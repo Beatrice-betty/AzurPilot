@@ -5894,6 +5894,11 @@
       "Overview": "总览喵",
       "Log": "运行日志喵"
     },
+    "TaskConfig": {
+      "SearchPlaceholder": "搜索配置喵",
+      "SearchNoResult": "没有找到匹配的配置喵",
+      "SearchResultCount": "共找到 {count} 项结果喵"
+    },
     "MenuDevelop": {
       "HomePage": "主页喵",
       "Translate": "翻译喵",

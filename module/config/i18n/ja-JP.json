@@ -5894,6 +5894,11 @@
       "Overview": "概要",
       "Log": "実行ログ"
     },
+    "TaskConfig": {
+      "SearchPlaceholder": "設定を検索",
+      "SearchNoResult": "一致する設定がありません",
+      "SearchResultCount": "{count} 件の結果"
+    },
     "MenuDevelop": {
       "HomePage": "ホームページ",
       "Translate": "翻訳する",

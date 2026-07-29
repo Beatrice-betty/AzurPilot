@@ -40,6 +40,11 @@ MenuAlas:
   Overview:
   Log:
 
+TaskConfig:
+  SearchPlaceholder:
+  SearchNoResult:
+  SearchResultCount:
+
 MenuDevelop:
   HomePage:
   Translate:

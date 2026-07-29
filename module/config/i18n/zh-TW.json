@@ -5894,6 +5894,11 @@
       "Overview": "總覽",
       "Log": "執行日誌"
     },
+    "TaskConfig": {
+      "SearchPlaceholder": "搜尋設定",
+      "SearchNoResult": "找不到相符的設定",
+      "SearchResultCount": "共 {count} 項結果"
+    },
     "MenuDevelop": {
       "HomePage": "主頁",
       "Translate": "翻譯",

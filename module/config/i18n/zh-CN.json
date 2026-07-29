@@ -5894,6 +5894,11 @@
       "Overview": "总览",
       "Log": "运行日志"
     },
+    "TaskConfig": {
+      "SearchPlaceholder": "搜索配置",
+      "SearchNoResult": "未找到匹配的配置",
+      "SearchResultCount": "共 {count} 项结果"
+    },
     "MenuDevelop": {
       "HomePage": "主页",
       "Translate": "翻译",
