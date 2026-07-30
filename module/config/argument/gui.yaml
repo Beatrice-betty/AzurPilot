@@ -45,6 +45,20 @@ TaskConfig:
   SearchNoResult:
   SearchResultCount:
 
+FleetManagement:
+  StartScan:
+  Scanning:
+  ScanStarted:
+  ScanAlreadyRunning:
+  ScanStartFailed:
+  LastScan:
+  NoResult:
+  Main:
+  Vanguard:
+  Submarine:
+  Fleet:
+  Ships:
+
 MenuDevelop:
   HomePage:
   Translate:
