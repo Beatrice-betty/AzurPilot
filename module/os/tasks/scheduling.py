@@ -29,7 +29,7 @@ from datetime import timedelta
 
 from module.config.config import Function, name_to_function
 from module.config.deep import deep_get
-from module.config.timesource import now as current_time
+from module.config.time_source import now as current_time
 from module.config.utils import get_os_reset_remain
 
 from module.logger import logger
