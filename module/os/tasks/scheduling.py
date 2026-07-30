@@ -218,7 +218,7 @@ class CoinTaskMixin:
 
         logger.info(f'[大世界-智能调度+] {reason}，智能调度+延迟 {minutes} 分钟')
         self.config.task_delay(
-            minutes=minutes,
+            minute=minutes,
             task=self.TASK_NAME_SCHEDULING,
         )
     
