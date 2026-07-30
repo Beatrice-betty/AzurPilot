@@ -1181,6 +1181,10 @@ OpsiScheduling:
   TaskPriority:
     type: textarea
     value: OpsiStronghold > OpsiObscure > OpsiAbyssal > OpsiMeowfficerFarming
+  MonthEndActionPointCleanupDays:
+    value: 0
+  MonthEndActionPointPreserve:
+    value: 0
 OpsiPreventActionPointOverflow:
   Task:
     value: OpsiScheduling

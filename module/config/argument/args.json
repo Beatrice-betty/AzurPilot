@@ -13896,6 +13896,14 @@
       "TaskPriority": {
         "type": "textarea",
         "value": "OpsiStronghold > OpsiObscure > OpsiAbyssal > OpsiMeowfficerFarming"
+      },
+      "MonthEndActionPointCleanupDays": {
+        "type": "input",
+        "value": 0
+      },
+      "MonthEndActionPointPreserve": {
+        "type": "input",
+        "value": 0
       }
     },
     "Storage": {

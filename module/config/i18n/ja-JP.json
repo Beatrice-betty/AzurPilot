@@ -3460,6 +3460,14 @@
     "TaskPriority": {
       "name": "作戦コイン補充優先度",
       "help": "作戦コイン（黄）が不足している場合、作戦コイン補充任務の実行優先順位。> で区切ります。"
+    },
+    "MonthEndActionPointCleanupDays": {
+      "name": "OpsiScheduling.MonthEndActionPointCleanupDays.name",
+      "help": "OpsiScheduling.MonthEndActionPointCleanupDays.help"
+    },
+    "MonthEndActionPointPreserve": {
+      "name": "OpsiScheduling.MonthEndActionPointPreserve.name",
+      "help": "OpsiScheduling.MonthEndActionPointPreserve.help"
     }
   },
   "OpsiPreventActionPointOverflow": {

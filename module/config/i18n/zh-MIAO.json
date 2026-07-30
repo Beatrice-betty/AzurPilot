@@ -3460,6 +3460,14 @@
     "TaskPriority": {
       "name": "补充黄币任务优先级喵~",
       "help": "黄币不足时，执行补充黄币任务的优先级顺序喵~。使用 > 分隔。"
+    },
+    "MonthEndActionPointCleanupDays": {
+      "name": "OpsiScheduling.MonthEndActionPointCleanupDays.name",
+      "help": "OpsiScheduling.MonthEndActionPointCleanupDays.help"
+    },
+    "MonthEndActionPointPreserve": {
+      "name": "OpsiScheduling.MonthEndActionPointPreserve.name",
+      "help": "OpsiScheduling.MonthEndActionPointPreserve.help"
     }
   },
   "OpsiPreventActionPointOverflow": {
