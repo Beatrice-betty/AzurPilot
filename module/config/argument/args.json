@@ -13897,6 +13897,14 @@
         "type": "textarea",
         "value": "OpsiStronghold > OpsiObscure > OpsiAbyssal > OpsiMeowfficerFarming"
       },
+      "MonthEndActionPointCleanupEnable": {
+        "type": "checkbox",
+        "value": false,
+        "option": [
+          true,
+          false
+        ]
+      },
       "MonthEndActionPointCleanupDays": {
         "type": "input",
         "value": 0

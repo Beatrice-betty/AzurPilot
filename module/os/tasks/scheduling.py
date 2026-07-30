@@ -71,6 +71,7 @@ class CoinTaskMixin:
     CONFIG_PATH_SMART_COIN_RETURN_THRESHOLD = 'OpsiScheduling.OpsiScheduling.OperationCoinsReturnThreshold'
     CONFIG_PATH_SMART_STATE = 'OpsiScheduling.Storage.Storage'
     # 月末清理行动力配置路径
+    CONFIG_PATH_MONTH_END_CLEANUP_ENABLE = 'OpsiScheduling.OpsiScheduling.MonthEndActionPointCleanupEnable'
     CONFIG_PATH_MONTH_END_CLEANUP_DAYS = 'OpsiScheduling.OpsiScheduling.MonthEndActionPointCleanupDays'
     CONFIG_PATH_MONTH_END_AP_PRESERVE = 'OpsiScheduling.OpsiScheduling.MonthEndActionPointPreserve'
     CONFIG_PATH_MONTH_END_SHOP_PURCHASE = 'OpsiScheduling.OpsiScheduling.MonthEndShopPurchase'
@@ -1264,12 +1265,15 @@ class OpsiScheduling(CoinTaskMixin, OSMap):
         判断当前是否应进入月末清理行动力模式。
 
         触发条件：
-            1. MonthEndActionPointCleanupDays > 0
-            2. 距大世界重置剩余天数 <= MonthEndActionPointCleanupDays
+            1. MonthEndActionPointCleanupEnable 开关已开启
+            2. MonthEndActionPointCleanupDays > 0
+            3. 距大世界重置剩余天数 <= MonthEndActionPointCleanupDays
 
         Returns:
             bool: 是否启用月末清理。
         """
+        if not self._config_enabled(keys=self.CONFIG_PATH_MONTH_END_CLEANUP_ENABLE, default=False):
+            return False
         cleanup_days = self._get_month_end_cleanup_days()
         if cleanup_days <= 0:
             return False
@@ -1372,9 +1376,10 @@ class OpsiScheduling(CoinTaskMixin, OSMap):
                 logger.warning(f'[大世界-月末清理] 塞壬要塞行动力不足: {e}')
             self._set_month_end_cleanup_first_run(False)
 
-        # 月末清理主循环
-        max_rounds = 50  # 安全上限，防止无限循环
-        for round_num in range(1, max_rounds + 1):
+        # 月末清理主循环（无限制，依靠退出条件终止）
+        round_num = 0
+        while True:
+            round_num += 1
             logger.hr(f'大世界-月末清理 第{round_num}轮', level=3)
 
             # 检查行动力是否已降到保留值
@@ -1422,8 +1427,6 @@ class OpsiScheduling(CoinTaskMixin, OSMap):
             if not meow_success:
                 logger.info('[大世界-月末清理] 短猫相接无可执行内容，月末清理结束')
                 break
-        else:
-            logger.warning(f'[大世界-月末清理] 达到最大轮数 {max_rounds}，强制结束')
 
         # 月末清理结束，刷新行动力并通知
         total_ap, current_ap = self._get_scheduling_action_point()
