@@ -976,6 +976,19 @@ class OpsiScheduling(CoinTaskMixin, OSMap):
                     f'[大世界-智能调度+] 月末清理已启用但行动力 {total_ap} '
                     f'<= 保留值 {month_end_preserve}，跳过清理'
                 )
+                # 月底最后一天（重置日当天）行动力不足时，每隔 2 小时再次检查
+                # 因为行动力会自然回复，2 小时后可能又有足够的行动力执行月末清理
+                remain = get_os_reset_remain()
+                if remain <= 0:
+                    logger.info(
+                        '[大世界-月末清理] 今天是月底最后一天，行动力不足，'
+                        '2 小时后再次运行'
+                    )
+                    self._delay_smart_scheduling_with_minutes(
+                        '月末清理行动力不足（月底最后一天）', 120
+                    )
+                    self.config.task_stop()
+                    return
 
         cl1_preserve = self._get_smart_scheduling_operation_coins_preserve()
         cl1_ap_preserve = self._get_effective_cl1_ap_preserve()
