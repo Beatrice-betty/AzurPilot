@@ -466,7 +466,7 @@ class FleetScanner(Scanner):
 class FleetNameScanner(Scanner):
     """识别船坞卡片中的舰娘名称，保留 OCR 原始结果。"""
     OCR_LANG = {
-        'cn': 'cnocr',
+        'cn': 'ppocr_v6',
         'en': 'ppocr_v6',
         'jp': 'jp',
         'tw': 'tw',
