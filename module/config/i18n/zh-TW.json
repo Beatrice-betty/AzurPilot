@@ -3468,6 +3468,12 @@
     "MonthEndActionPointPreserve": {
       "name": "OpsiScheduling.MonthEndActionPointPreserve.name",
       "help": "OpsiScheduling.MonthEndActionPointPreserve.help"
+    },
+    "MonthEndShopPurchase": {
+      "name": "OpsiScheduling.MonthEndShopPurchase.name",
+      "help": "OpsiScheduling.MonthEndShopPurchase.help",
+      "True": "True",
+      "False": "False"
     }
   },
   "OpsiPreventActionPointOverflow": {

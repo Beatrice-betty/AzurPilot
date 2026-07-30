@@ -13904,6 +13904,14 @@
       "MonthEndActionPointPreserve": {
         "type": "input",
         "value": 0
+      },
+      "MonthEndShopPurchase": {
+        "type": "checkbox",
+        "value": true,
+        "option": [
+          true,
+          false
+        ]
       }
     },
     "Storage": {

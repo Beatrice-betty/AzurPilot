@@ -73,6 +73,7 @@ class CoinTaskMixin:
     # 月末清理行动力配置路径
     CONFIG_PATH_MONTH_END_CLEANUP_DAYS = 'OpsiScheduling.OpsiScheduling.MonthEndActionPointCleanupDays'
     CONFIG_PATH_MONTH_END_AP_PRESERVE = 'OpsiScheduling.OpsiScheduling.MonthEndActionPointPreserve'
+    CONFIG_PATH_MONTH_END_SHOP_PURCHASE = 'OpsiScheduling.OpsiScheduling.MonthEndShopPurchase'
     STATE_KEY_COIN_REPLENISH_START = 'CoinReplenishStart'
     STATE_KEY_AP_REPLENISH_ACTIVE = 'ApReplenishActive'
     STATE_KEY_SCHEDULING_MODE = 'SchedulingMode'
@@ -191,6 +192,32 @@ class CoinTaskMixin:
                 keys=f'{self.TASK_NAME_SCHEDULING}.Scheduler.ServerUpdate',
                 default='00:00',
             ),
+            task=self.TASK_NAME_SCHEDULING,
+        )
+
+    def _delay_smart_scheduling_with_minutes(self, reason, minutes):
+        """
+        将实际运行智能调度+的任务延迟指定分钟数。
+
+        Args:
+            reason (str): 延迟原因（用于日志）。
+            minutes (int): 延迟的分钟数。
+        """
+        self._clear_coin_task_notification_state()
+        if self.is_running_prevent_action_point_overflow_task():
+            setattr(
+                self,
+                self.RUNTIME_ATTR_PREVENT_OVERFLOW_DELAY,
+                ((), {'minutes': minutes}),
+            )
+            logger.info(
+                f'[大世界-智能调度+] {reason}，防止行动力溢出任务延迟 {minutes} 分钟'
+            )
+            return
+
+        logger.info(f'[大世界-智能调度+] {reason}，智能调度+延迟 {minutes} 分钟')
+        self.config.task_delay(
+            minutes=minutes,
             task=self.TASK_NAME_SCHEDULING,
         )
     
@@ -1288,13 +1315,26 @@ class OpsiScheduling(CoinTaskMixin, OSMap):
                 logger.info('[大世界-月末清理] 大世界已进入新月周期，重置首次运行标记')
                 self._set_month_end_cleanup_first_run(True)
 
+    def _is_month_end_shop_purchase_enabled(self):
+        """
+        读取月末清理时是否执行商店购买。
+
+        Returns:
+            bool: True 表示执行商店购买。
+        """
+        return self._config_enabled(keys=self.CONFIG_PATH_MONTH_END_SHOP_PURCHASE, default=True)
+
     def _run_month_end_shop_purchase(self):
         """
         月末清理中的商店购买步骤。
 
         以 OpsiShop 任务上下文执行一次港口商店购买，
         不触发 task_delay/task_stop，购买完成后返回大世界地图。
+        若用户关闭了商店购买开关，则跳过此步骤。
         """
+        if not self._is_month_end_shop_purchase_enabled():
+            logger.info('[大世界-月末清理] 商店购买已关闭，跳过')
+            return
         logger.info('[大世界-月末清理] 执行港口商店购买')
         self._run_with_opsi_task_context(
             'OpsiShop',
@@ -1400,8 +1440,13 @@ class OpsiScheduling(CoinTaskMixin, OSMap):
             ),
         )
 
-        # 月末清理结束后，延迟到服务器刷新
-        self._delay_smart_scheduling_to_server_update('月末清理行动力已完成')
+        # 月底最后一天（重置日当天）每隔 2 小时运行一次，其他情况延迟到服务器刷新
+        remain = get_os_reset_remain()
+        if remain <= 0:
+            logger.info('[大世界-月末清理] 今天是月底最后一天，2 小时后再次运行')
+            self._delay_smart_scheduling_with_minutes('月末清理行动力已完成（月底最后一天）', 120)
+        else:
+            self._delay_smart_scheduling_to_server_update('月末清理行动力已完成')
         self.config.task_stop()
     
     def notify_action_point_threshold(self, title, content):

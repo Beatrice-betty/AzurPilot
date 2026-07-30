@@ -3468,6 +3468,12 @@
     "MonthEndActionPointPreserve": {
       "name": "月末清理行动力保留",
       "help": "月末清理行动力模式下的行动力保留值。如果启用跨月每日任务，最低预留 200 行动力。当此值大于最低预留时使用此值。"
+    },
+    "MonthEndShopPurchase": {
+      "name": "月末清理商店购买",
+      "help": "月末清理行动力时是否执行大世界商店购买。关闭后月末清理循环将跳过商店购买步骤。",
+      "True": "True",
+      "False": "False"
     }
   },
   "OpsiPreventActionPointOverflow": {

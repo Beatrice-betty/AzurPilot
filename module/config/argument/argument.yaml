@@ -1185,6 +1185,9 @@ OpsiScheduling:
     value: 0
   MonthEndActionPointPreserve:
     value: 0
+  MonthEndShopPurchase:
+    value: true
+    option: [true, false]
 OpsiPreventActionPointOverflow:
   Task:
     value: OpsiScheduling
