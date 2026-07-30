@@ -442,6 +442,13 @@ Island:
       - Scheduler
       - IslandPearlSell
 
+# ==================== Fleet Management ====================
+
+FleetManagement:
+  menu: collapse
+  page: setting
+  tasks: {}
+
 # ==================== Tool ====================
 
 Tool:
