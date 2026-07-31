@@ -1409,7 +1409,19 @@ class OpsiScheduling(CoinTaskMixin, OSMap):
                 f'保留值={month_end_preserve}, 继续清理'
             )
 
-            # 1. 执行一轮短猫相接
+            # 1. 调出隐秘海域
+            try:
+                self._run_scheduled_coin_task_once(self.TASK_NAME_OBSCURE, 0)
+            except ActionPointLimit as e:
+                logger.warning(f'[大世界-月末清理] 隐秘海域行动力不足: {e}')
+
+            # 2. 调出深渊坐标
+            try:
+                self._run_scheduled_coin_task_once(self.TASK_NAME_ABYSSAL, 0)
+            except ActionPointLimit as e:
+                logger.warning(f'[大世界-月末清理] 深渊坐标行动力不足: {e}')
+
+            # 3. 执行一轮短猫相接
             meow_success = False
             try:
                 meow_success = self._run_scheduled_coin_task_once(
@@ -1418,23 +1430,11 @@ class OpsiScheduling(CoinTaskMixin, OSMap):
             except ActionPointLimit as e:
                 logger.warning(f'[大世界-月末清理] 短猫相接行动力不足: {e}')
 
-            # 2. 回到大世界商店购买
+            # 4. 回到大世界商店购买
             try:
                 self._run_month_end_shop_purchase()
             except Exception as e:
                 logger.warning(f'[大世界-月末清理] 商店购买异常: {e}')
-
-            # 3. 调出隐秘海域
-            try:
-                self._run_scheduled_coin_task_once(self.TASK_NAME_OBSCURE, 0)
-            except ActionPointLimit as e:
-                logger.warning(f'[大世界-月末清理] 隐秘海域行动力不足: {e}')
-
-            # 4. 调出深渊坐标
-            try:
-                self._run_scheduled_coin_task_once(self.TASK_NAME_ABYSSAL, 0)
-            except ActionPointLimit as e:
-                logger.warning(f'[大世界-月末清理] 深渊坐标行动力不足: {e}')
 
             # 短猫无可执行内容时，其他任务也跑完一轮，结束月末清理
             if not meow_success:
