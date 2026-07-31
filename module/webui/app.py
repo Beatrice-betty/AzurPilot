@@ -248,7 +248,7 @@ def app():
         applications=[index, manage],
         cdn=cdn,
         static_mounts=static_mounts,
-        debug=True,
+        debug=False,
         on_startup=[
             startup,
             lambda: ProcessManager.restart_processes(
