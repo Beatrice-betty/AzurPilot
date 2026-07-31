@@ -1097,7 +1097,6 @@ OpsiMeowfficerFarming:
   TargetZone:
     value: 0
   StayInZone: false
-  APPreserveUntilReset: false
 OpsiTarget:
   TargetFarming: false
   TargetZone:
