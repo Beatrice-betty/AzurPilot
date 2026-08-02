@@ -2,9 +2,10 @@
 
 <p align="center">
   <a href="README.md"><img src="https://img.shields.io/badge/简体中文-中文-blue?style=flat-square" alt="简体中文"></a>
-  <a href="README.en.md"><img src="https://img.shields.io/badge/English-English-green?style=flat-square" alt="English"></a>
-  <a href="README.ja.md"><img src="https://img.shields.io/badge/日本語-日本語-red?style=flat-square" alt="日本語"></a>
-  <a href="README.ko.md"><img src="https://img.shields.io/badge/한국어-한국어-orange?style=flat-square" alt="한국어"></a>
+  <a href="README.zh-TW.md"><img src="https://img.shields.io/badge/繁體中文-繁體-green?style=flat-square" alt="繁體中文"></a>
+  <a href="README.en.md"><img src="https://img.shields.io/badge/English-English-red?style=flat-square" alt="English"></a>
+  <a href="README.ja.md"><img src="https://img.shields.io/badge/日本語-日本語-orange?style=flat-square" alt="日本語"></a>
+  <a href="README.ko.md"><img src="https://img.shields.io/badge/한국어-한국어-violet?style=flat-square" alt="한국어"></a>
 </p>
 
 <p align="center">
