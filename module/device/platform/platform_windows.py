@@ -90,46 +90,6 @@ def check_mumu_error_dialog():
     return found
 
 
-def find_visible_emulator_window(title_patterns):
-    """
-    枚举所有顶层窗口，查找标题匹配指定模式且可见的模拟器窗口。
-
-    用于解决"模拟器进程在运行但窗口不可见"的问题：
-    当 MuMu 等模拟器异常关闭后再被 ALAS 启动时，可能出现进程存在但窗口隐藏的情况，
-    此时 ADB 能连上但无法进行 UI 操作。
-
-    Args:
-        title_patterns (list[str]): 窗口标题关键字列表，如 ['MuMu', 'Nemu']。
-
-    Returns:
-        int: 匹配的可见窗口句柄，未找到返回 0。
-    """
-    found_hwnd = 0
-
-    def enum_callback(hwnd, _):
-        nonlocal found_hwnd
-        if not ctypes.windll.user32.IsWindowVisible(hwnd):
-            return True
-        text = get_window_text(hwnd)
-        if not text:
-            return True
-        for pattern in title_patterns:
-            if pattern in text:
-                found_hwnd = hwnd
-                logger.info(f'[设备-Windows] 找到可见模拟器窗口: "{text}" (hwnd={hwnd})')
-                return False  # 找到后停止枚举
-        return True
-
-    try:
-        ctypes.windll.user32.EnumWindows(
-            ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)(enum_callback),
-            0
-        )
-    except Exception as e:
-        logger.warning(f'[设备-Windows] 枚举窗口失败: {e}')
-    return found_hwnd
-
-
 def minimize_window(hwnd):
     """最小化指定窗口。"""
     ctypes.windll.user32.ShowWindow(hwnd, 6)
@@ -400,94 +360,6 @@ class PlatformWindows(PlatformBase, EmulatorManager):
         logger.error(f'[设备-Windows] 模拟器函数 {func.__name__}() 失败')
         return False
 
-    def _get_emulator_window_patterns(self):
-        """
-        根据当前模拟器类型返回窗口标题匹配关键字列表。
-
-        用于窗口可见性检测，识别模拟器主窗口是否在桌面上可见。
-
-        Returns:
-            list[str]: 窗口标题关键字列表；未知模拟器返回空列表（跳过检测）。
-        """
-        try:
-            instance = self.emulator_instance
-        except Exception:
-            return []
-
-        if instance is None:
-            return []
-
-        # 根据模拟器类型匹配窗口标题关键字
-        if instance == Emulator.MuMuPlayer12:
-            # MuMu12 窗口标题通常为 "MuMuPlayer12" 或 "MuMu模拟器12"
-            return ['MuMuPlayer', 'MuMu模拟器', 'MuMu']
-        elif instance == Emulator.MuMuPlayerX:
-            # MuMu X 窗口标题通常为 "NemuPlayer"
-            return ['NemuPlayer', 'MuMu']
-        elif instance == Emulator.MuMuPlayer:
-            # MuMu6 窗口标题通常为 "NemuPlayer"
-            return ['NemuPlayer', 'MuMu']
-        elif instance == Emulator.LDPlayerFamily:
-            # 雷电窗口标题通常为 "雷电模拟器" 或 "LDPlayer"
-            return ['雷电', 'LDPlayer']
-        elif instance == Emulator.NoxPlayerFamily:
-            # 夜神窗口标题通常为 "Nox" 或 "夜神"
-            return ['Nox', '夜神']
-        elif instance == Emulator.BlueStacks5:
-            return ['BlueStacks', '蓝叠']
-        elif instance == Emulator.BlueStacks4:
-            return ['BlueStacks', '蓝叠']
-        elif instance == Emulator.MEmuPlayer:
-            return ['MEmu', '逍遥']
-        else:
-            return []
-
-    def _force_kill_emulator_processes(self):
-        """
-        强制终止当前模拟器类型的所有进程。
-
-        用于清理"进程在运行但窗口不可见"的异常状态：
-        当模拟器异常关闭后被重新启动时，可能出现僵死进程占用了资源但无可见窗口，
-        此时需要强制终止所有相关进程，确保下次启动能正常显示窗口。
-        """
-        try:
-            instance = self.emulator_instance
-        except Exception:
-            logger.warning('[设备-Windows] 无法获取模拟器实例，跳过强制终止')
-            return
-
-        if instance is None:
-            return
-
-        # 根据模拟器类型构建进程名匹配正则
-        if instance == Emulator.MuMuPlayer12:
-            regex = r'(MuMuPlayer|MuMuManager|MuMuNxMain|MuMuVmmsVC|NemuPlayer|NemuHeadless)'
-        elif instance == Emulator.MuMuPlayerX:
-            regex = r'(NemuPlayer|Muvm6Headless|Muvm6SVC)'
-        elif instance == Emulator.MuMuPlayer:
-            regex = r'(NemuPlayer|NemuHeadless|NemuService|NemuSVC)'
-        elif instance == Emulator.LDPlayerFamily:
-            regex = r'(ld|dnplayer|LdVBoxHeadless)'
-        elif instance == Emulator.NoxPlayerFamily:
-            regex = r'(Nox|NoxVMHandle|NoxSVC)'
-        elif instance == Emulator.BlueStacks5:
-            regex = r'(HD-Player|BstkSVC|BlueStacks)'
-        elif instance == Emulator.BlueStacks4:
-            regex = r'(Bluestacks|HD-Player|BstkSVC)'
-        elif instance == Emulator.MEmuPlayer:
-            regex = r'(MEmu|MEmuConsole|MEmuHeadless)'
-        else:
-            logger.warning(f'[设备-Windows] 未知模拟器类型，无法强制终止: {instance}')
-            return
-
-        logger.warning(f'[设备-Windows] 强制终止模拟器进程 (匹配: {regex})')
-        count = self.kill_process_by_regex(regex)
-        logger.info(f'[设备-Windows] 已终止 {count} 个进程')
-
-        # 等待进程完全退出
-        import time
-        time.sleep(3)
-
     def emulator_start_watch(self):
         """
         监控模拟器启动过程，等待启动完成。
@@ -593,34 +465,6 @@ class PlatformWindows(PlatformBase, EmulatorManager):
             # 检测到错误对话框时立即终止等待，返回 False 触发重试
             if check_mumu_error_dialog():
                 logger.warning('[设备-Windows] 检测到MuMu错误对话框，中止启动监视')
-                return False
-
-        # 窗口可见性验证：ADB 已连上后，确认模拟器窗口在桌面上可见。
-        # 解决"进程在运行但窗口不可见"的问题：模拟器异常关闭后被重新启动时，
-        # 可能出现 ADB 能连上但窗口隐藏的情况，此时无法进行 UI 操作。
-        patterns = self._get_emulator_window_patterns()
-        if patterns:
-            window_check_timeout = Timer(30).start()
-            window_check_interval = Timer(2).start()
-            visible_hwnd = 0
-            while not window_check_timeout.reached():
-                window_check_interval.wait()
-                window_check_interval.reset()
-                visible_hwnd = find_visible_emulator_window(patterns)
-                if visible_hwnd:
-                    logger.info(f'[设备-Windows] 模拟器窗口可见性检查通过 (hwnd={visible_hwnd})')
-                    break
-                logger.info(f'[设备-Windows] 等待模拟器窗口变为可见...')
-
-            if not visible_hwnd:
-                # 窗口不可见但 ADB 已连接：模拟器处于异常状态（进程存在但无界面）
-                # 返回 False 触发外层 emulator_start() 的强制重启逻辑
-                logger.error(
-                    '[设备-Windows] 模拟器进程在运行但窗口不可见，'
-                    '可能为异常启动状态，将强制重启模拟器'
-                )
-                # 强制终止所有模拟器进程，清理僵死窗口
-                self._force_kill_emulator_processes()
                 return False
 
         if new_window != 0 and new_window != current_window:
