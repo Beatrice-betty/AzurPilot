@@ -114,7 +114,7 @@ Deploy:
     # Use auto update and builtin updater feature
     # 可能会引发问题 https://github.com/wess09/AzurPilot/issues/876
     # This may cause problem https://github.com/wess09/AzurPilot/issues/876
-    EnableReload: false
+    EnableReload: true
     # 每隔 X 分钟检查更新
     # Check update every X minute
     # [禁用] 0
