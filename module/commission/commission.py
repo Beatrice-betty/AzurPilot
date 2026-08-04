@@ -21,6 +21,7 @@
 """
 
 import copy
+from datetime import timedelta
 
 from scipy import signal
 
@@ -51,6 +52,7 @@ COMMISSION_SWITCH = Switch('Commission_switch', is_selector=True)
 COMMISSION_SWITCH.add_state('daily', COMMISSION_DAILY)
 COMMISSION_SWITCH.add_state('urgent', COMMISSION_URGENT)
 COMMISSION_SCROLL = Scroll(COMMISSION_SCROLL_AREA, color=(247, 211, 66), name='COMMISSION_SCROLL')
+COMMISSION_EXPIRE_SAFETY_MARGIN = timedelta(seconds=30)
 
 
 def lines_detect(image):
@@ -144,8 +146,9 @@ class RewardCommission(UI, InfoHandler):
                 image = crop(image, area, copy=False)
             commissions = self._commission_detect(image)
 
-            if commissions.count >= 2 and commissions.select(valid=False).count == 1:
-                logger.warning('[委托-检测] 发现1个无效委托，重试委托检测')
+            invalid_count = commissions.select(valid=False).count
+            if invalid_count:
+                logger.warning(f'[委托-检测] 发现{invalid_count}个无效委托，重试委托检测')
                 continue
             else:
                 return commissions
@@ -172,7 +175,8 @@ class RewardCommission(UI, InfoHandler):
         for comm in total:
             if comm.genre == 'daily_event':
                 self.max_commission = 5
-        running_count = len([c for c in total if c.status == 'running'])
+        running_list = [c for c in total if c.status == 'running']
+        running_count = len(running_list)
         logger.attr('运行中', f'{running_count}/{self.max_commission}')
 
         # 加载过滤器字符串
@@ -202,7 +206,9 @@ class RewardCommission(UI, InfoHandler):
         # 导致实际可选委托数量减少（bug 修复：原先仅在追加分支内更新 run，满额时 shortest 残留）
         no_shortest = run.delete(SelectedGrids(['shortest']))
         run = no_shortest
-        if run.count + running_count < self.max_commission:
+        # expire 是排序控制标记，不会实际占用委托槽位。
+        selected_count = sum(isinstance(c, Commission) for c in run)
+        if selected_count + running_count < self.max_commission:
             # 合并每日和紧急委托，从中挑选耗时最短的（不区分优先级）
             candidate = SelectedGrids([])
             if daily.count:
@@ -218,6 +224,30 @@ class RewardCommission(UI, InfoHandler):
                 logger.attr('过滤排序', ' > '.join([str(c) for c in run]))
             else:
                 logger.info('[委托-选择] 委托数量不足，无每日和紧急委托可选')
+
+        # expire 前方是重要委托；当其过期时间短于当前队列的最短时长时提前执行。
+        if 'expire' in run:
+            logger.info('[委托] 尝试提前快过期委托')
+
+            valid_runs = [c for c in run if isinstance(c, Commission)]
+            queue = running_list + valid_runs[:self.max_commission - running_count]
+            if queue:
+                min_duration_time = min(c.duration for c in queue)
+            else:
+                min_duration_time = timedelta(seconds=0)
+            logger.attr('最短时长', min_duration_time)
+
+            expire_index = run.grids.index('expire')
+            important = run[:expire_index].filter(
+                lambda c: isinstance(c, Commission) and c.expire
+            )
+            priority = [
+                c for c in important
+                if c.expire <= min_duration_time + COMMISSION_EXPIRE_SAFETY_MARGIN
+            ]
+            run = run.delete(SelectedGrids(['expire']))
+            run = SelectedGrids(priority).add_by_eq(run)
+            logger.attr('过滤排序', ' > '.join([str(c) for c in run]))
 
         self.comm_choose = run
         if running_count >= self.max_commission:

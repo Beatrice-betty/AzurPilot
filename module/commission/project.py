@@ -15,7 +15,7 @@
     - module.commission.project_data: 各服务器的委托名称字典
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from module.base.decorator import Config
 from module.base.filter import Filter
@@ -36,7 +36,7 @@ COMMISSION_FILTER = Filter(
         '(\d\d?.\d\d?|\d\d?)?'
     ),
     attr=('category_str', 'genre_str', 'duration_hm', 'duration_hour'),
-    preset=('shortest',)
+    preset=('shortest', 'expire')
 )
 
 
@@ -117,6 +117,10 @@ class Commission:
     status: str
     # 委托执行时长
     duration: timedelta
+    # 过期时间，仅紧急委托有值，其他委托为 0
+    expire: timedelta
+    # 绝对过期时间，用于跨截图稳定比较；非紧急委托为 None
+    expire_time: datetime | None
     # 过滤器用分类
     # 值: major|daily|extra|urgent|night
     category_str: str
@@ -150,6 +154,10 @@ class Commission:
             self.valid = False
 
         self.create_time = current_time()
+        self.expire_time = (
+            (self.create_time + self.expire).replace(microsecond=0)
+            if self.expire else None
+        )
         self.repeat_count = 1
         self.category_str = 'unknown'
         self.genre_str = 'unknown'
@@ -159,6 +167,27 @@ class Commission:
             self.category_str, self.genre_str = self.genre.split('_', 1)
             self.duration_hour = str(int(self.duration.total_seconds() / 36) / 100).strip('.0')
             self.duration_hm = str(self.duration).rsplit(':', 1)[0]
+
+    def _commission_expire_parse(self):
+        """识别紧急委托的剩余有效时间。
+
+        Returns:
+            timedelta: 紧急委托的剩余有效时间；非紧急委托返回 0。
+        """
+        # 紧急委托在时长左侧有红色提示标记，先用颜色判断可避免无效 OCR。
+        area = area_offset((-49, 68, -45, 84), self.area[0:2])
+        button = Button(area=area, color=(189, 65, 66),
+                        button=area, name='IS_URGENT')
+        if not button.appear_on(self.image, threshold=30):
+            return timedelta(seconds=0)
+
+        area = area_offset((-49, 67, 45, 94), self.area[0:2])
+        button = Button(area=area, color=(), button=area, name='EXPIRE')
+        expire = Duration(button).ocr(self.image)
+        if not expire:
+            logger.warning('[委托-检测] 紧急委托过期时间识别失败')
+            self.valid = False
+        return expire
 
     @Config.when(SERVER='en')
     def commission_parse(self):
@@ -191,6 +220,9 @@ class Commission:
         button = Button(area=area, color=(), button=area, name='DURATION')
         ocr = Duration(button)
         self.duration = ocr.ocr(self.image)
+
+        # 过期时间——仅紧急委托有
+        self.expire = self._commission_expire_parse()
 
         # 状态识别——通过 RGB 颜色通道判断
         area = area_offset((179, 71, 187, 93), self.area[0:2])
@@ -231,6 +263,9 @@ class Commission:
         button = Button(area=area, color=(), button=area, name='DURATION')
         ocr = Duration(button)
         self.duration = ocr.ocr(self.image)
+
+        # 过期时间——仅紧急委托有
+        self.expire = self._commission_expire_parse()
 
         # 状态识别——通过 RGB 颜色通道判断
         area = area_offset((179, 71, 187, 93), self.area[0:2])
@@ -276,6 +311,9 @@ class Commission:
         ocr = Duration(button)
         self.duration = ocr.ocr(self.image)
 
+        # 过期时间——仅紧急委托有
+        self.expire = self._commission_expire_parse()
+
         # 状态识别——通过 RGB 颜色通道判断
         area = area_offset((179, 71, 187, 93), self.area[0:2])
         dic = {
@@ -316,6 +354,9 @@ class Commission:
         ocr = Duration(button)
         self.duration = ocr.ocr(self.image)
 
+        # 过期时间——仅紧急委托有
+        self.expire = self._commission_expire_parse()
+
         # 状态识别——通过 RGB 颜色通道判断
         area = area_offset((179, 71, 187, 93), self.area[0:2])
         dic = {
@@ -334,6 +375,8 @@ class Commission:
         if not self.valid:
             return f'{name} (Invalid)'
         info = {'Genre': self.genre, 'Status': self.status, 'Duration': self.duration}
+        if self.expire:
+            info['Expire'] = self.expire
         if self.repeat_count > 1:
             info['Repeat'] = self.repeat_count
         info = ', '.join([f'{k}: {v}' for k, v in info.items()])
@@ -342,7 +385,7 @@ class Commission:
     def __eq__(self, other):
         """判断两个委托是否为同一委托。
 
-        通过类型、状态、后缀、时长（允许 120 秒误差）和重复次数
+        通过类型、状态、后缀、时长（允许 120 秒误差）、过期时间和重复次数
         进行综合比较。紧急物资委托还需匹配阵营标签（NYB/BIW）。
 
         Args:
@@ -369,6 +412,14 @@ class Commission:
                     return False
         if (other.duration < self.duration - threshold) or (other.duration > self.duration + threshold):
             return False
+        if (self.expire_time is None) != (other.expire_time is None):
+            return False
+        if self.expire_time is not None and other.expire_time is not None:
+            if (
+                other.expire_time < self.expire_time - threshold
+                or other.expire_time > self.expire_time + threshold
+            ):
+                return False
         if self.repeat_count != other.repeat_count:
             return False
         if self.genre in ['extra_oil', 'night_oil'] and not self.suffix_match(other):
