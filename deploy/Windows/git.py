@@ -106,8 +106,8 @@ class GitManager(DeployConfig):
     def git_repository_init(
             self, repo, source='origin', branch='master', proxy='', ssl_verify=True
     ):
-        # 配置操作不需要 UA 注入（不涉及 HTTP），直接用原始 git 路径
-        git = f'"{self.git}"'
+        # 所有 git 命令统一带随机 UA，绕过 gitcode 等仓库对特定 UA 的 418 封禁
+        git = f'"{self.git}" -c http.userAgent={self.git_user_agent()}'
 
         logger.hr('Git Init', 1)
         if not self.execute(f'{git} init', allow_failure=True):
