@@ -27,7 +27,7 @@ on:
           - upload
           - gray
           - production
-        default: upload
+        default: production
       traffic_percentage:
         description: "灰度模式中新版本承接的流量百分比（1-99）"
         required: false
@@ -80,7 +80,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_WORKER_NAME_SECRET: ${{ secrets.CF_WORKER_NAME }}
           CF_WORKER_NAME_INPUT: ${{ github.event.inputs.worker_name || '' }}
-          CF_WORKER_RELEASE_MODE: ${{ github.event.inputs.release_mode || 'upload' }}
+          CF_WORKER_RELEASE_MODE: ${{ github.event.inputs.release_mode || 'production' }}
           CF_WORKER_TRAFFIC_PERCENTAGE: ${{ github.event.inputs.traffic_percentage || '10' }}
           CF_WORKER_PREVIEW_ALIAS: ${{ github.event.inputs.preview_alias || 'git-over-cdn-preview' }}
         run: |
