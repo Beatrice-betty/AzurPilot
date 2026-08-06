@@ -248,15 +248,15 @@ class LoginHandler(UI):
                 f"进入观察阶段，最多等待 {RESTART_OBSERVE_SECONDS} 秒"
             )
             deadline = time.monotonic() + RESTART_OBSERVE_SECONDS
-            while time.monotonic() < deadline:
+            while 1:
+                if time.monotonic() >= deadline:
+                    break
                 if self.device.app_is_running_bounded():
                     logger.info("[重启] 观察阶段检测到应用恢复运行")
                     is_restart_success = True
                     break
                 remaining = max(0, int(deadline - time.monotonic()))
-                logger.warning(f"[重启] 观察阶段应用仍未恢复，剩余 {remaining} 秒后触发模拟器重启")
-                if remaining <= 0:
-                    break
+                logger.info(f"[重启] 观察阶段应用仍未恢复，剩余 {remaining} 秒后触发模拟器重启")
                 self.device.sleep(min(RESTART_OBSERVE_INTERVAL, remaining))
 
         # 观察阶段仍失败则抛出 EmulatorNotRunningError，
