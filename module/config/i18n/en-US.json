@@ -1938,9 +1938,13 @@
       "oil": "Diamond > Oil > Cubes",
       "custom": "Customize"
     },
+    "DynamicProgramming": {
+      "name": "Global optimal strategy (Experimental)",
+      "help": "This experimental option is disabled by default. Dynamic programming compares the value vector, per-tier index sums, and latest finish time. Plans selecting the same commissions in a different order are deduplicated by filter order before later tie-breakers such as total completion time."
+    },
     "CustomFilter": {
       "name": "Custom Commission Filter",
-      "help": "Custom commission filter syntax is the same as the Commission Preset filter"
+      "help": "Set Commission Filter to Customize to use this filter. With experimental dynamic programming enabled, tier separates value levels and ignore marks the algorithm boundary: rules before ignore use dynamic programming; rules after it fill slots in traditional filter order, but a commission must fit within the time window reserved by dynamic programming for that slot. When dynamic programming is disabled, both tier and ignore are ignored."
     },
     "DoMajorCommission": {
       "name": "Run Major Commissions (1200/1000 Oil)",
