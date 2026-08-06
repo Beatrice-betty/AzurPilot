@@ -10413,7 +10413,7 @@
       },
       "DynamicProgramming": {
         "type": "checkbox",
-        "value": false
+        "value": true
       },
       "CustomFilter": {
         "type": "textarea",
