@@ -10413,7 +10413,7 @@
       },
       "DynamicProgramming": {
         "type": "checkbox",
-        "value": true
+        "value": false
       },
       "TierValueRatio": {
         "type": "input",
@@ -10422,6 +10422,10 @@
       "DelayHalfLife": {
         "type": "input",
         "value": 100.0
+      },
+      "DeadlineFutureHorizon": {
+        "type": "input",
+        "value": 0.5
       },
       "FilterValueFloor": {
         "type": "input",
