@@ -684,8 +684,8 @@
       "help": "登入 SSH 的用戶名，例如: root"
     },
     "RemoteSSHPublicKey": {
-      "name": "SSH 公鑰",
-      "help": "SSH 登入所需的公鑰內容（如果需要）"
+      "name": "SSH 私鑰",
+      "help": "SSH 登入所需的私鑰內容（如果需要）"
     },
     "RemoteStartCommand": {
       "name": "遠端啟動指令",
