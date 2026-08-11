@@ -3672,9 +3672,17 @@
       "name": "Chicken Stock Threshold",
       "help": ""
     },
+    "ChickenFilter": {
+      "name": "Chicken Worker Filter",
+      "help": "Connect with >, e.g. ChaoHo > NewJersey > Amagi_chan\nSaratoga > Akashi > Tashkent > YingSwei\nLeMalin > Unicorn > Shimakaze > Cheshire\nChenHai > WilliamDPorter\nHelena > Friedrich > Atago\nYixian > August > Eugen > Hood > Javelin > Laffey > Explorer > Navigator > OceanCrosser > FeiYun > Takao > Anchorage > Belfast > ChangFeng > Mogador > RoyalFortune\nOnly recognizes the first two rows in default order. If the specified character is unavailable, falls back to WorkerJuu."
+    },
     "MinPork": {
       "name": "Pork Stock Threshold",
       "help": ""
+    },
+    "PigFilter": {
+      "name": "Pig Worker Filter",
+      "help": "Connect with >, e.g. ChaoHo > NewJersey > Amagi_chan\nSaratoga > Akashi > Tashkent > YingSwei\nLeMalin > Unicorn > Shimakaze > Cheshire\nChenHai > WilliamDPorter\nHelena > Friedrich > Atago\nYixian > August > Eugen > Hood > Javelin > Laffey > Explorer > Navigator > OceanCrosser > FeiYun > Takao > Anchorage > Belfast > ChangFeng > Mogador > RoyalFortune\nOnly recognizes the first two rows in default order. If the specified character is unavailable, falls back to WorkerJuu."
     },
     "Milk": {
       "name": "Raise Cattle",
@@ -5705,6 +5713,7 @@
       "help": "",
       "None": "None",
       "cheese": "Cheese",
+      "citrus_coffee": "Citrus Coffee",
       "strawberry_milkshake": "Strawberry Milk Tea",
       "morning_light": "Morning Light Combo",
       "wake_up_call": "Wake-Up Call Set",
@@ -5715,6 +5724,7 @@
       "help": "",
       "None": "None",
       "cheese": "Cheese",
+      "citrus_coffee": "Citrus Coffee",
       "strawberry_milkshake": "Strawberry Milk Tea",
       "morning_light": "Morning Light Combo",
       "wake_up_call": "Wake-Up Call Set",
@@ -5725,6 +5735,7 @@
       "help": "",
       "None": "None",
       "cheese": "Cheese",
+      "citrus_coffee": "Citrus Coffee",
       "strawberry_milkshake": "Strawberry Milk Tea",
       "morning_light": "Morning Light Combo",
       "wake_up_call": "Wake-Up Call Set",
@@ -5735,6 +5746,7 @@
       "help": "",
       "None": "None",
       "cheese": "Cheese",
+      "citrus_coffee": "Citrus Coffee",
       "strawberry_milkshake": "Strawberry Milk Tea",
       "morning_light": "Morning Light Combo",
       "wake_up_call": "Wake-Up Call Set",
@@ -5745,6 +5757,7 @@
       "help": "",
       "None": "None",
       "cheese": "Cheese",
+      "citrus_coffee": "Citrus Coffee",
       "strawberry_milkshake": "Strawberry Milk Tea",
       "morning_light": "Morning Light Combo",
       "wake_up_call": "Wake-Up Call Set",
