@@ -2357,6 +2357,14 @@
         "type": "checkbox",
         "value": false
       },
+      "HighValueCommissionFilterCount": {
+        "type": "input",
+        "value": 32
+      },
+      "HighValueCommissionReserve": {
+        "type": "input",
+        "value": 2
+      },
       "VanguardLevelMin": {
         "type": "input",
         "value": 1,
@@ -2866,6 +2874,14 @@
         "type": "checkbox",
         "value": false
       },
+      "HighValueCommissionFilterCount": {
+        "type": "input",
+        "value": 32
+      },
+      "HighValueCommissionReserve": {
+        "type": "input",
+        "value": 2
+      },
       "VanguardLevelMin": {
         "type": "input",
         "value": 1,
@@ -3374,6 +3390,14 @@
       "CommissionLimit": {
         "type": "checkbox",
         "value": false
+      },
+      "HighValueCommissionFilterCount": {
+        "type": "input",
+        "value": 32
+      },
+      "HighValueCommissionReserve": {
+        "type": "input",
+        "value": 2
       },
       "VanguardLevelMin": {
         "type": "input",
