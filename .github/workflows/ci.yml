@@ -83,9 +83,49 @@ jobs:
 
       # 全量导入冒烟：遍历 module/ deploy/ 下所有模块在独立子进程导入，
       # 已知失败在白名单中（见 dev_tools/import_smoke_test.py），意外失败会使 CI 失败。
+      # --summary-file 产出机器可读汇总，供 pr-report job 写入 PR 评论。
       - name: Run import smoke test
-        run: uv run python -m dev_tools.import_smoke_test
+        run: uv run python -m dev_tools.import_smoke_test --summary-file import-smoke-summary.json
 
       # 入口点导入 + WebUI/MCP 进程隔离守卫。
       - name: Run CI import unittest
         run: uv run python -m unittest tests.test_ci_import
+
+      - name: Upload import smoke summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: import-smoke-summary
+          path: import-smoke-summary.json
+
+  # 在所有检查完成后（即使某些 job 失败）发布/更新 PR 检查报告评论。
+  # 参考 noneflow 的 resuable_comment_issue 模式：用固定标记定位已有评论并更新，
+  # 避免每次 push 都新增一条评论。
+  pr-report:
+    name: PR 检查报告
+    if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+    needs: [ruff, button-config-check, import-smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Download import smoke summary
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: import-smoke-summary
+          path: .ci-reports
+
+      - name: Post PR report
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: python3 dev_tools/ci_pr_report.py --summary-file .ci-reports/import-smoke-summary.json

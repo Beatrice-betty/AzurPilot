@@ -159,6 +159,8 @@ def main() -> int:
     parser.add_argument("--include-campaign", action="store_true", help="额外扫描 campaign/（耗时较长）")
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT, help="单模块导入超时（秒）")
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS, help="并行子进程数")
+    parser.add_argument("--summary-file", type=str, default=None,
+                        help="将扫描汇总写入 JSON 文件（供 CI 报告使用），即使失败也会写入")
     args = parser.parse_args()
 
     start = time.time()
@@ -192,6 +194,25 @@ def main() -> int:
         print("\n[import-smoke] 通过 ✅")
     else:
         print("\n[import-smoke] 失败 ❌")
+
+    # 无论通过与否都写汇总文件，供 CI 报告引用真实数据（不伪造结果）。
+    if args.summary_file:
+        summary = {
+            "total": len(results),
+            "passed": len(passed),
+            "known": len(known),
+            "unexpected": len(unexpected),
+            "stale": len(stale),
+            "ok": ok,
+            "elapsed": round(elapsed, 1),
+            "known_failures": {module: reason for module, _, reason in known},
+            "unexpected_failures": {module: error for module, error in unexpected},
+        }
+        import json
+        with open(args.summary_file, "w", encoding="utf-8") as fp:
+            json.dump(summary, fp, ensure_ascii=False, indent=2)
+        print(f"[import-smoke] 汇总已写入 {args.summary_file}")
+
     return 0 if ok else 1
 
 
