@@ -98,34 +98,8 @@ jobs:
           name: import-smoke-summary
           path: import-smoke-summary.json
 
-  # 在所有检查完成后（即使某些 job 失败）发布/更新 PR 检查报告评论。
-  # 参考 noneflow 的 resuable_comment_issue 模式：用固定标记定位已有评论并更新，
-  # 避免每次 push 都新增一条评论。
-  pr-report:
-    name: PR 检查报告
-    if: ${{ !cancelled() && github.event_name == 'pull_request' }}
-    needs: [ruff, button-config-check, import-smoke]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Download import smoke summary
-        if: always()
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: import-smoke-summary
-          path: .ci-reports
-
-      - name: Post PR report
-        if: always()
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
-          GITHUB_EVENT_PATH: ${{ github.event_path }}
-          GITHUB_SHA: ${{ github.sha }}
-        run: python3 dev_tools/ci_pr_report.py --summary-file .ci-reports/import-smoke-summary.json
+  # 说明：PR 检查报告评论由两条 workflow 协作完成：
+  # 1. ci-report-placeholder.yml（pull_request_target）：PR 提交时立即创建占位评论；
+  # 2. ci-report.yml（workflow_run）：CI 完成后找到占位评论并更新为最终报告。
+  # 因此不再在 ci.yml 内直接发布评论（fork PR 下 GITHUB_TOKEN 只读无法发布，
+  # 且与占位机制重复）。
