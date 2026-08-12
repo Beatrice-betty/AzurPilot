@@ -1,0 +1,36 @@
+name: Import Test
+
+on: [push, pull_request]
+
+jobs:
+  import-smoke:
+    name: Import Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      # OpenCV 在无头 CI 环境需要系统运行库（与 deploy/docker/Dockerfile 保持一致）。
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y libgl1 libglib2.0-0 libgomp1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        run: uv sync
+
+      # 全量导入冒烟：遍历 module/ deploy/ 下所有模块在独立子进程导入，
+      # 已知失败在白名单中（见 dev_tools/import_smoke_test.py），意外失败会使 CI 失败。
+      - name: Run import smoke test
+        run: uv run python -m dev_tools.import_smoke_test
+
+      # 入口点导入 + WebUI/MCP 进程隔离守卫。
+      - name: Run CI import unittest
+        run: uv run python -m unittest tests.test_ci_import
