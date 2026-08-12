@@ -177,6 +177,24 @@ class LoginHandler(UI):
             self._user_agreement_timer.reset()
             return True
 
+    def _login_wait_timeout(self):
+        """
+        获取登录等待阶段允许画面保持静态的最大秒数。
+
+        对应配置项 Restart.LoginWaitTimeout，仅作用于 app_restart()/app_start()
+        之后的登录等待阶段；正常任务仍使用 device 原始卡死检测阈值。
+
+        Returns:
+            float: 登录等待宽容时间（秒），配置非法时回退默认 30 秒。
+        """
+        try:
+            timeout = float(getattr(self.config, 'Restart_LoginWaitTimeout', 30))
+        except (TypeError, ValueError):
+            timeout = 30.0
+        if timeout <= 0:
+            timeout = 30.0
+        return min(timeout, 3600.0)
+
     def handle_app_login(self):
         """
         处理应用登录流程。
@@ -191,8 +209,14 @@ class LoginHandler(UI):
         """
         logger.info('[登录] 处理应用登录')
         self.device.screenshot_interval_set(1.0)
+        login_wait_timeout = self._login_wait_timeout()
         try:
-            self._handle_app_login()
+            # 登录等待阶段放宽卡死检测，避免后台模拟器慢启动时
+            # 静态画面超过默认 30 秒就被误判为 GameStuckError 而陷入重启循环。
+            with self.device.stuck_timeout_override(
+                    image_stuck=login_wait_timeout,
+                    long_wait=max(login_wait_timeout, self.device.stuck_timer_long.limit)):
+                self._handle_app_login()
         finally:
             self.device.screenshot_interval_set()
 
