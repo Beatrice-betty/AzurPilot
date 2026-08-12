@@ -62,13 +62,40 @@ def api(url: str, token: str, method: str = "GET", payload=None):
         return json.loads(body) if body else None
 
 
-def get_pr_number(event_path: str) -> int | None:
-    """从事件负载读取 PR 号；非 PR 事件返回 None。"""
+def get_pr_number(event_path: str, token: str = "", repo: str = "", run_id: str = "") -> int | None:
+    """从事件负载读取 PR 号；非 PR 事件返回 None。
+
+    支持两类事件：
+    - pull_request：直接读取 event.pull_request.number；
+    - workflow_run（由 CI 完成后触发）：通过 API 查询
+      GET /repos/{repo}/actions/runs/{run_id}/pull_requests 获取关联 PR，
+      事件负载中的 workflow_run.pull_requests 作为回退。
+    """
     try:
         with open(event_path, encoding="utf-8") as fp:
             event = json.load(fp)
     except (OSError, json.JSONDecodeError):
         return None
+
+    # workflow_run 事件：优先查 API（该字段在事件负载中可能为空）。
+    if "workflow_run" in event:
+        if token and repo and run_id:
+            try:
+                data = api(
+                    f"https://api.github.com/repos/{repo}/actions/runs/{run_id}/pull_requests",
+                    token,
+                )
+                prs = data if isinstance(data, list) else (data or {}).get("pull_requests") or []
+                if prs:
+                    return prs[0].get("number")
+            except (urllib.error.URLError, urllib.error.HTTPError):
+                pass
+        wfr_prs = event.get("workflow_run", {}).get("pull_requests") or []
+        if wfr_prs:
+            return wfr_prs[0].get("number")
+        return None
+
+    # pull_request 事件。
     return event.get("pull_request", {}).get("number")
 
 
@@ -188,7 +215,7 @@ def main() -> int:
         print("[ci-report] 缺少必要环境变量，跳过")
         return 0
 
-    pr_number = get_pr_number(event_path)
+    pr_number = get_pr_number(event_path, token=token, repo=repo, run_id=run_id)
     if pr_number is None:
         print("[ci-report] 非 PR 事件，跳过")
         return 0
