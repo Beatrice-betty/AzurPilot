@@ -187,13 +187,18 @@ class LoginHandler(UI):
         Returns:
             float: 登录等待宽容时间（秒），配置非法时回退默认 30 秒。
         """
+        value = getattr(self.config, 'Restart_LoginWaitTimeout', 30)
         try:
-            timeout = float(getattr(self.config, 'Restart_LoginWaitTimeout', 30))
+            timeout = float(value)
         except (TypeError, ValueError):
-            timeout = 30.0
-        if timeout <= 0:
-            timeout = 30.0
-        return min(timeout, 3600.0)
+            timeout = -1.0
+        if not (timeout > 0):
+            logger.warning(f'[登录] Restart.LoginWaitTimeout 配置非法（{value!r}），回退默认 30 秒')
+            return 30.0
+        if timeout > 3600:
+            logger.warning(f'[登录] Restart.LoginWaitTimeout 超过上限（{value!r}），按 3600 秒处理')
+            return 3600.0
+        return timeout
 
     def handle_app_login(self):
         """
