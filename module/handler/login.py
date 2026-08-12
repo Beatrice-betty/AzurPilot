@@ -215,6 +215,7 @@ class LoginHandler(UI):
         logger.info('[登录] 处理应用登录')
         self.device.screenshot_interval_set(1.0)
         login_wait_timeout = self._login_wait_timeout()
+        logger.info(f'[登录] 登录等待宽容时间 {login_wait_timeout:g} 秒')
         try:
             # 登录等待阶段放宽卡死检测，避免后台模拟器慢启动时
             # 静态画面超过默认 30 秒就被误判为 GameStuckError 而陷入重启循环。
