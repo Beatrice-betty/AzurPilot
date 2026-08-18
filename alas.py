@@ -105,6 +105,8 @@ class AzurLaneAutoScript:
         # 连续卡死/ADB 离线计数，用于判断是否需要重启模拟器
         self.consecutive_game_stuck = 0
         self.consecutive_adb_offline = 0
+        # 未预期异常连续计数，先重启游戏，连续多次才重启模拟器
+        self.consecutive_unexpected_error = 0
         # ScriptError 连续计数，达到阈值后退出（代码 bug 重试无意义）
         self.script_error_count = 0
         # 上次计划重启模拟器的时间戳
@@ -750,7 +752,7 @@ class AzurLaneAutoScript:
             )
             return 'recoverable'
         except Exception as e:
-            # 未预期异常，尝试重启恢复而非直接终止
+            # 未预期异常，先重启游戏，连续多次失败才重启模拟器
             logger.exception_context(
                 title=f'任务执行发生未处理异常（{command}）', exc=e,
                 impact='当前任务无法确认执行结果，调度器将尝试重启恢复。',
@@ -759,8 +761,23 @@ class AzurLaneAutoScript:
             )
             self.save_error_log()
             self._check_sensitive_exit(command, e)
-            logger.warning('[Alas] 未处理异常，尝试重启模拟器恢复')
-            self._try_restart_emulator()
+
+            self.consecutive_unexpected_error += 1
+            limit = int(self.config.Error_GameStuckThreshold)
+            if self.consecutive_unexpected_error >= limit:
+                # 连续多次未预期异常，说明重启游戏无法解决，重启模拟器
+                logger.warning(
+                    f'[Alas] 未处理异常连续 {self.consecutive_unexpected_error}/{limit} 次，'
+                    f'重启模拟器恢复'
+                )
+                self._try_restart_emulator()
+                self.consecutive_unexpected_error = 0
+            else:
+                # 首次或前几次异常，先尝试重启游戏（较轻的恢复）
+                logger.warning(
+                    f'[Alas] 未处理异常 {self.consecutive_unexpected_error}/{limit} 次，'
+                    f'先尝试重启游戏恢复'
+                )
             self.config.task_call('Restart')
             handle_notify(
                 self.config.Error_OnePushConfig,
@@ -1712,6 +1729,7 @@ class AzurLaneAutoScript:
                     consecutive_global_failures = 0 # 任务成功时重置全局失败计数器
                     self.consecutive_game_stuck = 0
                     self.consecutive_adb_offline = 0
+                    self.consecutive_unexpected_error = 0
                     continue
                 elif success == 'recoverable' or self.config.Error_HandleError:
                     # 可恢复错误或启用了错误处理，刷新配置后继续循环
