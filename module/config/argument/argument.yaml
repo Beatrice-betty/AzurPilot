@@ -194,7 +194,7 @@ Error:
     validate: [1, 10]
   WatchdogTaskTimeout:
     value: 120
-    validate: [10, 1440]
+    validate: [0, 99999]
   LlmAnalysis: true
   LlmApiKey:
     type: textarea

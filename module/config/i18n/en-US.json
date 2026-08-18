@@ -747,7 +747,7 @@
     },
     "WatchdogTaskTimeout": {
       "name": "Task Stuck Watchdog Timeout (min)",
-      "help": "If a single task runs longer than this, the watchdog treats it as a logic loop (e.g. unskippable story, pathfinding loop) and force-restarts the emulator. 0 to disable. Default 120 min (2h)."
+      "help": "If a single task runs longer than this, the watchdog treats it as a logic loop (e.g. unskippable story, pathfinding loop) and force-restarts the emulator.\n0 = disabled; 99999 = virtually unlimited.\nDefault 120 min (2h)."
     },
     "LlmAnalysis": {
       "name": "Enable LLM Error Analysis",
