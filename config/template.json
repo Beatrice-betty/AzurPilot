@@ -101,6 +101,7 @@
       "GameStuckThreshold": 3,
       "AdbOfflineRestart": false,
       "AdbOfflineThreshold": 3,
+      "WatchdogTaskTimeout": 120,
       "LlmAnalysis": true,
       "LlmApiKey": null,
       "LlmApiBase": "https://api.xiaomimimo.com/v1",
