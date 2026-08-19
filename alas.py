@@ -36,11 +36,11 @@ from module.notify import handle_notify, notify_webui
 # 看门狗仅在任务执行阶段（self.run() 期间）激活，空闲等待（wait_until、
 # 服务器维护检查）期间自动暂停，避免误触发。
 WATCHDOG_CHECK_INTERVAL = 30
-WATCHDOG_THRESHOLD = 300  # 5 分钟无日志 → 主线程卡死
-# 单个任务最长运行时间（分钟），超过则判定为任务逻辑死循环
-# （如 story_skip 不断点击但剧情无法跳过、地图寻路死循环等）
-# 此时日志仍在更新，但任务无法自然退出，需强制中断
-# 默认 120 分钟（2 小时），可在 WebUI「调试设置」中修改，0 表示禁用
+# 日志心跳超时（秒），仅作为配置读取失败的兜底默认值
+# 实际值从配置 Error.WatchdogLogTimeout 读取，可在 WebUI「调试设置」中修改
+WATCHDOG_LOG_TIMEOUT_DEFAULT = 300
+# 单个任务最长运行时间（分钟），仅作为配置读取失败的兜底默认值
+# 实际值从配置 Error.WatchdogTaskTimeout 读取，0 表示禁用
 WATCHDOG_TASK_TIMEOUT_DEFAULT = 120
 # 模拟器 stop/start 单次操作的硬超时秒数
 RESTART_EMULATOR_OP_TIMEOUT = 120
@@ -273,10 +273,16 @@ class AzurLaneAutoScript:
                 continue
 
             # 检查 1：日志心跳超时（主线程卡死）
-            elapsed_log = time.monotonic() - self._log_heartbeat.last_log_time
-            if elapsed_log > WATCHDOG_THRESHOLD:
-                self._watchdog_recover(elapsed_log, reason='log_timeout')
-                continue
+            # 从配置读取超时阈值（秒），0 表示禁用
+            try:
+                log_timeout = int(self.config.Error_WatchdogLogTimeout)
+            except Exception:
+                log_timeout = WATCHDOG_LOG_TIMEOUT_DEFAULT
+            if log_timeout > 0:
+                elapsed_log = time.monotonic() - self._log_heartbeat.last_log_time
+                if elapsed_log > log_timeout:
+                    self._watchdog_recover(elapsed_log, reason='log_timeout')
+                    continue
 
             # 检查 2：任务运行时间超时（逻辑死循环）
             # 即使日志在更新，如果任务运行时间过长，说明陷入了无法
@@ -331,9 +337,14 @@ class AzurLaneAutoScript:
                 f'强制杀死模拟器进程以中断任务'
             )
         else:
+            try:
+                log_timeout = int(self.config.Error_WatchdogLogTimeout)
+            except Exception:
+                log_timeout = WATCHDOG_LOG_TIMEOUT_DEFAULT
             logger.critical(
-                f'[Alas][看门狗] 任务执行中已 {int(elapsed)} 秒无任何日志输出，'
-                f'判定主线程卡死，强制杀死模拟器进程以解除阻塞'
+                f'[Alas][看门狗] 任务执行中已 {int(elapsed)} 秒无任何日志输出'
+                f'（超过 {log_timeout} 秒），判定主线程卡死，'
+                f'强制杀死模拟器进程以解除阻塞'
             )
 
         try:

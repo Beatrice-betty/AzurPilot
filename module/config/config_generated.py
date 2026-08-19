@@ -123,6 +123,8 @@ class GeneratedConfig:
     Error_AdbOfflineRestart = False
     Error_AdbOfflineThreshold = 3
     Error_WatchdogTaskTimeout = 120
+    Error_WatchdogLogTimeout = 300
+    Error_RestartOperationTimeout = 120
     Error_LlmAnalysis = True
     Error_LlmApiKey = None
     Error_LlmApiBase = 'https://api.xiaomimimo.com/v1'

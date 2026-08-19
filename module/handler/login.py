@@ -50,6 +50,8 @@ RESTART_SUBSEQUENT_TRY_WAIT_SECONDS = 20
 RESTART_OBSERVE_SECONDS = 180
 RESTART_OBSERVE_INTERVAL = 15
 # 单次 app_stop/app_start 操作的硬超时秒数。
+# 仅作为配置读取失败的兜底默认值；实际值从配置 Error.RestartOperationTimeout
+# 读取，可在 WebUI「调试设置」中修改。
 # atx-agent 自恢复可能耗时 70 秒以上，给 120 秒余量；超过则判定模拟器或
 # atx-agent 卡死，立即抛出 EmulatorNotRunningError 触发模拟器重启，
 # 避免 u2 调用无限挂起导致 LoginWaitTimeout / GameStuckRestart 等保护机制
@@ -212,6 +214,36 @@ class LoginHandler(UI):
             return 3600.0
         return timeout
 
+    def _restart_operation_timeout(self):
+        """
+        获取 app_stop/app_start 操作的硬超时秒数。
+
+        对应配置项 Alas.Error.RestartOperationTimeout，超时则判定模拟器或
+        atx-agent 卡死，立即抛出 EmulatorNotRunningError 触发模拟器重启。
+
+        Returns:
+            int: 超时秒数，配置非法时回退默认 120 秒。
+        """
+        value = deep_get(
+            self.config.data, 'Alas.Error.RestartOperationTimeout',
+            default=RESTART_OPERATION_TIMEOUT,
+        )
+        try:
+            timeout = int(value)
+        except (TypeError, ValueError):
+            logger.warning(
+                f'[重启] Alas.Error.RestartOperationTimeout 配置非法（{value!r}），'
+                f'回退默认 {RESTART_OPERATION_TIMEOUT} 秒'
+            )
+            return RESTART_OPERATION_TIMEOUT
+        if not (timeout > 0):
+            logger.warning(
+                f'[重启] Alas.Error.RestartOperationTimeout 配置非法（{value!r}），'
+                f'回退默认 {RESTART_OPERATION_TIMEOUT} 秒'
+            )
+            return RESTART_OPERATION_TIMEOUT
+        return timeout
+
     def handle_app_login(self):
         """
         处理应用登录流程。
@@ -314,6 +346,10 @@ class LoginHandler(UI):
         logger.hr('应用重启')
         is_restart_success = False
 
+        # 从配置读取硬超时（秒），配置非法时回退默认 120 秒
+        op_timeout = self._restart_operation_timeout()
+        logger.info(f'[重启] app_stop/app_start 硬超时 {op_timeout} 秒')
+
         clear_cache = getattr(self.config, 'Restart_ClearCache', False)
         for i in range(RESTART_TRIES):
             logger.info(f"[重启] 应用重启尝试 {i + 1}/{RESTART_TRIES}...")
@@ -322,7 +358,7 @@ class LoginHandler(UI):
             # 等保护机制（依赖 screenshot() 中的 stuck_record_check）失效
             self._call_with_restart_deadline(
                 self.device.app_stop,
-                timeout=RESTART_OPERATION_TIMEOUT,
+                timeout=op_timeout,
                 operation_name='应用停止',
             )
             if clear_cache:
@@ -330,7 +366,7 @@ class LoginHandler(UI):
             self.device.sleep(3)
             self._call_with_restart_deadline(
                 self.device.app_start,
-                timeout=RESTART_OPERATION_TIMEOUT,
+                timeout=op_timeout,
                 operation_name='应用启动',
             )
             wait_seconds = RESTART_FIRST_TRY_WAIT_SECONDS if i == 0 else RESTART_SUBSEQUENT_TRY_WAIT_SECONDS
