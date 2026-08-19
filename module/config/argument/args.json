@@ -508,6 +508,10 @@
           99999
         ]
       },
+      "RestartOperationTimeoutEnable": {
+        "type": "checkbox",
+        "value": false
+      },
       "RestartOperationTimeout": {
         "type": "input",
         "value": 120,

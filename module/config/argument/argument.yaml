@@ -197,6 +197,7 @@ Error:
   WatchdogTaskTimeout:
     value: 120
     validate: [0, 99999]
+  RestartOperationTimeoutEnable: false
   RestartOperationTimeout:
     value: 120
     validate: [10, 600]

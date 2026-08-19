@@ -125,6 +125,7 @@ class GeneratedConfig:
     Error_WatchdogEnable = False
     Error_WatchdogTaskEnable = False
     Error_WatchdogTaskTimeout = 120
+    Error_RestartOperationTimeoutEnable = False
     Error_RestartOperationTimeout = 120
     Error_LlmAnalysis = True
     Error_LlmApiKey = None

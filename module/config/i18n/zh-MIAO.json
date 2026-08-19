@@ -757,6 +757,10 @@
       "name": "Error.WatchdogTaskTimeout.name",
       "help": "Error.WatchdogTaskTimeout.help"
     },
+    "RestartOperationTimeoutEnable": {
+      "name": "Error.RestartOperationTimeoutEnable.name",
+      "help": "Error.RestartOperationTimeoutEnable.help"
+    },
     "RestartOperationTimeout": {
       "name": "Error.RestartOperationTimeout.name",
       "help": "Error.RestartOperationTimeout.help"
