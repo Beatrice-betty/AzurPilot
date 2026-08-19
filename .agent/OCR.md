@@ -61,7 +61,7 @@ alwaysApply: true
 
 - `L38-58`：`handle_ocr_error()` — OCR 依赖加载失败统一处理，提示安装 VC++ 运行库并抛出 `RequestHumanTakeover`。
 - `L61-71`：导入 RapidOCR 依赖与 `NcnnRecOCR`/`supports_ncnn_model`。失败时调用 `handle_ocr_error()`。
-- `L74-142`：模型路径常量与 `ONNX_MODEL_PARAMS` — 6 个逻辑模型（azur_lane、azur_lane_jp、ppocr_v6、cn、jp、tw）各含 lite/standard/pro 三档 PP-OCRv6 模型 + 旧版 AlOCR 专用模型（alocr_en_v2_6/alocr_cn_v3）；`DEFAULT_ONNX_MODEL_VERSION` 默认 standard 档。azur_lane/azur_lane_jp 使用受限 en 字典。
+- `L74-142`：模型路径常量与 `ONNX_MODEL_PARAMS` — 6 个逻辑模型（azur_lane、azur_lane_jp、ppocr_v6、cn、jp、tw）各含 lite/standard/pro 三档 PP-OCRv6 模型 + 旧版 AlOCR 专用模型（alocr_en_v2_6/alocr_cn_v3）；`DEFAULT_ONNX_MODEL_VERSION` 对英文和简体中文默认使用对应旧版模型，其余语言默认 standard 档。azur_lane/azur_lane_jp 使用受限 en 字典。
 - `L145-177`：`RecOnlyOCR` — 仅加载识别模型，跳过检测和分类（`_initialize()` 重写）。
 - `L180-181`：全局配置加载（`AzurLaneConfig`）。
 - `L184-243`：OCR 工作队列 — `_OcrJob`（任务封装）、`_ocr_queue`（队列）、`_ocr_worker_loop()`（后台线程 `AlOcrQueue`）、`_ensure_ocr_worker()`、`_run_ocr_queued()`（将 OCR 操作排队到单线程执行，避免并发问题）。
