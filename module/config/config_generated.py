@@ -122,8 +122,9 @@ class GeneratedConfig:
     Error_GameStuckThreshold = 3
     Error_AdbOfflineRestart = False
     Error_AdbOfflineThreshold = 3
+    Error_WatchdogEnable = False
+    Error_WatchdogTaskEnable = False
     Error_WatchdogTaskTimeout = 120
-    Error_WatchdogLogTimeout = 300
     Error_RestartOperationTimeout = 120
     Error_LlmAnalysis = True
     Error_LlmApiKey = None
@@ -1009,6 +1010,7 @@ class GeneratedConfig:
 
     # 配置组 `EmulatorManagement`
     EmulatorManagement_ScheduledEmulatorRestart = False
+    EmulatorManagement_ForceScheduledRestart = False
     EmulatorManagement_RestartIntervalHours = 4
 
     # 配置组 `EmulatorManager`

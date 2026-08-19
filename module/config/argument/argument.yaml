@@ -192,12 +192,11 @@ Error:
   AdbOfflineThreshold:
     value: 3
     validate: [1, 10]
+  WatchdogEnable: false
+  WatchdogTaskEnable: false
   WatchdogTaskTimeout:
     value: 120
     validate: [0, 99999]
-  WatchdogLogTimeout:
-    value: 300
-    validate: [60, 1800]
   RestartOperationTimeout:
     value: 120
     validate: [10, 600]
@@ -1951,6 +1950,7 @@ GameManager:
   AutoRestart: true
 EmulatorManagement:
   ScheduledEmulatorRestart: false
+  ForceScheduledRestart: false
   RestartIntervalHours:
     value: 4
     validate: [1, 24]
