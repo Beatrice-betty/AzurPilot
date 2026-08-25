@@ -152,12 +152,13 @@ class EquipmentCodeHandler(StorageHandler):
 
     def is_code_preview_empty(self):
         # 只有所有可用槽位都正向命中空槽，才能确认预览已清空。
-        for button in EQUIPMENT_PREVIEW_EMPTY[:5]:
-            if not self.appear(button, offset=(5, 5)):
-                return False
-
-        return self.appear(EQUIPMENT_CODE_EQUIP_5_LOCKED, offset=(5, 5)) \
+        return all(
+            self.appear(button, offset=(5, 5))
+            for button in EQUIPMENT_PREVIEW_EMPTY[:5]
+        ) and (
+            self.appear(EQUIPMENT_CODE_EQUIP_5_LOCKED, offset=(5, 5))
             or self.appear(EQUIPMENT_CODE_EQUIP_5, offset=(5, 5))
+        )
 
     def _code_preview_slot_occupied(self, button):
         return button.match_luma(self.device.image, offset=(2, 2), similarity=0.85)
@@ -302,21 +303,14 @@ class EquipmentCodeHandler(StorageHandler):
             return False
 
     def _code_wait_preview_loaded(self):
-        """确认输入后等待装备预览加载完成。"""
-        confirm_clicked = False
+        """等待装备码预览加载完成。"""
         for _ in self.loop(timeout=10, skip_first=False):
-            # 确认按钮仍可见时，预览可能仍被输入法遮挡，不能提前校验。
-            if self.appear(EQUIPMENT_CODE_ENTER, offset=(5, 5), threshold=30):
-                if self.appear_then_click(EQUIPMENT_CODE_ENTER, offset=(5, 5), interval=3):
-                    confirm_clicked = True
-                continue
-
-            if self.device.ime_shown():
-                continue
-
-            # 只有预览栏正向识别为已加载，状态循环才能退出。
-            if confirm_clicked and self.is_code_preview_loaded():
+            # End：正向退出判断必须位于点击操作之前。
+            if self.is_code_preview_loaded():
                 return True
+
+            if self.appear_then_click(EQUIPMENT_CODE_ENTER, offset=(5, 5), interval=3):
+                continue
 
         return False
 
