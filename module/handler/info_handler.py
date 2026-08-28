@@ -301,7 +301,7 @@ class InfoHandler(ModuleBase):
             return False
 
         if not self.appear(POPUP_CONFIRM, offset=self._popup_offset) \
-                and not self.appear(POPUP_CANCEL, offset=self._popup_offset, interval=2):
+                or not self.appear(POPUP_CANCEL, offset=self._popup_offset, interval=2):
             return False
 
         if self.appear(USE_DATA_KEY, offset=(20, 20)):
@@ -314,11 +314,14 @@ class InfoHandler(ModuleBase):
                 if self.appear(USE_DATA_KEY, offset=(20, 20), interval=5):
                     self.device.click(USE_DATA_KEY_NOTIFIED)
                     continue
+        else:
+            # 新版战斗准备界面可能使专用模板失配，但作战档案仍明确预期该弹窗。
+            logger.warning('[作战档案] 数据密钥专用模板未命中，按通用弹窗继续确认')
 
+        result = self.handle_popup_confirm('USE_DATA_KEY')
+        if result:
             self.config.USE_DATA_KEY = False  # 成功后重置，因为任务可能在恢复前被停止
-            return self.handle_popup_confirm('USE_DATA_KEY')
-
-        return False
+        return result
 
     def handle_vote_popup(self):
         """
