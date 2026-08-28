@@ -2,7 +2,12 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from module.handler.assets import POPUP_CANCEL, POPUP_CONFIRM, USE_DATA_KEY
+from module.handler.assets import (
+    POPUP_CANCEL,
+    POPUP_CONFIRM,
+    USE_DATA_KEY,
+    USE_DATA_KEY_NOTIFIED,
+)
 from module.handler.info_handler import InfoHandler
 
 
@@ -10,6 +15,8 @@ class TestUseDataKeyPopup(unittest.TestCase):
     def setUp(self):
         self.handler = object.__new__(InfoHandler)
         self.handler.config = SimpleNamespace(USE_DATA_KEY=True)
+        self.handler.device = Mock()
+        self.handler.image_color_count = Mock(return_value=True)
         self.handler.handle_popup_confirm = Mock(return_value=True)
 
     def test_confirm_when_content_template_is_missing(self):
@@ -37,6 +44,22 @@ class TestUseDataKeyPopup(unittest.TestCase):
 
         self.assertFalse(result)
         self.assertTrue(self.handler.config.USE_DATA_KEY)
+        self.handler.handle_popup_confirm.assert_not_called()
+
+    def test_enable_do_not_remind_when_content_template_is_missing(self):
+        """专用模板失配时，也应先勾选“今天不再提示”。"""
+        self.handler.image_color_count.return_value = False
+        self.handler.appear = Mock(side_effect=lambda button, **kwargs: {
+            POPUP_CONFIRM: True,
+            POPUP_CANCEL: True,
+            USE_DATA_KEY: False,
+        }.get(button, False))
+
+        result = InfoHandler.handle_use_data_key(self.handler)
+
+        self.assertTrue(result)
+        self.assertTrue(self.handler.config.USE_DATA_KEY)
+        self.handler.device.click.assert_called_once_with(USE_DATA_KEY_NOTIFIED)
         self.handler.handle_popup_confirm.assert_not_called()
 
     def test_keep_state_when_confirmation_fails(self):
