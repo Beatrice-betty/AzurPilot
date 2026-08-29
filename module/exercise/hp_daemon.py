@@ -109,6 +109,7 @@ class HpDaemon(ModuleBase):
             PAUSE_ElvenVine,
             PAUSE_GildedReverie,
             PAUSE_AzureCore,
+            PAUSE_Nier,
             PAUSE_OldeRoyal,
             PAUSE_YoRHa,
         ]:
