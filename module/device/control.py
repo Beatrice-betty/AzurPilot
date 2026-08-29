@@ -183,8 +183,7 @@ class Control(Hermit, Minitouch, Scrcpy, MaaTouch, NemuIpc):
         self.swipe(p1, p2, duration=duration, name=name, distance_check=distance_check)
 
     def drag(self, p1, p2, segments=1, shake=(0, 15), point_random=(-10, -10, 10, 10), shake_random=(-5, -5, 5, 5),
-<<<<<<< HEAD
-             swipe_duration=0.25, shake_duration=0.1, name='DRAG'):
+             swipe_duration=0.25, shake_duration=0.1, hold_duration=0.0, name='DRAG'):
         """执行拖拽操作，支持分段滑动和松手后的抖动模拟。
 
         用于碧蓝航线中需要精确拖拽的场景（如装备拖放、编队调整）。
@@ -199,11 +198,9 @@ class Control(Hermit, Minitouch, Scrcpy, MaaTouch, NemuIpc):
             shake_random (tuple): 抖动的随机偏移范围 (x_min, y_min, x_max, y_max)。
             swipe_duration (float): 滑动持续时间（秒）。
             shake_duration (float): 抖动持续时间（秒）。
+            hold_duration (float): 松手前的持续按住时间（秒）。
             name (str): 拖拽操作名称，用于日志输出。
         """
-=======
-             swipe_duration=0.25, shake_duration=0.1, hold_duration=0.0, name='DRAG'):
->>>>>>> 6e75afd
         self.handle_control_check(name)
         p1, p2 = ensure_int(p1, p2)
         logger.info(
