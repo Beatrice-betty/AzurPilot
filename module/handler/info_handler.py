@@ -301,24 +301,24 @@ class InfoHandler(ModuleBase):
             return False
 
         if not self.appear(POPUP_CONFIRM, offset=self._popup_offset) \
-                or not self.appear(POPUP_CANCEL, offset=self._popup_offset, interval=2):
+                and not self.appear(POPUP_CANCEL, offset=self._popup_offset, interval=2):
             return False
 
-        if not self.appear(USE_DATA_KEY, offset=(20, 20)):
-            # 新版战斗准备界面可能使专用模板失配，但作战档案仍明确预期该弹窗。
-            logger.warning('[作战档案] 数据密钥专用模板未命中，按通用弹窗继续确认')
+        if self.appear(USE_DATA_KEY, offset=(20, 20)):
+            # enable USE_DATA_KEY_NOTIFIED
+            for _ in self.loop():
+                enabled = self.image_color_count(
+                    USE_DATA_KEY_NOTIFIED, color=(140, 207, 66), threshold=180, count=10)
+                if enabled:
+                    break
+                if self.appear(USE_DATA_KEY, offset=(20, 20), interval=5):
+                    self.device.click(USE_DATA_KEY_NOTIFIED)
+                    continue
 
-        # “今天不再提示”复选框的位置和选中颜色不依赖弹窗内容模板。
-        enabled = self.image_color_count(
-            USE_DATA_KEY_NOTIFIED, color=(140, 207, 66), threshold=180, count=10)
-        if not enabled:
-            self.device.click(USE_DATA_KEY_NOTIFIED)
-            return True
-
-        result = self.handle_popup_confirm('USE_DATA_KEY')
-        if result:
             self.config.USE_DATA_KEY = False  # 成功后重置，因为任务可能在恢复前被停止
-        return result
+            return self.handle_popup_confirm('USE_DATA_KEY')
+
+        return False
 
     def handle_vote_popup(self):
         """
