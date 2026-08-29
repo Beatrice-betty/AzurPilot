@@ -211,8 +211,14 @@ class Uiautomator2(Connection):
             self.sleep(second)
 
     def drag_uiautomator2(self, p1, p2, segments=1, shake=(0, 15), point_random=(-10, -10, 10, 10),
+<<<<<<< HEAD
                           shake_random=(-5, -5, 5, 5), swipe_duration=0.25, shake_duration=0.1):
         """拖拽并抖动，示意如下:
+=======
+                          shake_random=(-5, -5, 5, 5), swipe_duration=0.25, shake_duration=0.1,
+                          hold_duration=0.0):
+        """Drag and shake, like:
+>>>>>>> 6e75afd
                      /\
         +-----------+  +  +
                         \/
@@ -223,11 +229,20 @@ class Uiautomator2(Connection):
             p1 (tuple): 起始点，(x, y)。
             p2 (tuple): 终止点，(x, y)。
             segments (int):
+<<<<<<< HEAD
             shake (tuple): 到达终止点后的抖动。
             point_random: 为起始点和终止点添加随机偏移。
             shake_random: 为抖动数组添加随机偏移。
             swipe_duration: 路径点之间的间隔时间。
             shake_duration: 抖动点之间的间隔时间。
+=======
+            shake (tuple): Shake after arrive end point.
+            point_random: Add random to start point and end point.
+            shake_random: Add random to shake array.
+            swipe_duration: Duration between way points.
+            shake_duration: Duration between shake points.
+            hold_duration: Hold time before release.
+>>>>>>> 6e75afd
         """
         p1 = np.array(p1) - random_rectangle_point(point_random)
         p2 = np.array(p2) - random_rectangle_point(point_random)
@@ -237,6 +252,13 @@ class Uiautomator2(Connection):
             (*p2 - shake - random_rectangle_point(shake_random), shake_duration),
             (*p2, shake_duration)
         ]
+        internal_hold = ensure_time(shake_duration) * 3
+        hold_duration = ensure_time(hold_duration) - internal_hold
+        if hold_duration > 0:
+            path += [
+                (*p2, hold_duration),
+                (*p2, 0),
+            ]
         path = [(int(x), int(y), d) for x, y, d in path]
         self._drag_along(path)
 
