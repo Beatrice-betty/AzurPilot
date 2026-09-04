@@ -18,6 +18,7 @@ import cv2
 import numpy as np
 
 from module.base.decorator import cached_property
+from module.base.debug_clip import clip_feed
 from module.base.timer import Timer
 from module.base.utils import get_color, image_size, limit_in, save_image, set_template_match_non_native_720p
 from module.config.time_source import now as current_time
@@ -111,6 +112,9 @@ class Screenshot(Adb, WSA, DroidCast, AScreenCap, Scrcpy, NemuIpc, LDOpenGL):
                 # 此操作大约需要 40-60ms
                 cv2.fastNlMeansDenoising(self.image, self.image, h=17, templateWindowSize=1, searchWindowSize=2)
             self.image = self._handle_orientated_image(self.image)
+
+            # debug 录屏：ALAS 自己抓到的帧，若录屏开启则按间隔抽帧存视频
+            clip_feed(self.image)
 
             if self.config.Error_SaveError:
                 self.screenshot_deque.append({'time': current_time(), 'image': self.image})

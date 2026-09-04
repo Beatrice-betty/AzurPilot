@@ -13789,6 +13789,10 @@
           true,
           false
         ]
+      },
+      "DebugClip": {
+        "type": "checkbox",
+        "value": false
       }
     },
     "OpsiSirenBug": {
