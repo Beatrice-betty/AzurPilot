@@ -1,34 +1,34 @@
-"""侵蚀1漏猫复盘 debug 录屏（战后事件处理段）。
+"""侵蚀1漏猫复盘 debug 录屏（真实游戏画面，scrcpy 设备直录）。
 
-原理：ALAS 主线程每次 device.screenshot() 都会经过 module/device/screenshot.py
-的截图中枢。本模块把“录屏开关打开期间、按固定最小间隔抽样”的帧转发给后台
-编码线程，用 ffmpeg 直接写成 mp4。帧来自 ALAS 自己看到的画面，不额外增加
-adb 截图，因此能精确复现“画面里明明有明石却没被识别”这类漏猫场景。
+用户要录的是**游戏真实画面**（30fps），而不是 ALAS 处理过的截图帧，因此不再
+复用 ALAS 的 device.screenshot()。本模块在录屏开启时，用项目自带的 scrcpy
+v1.20 客户端另起一路设备视频流（H.264，max_fps=30），把原始流直接交给 ffmpeg
+封装成 mp4 文件。scrcpy 走独立 adb 通道，不影响 ALAS 自身的控制与截图。
 
 用法（由侵蚀1战后处理代码驱动）：
-    clip = clip_start()              # 战后处理开始时打开
+    clip = clip_start(self.config)    # 打完开始找事件时打开（提前几秒预录）
     ... 重扫地图 / 处理事件 / 强制移动 ...
-    clip_end(keep=bool(事件已解决))  # 结束；keep 决定是否保留成文件
+    clip_end(keep=bool(事件已解决))    # 事件处理完、进入下一循环前结束
 
-文件输出到 ./log/clips/，一个事件段一个 mp4（默认全部保留、不自动清理）。
+文件输出到 ./log/clips/，一段一个 mp4（默认全部保留、不自动清理）。
+限制：ALAS 自身截图方式若正使用 scrcpy，本模块会跳过并告警（同一 abstract
+socket 无法并存）。scrcpy 启动失败会优雅降级为不录，不影响游戏逻辑。
 """
 
 import os
-import queue
 import shutil
+import socket
+import struct
 import subprocess
 import threading
 import time
 
-import cv2
-import numpy as np
+from adbutils import AdbError, Network
 
 from module.logger import logger
 
 DEFAULT_OUTPUT_DIR = "./log/clips"
-# 录屏开关关闭时截图中枢每帧都会调用 clip_feed()，为空对象时开销必须极小
-_ACTIVE = None
-_FFMPEG_WARNED = False
+_ACTIVE = None  # 当前活动的录制会话
 
 
 def _ffmpeg_path():
@@ -43,36 +43,112 @@ def _ffmpeg_path():
         return None
 
 
-class _ClipRecorder:
-    """单个 debug 视频段。
+class _ScrcpyClip:
+    """一个基于 scrcpy 设备视频流的 debug 录屏段。"""
 
-    Args:
-        output_dir (str): 视频输出目录。
-        fps (float): 编码帧率（也近似播放节奏）。
-        min_interval (float): 抽帧最小间隔（秒），控制文件体积。
-    """
-
-    def __init__(self, output_dir=DEFAULT_OUTPUT_DIR, fps=2.0, min_interval=0.4):
-        self.output_dir = output_dir
+    def __init__(self, config, fps=30, width=1280, bitrate_scale=1.0):
+        self.config = config
         self.fps = fps
-        self.min_interval = min_interval
-        self._queue = queue.Queue(maxsize=8)
-        self._stop_event = threading.Event()
-        self._proc = None
-        self._writer = None
-        self._size = None  # (width, height)，由首帧确定
-        self._last_push = 0.0
+        self.width = width
+        self.bitrate_scale = bitrate_scale
+        self.output_dir = DEFAULT_OUTPUT_DIR
         self.tmp_path = None
+        self._core = None
+        self.video_socket = None
+        self.control_socket = None
+        self.server_stream = None
+        self.alive = False
+        self.resolution = (1280, 720)
+        self._proc = None
+        self._reader = None
+        self._stop = threading.Event()
 
-    # ------------------------------------------------------------ 生命周期
-    def open(self):
-        """启动 ffmpeg 并创建临时文件。成功返回 True。"""
+    # ------------------------------------------------ scrcpy 视频流
+    @property
+    def _bitrate(self):
+        # scrcpy 1.20 超过 20Mbps 会回落，保守限制在 20Mbps 内
+        base = max(1, self.width * int(self.width * 9 / 16) * self.fps)
+        bitrate = int(base * 0.20 * self.bitrate_scale)
+        return max(300_000, min(bitrate, 20_000_000))
+
+    def _open_scrcpy(self):
+        from module.device.method.scrcpy.core import ScrcpyCore
+        from module.device.method.scrcpy.options import ScrcpyOptions
+
+        core = ScrcpyCore(self.config)
+        core.adb_push(self.config.SCRCPY_FILEPATH_LOCAL, self.config.SCRCPY_FILEPATH_REMOTE)
+
+        original_frame_rate = ScrcpyOptions.frame_rate
+        try:
+            ScrcpyOptions.frame_rate = self.fps
+            commands = ScrcpyOptions.command_v120(jar_path=self.config.SCRCPY_FILEPATH_REMOTE)
+        finally:
+            ScrcpyOptions.frame_rate = original_frame_rate
+        # scrcpy-server 1.20 参数位置：max_size、bitrate、max_fps
+        commands[6] = str(self.width)
+        commands[7] = str(self._bitrate)
+        commands[8] = str(self.fps)
+
+        server_stream = core.adb.shell(commands, stream=True)
+        server_stream.conn.settimeout(3)
+
+        ret = server_stream.read(10)
+        if b"Aborted" in ret:
+            raise RuntimeError("scrcpy-server 启动失败：Aborted")
+        if ret == b"[server] E":
+            ret += self._receive_more(server_stream)
+            raise RuntimeError(ret.decode("utf-8", errors="replace"))
+        ret += self._receive_more(server_stream)
+        if ret:
+            logger.info(f"[录屏] scrcpy-server: {ret.strip()}")
+
+        video_socket = self._connect_scrcpy_socket(core)
+        if video_socket.recv(1) != b"\x00":
+            raise RuntimeError("scrcpy 视频流握手失败")
+        control_socket = self._connect_scrcpy_socket(core)
+        device_name = video_socket.recv(64).decode("utf-8", errors="replace").rstrip("\x00")
+        if device_name:
+            logger.attr("[录屏] 设备", device_name)
+        resolution = video_socket.recv(4)
+        if len(resolution) != 4:
+            raise RuntimeError("scrcpy 未返回视频分辨率")
+        self.resolution = struct.unpack(">HH", resolution)
+        video_socket.settimeout(1)
+
+        self._core = core
+        self.server_stream = server_stream
+        self.video_socket = video_socket
+        self.control_socket = control_socket
+        self.alive = True
+        logger.attr("[录屏] 分辨率", self.resolution)
+
+    @staticmethod
+    def _receive_more(server_stream):
+        try:
+            return server_stream.conn.recv(4096)
+        except Exception:
+            return b""
+
+    def _connect_scrcpy_socket(self, core):
+        deadline = time.time() + 3
+        while time.time() < deadline:
+            try:
+                sock = core.adb.create_connection(Network.LOCAL_ABSTRACT, "scrcpy")
+                sock.settimeout(3)
+                return sock
+            except AdbError:
+                time.sleep(0.1)
+        raise RuntimeError("连接 scrcpy socket 超时")
+
+    # ------------------------------------------------ 生命周期
+    def start(self):
+        """启动 scrcpy 视频流 + ffmpeg 输出到临时文件。成功返回 True。"""
         ffmpeg = _ffmpeg_path()
         if not ffmpeg:
-            global _FFMPEG_WARNED
-            if not _FFMPEG_WARNED:
-                logger.warning("[录屏] 未找到 ffmpeg，录屏功能不可用")
-                _FFMPEG_WARNED = True
+            logger.warning("[录屏] 未找到 ffmpeg，录屏功能不可用")
+            return False
+        if str(self.config.Emulator_ScreenshotMethod).lower().startswith("scrcpy"):
+            logger.warning("[录屏] 截图方式为 scrcpy，无法并存第二条视频流，本次跳过录制")
             return False
         try:
             os.makedirs(self.output_dir, exist_ok=True)
@@ -84,17 +160,10 @@ class _ClipRecorder:
         self.tmp_path = os.path.join(self.output_dir, f"_tmp_eh1_{ts}.mp4")
         cmd = [
             ffmpeg, "-y",
-            "-f", "rawvideo",
-            "-vcodec", "rawvideo",
-            "-pix_fmt", "bgr24",
-            "-s", "1280x720",
-            "-r", str(self.fps),
-            "-i", "-",
-            "-an",
-            "-c:v", "libx264",
-            "-preset", "veryfast",
-            "-crf", "28",
-            "-pix_fmt", "yuv420p",
+            "-f", "h264",
+            "-framerate", str(self.fps),
+            "-i", "pipe:0",
+            "-c:v", "copy",
             "-movflags", "+faststart",
             self.tmp_path,
         ]
@@ -106,63 +175,75 @@ class _ClipRecorder:
         except OSError as e:
             logger.warning(f"[录屏] 启动 ffmpeg 失败: {e}")
             return False
-        self._writer = threading.Thread(target=self._encode_loop, daemon=True)
-        self._writer.start()
-        logger.info(f"[录屏] 开始录制临时文件: {self.tmp_path}")
+
+        try:
+            self._open_scrcpy()
+        except Exception as e:
+            logger.warning(f"[录屏] scrcpy 启动失败，本次不录制: {e}")
+            self._proc.terminate()
+            self._proc = None
+            if self.tmp_path and os.path.exists(self.tmp_path):
+                try:
+                    os.remove(self.tmp_path)
+                except OSError:
+                    pass
+            return False
+
+        self._reader = threading.Thread(target=self._reader_loop, daemon=True)
+        self._reader.start()
+        logger.info(f"[录屏] 开始录制（真实画面 {self.fps}fps）: {self.tmp_path}")
         return True
 
-    def _encode_loop(self):
-        """从队列取原始帧写进 ffmpeg，None 表示结束。"""
-        while True:
-            frame = self._queue.get()
-            if frame is None:
-                break
-            if self._proc is None or self._proc.poll() is not None:
-                break
+    def _reader_loop(self):
+        """把 scrcpy 原始 H.264 流写入 ffmpeg。"""
+        try:
+            while not self._stop.is_set() and self.alive:
+                try:
+                    data = self.video_socket.recv(0x10000)
+                except socket.timeout:
+                    continue
+                except (ConnectionError, OSError):
+                    break
+                if not data:
+                    break
+                try:
+                    self._proc.stdin.write(data)
+                    self._proc.stdin.flush()
+                except Exception:
+                    break
+        finally:
             try:
-                data = frame.tobytes()
-                self._proc.stdin.write(data)
-                self._proc.stdin.flush()
+                if self._proc is not None and self._proc.stdin:
+                    self._proc.stdin.close()
             except Exception:
-                break
-        try:
-            if self._proc is not None and self._proc.stdin:
-                self._proc.stdin.close()
-        except Exception:
-            pass
+                pass
 
-    def push(self, image):
-        """主线程每帧调用；按最小间隔抽帧后交给编码线程。"""
-        now = time.perf_counter()
-        if now - self._last_push < self.min_interval:
-            return
-        if self._queue.full():
-            return
-        self._last_push = now
-        try:
-            self._queue.put_nowait(np.ascontiguousarray(image).copy())
-        except Exception:
-            pass
+    def _close_scrcpy(self):
+        self.alive = False
+        for obj in (self.control_socket, self.video_socket, self.server_stream):
+            if obj is None:
+                continue
+            try:
+                obj.close()
+            except Exception:
+                pass
+        self.control_socket = None
+        self.video_socket = None
+        self.server_stream = None
 
     def finalize(self, keep):
-        """正常收尾录制，再决定保留还是删除临时文件。
+        """结束录制，决定保留还是删除。
 
         Returns:
             str: 保留时返回最终 mp4 路径，丢弃或失败返回 None。
         """
-        # 一律先让 ffmpeg 正常写完（发送结束标记并等编码线程排空队列），
-        # 避免直接 terminate 导致文件被占用而无法删除。
-        if not self._stop_event.is_set():
-            self._stop_event.set()
-            try:
-                self._queue.put_nowait(None)
-            except queue.Full:
-                pass
-        if self._writer is not None:
-            self._writer.join(timeout=8)
+        self._stop.set()
+        self._close_scrcpy()
+        if self._reader is not None:
+            self._reader.join(timeout=6)
         if self._proc is not None:
             try:
-                self._proc.wait(timeout=8)
+                self._proc.wait(timeout=6)
             except Exception:
                 try:
                     self._proc.terminate()
@@ -199,17 +280,20 @@ class _ClipRecorder:
         return final_path
 
 
-def clip_start(output_dir=DEFAULT_OUTPUT_DIR, fps=2.0, min_interval=0.4):
+def clip_start(config, fps=30):
     """打开录屏（线程安全：重复调用返回 None）。
 
+    Args:
+        config: 当前运行实例的 AzurLaneConfig（含 serial / scrcpy 路径配置）。
+
     Returns:
-        _ClipRecorder: 录制句柄；失败（ffmpeg 缺失/已开启）返回 None。
+        _ScrcpyClip: 录制句柄；启动失败返回 None。
     """
     global _ACTIVE
     if _ACTIVE is not None:
         return None
-    rec = _ClipRecorder(output_dir=output_dir, fps=fps, min_interval=min_interval)
-    if not rec.open():
+    rec = _ScrcpyClip(config, fps=fps)
+    if not rec.start():
         return None
     _ACTIVE = rec
     return rec
@@ -230,11 +314,3 @@ def clip_end(keep=True):
     if rec is None:
         return None
     return rec.finalize(keep=keep)
-
-
-def clip_feed(image):
-    """截图中枢每截一帧调用一次；录屏关闭时近乎零开销。"""
-    rec = _ACTIVE
-    if rec is None:
-        return
-    rec.push(image)

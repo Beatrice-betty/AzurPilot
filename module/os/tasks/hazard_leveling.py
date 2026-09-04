@@ -84,7 +84,7 @@ class OpsiHazard1Leveling(CoinTaskMixin, OSMap):
         had_forced_move = False
         debug_error = None
         if self.config.OpsiHazard1Leveling_DebugClip:
-            debug_clip = clip_start()
+            debug_clip = clip_start(self.config)
         try:
             # 第一次重扫：检查是否还有事件
             self._solved_map_event = set()
