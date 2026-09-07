@@ -665,6 +665,22 @@
           "close_game",
           "close_emulator"
         ]
+      },
+      "WarmupEnable": {
+        "type": "checkbox",
+        "value": true,
+        "option": [
+          true,
+          false
+        ]
+      },
+      "WarmupMinutes": {
+        "type": "input",
+        "value": 15,
+        "validate": [
+          1,
+          1440
+        ]
       }
     },
     "DropRecord": {
@@ -1002,6 +1018,14 @@
         "validate": [
           1,
           3600
+        ]
+      },
+      "MoveChannelFloat": {
+        "type": "checkbox",
+        "value": false,
+        "option": [
+          true,
+          false
         ]
       }
     },
@@ -13757,8 +13781,13 @@
         "value": 200
       },
       "ExecuteFixedPatrolScan": {
-        "type": "checkbox",
-        "value": true
+        "type": "select",
+        "value": 0,
+        "option": [
+          0,
+          1,
+          2
+        ]
       },
       "SkipHpCheck": {
         "type": "checkbox",
@@ -13783,6 +13812,10 @@
           true,
           false
         ]
+      },
+      "DebugClip": {
+        "type": "checkbox",
+        "value": false
       }
     },
     "OpsiSirenBug": {
@@ -14433,7 +14466,8 @@
           "ChangFeng",
           "Mogador",
           "RoyalFortune",
-          "DaVinci"
+          "DaVinci",
+          "Taihou"
         ]
       },
       "Char2": {
@@ -14474,7 +14508,8 @@
           "ChangFeng",
           "Mogador",
           "RoyalFortune",
-          "DaVinci"
+          "DaVinci",
+          "Taihou"
         ]
       },
       "Product1": {
@@ -14611,7 +14646,8 @@
           "ChangFeng",
           "Mogador",
           "RoyalFortune",
-          "DaVinci"
+          "DaVinci",
+          "Taihou"
         ]
       },
       "Char2": {
@@ -14652,7 +14688,8 @@
           "ChangFeng",
           "Mogador",
           "RoyalFortune",
-          "DaVinci"
+          "DaVinci",
+          "Taihou"
         ]
       },
       "Product1": {
@@ -14801,7 +14838,8 @@
           "ChangFeng",
           "Mogador",
           "RoyalFortune",
-          "DaVinci"
+          "DaVinci",
+          "Taihou"
         ]
       },
       "Char2": {
@@ -14842,7 +14880,8 @@
           "ChangFeng",
           "Mogador",
           "RoyalFortune",
-          "DaVinci"
+          "DaVinci",
+          "Taihou"
         ]
       },
       "Product1": {
@@ -14949,7 +14988,8 @@
           "ChangFeng",
           "Mogador",
           "RoyalFortune",
-          "DaVinci"
+          "DaVinci",
+          "Taihou"
         ]
       },
       "Char2": {
@@ -14990,7 +15030,8 @@
           "ChangFeng",
           "Mogador",
           "RoyalFortune",
-          "DaVinci"
+          "DaVinci",
+          "Taihou"
         ]
       },
       "Product1": {
@@ -15102,7 +15143,8 @@
           "ChangFeng",
           "Mogador",
           "RoyalFortune",
-          "DaVinci"
+          "DaVinci",
+          "Taihou"
         ]
       },
       "Char2": {
@@ -15143,7 +15185,8 @@
           "ChangFeng",
           "Mogador",
           "RoyalFortune",
-          "DaVinci"
+          "DaVinci",
+          "Taihou"
         ]
       },
       "Product1": {
