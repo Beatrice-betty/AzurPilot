@@ -2740,7 +2740,8 @@
       "Cl1Filter": "ActionPoint",
       "RecordNonCL1AP": true,
       "RecordSeaMiles": true,
-      "DebugClip": false
+      "DebugClip": false,
+      "DebugClipRetentionDays": 7
     },
     "OpsiSirenBug": {
       "SirenResearch_Enable": true,

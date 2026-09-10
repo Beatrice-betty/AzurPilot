@@ -13936,6 +13936,10 @@
       "DebugClip": {
         "type": "checkbox",
         "value": false
+      },
+      "DebugClipRetentionDays": {
+        "type": "input",
+        "value": 7
       }
     },
     "OpsiSirenBug": {

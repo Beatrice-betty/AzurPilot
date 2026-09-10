@@ -78,7 +78,11 @@ class OpsiHazard1Leveling(CoinTaskMixin, OSMap):
 
         # debug 录屏：只录“战后找事件 + 处理事件 + 强制移动”这一段
         # 事件/强制移动处理完进入下一轮前结束；若无事件则不保留文件。
-        from module.base.debug_clip import clip_end, clip_start
+        from module.base.debug_clip import cleanup_clips_if_due, clip_end, clip_start
+
+        # 过期录像清理：与本次是否开启录制无关，避免关掉录制后旧录像一直堆着。
+        # 内部有节流，不会每轮战斗都真的扫目录。
+        cleanup_clips_if_due(self.config)
 
         debug_clip = None
         had_forced_move = False

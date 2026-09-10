@@ -1211,6 +1211,8 @@ OpsiHazard1Leveling:
     value: true
     option: [true, false]
   DebugClip: false
+  # 录像保留天数：log/clips/ 下超过该天数的录像会被自动清理，0 表示永久保留。
+  DebugClipRetentionDays: 7
 OpsiSirenBug:
   SirenResearch_Enable: true
   Siren_Mode:

@@ -3445,7 +3445,11 @@
     },
     "DebugClip": {
       "name": "Post-battle debug recording",
-      "help": "When enabled, during each erosion-1 round's post-battle handling (rescan / event resolution / forced movement), record what ALAS itself sees into an mp4 under log/clips/. Rounds with no event produce no file. Use this to manually verify whether Akashi is missed. Videos are kept indefinitely (no auto cleanup) — watch disk space."
+      "help": "When enabled, during each erosion-1 round's post-battle handling (rescan / event resolution / forced movement), record what ALAS itself sees into an mp4 under log/clips/. Rounds with no event produce no file. Use this to manually verify whether Akashi is missed. Clips are cleaned up automatically according to the clip retention setting below."
+    },
+    "DebugClipRetentionDays": {
+      "name": "Clip retention days",
+      "help": "Clips under log/clips/ older than this many days are deleted automatically, so recordings cannot fill up your disk. Set to 0 to keep them forever with no auto cleanup."
     }
   },
   "OpsiSirenBug": {
