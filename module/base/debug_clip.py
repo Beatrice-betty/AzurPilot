@@ -29,7 +29,10 @@ analyzeduration / threads 都压不下去），这段帧要等收到 EOF 才会�
 
     clip = clip_start(self.config)     # 打完开始找事件时打开
     ... 重扫地图 / 处理事件 / 强制移动 ...
-    clip_end(keep=bool(事件已解决))     # 事件处理完、进入下一循环前结束
+    clip_end(keep=True)                # 事件处理完、进入下一循环前结束
+
+调用方对每一轮都传 `keep=True`：不管这一轮有没有遇到事件都留下录像，方便逐轮
+回看实际过程。`keep=False` 只用于调用方确实想丢弃某一段的场景。
 
 文件输出到 `./log/clips/`，一段一个 mp4，按 `DebugClipRetentionDays` 保留天数自动
 清理（0 表示永久保留）。产物无效时**不会**留下文件，也不会谎报「已保存」。
@@ -976,7 +979,8 @@ def clip_end(keep=True):
     """结束当前录屏。
 
     Args:
-        keep (bool): 是否把该段保存为 mp4（无事件轮传 False 会自动丢弃）。
+        keep (bool): 是否把该段保存为 mp4。默认 True（每一轮都保留）；
+            传 False 会直接丢弃该段，不留下任何文件。
 
     Returns:
         str: 保留时的视频路径；无录制或产物无效时返回 None。
