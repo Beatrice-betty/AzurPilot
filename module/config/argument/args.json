@@ -12756,6 +12756,10 @@
         "type": "textarea",
         "value": "ActionPoint"
       },
+      "DebugClipRetentionDays": {
+        "type": "input",
+        "value": 7
+      },
       "NotifyOpsiMail": {
         "type": "checkbox",
         "value": true
@@ -13785,6 +13789,10 @@
         "value": false
       },
       "ExecuteFixedPatrolScan": {
+        "type": "checkbox",
+        "value": false
+      },
+      "DebugClip": {
         "type": "checkbox",
         "value": false
       }
