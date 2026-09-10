@@ -108,6 +108,22 @@ class TestCleanupClips(ClipTestCase):
         self.assertFalse(os.path.exists(stale))
         self.assertTrue(os.path.exists(fresh))
 
+    def test_removes_meowfficer_clips_too(self):
+        """短猫相接的录像用 meow_clip_ 前缀，同样要按保留天数清理。"""
+        old = self.touch('meow_clip_20200101_000000.mp4', 8 * 86400)
+        fresh = self.touch('meow_clip_20260909_000000.mp4', 60)
+        self.assertEqual(debug_clip.cleanup_clips(7, self.output_dir), 1)
+        self.assertFalse(os.path.exists(old))
+        self.assertTrue(os.path.exists(fresh))
+
+    def test_removes_both_tmp_prefixes(self):
+        """新前缀与历史遗留的 _tmp_eh1_ 临时文件都要清掉。"""
+        legacy = self.touch('_tmp_eh1_20200101_000000.mp4', 2 * 3600)
+        current = self.touch('_tmp_clip_20200101_000001.mp4', 2 * 3600)
+        self.assertEqual(debug_clip.cleanup_clips(0, self.output_dir), 2)
+        self.assertFalse(os.path.exists(legacy))
+        self.assertFalse(os.path.exists(current))
+
     def test_ignores_unrelated_files(self):
         other = self.touch('readme.txt', 400 * 86400)
         self.assertEqual(debug_clip.cleanup_clips(1, self.output_dir), 0)
@@ -133,12 +149,12 @@ class TestCleanupClipsIfDue(ClipTestCase):
 
     def test_uses_configured_retention_days(self):
         self.touch_expired_clip('eh1_clip_20200101_000000.mp4')
-        config = SimpleNamespace(OpsiHazard1Leveling_DebugClipRetentionDays=1)
+        config = SimpleNamespace(OpsiGeneral_DebugClipRetentionDays=1)
         self.assertEqual(debug_clip.cleanup_clips_if_due(config, self.output_dir), 1)
 
     def test_second_call_is_throttled(self):
         self.touch_expired_clip('eh1_clip_20200101_000000.mp4')
-        config = SimpleNamespace(OpsiHazard1Leveling_DebugClipRetentionDays=1)
+        config = SimpleNamespace(OpsiGeneral_DebugClipRetentionDays=1)
         self.assertEqual(debug_clip.cleanup_clips_if_due(config, self.output_dir), 1)
         self.touch_expired_clip('eh1_clip_20200102_000000.mp4')
         # 节流期内不再扫描，文件仍然留着
@@ -152,7 +168,7 @@ class TestCleanupClipsIfDue(ClipTestCase):
 
     def test_invalid_setting_is_ignored(self):
         kept = self.touch_expired_clip('eh1_clip_20200101_000000.mp4')
-        config = SimpleNamespace(OpsiHazard1Leveling_DebugClipRetentionDays='abc')
+        config = SimpleNamespace(OpsiGeneral_DebugClipRetentionDays='abc')
         self.assertEqual(debug_clip.cleanup_clips_if_due(config, self.output_dir), 0)
         self.assertTrue(os.path.exists(kept))
 
@@ -281,9 +297,20 @@ class TestKeepRecord(ClipTestCase):
         self.rec._frames_written = 300
         path = self.rec._keep_record(True, 10.0)
         self.assertIsNotNone(path)
-        self.assertTrue(os.path.basename(path).startswith(debug_clip.CLIP_PREFIX))
+        self.assertTrue(os.path.basename(path).startswith(debug_clip.CLIP_PREFIX_EH1))
         self.assertTrue(os.path.exists(path))
         self.assertFalse(os.path.exists(self.tmp_path))
+
+    def test_custom_prefix_is_used_for_output_name(self):
+        """短猫相接的录像要带自己的前缀，方便和侵蚀一的区分开。"""
+        rec = self.make_clip()
+        rec.prefix = debug_clip.CLIP_PREFIX_MEOW
+        with open(rec.tmp_path, 'wb') as f:
+            f.write(b'x' * 8000)
+        rec._frames_written = 300
+        path = rec._keep_record(True, 10.0)
+        self.assertIsNotNone(path)
+        self.assertTrue(os.path.basename(path).startswith(debug_clip.CLIP_PREFIX_MEOW))
 
 
 class TestFinalizeIsSafe(ClipTestCase):
@@ -444,6 +471,70 @@ class TestClipSession(unittest.TestCase):
 
     def test_clip_end_without_session_returns_none(self):
         self.assertIsNone(debug_clip.clip_end(keep=True))
+
+
+class TestClipRecordingContext(unittest.TestCase):
+    """clip_recording 是各任务接入录像的统一入口（短猫相接有 4 处调用）。"""
+
+    def test_disabled_does_not_start_or_save(self):
+        with patch.object(debug_clip, 'clip_start') as start, \
+                patch.object(debug_clip, 'clip_end') as end:
+            with debug_clip.clip_recording(config='cfg', enabled=False) as clip:
+                self.assertIsNone(clip)
+        start.assert_not_called()
+        end.assert_not_called()
+
+    def test_enabled_starts_with_prefix_and_saves(self):
+        handle = object()
+        with patch.object(debug_clip, 'clip_start', return_value=handle) as start, \
+                patch.object(debug_clip, 'clip_end') as end:
+            with debug_clip.clip_recording(
+                config='cfg', enabled=True, prefix=debug_clip.CLIP_PREFIX_MEOW
+            ) as clip:
+                self.assertIs(clip, handle)
+        start.assert_called_once_with('cfg', prefix=debug_clip.CLIP_PREFIX_MEOW)
+        end.assert_called_once_with(keep=True)
+
+    def test_saves_even_when_body_raises(self):
+        with patch.object(debug_clip, 'clip_start', return_value=object()), \
+                patch.object(debug_clip, 'clip_end') as end:
+            with self.assertRaises(ValueError):
+                with debug_clip.clip_recording(config='cfg', enabled=True):
+                    raise ValueError('boom')
+        end.assert_called_once_with(keep=True)
+
+    def test_start_failure_is_not_fatal(self):
+        """scrcpy/ffmpeg 起不来时录像优雅降级，不影响任务本身。"""
+        with patch.object(debug_clip, 'clip_start', return_value=None), \
+                patch.object(debug_clip, 'clip_end') as end:
+            with debug_clip.clip_recording(config='cfg', enabled=True) as clip:
+                self.assertIsNone(clip)
+        end.assert_not_called()
+
+
+class TestMeowfficerClipWiring(unittest.TestCase):
+    """短猫相接的录像上下文必须读对配置键、用对自己的文件名前缀。"""
+
+    def make_fake_task(self, enabled):
+        from module.os.tasks.meowfficer_farming import OpsiMeowfficerFarming
+
+        fake = SimpleNamespace(
+            config=SimpleNamespace(OpsiMeowfficerFarming_DebugClip=enabled)
+        )
+        return OpsiMeowfficerFarming._meow_debug_clip(fake)
+
+    def test_disabled_switch_yields_no_clip(self):
+        with self.make_fake_task(False) as clip:
+            self.assertIsNone(clip)
+
+    def test_enabled_switch_starts_clip_with_meow_prefix(self):
+        handle = object()
+        with patch.object(debug_clip, 'clip_start', return_value=handle) as start, \
+                patch.object(debug_clip, 'clip_end') as end:
+            with self.make_fake_task(True) as clip:
+                self.assertIs(clip, handle)
+        self.assertEqual(start.call_args.kwargs['prefix'], debug_clip.CLIP_PREFIX_MEOW)
+        end.assert_called_once_with(keep=True)
 
 
 if __name__ == '__main__':

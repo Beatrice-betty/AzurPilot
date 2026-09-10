@@ -1,4 +1,7 @@
-"""侵蚀1漏猫复盘 debug 录屏（真实游戏画面，scrcpy 设备直录，30fps 实时）。
+"""大世界战后 debug 录屏（真实游戏画面，scrcpy 设备直录，30fps 实时）。
+
+当前由侵蚀1练级与短猫相接两个任务使用，各自有独立的开关，共用同一套录制实现
+和同一份保留天数设置。
 
 用户要求：录「游戏真实画面」，30fps，**既不加速也不跳帧**。
 
@@ -25,14 +28,20 @@ analyzeduration / threads 都压不下去），这段帧要等收到 EOF 才会�
 源帧率越低这段越长（5fps 时可达 4 秒），但 scrcpy 在实战画面下不会掉到那么低。
 偏差超过 20% 时 `_keep_record` 会打 warning，不会静默。
 
-用法（由侵蚀1战后处理代码驱动）：
+用法（由各任务的战后处理代码驱动，推荐用上下文管理器）：
 
-    clip = clip_start(self.config)     # 打完开始找事件时打开
-    ... 重扫地图 / 处理事件 / 强制移动 ...
-    clip_end(keep=True)                # 事件处理完、进入下一循环前结束
+    with clip_recording(self.config, self.config.OpsiMeowfficerFarming_DebugClip,
+                        prefix=CLIP_PREFIX_MEOW):
+        ... 重扫地图 / 处理事件 / 强制移动 ...
 
-调用方对每一轮都传 `keep=True`：不管这一轮有没有遇到事件都留下录像，方便逐轮
-回看实际过程。`keep=False` 只用于调用方确实想丢弃某一段的场景。
+进入 with 时开录，退出时（含异常路径）保存。每一轮都保留，不管这一轮有没有
+遇到事件，方便逐轮回看实际过程。也可手动 `clip_start()` / `clip_end(keep=...)`
+控制得更细，`keep=False` 用于调用方确实想丢弃某一段的场景。
+
+文件输出到 `./log/clips/`，一段一个 mp4，文件名前缀区分任务
+（`eh1_clip_*` = 侵蚀1、`meow_clip_*` = 短猫相接），按 `OpsiGeneral` 里的
+`DebugClipRetentionDays` 保留天数自动清理（0 表示永久保留）。产物无效时
+**不会**留下文件，也不会谎报「已保存」。
 
 文件输出到 `./log/clips/`，一段一个 mp4，按 `DebugClipRetentionDays` 保留天数自动
 清理（0 表示永久保留）。产物无效时**不会**留下文件，也不会谎报「已保存」。
@@ -41,6 +50,7 @@ analyzeduration / threads 都压不下去），这段帧要等收到 EOF 才会�
 socket 无法并存）。scrcpy/ffmpeg 启动失败会优雅降级为不录，不影响游戏逻辑。
 """
 
+import contextlib
 import os
 import queue
 import shutil
@@ -56,8 +66,13 @@ from module.logger import logger
 
 DEFAULT_OUTPUT_DIR = "./log/clips"
 RECORD_FPS = 30
-CLIP_PREFIX = "eh1_clip_"
-TMP_PREFIX = "_tmp_eh1_"
+# 录像文件名前缀，用于区分是哪个任务录的
+CLIP_PREFIX_EH1 = "eh1_clip_"  # 侵蚀1练级
+CLIP_PREFIX_MEOW = "meow_clip_"  # 短猫相接（耄耋相接）
+CLIP_PREFIXES = (CLIP_PREFIX_EH1, CLIP_PREFIX_MEOW)
+# 录制中途的临时文件前缀；保留旧前缀以便清理历史残留
+TMP_PREFIX = "_tmp_clip_"
+TMP_PREFIXES = (TMP_PREFIX, "_tmp_eh1_")
 # 产物小于此字节数视为无效（正常 720p 首帧就在 10KB 以上）
 MIN_VALID_BYTES = 4096
 # 编码落后超过该秒数就不再追赶，直接重新对齐（否则会陷入无休止追赶）
@@ -160,8 +175,10 @@ def cleanup_clips(retention_days, output_dir=DEFAULT_OUTPUT_DIR):
     """清理录像目录。
 
     规则：
-    - `eh1_clip_*.mp4`：修改时间超过 retention_days 天的删除；retention_days <= 0 表示永久保留。
-    - `_tmp_eh1_*`：录制中途被中断留下的临时文件/日志，超过 TMP_MAX_AGE 即删除。
+    - `eh1_clip_*.mp4` / `meow_clip_*.mp4`：修改时间超过 retention_days 天的删除；
+      retention_days <= 0 表示永久保留。
+    - `_tmp_clip_*` / `_tmp_eh1_*`：录制中途被中断留下的临时文件/日志，
+      超过 TMP_MAX_AGE 即删除。
     - 其它文件一律不动。
 
     Args:
@@ -187,9 +204,9 @@ def cleanup_clips(retention_days, output_dir=DEFAULT_OUTPUT_DIR):
         except OSError:
             continue
 
-        if name.startswith(TMP_PREFIX):
+        if name.startswith(TMP_PREFIXES):
             deadline = TMP_MAX_AGE
-        elif name.startswith(CLIP_PREFIX) and name.endswith(".mp4"):
+        elif name.startswith(CLIP_PREFIXES) and name.endswith(".mp4"):
             if retention_days <= 0:
                 continue
             deadline = retention_days * 86400
@@ -217,6 +234,9 @@ def cleanup_clips(retention_days, output_dir=DEFAULT_OUTPUT_DIR):
 def cleanup_clips_if_due(config, output_dir=DEFAULT_OUTPUT_DIR):
     """按配置清理过期录像（带节流，不必每轮战斗都真的扫目录）。
 
+    保留天数取自「大世界通用设置」的 DebugClipRetentionDays，侵蚀一与短猫相接共用。
+    任何 Opsi 任务都会自动绑定 OpsiGeneral，所以这里可以直接读属性。
+
     Args:
         config: 当前运行实例的 AzurLaneConfig。
         output_dir (str): 录像目录。
@@ -231,7 +251,7 @@ def cleanup_clips_if_due(config, output_dir=DEFAULT_OUTPUT_DIR):
     _LAST_CLEANUP = now
 
     # 配置缺失时按「永久保留」处理：删除是不可逆操作，默认不删任何东西
-    days = getattr(config, "OpsiHazard1Leveling_DebugClipRetentionDays", 0)
+    days = getattr(config, "OpsiGeneral_DebugClipRetentionDays", 0)
     try:
         days = int(days)
     except (TypeError, ValueError):
@@ -243,9 +263,11 @@ def cleanup_clips_if_due(config, output_dir=DEFAULT_OUTPUT_DIR):
 class _ScrcpyClip:
     """一个基于 scrcpy 设备视频流的 debug 录屏段。"""
 
-    def __init__(self, config, fps=RECORD_FPS, width=1280, bitrate_scale=1.0):
+    def __init__(self, config, fps=RECORD_FPS, prefix=CLIP_PREFIX_EH1,
+                 width=1280, bitrate_scale=1.0):
         self.config = config
         self.fps = fps
+        self.prefix = prefix
         self.width = width
         self.bitrate_scale = bitrate_scale
         self.output_dir = DEFAULT_OUTPUT_DIR
@@ -840,7 +862,7 @@ class _ScrcpyClip:
             return None
 
         final_path = os.path.join(
-            self.output_dir, f"{CLIP_PREFIX}{time.strftime('%Y%m%d_%H%M%S')}.mp4"
+            self.output_dir, f"{self.prefix}{time.strftime('%Y%m%d_%H%M%S')}.mp4"
         )
         try:
             os.replace(self.tmp_path, final_path)
@@ -930,12 +952,13 @@ class _ScrcpyClip:
         return result
 
 
-def clip_start(config, fps=RECORD_FPS):
+def clip_start(config, fps=RECORD_FPS, prefix=CLIP_PREFIX_EH1):
     """打开录屏。
 
     Args:
         config: 当前运行实例的 AzurLaneConfig（含 serial / scrcpy 路径配置）。
         fps (int): 目标帧率。
+        prefix (str): 输出文件名前缀，用于区分是哪个任务录的。
 
     Returns:
         _ScrcpyClip: 录制句柄；启动失败返回 None。
@@ -947,7 +970,7 @@ def clip_start(config, fps=RECORD_FPS):
         logger.warning("[录屏] 上一段录制未正常结束，先收尾再开始新的一段")
         _finalize_active(keep=True)
 
-    rec = _ScrcpyClip(config, fps=fps)
+    rec = _ScrcpyClip(config, fps=fps, prefix=prefix)
     if not rec.start():
         return None
     _ACTIVE = rec
@@ -986,3 +1009,26 @@ def clip_end(keep=True):
         str: 保留时的视频路径；无录制或产物无效时返回 None。
     """
     return _finalize_active(keep=keep)
+
+
+@contextlib.contextmanager
+def clip_recording(config, enabled, prefix=CLIP_PREFIX_EH1):
+    """在 with 块内录制一段 debug 录像（进入时开录，退出时保存）。
+
+    异常路径也会正常收尾，不会把会话留在活动状态。同一个进程内不会同时存在
+    两段录制，因此调用方应避免嵌套。
+
+    Args:
+        config: 当前运行实例的 AzurLaneConfig。
+        enabled (bool): 是否开启录制；False 时整个块不产生任何录像。
+        prefix (str): 输出文件名前缀，用于区分是哪个任务录的。
+
+    Yields:
+        _ScrcpyClip | None: 录制句柄；未开启或启动失败时为 None。
+    """
+    clip = clip_start(config, prefix=prefix) if enabled else None
+    try:
+        yield clip
+    finally:
+        if clip is not None:
+            clip_end(keep=True)

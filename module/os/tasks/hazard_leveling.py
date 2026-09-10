@@ -78,16 +78,16 @@ class OpsiHazard1Leveling(CoinTaskMixin, OSMap):
 
         # debug 录屏：只录“战后找事件 + 处理事件 + 强制移动”这一段
         # 事件/强制移动处理完进入下一轮前结束。每一轮都保留，不论有没有遇到事件。
-        from module.base.debug_clip import cleanup_clips_if_due, clip_end, clip_start
+        from module.base.debug_clip import cleanup_clips_if_due, clip_recording
 
         # 过期录像清理：与本次是否开启录制无关，避免关掉录制后旧录像一直堆着。
         # 内部有节流，不会每轮战斗都真的扫目录。
         cleanup_clips_if_due(self.config)
 
-        debug_clip = None
-        if self.config.OpsiHazard1Leveling_DebugClip:
-            debug_clip = clip_start(self.config)
-        try:
+        with clip_recording(
+            self.config,
+            self.config.OpsiHazard1Leveling_DebugClip,
+        ):
             # 第一次重扫：检查是否还有事件
             self._solved_map_event = set()
             self._solved_fleet_mechanism = False
@@ -103,10 +103,6 @@ class OpsiHazard1Leveling(CoinTaskMixin, OSMap):
                     self._execute_fixed_patrol_scan(ExecuteFixedPatrolScan=True)
 
             self.handle_after_auto_search()
-        finally:
-            # 不论这一轮有没有遇到事件、有没有出错都保留录像，方便逐轮回看实际过程
-            if debug_clip is not None:
-                clip_end(keep=True)
 
         # 明石遭遇记录
         solved_events = getattr(self, "_solved_map_event", set())
