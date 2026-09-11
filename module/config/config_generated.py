@@ -219,6 +219,12 @@ class GeneratedConfig:
     OperationHandover_Count = 1
     OperationHandover_AutoSupplementTime = False
     OperationHandover_UseHandoverBook = False
+    OperationHandover_ConsumeAllBook = False  # True, False
+    OperationHandover_ConsumeAllBookWeekday = 'sun'  # mon, tue, wed, thu, fri, sat, sun
+    OperationHandover_ConsumeAllBookTime = '00:00'
+    OperationHandover_MaintainOverride = False  # True, False
+    OperationHandover_OilLimit = 1000
+    OperationHandover_ConsumeAllBookRecord = None
 
     # 配置组 `StopCondition`
     StopCondition_OilLimit = 1000
