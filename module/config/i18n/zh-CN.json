@@ -66,10 +66,6 @@
       "name": "主线图-3Plus",
       "help": ""
     },
-    "OperationHandover": {
-      "name": "作战委托合约Beta",
-      "help": "消耗作战委托书，自动进行作战委托。"
-    },
     "GemsFarming": {
       "name": "紧急委托Plus",
       "help": ""
@@ -189,6 +185,10 @@
     "Awaken": {
       "name": "认知觉醒",
       "help": ""
+    },
+    "OperationHandover": {
+      "name": "作战委托合约Beta",
+      "help": "消耗作战委托书，自动进行作战委托。"
     },
     "Daily": {
       "name": "每日任务",

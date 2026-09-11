@@ -66,10 +66,6 @@
       "name": "主線圖-3Plus",
       "help": ""
     },
-    "OperationHandover": {
-      "name": "作戰委託合約",
-      "help": "消耗作戰委託書，自動進行作戰委託。"
-    },
     "GemsFarming": {
       "name": "緊急委託Plus",
       "help": ""
@@ -189,6 +185,10 @@
     "Awaken": {
       "name": "認知覺醒",
       "help": ""
+    },
+    "OperationHandover": {
+      "name": "作戰委託合約",
+      "help": "消耗作戰委託書，自動進行作戰委託。"
     },
     "Daily": {
       "name": "每日任務",
