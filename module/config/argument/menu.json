@@ -15,7 +15,6 @@
       "Main",
       "Main2",
       "Main3",
-      "OperationHandover",
       "GemsFarming",
       "ThreeOilLowCost",
       "Ambush11"
@@ -63,7 +62,8 @@
       "Meowfficer",
       "Guild",
       "Reward",
-      "Awaken"
+      "Awaken",
+      "OperationHandover"
     ]
   },
   "DailyMission": {
