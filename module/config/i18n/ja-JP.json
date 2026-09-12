@@ -892,8 +892,8 @@
     "CloseEmulatorDuringLongWait": {
       "name": "長時間待機中にエミュレーターを閉じる",
       "help": "次のタスクまで 3 時間を超える場合、待機中にエミュレーターを閉じてメモリと CPU を節約します。",
-      "True": "True",
-      "False": "False"
+      "True": "オン",
+      "False": "オフ"
     },
     "WhenTaskQueueEmpty": {
       "name": "タスクキューが空になった時",
@@ -913,8 +913,8 @@
     "WarmupEnable": {
       "name": "次のタスクの前にエミュレーターとゲームを先に起動する",
       "help": "待機中にエミュレーター/ゲームを閉じた場合（長時間待機時にエミュレーターを終了、タスク待ち時にゲームを終了）に、次のタスク開始前に起動してログインします。タスク開始時のコールドスタートによる遅延を防ぎます。有効時、先行時間に満たない短い待機ではゲームを終了しません。",
-      "True": "True",
-      "False": "False"
+      "True": "オン",
+      "False": "オフ"
     },
     "WarmupMinutes": {
       "name": "タスクの X 分前に起動を開始する",
@@ -1596,7 +1596,7 @@
       "boss_only": "BOSS戦のみ",
       "hunt_and_boss": "狩猟及びBOSS戦",
       "every_combat": "毎戦出撃",
-      "advanced": "advanced"
+      "advanced": "上級"
     },
     "AutoSearchMode": {
       "name": "潜水艦自律プランを選択",
@@ -1613,8 +1613,8 @@
       "use_open_ocean_support": "遠洋支援を使用する"
     },
     "AdvancedConfig": {
-      "name": "Submarine.AdvancedConfig.name",
-      "help": "Submarine.AdvancedConfig.help"
+      "name": "上級設定",
+      "help": "上級設定は、潜水艦出撃プランが「上級」の場合のみ有効です。設定は厳密に YAML 形式に従います。\n\n【基本パラメータ】\n- ammo: 潜水艦の総弾薬数。\n- support: 遠洋支援の使用可能回数。\n- range: 狩猟範囲。長さ7の文字列を7つで構成します。「N」はカバー範囲、「O」は非カバー範囲、「H」は潜水艦の位置（4行4列・中央のみ）を表します。\n\n【ルール rules】\n- 戦闘インデックス: battle_0（すべての戦闘）、battle_N（N番目の戦闘、1始まり）、battle_-N（後ろからN番目の戦闘）。1つの戦闘が複数のルールにマッチする場合、「召喚 > 狩猟 > 出撃しない」の順で処理されます。\n- type: 出撃タイプ。hunt（狩猟）、call（召喚）。\n- condition: 発動条件（省略時は無条件で出撃）。\n    ammo: 弾薬の条件式。例：「>2」「>=2」「=3」。対応演算子：「>」「>=」「<」「<=」「=」「!=」。\n    support: 遠洋支援回数の条件式。例：「>2」「>=2」「=3」。対応演算子：「>」「>=」「<」「<=」「=」「!=」。\n    enemy: 対象の敵艦タイプリスト。規模+艦種で表します。例：「3M」は大型主力艦隊。ワイルドカード「*」に対応。例：「3*」はすべての大型艦隊、「*T」はすべての輸送船。\n    - 規模：1：小型艦隊；2：中型艦隊；3：大型艦隊；0：規模不明。\n    - 艦種：L：偵察艦隊；M：主力艦隊；C：航空艦隊；T：輸送船；E：不明タイプ。\n    in_range（true/false）: 狩猟範囲内かどうか。範囲外で潜水艦を召喚すると遠洋支援回数を消費します。\n- move: 範囲が足りない場合、対象をカバーできる最小燃料の位置まで潜水艦を移動させるか（true/false）。遠洋支援回数が残っている場合は移動せず遠洋支援を使用します。"
     }
   },
   "Emotion": {
@@ -2142,8 +2142,8 @@
     "DetectShipDrop": {
       "name": "艦船ドロップを検出",
       "help": "委託報酬受け取り後に「艦船獲得」画面を検出して閉じます。艦船がドロップする委託を実行しない場合はオフにして検出エラーを回避できます。",
-      "True": "True",
-      "False": "False"
+      "True": "オン",
+      "False": "オフ"
     },
     "GemNotify": {
       "name": "ダイヤ委託実行通知",
@@ -3729,24 +3729,24 @@
       "help": "作戦コイン（黄）が不足している場合、作戦コイン補充任務の実行優先順位。> で区切ります。"
     },
     "MonthEndActionPointCleanupEnable": {
-      "name": "OpsiScheduling.MonthEndActionPointCleanupEnable.name",
-      "help": "OpsiScheduling.MonthEndActionPointCleanupEnable.help",
-      "True": "True",
-      "False": "False"
+      "name": "月末の行動力クリーンアップを有効にする",
+      "help": "月末の行動力クリーンアップ機能を有効にするかどうか。有効にすると、大世界リセットまでの残り日数が「月末クリーンアップ日数」以下になった時点で、月末クリーンアップモードを開始して行動力を消費します。",
+      "True": "オン",
+      "False": "オフ"
     },
     "MonthEndActionPointCleanupDays": {
-      "name": "OpsiScheduling.MonthEndActionPointCleanupDays.name",
-      "help": "OpsiScheduling.MonthEndActionPointCleanupDays.help"
+      "name": "月末クリーンアップ日数",
+      "help": "大世界リセットまでの残り日数がこの値以下になった時点で、月末クリーンアップモードを開始します。0 で無効。有効にすると、短猫相接・商店購入・隠秘海域・深淵座標を循環実行して行動力を消費し、初回実行時にはセイレーン要塞も呼び出します。"
     },
     "MonthEndActionPointPreserve": {
-      "name": "OpsiScheduling.MonthEndActionPointPreserve.name",
-      "help": "OpsiScheduling.MonthEndActionPointPreserve.help"
+      "name": "月末クリーンアップ時の行動力保留値",
+      "help": "月末クリーンアップモードにおける行動力の保留値。跨月デイリーを有効にしている場合は最低 200 行動力を確保してください。この値が最低確保値より大きい場合はこの値が使われます。"
     },
     "MonthEndShopPurchase": {
-      "name": "OpsiScheduling.MonthEndShopPurchase.name",
-      "help": "OpsiScheduling.MonthEndShopPurchase.help",
-      "True": "True",
-      "False": "False"
+      "name": "月末クリーンアップ時の商店購入",
+      "help": "月末クリーンアップ時に大世界商店の購入を実行するかどうか。オフにすると、月末クリーンアップのループで商店購入ステップをスキップします。",
+      "True": "オン",
+      "False": "オフ"
     }
   },
   "OpsiPreventActionPointOverflow": {
@@ -4098,7 +4098,7 @@
     "Meal1": {
       "name": "メニュー1",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "tofu": "豆腐",
       "omurice": "オムライス",
       "cabbage_tofu": "白菜豆腐スープ",
@@ -4106,7 +4106,7 @@
       "tofu_meat": "肉みそ豆腐",
       "tofu_combo": "クラシック豆腐セット",
       "hearty_meal": "まん玉定食",
-      "double_bamboo_shoots": "涼拌双筍",
+      "double_bamboo_shoots": "若竹の和え物",
       "asparagus_shrimp": "筍と海老の炒め物",
       "fish_chip": "フィッシュアンドチップス",
       "fo_tiao": "仏跳牆",
@@ -4121,7 +4121,7 @@
     "Meal2": {
       "name": "メニュー2",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "tofu": "豆腐",
       "omurice": "オムライス",
       "cabbage_tofu": "白菜豆腐スープ",
@@ -4129,7 +4129,7 @@
       "tofu_meat": "肉みそ豆腐",
       "tofu_combo": "クラシック豆腐セット",
       "hearty_meal": "まん玉定食",
-      "double_bamboo_shoots": "涼拌双筍",
+      "double_bamboo_shoots": "若竹の和え物",
       "asparagus_shrimp": "筍と海老の炒め物",
       "fish_chip": "フィッシュアンドチップス",
       "fo_tiao": "仏跳牆",
@@ -4144,7 +4144,7 @@
     "Meal3": {
       "name": "メニュー3",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "tofu": "豆腐",
       "omurice": "オムライス",
       "cabbage_tofu": "白菜豆腐スープ",
@@ -4152,7 +4152,7 @@
       "tofu_meat": "肉みそ豆腐",
       "tofu_combo": "クラシック豆腐セット",
       "hearty_meal": "まん玉定食",
-      "double_bamboo_shoots": "涼拌双筍",
+      "double_bamboo_shoots": "若竹の和え物",
       "asparagus_shrimp": "筍と海老の炒め物",
       "fish_chip": "フィッシュアンドチップス",
       "fo_tiao": "仏跳牆",
@@ -4167,7 +4167,7 @@
     "Meal4": {
       "name": "メニュー4",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "tofu": "豆腐",
       "omurice": "オムライス",
       "cabbage_tofu": "白菜豆腐スープ",
@@ -4175,7 +4175,7 @@
       "tofu_meat": "肉みそ豆腐",
       "tofu_combo": "クラシック豆腐セット",
       "hearty_meal": "まん玉定食",
-      "double_bamboo_shoots": "涼拌双筍",
+      "double_bamboo_shoots": "若竹の和え物",
       "asparagus_shrimp": "筍と海老の炒め物",
       "fish_chip": "フィッシュアンドチップス",
       "fo_tiao": "仏跳牆",
@@ -4190,7 +4190,7 @@
     "Meal5": {
       "name": "メニュー5",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "tofu": "豆腐",
       "omurice": "オムライス",
       "cabbage_tofu": "白菜豆腐スープ",
@@ -4198,7 +4198,7 @@
       "tofu_meat": "肉みそ豆腐",
       "tofu_combo": "クラシック豆腐セット",
       "hearty_meal": "まん玉定食",
-      "double_bamboo_shoots": "涼拌双筍",
+      "double_bamboo_shoots": "若竹の和え物",
       "asparagus_shrimp": "筍と海老の炒め物",
       "fish_chip": "フィッシュアンドチップス",
       "fo_tiao": "仏跳牆",
@@ -4213,7 +4213,7 @@
     "Meal6": {
       "name": "メニュー6",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "tofu": "豆腐",
       "omurice": "オムライス",
       "cabbage_tofu": "白菜豆腐スープ",
@@ -4221,7 +4221,7 @@
       "tofu_meat": "肉みそ豆腐",
       "tofu_combo": "クラシック豆腐セット",
       "hearty_meal": "まん玉定食",
-      "double_bamboo_shoots": "涼拌双筍",
+      "double_bamboo_shoots": "若竹の和え物",
       "asparagus_shrimp": "筍と海老の炒め物",
       "fish_chip": "フィッシュアンドチップス",
       "fo_tiao": "仏跳牆",
@@ -4236,7 +4236,7 @@
     "Meal7": {
       "name": "メニュー7",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "tofu": "豆腐",
       "omurice": "オムライス",
       "cabbage_tofu": "白菜豆腐スープ",
@@ -4244,7 +4244,7 @@
       "tofu_meat": "肉みそ豆腐",
       "tofu_combo": "クラシック豆腐セット",
       "hearty_meal": "まん玉定食",
-      "double_bamboo_shoots": "涼拌双筍",
+      "double_bamboo_shoots": "若竹の和え物",
       "asparagus_shrimp": "筍と海老の炒め物",
       "fish_chip": "フィッシュアンドチップス",
       "fo_tiao": "仏跳牆",
@@ -4259,7 +4259,7 @@
     "Meal8": {
       "name": "メニュー8",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "tofu": "豆腐",
       "omurice": "オムライス",
       "cabbage_tofu": "白菜豆腐スープ",
@@ -4267,7 +4267,7 @@
       "tofu_meat": "肉みそ豆腐",
       "tofu_combo": "クラシック豆腐セット",
       "hearty_meal": "まん玉定食",
-      "double_bamboo_shoots": "涼拌双筍",
+      "double_bamboo_shoots": "若竹の和え物",
       "asparagus_shrimp": "筍と海老の炒め物",
       "fish_chip": "フィッシュアンドチップス",
       "fo_tiao": "仏跳牆",
@@ -4288,7 +4288,7 @@
     "AwayCook": {
       "name": "常設メニュー",
       "help": "上記すべてが完了したら常設メニューを生産します。",
-      "None": "None",
+      "None": "なし",
       "tofu": "豆腐",
       "omurice": "オムライス",
       "cabbage_tofu": "白菜豆腐スープ",
@@ -4296,7 +4296,7 @@
       "tofu_meat": "肉みそ豆腐",
       "tofu_combo": "クラシック豆腐セット",
       "hearty_meal": "まん玉定食",
-      "double_bamboo_shoots": "涼拌双筍",
+      "double_bamboo_shoots": "若竹の和え物",
       "asparagus_shrimp": "筍と海老の炒め物",
       "fish_chip": "フィッシュアンドチップス",
       "fo_tiao": "仏跳牆",
@@ -4327,7 +4327,7 @@
     "Meal1": {
       "name": "メニュー1",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "apple_juice": "アップルジュース",
       "banana_mango": "バナナマンゴージュース",
       "honey_lemon": "ハニーレモンウォーター",
@@ -4348,7 +4348,7 @@
     "Meal2": {
       "name": "メニュー2",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "apple_juice": "アップルジュース",
       "banana_mango": "バナナマンゴージュース",
       "honey_lemon": "ハニーレモンウォーター",
@@ -4369,7 +4369,7 @@
     "Meal3": {
       "name": "メニュー3",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "apple_juice": "アップルジュース",
       "banana_mango": "バナナマンゴージュース",
       "honey_lemon": "ハニーレモンウォーター",
@@ -4390,7 +4390,7 @@
     "Meal4": {
       "name": "メニュー4",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "apple_juice": "アップルジュース",
       "banana_mango": "バナナマンゴージュース",
       "honey_lemon": "ハニーレモンウォーター",
@@ -4411,7 +4411,7 @@
     "Meal5": {
       "name": "メニュー5",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "apple_juice": "アップルジュース",
       "banana_mango": "バナナマンゴージュース",
       "honey_lemon": "ハニーレモンウォーター",
@@ -4432,7 +4432,7 @@
     "Meal6": {
       "name": "メニュー6",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "apple_juice": "アップルジュース",
       "banana_mango": "バナナマンゴージュース",
       "honey_lemon": "ハニーレモンウォーター",
@@ -4453,7 +4453,7 @@
     "Meal7": {
       "name": "メニュー7",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "apple_juice": "アップルジュース",
       "banana_mango": "バナナマンゴージュース",
       "honey_lemon": "ハニーレモンウォーター",
@@ -4474,7 +4474,7 @@
     "Meal8": {
       "name": "メニュー8",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "apple_juice": "アップルジュース",
       "banana_mango": "バナナマンゴージュース",
       "honey_lemon": "ハニーレモンウォーター",
@@ -4501,7 +4501,7 @@
     "AwayCook": {
       "name": "常設メニュー",
       "help": "上記すべてが完了したら常設メニューを生産します。",
-      "None": "None",
+      "None": "なし",
       "apple_juice": "アップルジュース",
       "banana_mango": "バナナマンゴージュース",
       "honey_lemon": "ハニーレモンウォーター",
@@ -4534,7 +4534,7 @@
     "Meal1": {
       "name": "メニュー1",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "roasted_skewer": "炭焼き串",
       "chicken_potato": "鶏肉じゃがいも盛り合わせ",
       "carrot_omelette": "にんじん厚焼き玉子",
@@ -4551,7 +4551,7 @@
     "Meal2": {
       "name": "メニュー2",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "roasted_skewer": "炭焼き串",
       "chicken_potato": "鶏肉じゃがいも盛り合わせ",
       "carrot_omelette": "にんじん厚焼き玉子",
@@ -4568,7 +4568,7 @@
     "Meal3": {
       "name": "メニュー3",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "roasted_skewer": "炭焼き串",
       "chicken_potato": "鶏肉じゃがいも盛り合わせ",
       "carrot_omelette": "にんじん厚焼き玉子",
@@ -4585,7 +4585,7 @@
     "Meal4": {
       "name": "メニュー4",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "roasted_skewer": "炭焼き串",
       "chicken_potato": "鶏肉じゃがいも盛り合わせ",
       "carrot_omelette": "にんじん厚焼き玉子",
@@ -4602,7 +4602,7 @@
     "Meal5": {
       "name": "メニュー5",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "roasted_skewer": "炭焼き串",
       "chicken_potato": "鶏肉じゃがいも盛り合わせ",
       "carrot_omelette": "にんじん厚焼き玉子",
@@ -4619,7 +4619,7 @@
     "Meal6": {
       "name": "メニュー6",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "roasted_skewer": "炭焼き串",
       "chicken_potato": "鶏肉じゃがいも盛り合わせ",
       "carrot_omelette": "にんじん厚焼き玉子",
@@ -4636,7 +4636,7 @@
     "Meal7": {
       "name": "メニュー7",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "roasted_skewer": "炭焼き串",
       "chicken_potato": "鶏肉じゃがいも盛り合わせ",
       "carrot_omelette": "にんじん厚焼き玉子",
@@ -4653,7 +4653,7 @@
     "Meal8": {
       "name": "メニュー8",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "roasted_skewer": "炭焼き串",
       "chicken_potato": "鶏肉じゃがいも盛り合わせ",
       "carrot_omelette": "にんじん厚焼き玉子",
@@ -4676,7 +4676,7 @@
     "AwayCook": {
       "name": "常設メニュー",
       "help": "上記すべてが完了したら常設メニューを生産します。",
-      "None": "None",
+      "None": "なし",
       "roasted_skewer": "炭焼き串",
       "chicken_potato": "鶏肉じゃがいも盛り合わせ",
       "carrot_omelette": "にんじん厚焼き玉子",
@@ -4705,7 +4705,7 @@
     "Meal1": {
       "name": "メニュー1",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "apple_pie": "アップルパイ",
       "corn_cup": "コーンカップ",
       "orange_pie": "オレンジパイ",
@@ -4724,7 +4724,7 @@
     "Meal2": {
       "name": "メニュー2",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "apple_pie": "アップルパイ",
       "corn_cup": "コーンカップ",
       "orange_pie": "オレンジパイ",
@@ -4743,7 +4743,7 @@
     "Meal3": {
       "name": "メニュー3",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "apple_pie": "アップルパイ",
       "corn_cup": "コーンカップ",
       "orange_pie": "オレンジパイ",
@@ -4762,7 +4762,7 @@
     "Meal4": {
       "name": "メニュー4",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "apple_pie": "アップルパイ",
       "corn_cup": "コーンカップ",
       "orange_pie": "オレンジパイ",
@@ -4781,7 +4781,7 @@
     "Meal5": {
       "name": "メニュー5",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "apple_pie": "アップルパイ",
       "corn_cup": "コーンカップ",
       "orange_pie": "オレンジパイ",
@@ -4800,7 +4800,7 @@
     "Meal6": {
       "name": "メニュー6",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "apple_pie": "アップルパイ",
       "corn_cup": "コーンカップ",
       "orange_pie": "オレンジパイ",
@@ -4819,7 +4819,7 @@
     "Meal7": {
       "name": "メニュー7",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "apple_pie": "アップルパイ",
       "corn_cup": "コーンカップ",
       "orange_pie": "オレンジパイ",
@@ -4838,7 +4838,7 @@
     "Meal8": {
       "name": "メニュー8",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "apple_pie": "アップルパイ",
       "corn_cup": "コーンカップ",
       "orange_pie": "オレンジパイ",
@@ -4863,7 +4863,7 @@
     "AwayCook": {
       "name": "常設メニュー",
       "help": "上記すべてが完了したら常設メニューを生産します。",
-      "None": "None",
+      "None": "なし",
       "apple_pie": "アップルパイ",
       "corn_cup": "コーンカップ",
       "orange_pie": "オレンジパイ",
@@ -4898,7 +4898,7 @@
     "Meal1": {
       "name": "メニュー1",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "iced_coffee": "アイスコーヒー",
       "omelette": "オムレツ",
       "cheese": "チーズ",
@@ -4916,7 +4916,7 @@
     "Meal2": {
       "name": "メニュー2",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "iced_coffee": "アイスコーヒー",
       "omelette": "オムレツ",
       "cheese": "チーズ",
@@ -4934,7 +4934,7 @@
     "Meal3": {
       "name": "メニュー3",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "iced_coffee": "アイスコーヒー",
       "omelette": "オムレツ",
       "cheese": "チーズ",
@@ -4952,7 +4952,7 @@
     "Meal4": {
       "name": "メニュー4",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "iced_coffee": "アイスコーヒー",
       "omelette": "オムレツ",
       "cheese": "チーズ",
@@ -4970,7 +4970,7 @@
     "Meal5": {
       "name": "メニュー5",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "iced_coffee": "アイスコーヒー",
       "omelette": "オムレツ",
       "cheese": "チーズ",
@@ -4988,7 +4988,7 @@
     "Meal6": {
       "name": "メニュー6",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "iced_coffee": "アイスコーヒー",
       "omelette": "オムレツ",
       "cheese": "チーズ",
@@ -5006,7 +5006,7 @@
     "Meal7": {
       "name": "メニュー7",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "iced_coffee": "アイスコーヒー",
       "omelette": "オムレツ",
       "cheese": "チーズ",
@@ -5024,7 +5024,7 @@
     "Meal8": {
       "name": "メニュー8",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "iced_coffee": "アイスコーヒー",
       "omelette": "オムレツ",
       "cheese": "チーズ",
@@ -5048,7 +5048,7 @@
     "AwayCook": {
       "name": "常設メニュー",
       "help": "上記すべてが完了したら常設メニューを生産します。",
-      "None": "None",
+      "None": "なし",
       "iced_coffee": "アイスコーヒー",
       "omelette": "オムレツ",
       "cheese": "チーズ",
@@ -5206,20 +5206,20 @@
     "Batch1Shops": {
       "name": "第1バッチ店舗",
       "help": "最初のバッチで経営する店舗を選択",
-      "1": "有魚餐馆",
-      "2": "白熊飲品",
-      "3": "啾啾簡餐",
-      "4": "烏魚烤肉",
-      "5": "啾珈琲"
+      "1": "有魚レストラン",
+      "2": "白熊ドリンク",
+      "3": "ジュウ簡餐",
+      "4": "イカ焼き",
+      "5": "ジュウコーヒー"
     },
     "Batch2Shops": {
       "name": "第2バッチ店舗",
       "help": "2番目のバッチで経営する店舗を選択",
-      "1": "有魚餐馆",
-      "2": "白熊飲品",
-      "3": "啾啾簡餐",
-      "4": "烏魚烤肉",
-      "5": "啾珈琲"
+      "1": "有魚レストラン",
+      "2": "白熊ドリンク",
+      "3": "ジュウ簡餐",
+      "4": "イカ焼き",
+      "5": "ジュウコーヒー"
     },
     "SeasonalReplaceEnabled": {
       "name": "季節限定置き換え",
@@ -5320,8 +5320,8 @@
     "Product1": {
       "name": "メニュー1",
       "help": "",
-      "None": "None",
-      "double_bamboo_shoots": "涼拌双筍",
+      "None": "なし",
+      "double_bamboo_shoots": "若竹の和え物",
       "tofu_meat": "肉みそ豆腐",
       "tofu_combo": "クラシック豆腐セット",
       "hearty_meal": "まん玉定食",
@@ -5333,8 +5333,8 @@
     "Product2": {
       "name": "メニュー2",
       "help": "",
-      "None": "None",
-      "double_bamboo_shoots": "涼拌双筍",
+      "None": "なし",
+      "double_bamboo_shoots": "若竹の和え物",
       "tofu_meat": "肉みそ豆腐",
       "tofu_combo": "クラシック豆腐セット",
       "hearty_meal": "まん玉定食",
@@ -5346,8 +5346,8 @@
     "Product3": {
       "name": "メニュー3",
       "help": "",
-      "None": "None",
-      "double_bamboo_shoots": "涼拌双筍",
+      "None": "なし",
+      "double_bamboo_shoots": "若竹の和え物",
       "tofu_meat": "肉みそ豆腐",
       "tofu_combo": "クラシック豆腐セット",
       "hearty_meal": "まん玉定食",
@@ -5359,8 +5359,8 @@
     "Product4": {
       "name": "メニュー4",
       "help": "",
-      "None": "None",
-      "double_bamboo_shoots": "涼拌双筍",
+      "None": "なし",
+      "double_bamboo_shoots": "若竹の和え物",
       "tofu_meat": "肉みそ豆腐",
       "tofu_combo": "クラシック豆腐セット",
       "hearty_meal": "まん玉定食",
@@ -5372,13 +5372,13 @@
     "Product5": {
       "name": "メニュー5",
       "help": "",
-      "None": "None",
-      "double_bamboo_shoots": "涼拌双筍",
+      "None": "なし",
+      "double_bamboo_shoots": "若竹の和え物",
       "tofu_meat": "肉みそ豆腐",
       "tofu_combo": "クラシック豆腐セット",
       "hearty_meal": "まん玉定食",
       "fo_tiao": "仏跳牆",
-      "amaranth_rice_ball": "苋菜饭团",
+      "amaranth_rice_ball": "アマランスおにぎり",
       "matsutake_chicken_soup": "松茸チキンスープ",
       "persimmon_cake": "柿のケーキ"
     },
@@ -5386,12 +5386,12 @@
       "name": "季節代替メニュー",
       "help": "季節限定メニューの在庫不足時に置き換えるメニュー",
       "None": "なし",
-      "double_bamboo_shoots": "涼拌双筍",
-      "tofu_meat": "肉末焼豆腐",
-      "tofu_combo": "經典豆腐套餐",
-      "hearty_meal": "綿玉定食",
-      "fo_tiao": "佛跳牆",
-      "amaranth_rice_ball": "莧菜飯糰",
+      "double_bamboo_shoots": "若竹の和え物",
+      "tofu_meat": "肉みそ豆腐",
+      "tofu_combo": "クラシック豆腐セット",
+      "hearty_meal": "まん玉定食",
+      "fo_tiao": "仏跳牆",
+      "amaranth_rice_ball": "アマランスおにぎり",
       "matsutake_chicken_soup": "松茸チキンスープ",
       "persimmon_cake": "柿のケーキ"
     },
@@ -5408,7 +5408,7 @@
     "Char1": {
       "name": "キャラクター1",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "WorkerJuu": "WorkerJuu",
       "Cheshire": "Cheshire",
       "YingSwei": "YingSwei",
@@ -5448,7 +5448,7 @@
     "Char2": {
       "name": "キャラクター2",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "WorkerJuu": "WorkerJuu",
       "Cheshire": "Cheshire",
       "YingSwei": "YingSwei",
@@ -5488,7 +5488,7 @@
     "Product1": {
       "name": "メニュー1",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "spring_flower_tea": "春花茶",
       "strawberry_lemon": "ストレーモン",
       "strawberry_honey": "いちごハニースムージー",
@@ -5503,7 +5503,7 @@
     "Product2": {
       "name": "メニュー2",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "spring_flower_tea": "春花茶",
       "strawberry_lemon": "ストレーモン",
       "strawberry_honey": "いちごハニースムージー",
@@ -5518,7 +5518,7 @@
     "Product3": {
       "name": "メニュー3",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "spring_flower_tea": "春花茶",
       "strawberry_lemon": "ストレーモン",
       "strawberry_honey": "いちごハニースムージー",
@@ -5533,7 +5533,7 @@
     "Product4": {
       "name": "メニュー4",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "spring_flower_tea": "春花茶",
       "strawberry_lemon": "ストレーモン",
       "strawberry_honey": "いちごハニースムージー",
@@ -5548,7 +5548,7 @@
     "Product5": {
       "name": "メニュー5",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "spring_flower_tea": "春花茶",
       "strawberry_lemon": "ストレーモン",
       "strawberry_honey": "いちごハニースムージー",
@@ -5556,14 +5556,14 @@
       "fruit_paradise": "フルーツパラダイス",
       "lavender_tea": "ラベンダーティー",
       "sunny_honey": "サニーハニー",
-      "watermelon_juice": "西瓜汁",
+      "watermelon_juice": "スイカジュース",
       "chrysanthemum_tea": "菊花茶",
       "carrot_pear_juice": "ニンジン秋梨ジュース"
     },
     "SeasonalFallback": {
       "name": "季節ドリンク予備",
       "help": "白熊ドリンクの季節ドリンクの在庫が不足している場合に置き換えるドリンク",
-      "None": "None",
+      "None": "なし",
       "spring_flower_tea": "春花茶",
       "strawberry_lemon": "ストレーモン",
       "strawberry_honey": "いちごハニースムージー",
@@ -5588,7 +5588,7 @@
     "Char1": {
       "name": "キャラクター1",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "WorkerJuu": "WorkerJuu",
       "Cheshire": "Cheshire",
       "YingSwei": "YingSwei",
@@ -5668,7 +5668,7 @@
     "Product1": {
       "name": "メニュー1",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "orchard_duo": "果樹園デュオ",
       "succulently_sweet": "スイートコンボ",
       "berry_orange": "ベリーオレンジデザートセット",
@@ -5678,7 +5678,7 @@
     "Product2": {
       "name": "メニュー2",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "orchard_duo": "果樹園デュオ",
       "succulently_sweet": "スイートコンボ",
       "berry_orange": "ベリーオレンジデザートセット",
@@ -5688,7 +5688,7 @@
     "Product3": {
       "name": "メニュー3",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "orchard_duo": "果樹園デュオ",
       "succulently_sweet": "スイートコンボ",
       "berry_orange": "ベリーオレンジデザートセット",
@@ -5698,7 +5698,7 @@
     "Product4": {
       "name": "メニュー4",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "orchard_duo": "果樹園デュオ",
       "succulently_sweet": "スイートコンボ",
       "berry_orange": "ベリーオレンジデザートセット",
@@ -5708,7 +5708,7 @@
     "Product5": {
       "name": "メニュー5",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "orchard_duo": "果樹園デュオ",
       "succulently_sweet": "スイートコンボ",
       "berry_orange": "ベリーオレンジデザートセット",
@@ -5728,7 +5728,7 @@
     "Char1": {
       "name": "キャラクター1",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "WorkerJuu": "WorkerJuu",
       "Cheshire": "Cheshire",
       "YingSwei": "YingSwei",
@@ -5808,7 +5808,7 @@
     "Product1": {
       "name": "商品1",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "roasted_skewer": "炭焼き串",
       "stir_fried_chicken": "鶏肉炒め",
       "steak_bowl": "ハンバーグ丼",
@@ -5819,7 +5819,7 @@
     "Product2": {
       "name": "商品2",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "roasted_skewer": "炭焼き串",
       "stir_fried_chicken": "鶏肉炒め",
       "steak_bowl": "ハンバーグ丼",
@@ -5830,7 +5830,7 @@
     "Product3": {
       "name": "商品3",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "roasted_skewer": "炭焼き串",
       "stir_fried_chicken": "鶏肉炒め",
       "steak_bowl": "ハンバーグ丼",
@@ -5841,7 +5841,7 @@
     "Product4": {
       "name": "商品4",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "roasted_skewer": "炭焼き串",
       "stir_fried_chicken": "鶏肉炒め",
       "steak_bowl": "ハンバーグ丼",
@@ -5867,7 +5867,7 @@
   },
   "IslandBusinessShop5": {
     "_info": {
-      "name": "ジューコーヒー",
+      "name": "ジュウコーヒー",
       "help": "メニューは1～8の順に生産されます。生産目標はメニューX数量オプションで、前の項目が完全に満たされてから次の項目が実行されます。後続の項目は実行時にそれ以前の項目の達成に影響しません。"
     },
     "Char1": {
