@@ -5852,7 +5852,7 @@
     "Product5": {
       "name": "商品5",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "roasted_skewer": "炭焼き串",
       "stir_fried_chicken": "鶏肉炒め",
       "steak_bowl": "ハンバーグ丼",
@@ -5873,7 +5873,7 @@
     "Char1": {
       "name": "キャラクター1",
       "help": "",
-      "None": "None",
+      "None": "なし",
       "WorkerJuu": "WorkerJuu",
       "Cheshire": "Cheshire",
       "YingSwei": "YingSwei",

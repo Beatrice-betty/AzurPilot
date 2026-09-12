@@ -3108,7 +3108,7 @@
   },
   "Hard": {
     "_info": {
-      "name": "Hard Mode",
+      "name": "Hard mode",
       "help": "Running daily Hard mode requires clearing mode to be unlocked. Before unlocking, use the main campaign function instead."
     },
     "HardStage": {
@@ -3170,7 +3170,7 @@
       "help": "Recommended 1.0 ~ 3.0, because the character portrait may cover the HP bar, so a brief confirmation period is needed."
     },
     "OpponentRefreshValue": {
-      "name": "Opponents Refreshed X Times Today",
+      "name": "Opponents refreshed X times today",
       "help": "Automatically updated value, resets at midnight.\nIf you manually refresh opponents, you should update this value."
     },
     "OpponentRefreshRecord": {
