@@ -440,6 +440,15 @@ StopCondition:
   ReachLevel: 0
 WarArchives:
   DailyRunCount: 0
+  AutoClear: false
+  AutoSelectEvent: false
+  AutoClearTarget:
+    value: three_star
+    option: [normal_3_star, three_star, clear_100]
+  AutoClearProgress:
+    type: stored
+    value: null
+    display: hide
   DailyRunCountRemain:
     type: stored
     value: 0
@@ -767,6 +776,15 @@ Commission:
   CommissionNotifyRewardStatistics:
     type: checkbox
     value: true
+  GemNotify:
+    type: checkbox
+    value: true
+  GemStatistics:
+    type: checkbox
+    value: false
+  GemStatisticsPeriod:
+    value: month
+    option: [today, week, month]
 Tactical:
   TacticalFilter: |-
     SameT4 > SameT3 > SameT2 > SameT1
@@ -894,6 +912,17 @@ Awaken:
     option: [level120, level125]
   Favourite:
     value: false
+Secretary:
+  CustomFilter: |-
+    ultra > super_rare > elite > rare > common
+  LowFavorabilityPriority: false
+  BackupEnable: true
+  CheckInterval: 0
+  Notify: true
+  OnePushConfig:
+    type: textarea
+    mode: yaml
+    value: "provider: null"
 GeneralShop:
   Enable: true
   UseGems: false

@@ -1340,6 +1340,10 @@ class AzurLaneAutoScript:
         from module.awaken.awaken import Awaken
         Awaken(config=self.config, device=self.device).run()
 
+    def secretary(self):
+        from module.secretary.secretary import Secretary
+        Secretary(config=self.config, device=self.device).run()
+
     def shop_frequent(self):
         from module.shop.shop_reward import RewardShop
         RewardShop(config=self.config, device=self.device).run_frequent()
@@ -2039,6 +2043,29 @@ class AzurLaneAutoScript:
                 level=50,
             )
             exit(1)
+
+        # 每日自动备份：备份数据库与用户配置，超过保留天数的历史备份自动清理。
+        # 备份失败不阻断调度器启动，仅记录告警。
+        try:
+            from module.base.backup import backup
+            today = datetime.now().strftime('%Y-%m-%d')
+            if getattr(self, 'last_backup_date', None) != today:
+                backup()
+                self.last_backup_date = today
+        except Exception as e:
+            logger.warning(f'每日自动备份失败，已跳过本次备份：{e}')
+
+        # 本地调试服务：仅在显式设置环境变量 ALAS_DEBUG_SERVER=1 时启动，
+        # 监听 127.0.0.1，用于向统计库注入测试数据并验证推送链路。
+        # 默认不启动，避免无意中开放本地端口。
+        if os.environ.get('ALAS_DEBUG_SERVER') == '1':
+            try:
+                from module.debug.commission_debug import CommissionDebugHandler
+                from module.debug.web_debug_server import start_debug_server
+
+                start_debug_server(CommissionDebugHandler(self))
+            except Exception as e:
+                logger.warning(f'调试服务启动失败：{e}')
 
         # 全局异常连续失败计数（仅用于日志展示和退避策略，不再触发退出）
         consecutive_global_failures = 0

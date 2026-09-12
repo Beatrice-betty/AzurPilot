@@ -238,6 +238,10 @@ class GeneratedConfig:
 
     # 配置组 `WarArchives`
     WarArchives_DailyRunCount = 0
+    WarArchives_AutoClear = False
+    WarArchives_AutoSelectEvent = False
+    WarArchives_AutoClearTarget = 'three_star'  # normal_3_star, three_star, clear_100
+    WarArchives_AutoClearProgress = None
     WarArchives_DailyRunCountRemain = 0
     WarArchives_DailyRunCountRecord = datetime.datetime(2020, 1, 1, 0, 0)
     WarArchives_DailyRunCountLimit = 0
@@ -378,6 +382,9 @@ class GeneratedConfig:
     Commission_DoMajorCommission = False
     Commission_CommissionNotifyReward = False
     Commission_CommissionNotifyRewardStatistics = True
+    Commission_GemNotify = True
+    Commission_GemStatistics = False
+    Commission_GemStatisticsPeriod = 'month'  # today, week, month
 
     # 配置组 `Tactical`
     Tactical_TacticalFilter = 'SameT4 > SameT3 > SameT2 > SameT1\n> BlueT2 > YellowT2 > RedT2\n> BlueT3 > YellowT3 > RedT3\n> BlueT4 > YellowT4 > RedT4\n> BlueT1 > YellowT1 > RedT1\n> first'
@@ -452,6 +459,14 @@ class GeneratedConfig:
     # 配置组 `Awaken`
     Awaken_LevelCap = 'level120'  # level120, level125
     Awaken_Favourite = False
+
+    # 配置组 `Secretary`
+    Secretary_CustomFilter = 'ultra > super_rare > elite > rare > common'
+    Secretary_LowFavorabilityPriority = False
+    Secretary_BackupEnable = True
+    Secretary_CheckInterval = 0
+    Secretary_Notify = True
+    Secretary_OnePushConfig = 'provider: null'
 
     # 配置组 `GeneralShop`
     GeneralShop_Enable = True

@@ -261,6 +261,9 @@ Reward:
     Awaken:
       - Scheduler
       - Awaken
+    Secretary:
+      - Scheduler
+      - Secretary
     OperationHandover:
       - Scheduler
       - Campaign

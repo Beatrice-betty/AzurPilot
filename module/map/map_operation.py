@@ -470,7 +470,7 @@ class MapOperation(MysteryHandler, FleetPreparation, Retirement, FastForwardHand
             return True
 
         if mode == 'normal':
-            if self.match_template_color(MAP_MODE_SWITCH_NORMAL, offset=(-20, -20, 80, 20)):
+            if self.match_template_color(MAP_MODE_SWITCH_NORMAL, offset=(20, 20)):
                 logger.attr('地图模式', '普通')
                 return True
             if self._is_mod_switch_hard_appear(active=False, interval=2):
@@ -483,7 +483,7 @@ class MapOperation(MysteryHandler, FleetPreparation, Retirement, FastForwardHand
             if self._is_mod_switch_hard_appear(active=True):
                 logger.attr('地图模式', '困难')
                 return True
-            if self.match_template_color(MAP_MODE_SWITCH_NORMAL, offset=(-20, -20, 80, 20), interval=2):
+            if self.match_template_color(MAP_MODE_SWITCH_NORMAL, offset=(20, 20), interval=2):
                 logger.attr('地图模式', '普通')
                 MAP_MODE_SWITCH_HARD.clear_offset()
                 self.device.click(MAP_MODE_SWITCH_HARD)
@@ -518,7 +518,7 @@ class MapOperation(MysteryHandler, FleetPreparation, Retirement, FastForwardHand
             MAP_MODE_SWITCH_HARD5,
             MAP_MODE_SWITCH_HARD6,
         ]:
-            if self.appear(button, offset=(-20, -20, 80, 20), similarity=0.7):
+            if self.appear(button, offset=(20, 20), similarity=0.7):
                 if active:
                     return self._is_mod_switch_hard_active(button)
                 else:
@@ -626,14 +626,14 @@ class MapOperation(MysteryHandler, FleetPreparation, Retirement, FastForwardHand
         """
         if not self.map_cat_attack_timer.reached():
             return False
-        if self.image_color_count(MAP_CAT_ATTACK, color=(255, 231, 123), threshold=221, count=100):
+        if self.image_color_count(MAP_CAT_ATTACK, color=(255, 231, 123), threshold=30, count=100):
             logger.info('[地图-操作] 跳过地图猫攻击')
             self.device.click(MAP_CAT_ATTACK)
             self.map_cat_attack_timer.reset()
             return True
         if not self.map_is_clear_mode:
             # 威胁检测：Medium 模式有 106 像素计数，MAP_CAT_ATTACK_MIRROR 有 290。
-            if self.image_color_count(MAP_CAT_ATTACK_MIRROR, color=(255, 231, 123), threshold=221, count=200):
+            if self.image_color_count(MAP_CAT_ATTACK_MIRROR, color=(255, 231, 123), threshold=30, count=200):
                 logger.info('[地图-操作] 跳过地图被攻击')
                 self.device.click(MAP_CAT_ATTACK)
                 self.map_cat_attack_timer.reset()

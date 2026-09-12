@@ -1358,6 +1358,10 @@
     },
     "WarArchives": {
       "DailyRunCount": 0,
+      "AutoClear": false,
+      "AutoSelectEvent": false,
+      "AutoClearTarget": "three_star",
+      "AutoClearProgress": null,
       "DailyRunCountRemain": 0,
       "DailyRunCountRecord": "2020-01-01 00:00:00",
       "DailyRunCountLimit": 0
@@ -1976,7 +1980,10 @@
       "Blacklist": null,
       "DoMajorCommission": false,
       "CommissionNotifyReward": false,
-      "CommissionNotifyRewardStatistics": true
+      "CommissionNotifyRewardStatistics": true,
+      "GemNotify": true,
+      "GemStatistics": false,
+      "GemStatisticsPeriod": "month"
     },
     "Storage": {
       "Storage": {}
@@ -2156,6 +2163,29 @@
     "Awaken": {
       "LevelCap": "level120",
       "Favourite": false
+    },
+    "Storage": {
+      "Storage": {}
+    }
+  },
+  "Secretary": {
+    "Scheduler": {
+      "Enable": false,
+      "PushNotification": false,
+      "NextRun": "2020-01-01 00:00:00",
+      "Command": "Secretary",
+      "SuccessInterval": 0,
+      "FailureInterval": 120,
+      "ServerUpdate": "00:00",
+      "Sensitive": false
+    },
+    "Secretary": {
+      "CustomFilter": "ultra > super_rare > elite > rare > common",
+      "LowFavorabilityPriority": false,
+      "BackupEnable": true,
+      "CheckInterval": 0,
+      "Notify": true,
+      "OnePushConfig": "provider: null"
     },
     "Storage": {
       "Storage": {}
