@@ -186,6 +186,10 @@
       "name": "Cognitive Awakening",
       "help": ""
     },
+    "Secretary": {
+      "name": "Secretary",
+      "help": "Automatically monitor the secretary ship's affinity and replace it when it reaches 90 affinity"
+    },
     "OperationHandover": {
       "name": "Operation Handover Contract",
       "help": "Consume Handover Books to run Operation Handover automatically."
@@ -1448,6 +1452,25 @@
       "name": "Sortie X Times Daily",
       "help": "Maximum War Archives runs per day.\n0 means no limit.\nAfter reaching the limit, the task is delayed until the next server reset instead of being disabled."
     },
+    "AutoClear": {
+      "name": "Auto Clear",
+      "help": "Automatically clear all stages of the event.\nStage name can be left blank; the script decides which stage to run\naccording to the clear target. Finished stages are skipped.\nNormal Maps 3 Stars / All Maps 3 Stars mode: auto search for the 2nd star,\nfull clear for the 3rd.\n100% Clear mode: full-clear runs only; intermediate stages advance once 100% cleared."
+    },
+    "AutoSelectEvent": {
+      "name": "Auto Select Event",
+      "help": "When enabled, the event name input is ignored.\nThe script selects war archive events from top to bottom and clears them one by one;\nwhen an event is fully cleared, the next one starts automatically.\nRequires Auto Clear."
+    },
+    "AutoClearTarget": {
+      "name": "Clear Target",
+      "help": "Scope and strategy of auto clear:\nNormal Maps 3 Stars: farms every stage of the normal map to 3 stars\n(auto search for the 2nd star, full clear for the 3rd), stops when done.\nAll Maps 3 Stars: farms every stage of both normal and hard maps to 3 stars\n(auto search for the 2nd star, full clear for the 3rd);\nnormal maps are cleared before hard maps.\n100% Clear: full-clears hard stages; intermediate stages advance once 100% cleared\n(one full-clear run each), only the last stage is farmed to full stars.\nStage name is decided by the script automatically.",
+      "normal_3_star": "Normal Maps 3 Stars",
+      "three_star": "All Maps 3 Stars",
+      "clear_100": "100% Clear (Hard)"
+    },
+    "AutoClearProgress": {
+      "name": "Auto Clear Progress",
+      "help": "Auto clear progress recorded by the script, so finished stages are skipped on the next run."
+    },
     "DailyRunCountRemain": {
       "name": "Daily Sorties Remaining",
       "help": "Today's remaining quota, maintained automatically by the script."
@@ -2110,6 +2133,21 @@
     "CommissionNotifyRewardStatistics": {
       "name": "Include Statistics in Push",
       "help": "Display today/week/month cumulative gem count in notification"
+    },
+    "GemNotify": {
+      "name": "Gem Commission Execution Notification",
+      "help": "After a new Gem Commission starts, send the list of all currently running Gem Commissions"
+    },
+    "GemStatistics": {
+      "name": "Gem Commission Statistics Details",
+      "help": "When enabled, include gem commission statistics (success rate, total rewards) in reward notification"
+    },
+    "GemStatisticsPeriod": {
+      "name": "Gem Commission Statistics Period",
+      "help": "Statistical period for gem commission rewards",
+      "today": "Today",
+      "week": "This Week",
+      "month": "This Month"
     }
   },
   "Tactical": {
@@ -2433,6 +2471,36 @@
     "Favourite": {
       "name": "Only awaken favorited ships",
       "help": ""
+    }
+  },
+  "Secretary": {
+    "_info": {
+      "name": "Secretary Settings",
+      "help": "Configure automatic secretary replacement and notification settings"
+    },
+    "CustomFilter": {
+      "name": "Rarity Filter",
+      "help": "Rarities include ultra, super_rare, elite, rare, and common\nPlease enter the custom order below\nDefault priority: ultra > super_rare > elite > rare > common"
+    },
+    "LowFavorabilityPriority": {
+      "name": "Low Favorability Priority",
+      "help": "Ships will be selected in ascending order of favorability"
+    },
+    "BackupEnable": {
+      "name": "Backup Secretary",
+      "help": "Use ships in the secretary group as backup secretaries and prioritize switching to them"
+    },
+    "CheckInterval": {
+      "name": "Custom Check Interval (Hours)",
+      "help": "Check after the specified interval following a secretary switch. Set to 0 to calculate automatically based on affinity. If your secretary gains affinity through sorties, setting this value allows earlier replacement"
+    },
+    "Notify": {
+      "name": "Secretary Notifications",
+      "help": "Send secretary-related notifications via OnePush"
+    },
+    "OnePushConfig": {
+      "name": "OnePush Configuration",
+      "help": "Notification settings for secretary replacement. Leave empty to use the global configuration"
     }
   },
   "GeneralShop": {
