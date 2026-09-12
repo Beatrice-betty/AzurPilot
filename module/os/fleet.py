@@ -970,10 +970,7 @@ class OSFleet(OSCamera, Combat, Fleet, OSAsh):
         fleets = self.parse_fleet_filter()
         with self.stat.new(
                 genre=inflection.underscore(self.config.task.command),
-                method=self.stat.opsi_save_method(
-                    self.config.task.command,
-                    self.config.DropRecord_OpsiRecord,
-                )
+                method=self.config.DropRecord_OpsiRecord
         ) as drop:
             for fleet in fleets:
                 logger.hr(f'回合: {fleet}', level=2)

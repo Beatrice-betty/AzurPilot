@@ -34,7 +34,6 @@
 #pywebio-scope-overview {
     grid-auto-flow: column;
     grid-template-columns: minmax(16rem, 20rem) minmax(24rem, 1fr);
-    column-gap: 1rem;
 }
 
 #pywebio-scope-daemon-overview {
