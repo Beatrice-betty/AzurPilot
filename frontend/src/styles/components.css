@@ -66,13 +66,32 @@
 .live-label {font-size: 8px; letter-spacing: .5px; display: flex; align-items: center; gap: 5px; color: #7c9d91; border: 1px solid #65b89922; border-radius: 4px; padding: 3px 6px}
 .live-label i {width: 4px; height: 4px; border-radius: 50%; background: #6aba9e}
 .log-panel .panel-heading {padding-top: 14px; padding-bottom: 14px}
-.log-content {background: var(--surface-muted); padding: 13px 17px; height: 62vh; min-height: 220px; overflow: auto; font-family: "Cascadia Code", "Consolas", "Microsoft YaHei", monospace; font-size: 10px; color: #82929f}
+.log-content {background: var(--surface-muted); padding: 13px 17px; height: 62vh; min-height: 220px; overflow: auto; font-family: "Cascadia Code", "JetBrains Mono", "Consolas", "Courier New", monospace; font-size: 11px; line-height: 1.6; color: var(--text)}
 .compact .log-content {height: 178px; min-height: 0}
-.log-line {display: grid; grid-template-columns: 26px 46px minmax(0, 1fr); gap: 12px; line-height: 1.9; padding: 3px 0; white-space: pre-wrap; overflow-wrap: anywhere}
-.log-number {color: #b6c0c9; font-size: 9px}
-.log-level {font-size: 8px; color: #51a794}
-.log-line.warning, .log-line.warning .log-level {color: #b0955b}
-.log-line.error, .log-line.critical, .log-line.error .log-level, .log-line.critical .log-level {color: #c16c72}
+.log-entry-line {display: flex; gap: 8px; padding: 2px 0; white-space: pre-wrap; word-break: break-all}
+.log-entry-line.log-raw {display: block}
+.log-lvl {font-weight: 600; min-width: 60px; flex-shrink: 0}
+.lvl-debug {color: #85929e}
+.lvl-info {color: #0ea5e9}
+.lvl-warning {color: #eab308}
+.lvl-error {color: #ef4444}
+.lvl-critical {color: #f43f5e; font-weight: 700}
+.log-ts {color: #06b6d4; flex-shrink: 0}
+.log-divider {color: var(--border); user-select: none; flex-shrink: 0}
+.log-msg {flex: 1; min-width: 0}
+.log-rule {display: flex; align-items: center; gap: 12px; margin: 8px 0; color: var(--muted); font-size: 11px}
+.log-rule .rule-bar {flex: 1; height: 1px; background: currentColor; opacity: .35}
+.log-rule.rule-double .rule-bar {height: 2px; border-top: 1px solid currentColor; border-bottom: 1px solid currentColor; background: transparent; opacity: .45}
+.log-rule .rule-title {font-weight: 700; color: var(--text); padding: 0 4px; letter-spacing: .5px}
+.hl-bool-true {color: #22c55e; font-style: italic; font-weight: 550}
+.hl-bool-false {color: #ef4444; font-style: italic; font-weight: 550}
+.hl-none {color: #d946ef; font-style: italic}
+.hl-brace {font-weight: 700; color: var(--text)}
+.hl-path {color: #a855f7}
+.hl-time {color: #06b6d4}
+.hl-attr {color: #14b8a6; font-weight: 550}
+.hl-title {font-weight: 700; color: var(--accent)}
+.log-search-match {background: #fbbf2445; color: inherit; border-radius: 2px; padding: 0 1px}
 .log-filters {display: flex; align-items: center; gap: 12px; padding: 14px 20px; font-size: 11px; color: var(--muted)}
 .log-filters .input-icon {flex: 1}
 .empty {min-height: 160px; height: 100%; padding: 35px 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); gap: 12px; text-align: center; line-height: 1.8; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; font-size: 11px}
@@ -108,7 +127,6 @@
 .group-indicator {width: 4px; height: 15px; border-radius: 3px; background: #74bda8}
 .field-row {padding: 19px 22px; display: flex; align-items: center; justify-content: space-between; gap: 25px; border-bottom: 1px solid var(--border)}
 .field-row:last-child {border-bottom: 0}
-.field-row.modified {box-shadow: inset 3px 0 #42ac91; background: #43ac9104}
 .field-label {flex: 1; min-width: 120px}
 .field-label label {font-size: 14px; font-weight: 550; line-height: 1.7}
 .field-label label > span {margin-left: 6px}
@@ -116,8 +134,6 @@
 .field-control {width: 260px; flex-shrink: 0; text-align: right}
 .field-control > input, .field-control > select, .field-control > textarea {width: 100%; font-size: 13px}
 .field-control textarea {resize: none; overflow-y: hidden; min-height: 0; line-height: 1.9}
-.save-bar {position: fixed; bottom: 22px; left: calc(var(--sidebar-width) + 32px); right: 34px; z-index: 25; padding: 13px 20px; border: 1px solid #6aa89750; border-radius: 10px; display: flex; align-items: center; gap: 14px; background: var(--surface); box-shadow: 0 4px 35px #19383125}
-.save-bar > span {display: flex; align-items: center; gap: 8px; margin-right: auto; font-size: 11px; color: var(--muted)}
 .settings-notice {font-size: 11px; color: var(--muted); line-height: 1.9; margin: 24px 0 16px}
 .panel-note {font-size: 10px; color: var(--muted); padding: 13px 20px; border-top: 1px solid var(--border)}
 .chart-panel .empty {height: 350px}

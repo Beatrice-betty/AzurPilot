@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Palette, Save, Settings2, Trash2 } from 'lucide-react'
+import { Palette, Settings2, Trash2 } from 'lucide-react'
 import { api } from '../api/client'
 import type { Settings as SettingsData, Value } from '../api/types'
 import { languages, useApp, useConnection } from '../app/context'
@@ -11,41 +11,211 @@ export function Settings() {
   const {instance = ''} = useParams()
   const {notify, refresh, instances, theme, setTheme, language, setLanguage, t} = useApp()
   const [data, setData] = useState<SettingsData>()
-  const [draft, setDraft] = useState<Record<string, Value>>({})
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [startup, setStartup] = useState(false)
   const connection = useConnection()
+
+  const pendingDeploy = useRef<Record<string, Value>>({})
+  const deployTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   useEffect(() => {
     if (connection !== 'ready') return
     let active = true
-    void Promise.all([api.request('settings.get', {}), api.request('startup.get', {instance})]).then(([data, start]) => {if (active) {setData(data); setStartup(start.enabled)}}).catch(error => {if (active) setError(error.message)})
-    return () => {active = false}
+    void Promise.all([api.request('settings.get', {}), api.request('startup.get', {instance})])
+      .then(([data, start]) => {
+        if (active) {
+          setData(data)
+          setStartup(start.enabled)
+        }
+      })
+      .catch(error => {
+        if (active) setError(error.message)
+      })
+    return () => { active = false }
   }, [connection, instance])
-  async function save() {
-    setBusy(true); setError('')
-    try {await api.request('settings.patch', {values: draft}); setData(await api.request('settings.get', {})); setDraft({}); notify('部署设置已保存，重启服务后生效')}
-    catch (error) {setError((error as Error).message)} finally {setBusy(false)}
-  }
+
+  const flushDeploy = useCallback(async () => {
+    if (deployTimer.current) {
+      clearTimeout(deployTimer.current)
+      deployTimer.current = null
+    }
+    if (!Object.keys(pendingDeploy.current).length) return
+    const values = {...pendingDeploy.current}
+    pendingDeploy.current = {}
+    try {
+      await api.request('settings.patch', {values})
+      notify('部署设置已自动更新，重启服务后生效')
+    } catch (err) {
+      notify((err as Error).message, true)
+    }
+  }, [notify])
+
+  const changeDeployField = useCallback((key: string, value: Value, immediate = false) => {
+    pendingDeploy.current[key] = value
+    setData(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        groups: prev.groups.map(g => ({
+          ...g,
+          fields: g.fields.map(f => f.key === key ? {...f, value} : f)
+        }))
+      }
+    })
+    if (immediate) {
+      void flushDeploy()
+    } else {
+      if (deployTimer.current) clearTimeout(deployTimer.current)
+      deployTimer.current = setTimeout(() => {
+        void flushDeploy()
+      }, 400)
+    }
+  }, [flushDeploy])
+
+  useEffect(() => {
+    return () => {
+      if (Object.keys(pendingDeploy.current).length) {
+        void flushDeploy()
+      }
+    }
+  }, [flushDeploy])
+
   async function remove() {
     setBusy(true)
-    try {const config = await api.request('config.get', {instance}); await api.request('instances.delete', {instance, revision: config.revision}); await refresh(); notify('实例已移入配置备份目录'); setDeleting(false)}
-    catch (error) {setError((error as Error).message)} finally {setBusy(false)}
+    try {
+      const config = await api.request('config.get', {instance})
+      await api.request('instances.delete', {instance, revision: config.revision})
+      await refresh()
+      notify('实例已移入配置备份目录')
+      setDeleting(false)
+    } catch (error) {
+      setError((error as Error).message)
+    } finally {
+      setBusy(false)
+    }
   }
+
   async function setAutoRun() {
     setBusy(true)
-    try {await api.request('startup.set', {instance, enabled: !startup}); setStartup(!startup)} catch (error) {setError((error as Error).message)} finally {setBusy(false)}
+    try {
+      await api.request('startup.set', {instance, enabled: !startup})
+      setStartup(!startup)
+    } catch (error) {
+      setError((error as Error).message)
+    } finally {
+      setBusy(false)
+    }
   }
-  return <><PageTitle title="系统设置" actions={<button className="button primary" onClick={save} disabled={!Object.keys(draft).length || busy || connection !== 'ready'}><Save size={16}/>保存设置</button>}/>
-    {error && <ErrorBox message={error}/>}
-    <section className="panel config-group"><div className="panel-heading"><div><Palette size={18}/><h2>界面偏好</h2></div></div>
-      <div className="field-row"><div className="field-label"><label htmlFor="ui-theme">界面主题</label><p>即时切换当前浏览器的外观。</p></div><div className="field-control"><select id="ui-theme" value={theme} onChange={event => setTheme(event.target.value as typeof theme)}><option value="light">浅色</option><option value="dark">深色</option></select></div></div>
-      <div className="field-row"><div className="field-label"><label htmlFor="ui-language">界面语言</label><p>切换任务菜单、配置名称及说明的语言，选择会保存在当前浏览器中。</p></div><div className="field-control"><select id="ui-language" value={language} disabled={connection !== 'ready'} onChange={event => setLanguage(event.target.value as typeof language)}>{Object.entries(languages).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div></div>
-    </section>
-    <section className="panel instance-settings"><div className="panel-heading"><div><Settings2 size={18}/><h2>实例管理</h2></div></div><div className="field-row"><div className="field-label"><label>启动服务时自动运行 {instance}</label><p>服务启动后自动接续此实例的任务调度。</p></div><FieldInput id="startup" value={startup} onChange={setAutoRun} label="启动时自动运行" disabled={busy || connection !== 'ready'}/></div><div className="field-row"><div className="field-label"><label>删除当前实例</label><p>配置将移入备份目录；必须先停止运行中的实例。</p></div><button className="button danger subtle" disabled={busy || connection !== 'ready' || instances.find(item => item.name === instance)?.status === 'running'} onClick={() => setDeleting(true)}><Trash2 size={15}/>删除实例</button></div></section>
-    <p className="settings-notice">以下为服务端部署设置，保存后需要重启服务生效。界面偏好即时生效。</p>
-    {!data ? <Loading/> : data.groups.map(group => <section className="panel config-group" key={group.key}><div className="panel-heading"><h2>{t(`Gui.DeploySetting.Group${group.key}`)}</h2></div>{group.fields.filter(field => !['CDN', 'DpiScaling', 'Theme', 'Language'].includes(field.key)).map(field => <div className={`field-row ${['textarea', 'yaml', 'task_priority'].includes(field.type) ? 'field-row-multiline' : ''}`} key={field.key}><div className="field-label"><label htmlFor={`deploy-${field.key}`}>{field.label}</label><p>{field.key === 'Password' ? '留空保留原密码。新密码在重启服务后生效。' : field.help.replace(/<[^>]*>/g, '')}</p></div><div className="field-control"><FieldInput id={`deploy-${field.key}`} label={field.label} type={field.type} options={field.options} value={field.key in draft ? draft[field.key] : field.value} disabled={busy || connection !== 'ready'} onChange={value => setDraft(previous => ({...previous, [field.key]: value}))}/></div></div>)}</section>)}
-    {deleting && <Modal title={`删除实例 ${instance}`} onClose={() => setDeleting(false)}><p>实例将从列表移除，原配置保留在 config/backup 中。</p><button className="button danger" disabled={busy} onClick={remove}>确认删除</button></Modal>}
-  </>
+
+  return (
+    <>
+      <PageTitle title="系统设置" />
+      {error && <ErrorBox message={error} />}
+      <section className="panel config-group">
+        <div className="panel-heading">
+          <div>
+            <Palette size={18} />
+            <h2>界面偏好</h2>
+          </div>
+        </div>
+        <div className="field-row">
+          <div className="field-label">
+            <label htmlFor="ui-theme">界面主题</label>
+            <p>即时切换当前浏览器的外观。</p>
+          </div>
+          <div className="field-control">
+            <select id="ui-theme" value={theme} onChange={event => setTheme(event.target.value as typeof theme)}>
+              <option value="light">浅色</option>
+              <option value="dark">深色</option>
+            </select>
+          </div>
+        </div>
+        <div className="field-row">
+          <div className="field-label">
+            <label htmlFor="ui-language">界面语言</label>
+            <p>切换任务菜单、配置名称及说明的语言，选择会保存在当前浏览器中。</p>
+          </div>
+          <div className="field-control">
+            <select id="ui-language" value={language} disabled={connection !== 'ready'} onChange={event => setLanguage(event.target.value as typeof language)}>
+              {Object.entries(languages).map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </section>
+      <section className="panel instance-settings">
+        <div className="panel-heading">
+          <div>
+            <Settings2 size={18} />
+            <h2>实例管理</h2>
+          </div>
+        </div>
+        <div className="field-row">
+          <div className="field-label">
+            <label>启动服务时自动运行 {instance}</label>
+            <p>服务启动后自动接续此实例的任务调度。</p>
+          </div>
+          <FieldInput id="startup" value={startup} onChange={setAutoRun} label="启动时自动运行" disabled={busy || connection !== 'ready'} />
+        </div>
+        <div className="field-row">
+          <div className="field-label">
+            <label>删除当前实例</label>
+            <p>配置将移入备份目录；必须先停止运行中的实例。</p>
+          </div>
+          <button
+            className="button danger subtle"
+            disabled={busy || connection !== 'ready' || instances.find(item => item.name === instance)?.status === 'running'}
+            onClick={() => setDeleting(true)}
+          >
+            <Trash2 size={15} />删除实例
+          </button>
+        </div>
+      </section>
+      <p className="settings-notice">以下为服务端部署设置，修改后实时保存，重启服务后生效。界面偏好即时生效。</p>
+      {!data ? (
+        <Loading />
+      ) : (
+        data.groups.map(group => (
+          <section className="panel config-group" key={group.key}>
+            <div className="panel-heading">
+              <h2>{t(`Gui.DeploySetting.Group${group.key}`)}</h2>
+            </div>
+            {group.fields
+              .filter(field => !['CDN', 'DpiScaling', 'Theme', 'Language'].includes(field.key))
+              .map(field => (
+                <div className={`field-row ${['textarea', 'yaml', 'task_priority'].includes(field.type) ? 'field-row-multiline' : ''}`} key={field.key}>
+                  <div className="field-label">
+                    <label htmlFor={`deploy-${field.key}`}>{field.label}</label>
+                    <p>{field.key === 'Password' ? '留空保留原密码。新密码在重启服务后生效。' : field.help.replace(/<[^>]*>/g, '')}</p>
+                  </div>
+                  <div className="field-control">
+                    <FieldInput
+                      id={`deploy-${field.key}`}
+                      label={field.label}
+                      type={field.type}
+                      options={field.options}
+                      value={field.value}
+                      disabled={busy || connection !== 'ready'}
+                      onChange={value => {
+                        const immediate = ['select', 'checkbox'].includes(field.type)
+                        changeDeployField(field.key, value, immediate)
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+          </section>
+        ))
+      )}
+      {deleting && (
+        <Modal title={`删除实例 ${instance}`} onClose={() => setDeleting(false)}>
+          <p>实例将从列表移除，原配置保留在 config/backup 中。</p>
+          <button className="button danger" disabled={busy} onClick={remove}>确认删除</button>
+        </Modal>
+      )}
+    </>
+  )
 }

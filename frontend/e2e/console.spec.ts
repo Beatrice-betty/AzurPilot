@@ -1,6 +1,6 @@
 import { expect, test, type WebSocketRoute } from '@playwright/test'
 
-test('总览、配置保存、未保存提示与刷新持久化', async ({page}) => {
+test('总览、配置实时更新与刷新持久化', async ({page}) => {
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
   await page.goto('/')
@@ -9,17 +9,14 @@ test('总览、配置保存、未保存提示与刷新持久化', async ({page})
   await page.screenshot({path: 'test-results/overview-desktop.png', fullPage: true, animations: 'disabled'})
   await page.locator('.task-nav').getByRole('link', {name: /Alas/}).click()
   const serial = page.locator('[id="Alas.Emulator.Serial"]')
+  await expect(serial).toBeVisible()
+  await expect(page.getByRole('button', {name: /保存/})).toHaveCount(0)
+  await expect(page.getByRole('button', {name: '撤销修改'})).toHaveCount(0)
+  await expect(page.locator('.save-bar')).toHaveCount(0)
   await serial.fill('127.0.0.1:5557')
-  await page.getByRole('button', {name: '保存 1 项修改'}).click()
-  await expect(page.getByRole('button', {name: '已保存', exact: true})).toBeVisible()
+  await page.waitForTimeout(500)
   await page.reload()
   await expect(serial).toHaveValue('127.0.0.1:5557')
-  await serial.fill('pending-change')
-  await page.locator('.primary-nav').getByRole('link', {name: '资源统计', exact: true}).click()
-  await expect(page.getByRole('dialog')).toBeVisible()
-  await page.getByRole('button', {name: '继续编辑'}).click()
-  await expect(serial).toHaveValue('pending-change')
-  await page.getByRole('button', {name: '撤销修改', exact: true}).click()
   await page.screenshot({path: 'test-results/config-desktop.png', fullPage: true, animations: 'disabled'})
   await page.locator('.primary-nav').getByRole('link', {name: '资源统计', exact: true}).click()
   await expect(page.getByRole('heading', {name: '资源统计', exact: true})).toBeVisible()
@@ -59,7 +56,6 @@ test('断线后自动恢复，保留未保存草稿', async ({page}) => {
   await expect(page.locator('.connection-label')).toHaveText('已连接')
   expect(sockets.length).toBeGreaterThan(1)
   await expect(serial).toHaveValue('keep-draft')
-  await page.getByRole('button', {name: '撤销修改', exact: true}).click()
   await page.locator('.primary-nav').getByRole('link', {name: '系统设置'}).click()
   await page.getByLabel('界面主题').selectOption('dark')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
