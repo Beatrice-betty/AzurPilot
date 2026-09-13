@@ -79,7 +79,10 @@ class CommissionIncomeStatisticsMixin(WebUIMixinBase):
             "Oil": "static/assets/gui/icon/icon_4.png",
             "Coin": "static/assets/gui/icon/icon_5.png",
         }
-        period = self._commission_income_period
+        # 与 _ap_chart_view 同惯例：读取处兜底。该属性由 alas_set_stat
+        # 惰性初始化，渲染早于它触发就会 AttributeError，整个委托收入
+        # 板块渲染失败（日志实测：「委托收入渲染失败: has no attribute」）。
+        period = getattr(self, "_commission_income_period", "month")
 
         return {
             "period": period,

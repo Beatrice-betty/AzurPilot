@@ -41,6 +41,7 @@
     }
 
     var chartType = "__CHART_TYPE__";
+    var I18N = __I18N__;
     var labels = __LABELS__;
     var opens = __OPENS__;
     var highs = __HIGHS__;
@@ -64,8 +65,35 @@
 
     var seriesVisible = [true, true, true, true, true];
     var _isSelecting = false;
-    var seriesColors = ["#64b5f6", "#ce93d8", "#ffd54f", "#22d3ee", "#1565c0"];
-    var seriesNames = ["体力", "紫币", "黄币", "资产", "海里数"];
+    // 系列色唯一来源是 CSS 令牌 --ap-series-*；曲线/数值/图例/提示框共用同一组值
+    var __FALLBACK_SERIES = {
+        1: '#64b5f6', 2: '#ffd54f', 3: '#ce93d8', 4: '#81c784', 5: '#1565c0',
+        ma5: '#ffeb3b', ma10: '#e91e63', avg: '#ff9800'
+    };
+    function __apSeriesColor(key) {
+        var cs = getComputedStyle(document.documentElement);
+        var v = (cs.getPropertyValue('--ap-series-' + key) || '').trim();
+        return v || __FALLBACK_SERIES[key] || '#888';
+    }
+    /* 把当前描边色转成「同色系加深」的描边色。
+       light 底：压暗到 40% 并半透明，形成一圈深色勾边；
+       dark 底：提亮，形成一圈浅色勾边；
+       glow === 'none' 时返回透明，配合 __apGlowPad = 0 完全关闭。 */
+    function __apEdgeColor(color, glow) {
+        if (glow === 'none' || !color) { return 'rgba(0, 0, 0, 0)'; }
+        var m = String(color).match(/rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+        if (!m) { return glow === 'light' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)'; }
+        var f = (glow === 'light') ? 0.40 : 1.55;
+        var r = Math.min(255, Math.round(+m[1] * f));
+        var g = Math.min(255, Math.round(+m[2] * f));
+        var b = Math.min(255, Math.round(+m[3] * f));
+        return 'rgba(' + r + ',' + g + ',' + b + ',0.7)';
+    }
+
+    var seriesColors = [__apSeriesColor(1), __apSeriesColor(3),
+                        __apSeriesColor(2), __apSeriesColor(4),
+                        __apSeriesColor(5)];
+    var seriesNames = [I18N.ChartSeriesAp, I18N.ChartSeriesPurple, I18N.ChartSeriesYellow, I18N.ChartSeriesAsset, I18N.ChartSeriesDistance];
 
     var chartId = "__CHART_ID__";
     window.__apChartCleanups = window.__apChartCleanups || {};
@@ -88,6 +116,7 @@
 
     function cleanup() {
         cleanupHandlers.forEach(function (item) {
+            if (item.type === "__disconnect") { item.target.disconnect(); return; }
             item.target.removeEventListener(item.type, item.handler, item.options);
         });
         cleanupHandlers = [];
@@ -98,6 +127,11 @@
         }
     }
 
+    // 函数声明可提升，initChart 之外的 resizeCanvas() 也能调用
+    function setCanvasTransform(c) {
+        c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
     function addListener(target, type, handler, options) {
         if (!target) return;
         target.addEventListener(type, handler, options);
@@ -106,24 +140,145 @@
 
     window.__apChartCleanups[chartId] = cleanup;
 
+    watchThemeRedraw();
+
+    // 容器尺寸变化后必须重新同步位图，否则重绘即非等比拉伸（重影）
+    var __resizeTimer = null;
+    function handleCanvasResize() {
+        if (__resizeTimer) { clearTimeout(__resizeTimer); }
+        __resizeTimer = setTimeout(function () {
+            __resizeTimer = null;
+            initChart();
+        }, 120);
+    }
+    if (typeof ResizeObserver === "function") {
+        var __ro = new ResizeObserver(handleCanvasResize);
+        __ro.observe(cv.parentElement || cv);
+        cleanupHandlers.push({
+            target: __ro, type: "__disconnect", handler: null, options: null });
+    }
+    addListener(window, "resize", handleCanvasResize);
+
+
     // 延迟渲染以确保 canvas 布局完成，避免首次加载坐标偏移
     animationFrameId = requestAnimationFrame(function () {
         animationFrameId = null;
         initChart();
     });
 
+
+    // 位图尺寸按 dpr 匹配显示尺寸。不要写 cv.style.width/height：canvas 是
+    // width:100% 自适应，把量到的像素写回内联样式后会自我强化（宽度由自己
+    // 上一步的值决定），容器变窄时报旧宽度、位图永不更新且无法恢复
+    function resizeCanvas() {
+
+        // 宽度取 getBoundingClientRect()：clientWidth 会四舍五入掉小数，差 1px 即被拉伸
+        var rect = cv.getBoundingClientRect();
+        var w = Math.round(rect.width);
+        var h = Math.round(cv.clientHeight);
+        if (!w) { w = Math.round(cv.clientWidth); }
+        if (!h) { h = 360; }
+        if (!w || !h) { return null; }
+        W = w;
+        H = h;
+        var bw = Math.round(w * dpr);
+        var bh = Math.round(h * dpr);
+        if (cv.width !== bw || cv.height !== bh) {
+            cv.width = bw;
+            cv.height = bh;
+        }
+        if (ovCv.width !== bw || ovCv.height !== bh) {
+            ovCv.width = bw;
+            ovCv.height = bh;
+        }
+        var c2 = cv.getContext("2d");
+        var o2 = ovCv.getContext("2d");
+        setCanvasTransform(c2);
+        o2.setTransform(1, 0, 0, 1, 0, 0);
+        return { w: w, h: h };
+    }
+
+
+    // canvas 的 fillStyle 不接受 var(--x)，必须读计算值
+    var __FALLBACK_CC = { bg: '#1a1a2e', grid: '#2a2a3e', label: '#666',
+                     up: '#ff6b6b', down: '#2ee6c5', lw: 'dark', glow: 'dark' };
+
+    // 不用 shadowBlur：蒙一层阴影会让细线发糊，K 线影线尤其明显
+    var __apLineW = 1;
+
+    // 描边函数必须定义在 initChart 内：模块作用域取不到局部 ctx 会抛 ReferenceError
+    var __apGlowPad = 0;
+    var __apGlowMode = 'light';
+
+    var _cc = __FALLBACK_CC;
+
+    function chartThemeColors() {
+        var cs = getComputedStyle(document.documentElement);
+        function pick(n) { return (cs.getPropertyValue(n) || '').trim(); }
+        var isInline = !!(cv && cv.closest
+            && cv.closest('#pywebio-scope-stat_panels'));
+        return {
+            // 两条路径脱钩：右栏滚动栏(isInline) 全透明，透出磨砂玻璃；
+            // 二级菜单统计页自涂不透明底色（那里 canvas 直接铺在页面上，
+            // 没有玻璃垫着，全透明会让网格线和刻度看不清）
+            bg: isInline ? 'rgba(0, 0, 0, 0)'
+                : (pick('--alas-chart-bitmap-bg')
+                   || pick('--alas-chart-bg')
+                   || pick('--ap-chart-container-bg')
+                   || __FALLBACK_CC.bg),
+            grid: pick('--alas-chart-grid') || __FALLBACK_CC.grid,
+            label: pick('--alas-chart-label') || __FALLBACK_CC.label,
+            up: pick('--alas-chart-up') || __FALLBACK_CC.up,
+            down: pick('--alas-chart-down') || __FALLBACK_CC.down,
+            lw: (cs.getPropertyValue('--alas-chart-lw') || '').trim()
+                || __FALLBACK_CC.lw,
+            // 'light' 底用暗描边、'dark' 底用亮描边；none 关闭
+            glow: pick('--alas-chart-glow') || __FALLBACK_CC.glow
+        };
+    }
+
+    // 主题切换靠 <head> 里样式表增删，位图里烘焙的是旧主题颜色，必须重绘
+    var __themeWatch = null;
+    function watchThemeRedraw() {
+        if (__themeWatch || typeof MutationObserver !== 'function') { return; }
+        var pending = null;
+        __themeWatch = new MutationObserver(function () {
+            if (pending) { clearTimeout(pending); }
+            pending = setTimeout(function () {
+                pending = null;
+                initChart();
+            }, 80);
+        });
+        __themeWatch.observe(document.head, { childList: true });
+        cleanupHandlers.push({
+            target: __themeWatch, type: '__disconnect', handler: null, options: null });
+    }
+
     function initChart() {
-        W = cv.clientWidth;
-        H = cv.clientHeight;
-        if (!W || !H) { W = cv.parentElement.clientWidth || 800; H = 360; }
-        cv.width = W * dpr; cv.height = H * dpr;
-        cv.style.width = W + "px"; cv.style.height = H + "px";
-        ovCv.width = W * dpr; ovCv.height = H * dpr;
-        ovCv.style.width = W + "px"; ovCv.style.height = H + "px";
+        _cc = chartThemeColors();
+        __apLineW = (_cc.lw === 'light') ? 2.0 : 1.9;
+        // 描边宽度 = 线宽 × 0.15；必须远小于线宽，接近线宽会把彩色线盖住
+        __apGlowMode = _cc.glow;
+        __apGlowPad = (_cc.glow === 'none') ? 0 : __apLineW * 0.10;
+        resizeCanvas();
 
         var ctx = cv.getContext("2d");
-        ctx.scale(dpr, dpr);
+
+        // 顺序关键：先彩色描粗一圈露边，再暗色描回原宽压住中间（反过来会整条盖住彩色）
+        function strokeWithGlow() {
+            if (__apGlowPad <= 0) { ctx.stroke(); return; }
+            var w = ctx.lineWidth, c = ctx.strokeStyle;
+            // 描边色按当前线色即时算同色系加深/提亮；用固定黑或白会把线拉灰或洗白
+            var edge = __apEdgeColor(c, __apGlowMode);
+            ctx.lineWidth = w + __apGlowPad * 2;
+            ctx.stroke();
+            ctx.lineWidth = w;
+            ctx.strokeStyle = edge;
+            ctx.stroke();
+            ctx.strokeStyle = c;
+        }
         var oc = ovCv.getContext("2d");
+        setCanvasTransform(ctx);
 
         // 硬币刻度标签布局常量
         var COIN_TICK_X = 8;
@@ -209,15 +364,21 @@
             EXTRA_SERIES_CONFIGS.push({ color: color, dataMin: dataMin, dataMax: dataMax, offsetY: cfgOffset });
             cfgOffset += COIN_TICK_STACK_GAP;
         }
-        addCfg(hasPurpleCoins, "#ce93d8", purpleMin, purpleMax);
-        addCfg(hasCombined, "#ffd54f", combinedMin, combinedMax);
+        addCfg(hasPurpleCoins, __apSeriesColor(3), purpleMin, purpleMax);
+        addCfg(hasCombined, __apSeriesColor(2), combinedMin, combinedMax);
 
-        // 系列绘制配置（所有线都要画，资产用时间戳）
+        // 每个系列必须带 color：光晕用同色阴影画，缺了会收到 undefined 而不出现
         var SERIES_DRAW = [
-            { has: hasPurpleCoins, data: purpleCoins, yFn: yOfPurple, dash: [] },
-            { has: hasYellowCoins, data: yellowCoins, yFn: yOfCombined, dash: [] },
-            { has: hasAssetSeries, data: lineAsset, ts: lineAssetTs, yFn: yOfCombined, dash: [] },
-            { has: hasDistanceSeries, data: lineDistance, yFn: yOfCombined, dash: [] },
+            // 这里一度按无障碍指南给系列分配不同虚线做「冗余编码」，
+            // 不用虚线做「冗余编码」：每像素约 6 个点，短虚线会碎成断点反而更难读
+            { has: hasPurpleCoins, data: purpleCoins, yFn: yOfPurple, dash: [],
+              color: __apSeriesColor(3) },
+            { has: hasYellowCoins, data: yellowCoins, yFn: yOfCombined,
+              dash: [], color: __apSeriesColor(2) },
+            { has: hasAssetSeries, data: lineAsset, ts: lineAssetTs,
+              yFn: yOfCombined, dash: [], color: __apSeriesColor(4) },
+            { has: hasDistanceSeries, data: lineDistance, yFn: yOfCombined,
+              dash: [], color: __apSeriesColor(5) },
         ];
 
         // Y 坐标映射
@@ -256,10 +417,10 @@
                 if (!sd.has) continue;
                 if (!seriesVisible[ci + 1]) continue;
 
-                ctx.lineWidth = 1;
+                ctx.lineWidth = __apLineW;
                 ctx.lineJoin = "round";
                 ctx.setLineDash(sd.dash);
-                ctx.strokeStyle = ["#ce93d8", "#ffd54f", "#81c784", "#1565c0"][ci];
+                ctx.strokeStyle = sd.color;
                 ctx.beginPath();
                 var started = false;
 
@@ -269,7 +430,7 @@
                     if (!started) { ctx.moveTo(x, y); started = true; }
                     else { ctx.lineTo(x, y); }
                 }
-                ctx.stroke();
+                strokeWithGlow();
             }
             ctx.setLineDash([]);
         }
@@ -279,12 +440,15 @@
         function xCenter(i) { return pad.l + candleSpace * (i + 0.5); }
 
         // ======== 初始绘制（非缩放全量视图） ========
-        ctx.fillStyle = "#1a1a2e";
+        // 先复位变换再清屏：变换会累积，复位前清屏会留下未清的旧像素（重影）
+        setCanvasTransform(ctx);
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = _cc.bg;
         ctx.fillRect(0, 0, W, H);
 
-        ctx.strokeStyle = "#2a2a3e";
+        ctx.strokeStyle = _cc.grid;
         ctx.lineWidth = 1;
-        ctx.fillStyle = "#666";
+        ctx.fillStyle = _cc.label;
         ctx.font = "11px -apple-system, sans-serif";
         ctx.textAlign = "right";
         ctx.textBaseline = "middle";
@@ -299,17 +463,17 @@
 
         var avgY = yOf(avg);
         ctx.save();
-        ctx.strokeStyle = "#ff9800";
+        ctx.strokeStyle = __apSeriesColor('avg');
         ctx.lineWidth = 1;
         ctx.setLineDash([6, 4]);
         ctx.beginPath(); ctx.moveTo(pad.l, avgY); ctx.lineTo(W - pad.r, avgY); ctx.stroke();
         ctx.restore();
-        ctx.fillStyle = "#ff9800";
+        ctx.fillStyle = __apSeriesColor('avg');
         ctx.font = "10px -apple-system, sans-serif";
         ctx.textAlign = "right";
-        ctx.fillText("均值:" + avg, W - pad.r - 4, avgY - 8);
+        ctx.fillText(I18N.ChartMean + avg, W - pad.r - 4, avgY - 8);
 
-        ctx.fillStyle = "#666";
+        ctx.fillStyle = _cc.label;
         ctx.font = "10px -apple-system, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
@@ -330,20 +494,21 @@
         }
 
         if (chartType === 'line' && seriesVisible[0]) {
-            ctx.lineWidth = 1;
+            // 体力主线是主序列，加宽以免与网格线同粗
+            ctx.lineWidth = __apLineW * 1.2;
             ctx.lineJoin = "round";
             for (var i = 1; i < nn; i++) {
                 ctx.beginPath();
                 ctx.moveTo(xOfLine(i - 1), yOf(ap[i - 1]));
-                ctx.strokeStyle = ap[i] >= ap[i - 1] ? "#ef5350" : "#26a69a";
+                ctx.strokeStyle = ap[i] >= ap[i - 1] ? _cc.up : _cc.down;
                 ctx.lineTo(xOfLine(i), yOf(ap[i]));
-                ctx.stroke();
+                strokeWithGlow();
             }
             if (nn < 60) {
                 for (var i = 0; i < nn; i++) {
                     ctx.beginPath();
-                    ctx.arc(xOfLine(i), yOf(ap[i]), 1.5, 0, Math.PI * 2);
-                    var dotColor = (i > 0 && ap[i] < ap[i - 1]) ? "#26a69a" : "#ef5350";
+                    ctx.arc(xOfLine(i), yOf(ap[i]), 1.5 * __apLineW, 0, Math.PI * 2);
+                    var dotColor = (i > 0 && ap[i] < ap[i - 1]) ? _cc.down : _cc.up;
                     ctx.fillStyle = dotColor;
                     ctx.fill();
                 }
@@ -355,10 +520,10 @@
                 var isUp = c > o;
                 var isDown = c < o;
                 var isFlat = c === o;
-                var color = isFlat ? "#888" : (isUp ? "#ef5350" : "#26a69a");
+                var color = isFlat ? "#888" : (isUp ? _cc.up : _cc.down);
 
                 ctx.strokeStyle = color;
-                ctx.lineWidth = 1.5;
+                ctx.lineWidth = __apLineW * 1.5;
                 ctx.beginPath();
                 ctx.moveTo(cx, yOf(h));
                 ctx.lineTo(cx, yOf(l));
@@ -382,7 +547,7 @@
             function drawMA(days, maColor) {
                 if (nn < days) return;
                 ctx.beginPath();
-                ctx.lineWidth = 1.5;
+                ctx.lineWidth = __apLineW * 1.5;
                 ctx.strokeStyle = maColor;
                 var started = false;
                 for (var i = days - 1; i < nn; i++) {
@@ -393,10 +558,10 @@
                     if (!started) { ctx.moveTo(x, y); started = true; }
                     else { ctx.lineTo(x, y); }
                 }
-                ctx.stroke();
+                strokeWithGlow();
             }
-            drawMA(5, "#ffeb3b");
-            drawMA(10, "#e91e63");
+            drawMA(5, __apSeriesColor('ma5'));
+            drawMA(10, __apSeriesColor('ma10'));
         }
 
         // 绘制额外系列线（黄币/紫币/资产）
@@ -454,7 +619,7 @@
                 oc.beginPath(); oc.arc(px, py, 6, 0, Math.PI * 2);
                 oc.fillStyle = "rgba(100,181,246,0.3)"; oc.fill();
                 oc.beginPath(); oc.arc(px, py, 4, 0, Math.PI * 2);
-                oc.fillStyle = "#64b5f6"; oc.fill();
+                oc.fillStyle = __apSeriesColor(1); oc.fill();
                 oc.strokeStyle = "#fff"; oc.lineWidth = 2; oc.stroke();
                 }
 
@@ -474,9 +639,9 @@
                     oc.strokeStyle = "#fff"; oc.lineWidth = 1.5; oc.stroke();
                 }
                 if (hasPurpleCoins && idx < purpleCoinsLen && purpleCoins[idx] !== null && purpleCoins[idx] !== undefined && seriesVisible[1])
-                    drawBead(purpleCoins[idx], "#ce93d8", yOfPurple);
+                    drawBead(purpleCoins[idx], __apSeriesColor(3), yOfPurple);
                 if (hasYellowCoins && idx < yellowCoinsLen && yellowCoins[idx] !== null && yellowCoins[idx] !== undefined && seriesVisible[2])
-                    drawBead(yellowCoins[idx], "#ffd54f", yOfCombined);
+                    drawBead(yellowCoins[idx], __apSeriesColor(2), yOfCombined);
 
                 if (seriesVisible[3] && hasAssetSeries) {
                     var closestIdx_a = -1, closestDist_a = 600000;
@@ -485,49 +650,49 @@
                         if (dist < closestDist_a) { closestDist_a = dist; closestIdx_a = j; }
                     }
                     if (closestIdx_a !== -1 && closestDist_a < 5)
-                        drawBead(lineAsset[closestIdx_a], "#81c784", yOfCombined);
+                        drawBead(lineAsset[closestIdx_a], __apSeriesColor(4), yOfCombined);
                 }
 
                 // 海里数 bead
                 if (hasDistanceSeries && idx < lineDistance.length && lineDistance[idx] !== null && lineDistance[idx] !== undefined && seriesVisible[4])
-                    drawBead(lineDistance[idx], "#1565c0", yOfCombined);
+                    drawBead(lineDistance[idx], __apSeriesColor(5), yOfCombined);
 
                 oc.setTransform(1, 0, 0, 1, 0, 0);
 
                 var diff = idx > 0 ? (ap[idx] - ap[idx - 1]) : 0;
                 var isUp = diff >= 0;
-                var dc = isUp ? "#ef5350" : "#26a69a";
+                var dc = isUp ? _cc.up : _cc.down;
                 var ds = (isUp ? "+" : "") + diff;
                 var tooltipRows = [
                     { style: { color: "#888", marginBottom: "4px", fontWeight: "600" }, parts: [{ type: 'text', value: labels[idx] }] },
                 ];
                 if (seriesVisible[0]) {
-                tooltipRows.push({ parts: [{ type: 'text', value: "体力: " }, { type: 'bold', value: String(ap[idx]), style: { color: "#64b5f6" } }] },
-                    { parts: [{ type: 'text', value: "单次变化: " }, { type: 'bold', value: ds, style: { color: dc } }] });
+                tooltipRows.push({ parts: [{ type: 'text', value: I18N.ChartAp }, { type: 'bold', value: String(ap[idx]), style: { color: __apSeriesColor(1) } }] },
+                    { parts: [{ type: 'text', value: I18N.ChartDelta }, { type: 'bold', value: ds, style: { color: dc } }] });
                 }
 
                 if (isDetailMode) {
                     var source = sources && sources[idx] ? sources[idx] : '-';
-                    var sourceColor = source === 'cl1' ? '#64b5f6' : (source === 'meow' ? '#ff9800' : '#888');
-                    tooltipRows.push({ parts: [{ type: 'text', value: "来源: " }, { type: 'bold', value: source, style: { color: sourceColor } }] });
+                    var sourceColor = source === 'cl1' ? __apSeriesColor(1) : (source === 'meow' ? __apSeriesColor('avg') : '#888');
+                    tooltipRows.push({ parts: [{ type: 'text', value: I18N.ChartSource }, { type: 'bold', value: source, style: { color: sourceColor } }] });
                 }
 
                 // 黄币 tooltip
                 if (seriesVisible[2] && hasYellowCoins && idx < yellowCoinsLen && yellowCoins[idx] !== null && yellowCoins[idx] !== undefined) {
                     var yc = yellowCoins[idx];
                     var ycDiff = idx > 0 && yellowCoins[idx - 1] !== null && yellowCoins[idx - 1] !== undefined ? (yc - yellowCoins[idx - 1]) : 0;
-                    var ycColor = ycDiff >= 0 ? "#ef5350" : "#26a69a";
+                    var ycColor = ycDiff >= 0 ? _cc.up : _cc.down;
                     var ycDiffStr = (ycDiff >= 0 ? "+" : "") + ycDiff;
-                    tooltipRows.push({ parts: [{ type: 'text', value: "黄币: " }, { type: 'bold', value: String(yc), style: { color: "#ffd54f" } }, { type: 'text', value: " (" + ycDiffStr + ")", style: { color: ycColor } }] });
+                    tooltipRows.push({ parts: [{ type: 'text', value: I18N.ChartYellow }, { type: 'bold', value: String(yc), style: { color: __apSeriesColor(2) } }, { type: 'text', value: " (" + ycDiffStr + ")", style: { color: ycColor } }] });
                 }
 
                 // 紫币 tooltip
                 if (seriesVisible[1] && hasPurpleCoins && idx < purpleCoinsLen && purpleCoins[idx] !== null && purpleCoins[idx] !== undefined) {
                     var pc = purpleCoins[idx];
                     var pcDiff = idx > 0 && purpleCoins[idx - 1] !== null && purpleCoins[idx - 1] !== undefined ? (pc - purpleCoins[idx - 1]) : 0;
-                    var pcColor = pcDiff >= 0 ? "#ef5350" : "#26a69a";
+                    var pcColor = pcDiff >= 0 ? _cc.up : _cc.down;
                     var pcDiffStr = (pcDiff >= 0 ? "+" : "") + pcDiff;
-                    tooltipRows.push({ parts: [{ type: 'text', value: "紫币: " }, { type: 'bold', value: String(pc), style: { color: "#ce93d8" } }, { type: 'text', value: " (" + pcDiffStr + ")", style: { color: pcColor } }] });
+                    tooltipRows.push({ parts: [{ type: 'text', value: I18N.ChartPurple }, { type: 'bold', value: String(pc), style: { color: __apSeriesColor(3) } }, { type: 'text', value: " (" + pcDiffStr + ")", style: { color: pcColor } }] });
                 }
 
                 // 资产 tooltip
@@ -538,7 +703,7 @@
                         if (dist < closestDist) { closestDist = dist; closestIdx = j; }
                     }
                     if (closestIdx !== -1 && closestDist < 5) {
-                        tooltipRows.push({ parts: [{ type: 'text', value: "资产: " }, { type: 'bold', value: lineAsset[closestIdx].toFixed(1), style: { color: "#81c784" } }] });
+                        tooltipRows.push({ parts: [{ type: 'text', value: I18N.ChartAsset }, { type: 'bold', value: lineAsset[closestIdx].toFixed(1), style: { color: __apSeriesColor(4) } }] });
                     }
                 }
 
@@ -546,9 +711,9 @@
                 if (seriesVisible[4] && hasDistanceSeries && idx < lineDistance.length && lineDistance[idx] !== null && lineDistance[idx] !== undefined) {
                     var d = lineDistance[idx];
                     var dDiff = idx > 0 && lineDistance[idx - 1] !== null && lineDistance[idx - 1] !== undefined ? (d - lineDistance[idx - 1]) : 0;
-                    var dColor = dDiff >= 0 ? "#ef5350" : "#26a69a";
+                    var dColor = dDiff >= 0 ? _cc.up : _cc.down;
                     var dDiffStr = (dDiff >= 0 ? "+" : "") + dDiff;
-                    tooltipRows.push({ parts: [{ type: 'text', value: "海里数: " }, { type: 'bold', value: String(d), style: { color: "#1565c0" } }, { type: 'text', value: " (" + dDiffStr + ")", style: { color: dColor } }] });
+                    tooltipRows.push({ parts: [{ type: 'text', value: I18N.ChartDistance }, { type: 'bold', value: String(d), style: { color: __apSeriesColor(5) } }, { type: 'text', value: " (" + dDiffStr + ")", style: { color: dColor } }] });
                 }
 
                 setTooltipContent(tipEl, tooltipRows);
@@ -577,7 +742,7 @@
                 var chg = c_ - o;
                 var chgPct = o !== 0 ? ((chg / o) * 100).toFixed(1) : "0.0";
                 var isUp = c_ >= o;
-                var dc = isUp ? "#ef5350" : "#26a69a";
+                var dc = isUp ? _cc.up : _cc.down;
                 var chgSign = chg >= 0 ? "+" : "";
 
                 var ma5Val = "-";
@@ -595,22 +760,22 @@
                     { style: { color: "#888", marginBottom: "4px", fontWeight: "600" }, parts: [{ type: 'text', value: labels[idx] }] },
                     {
                         parts: [
-                            { type: 'text', value: "开盘: " },
+                            { type: 'text', value: I18N.ChartOpen },
                             { type: 'bold', value: String(o) },
-                            { type: 'text', value: "  MA5(5期平均): " + ma5Val, style: { marginLeft: "8px", color: "#ffeb3b" } }
+                            { type: 'text', value: I18N.ChartMa5 + ma5Val, style: { marginLeft: "8px", color: __apSeriesColor('ma5') } }
                         ]
                     },
                     {
                         parts: [
-                            { type: 'text', value: "收盘: " },
+                            { type: 'text', value: I18N.ChartClose },
                             { type: 'bold', value: String(c_), style: { color: dc } },
-                            { type: 'text', value: "  MA10(10期平均): " + ma10Val, style: { marginLeft: "8px", color: "#e91e63" } }
+                            { type: 'text', value: I18N.ChartMa10 + ma10Val, style: { marginLeft: "8px", color: __apSeriesColor('ma10') } }
                         ]
                     },
-                    { parts: [{ type: 'text', value: "最高: " }, { type: 'bold', value: String(h), style: { color: "#ef5350" } }] },
-                    { parts: [{ type: 'text', value: "最低: " }, { type: 'bold', value: String(l), style: { color: "#26a69a" } }] },
-                    { parts: [{ type: 'text', value: "涨跌: " }, { type: 'bold', value: chgSign + chg + " (" + chgSign + chgPct + "%)", style: { color: dc } }] },
-                    { style: { color: "#666", marginTop: "4px" }, parts: [{ type: 'text', value: "数据点密度: " + counts[idx] }] }
+                    { parts: [{ type: 'text', value: I18N.ChartHigh }, { type: 'bold', value: String(h), style: { color: _cc.up } }] },
+                    { parts: [{ type: 'text', value: I18N.ChartLow }, { type: 'bold', value: String(l), style: { color: _cc.down } }] },
+                    { parts: [{ type: 'text', value: I18N.ChartChange }, { type: 'bold', value: chgSign + chg + " (" + chgSign + chgPct + "%)", style: { color: dc } }] },
+                    { style: { color: "#666", marginTop: "4px" }, parts: [{ type: 'text', value: I18N.ChartDensity + counts[idx] }] }
                 ]);
             }
 
@@ -672,6 +837,12 @@
             var minZoom = 0.5;
 
             function renderDetailChart() {
+                _cc = chartThemeColors();
+        __apLineW = (_cc.lw === 'light') ? 2.0 : 1.9;
+        // 描边宽度 = 线宽 × 0.15；必须远小于线宽，接近线宽会把彩色线盖住
+        __apGlowMode = _cc.glow;
+        __apGlowPad = (_cc.glow === 'none') ? 0 : __apLineW * 0.10;
+                resizeCanvas();
                 var visibleStart = Math.max(0, Math.floor(panOffset));
                 var visibleCount = Math.ceil(nn / zoomLevel);
                 var visibleEnd = Math.min(nn, visibleStart + visibleCount);
@@ -685,12 +856,15 @@
                 var drng = dMax - dMin || 1;
                 dMax += drng * 0.1;
 
-                ctx.fillStyle = "#1a1a2e";
+                // 先复位变换再清屏，否则残留旧像素（重影）
+                setCanvasTransform(ctx);
+                ctx.clearRect(0, 0, W, H);
+                ctx.fillStyle = _cc.bg;
                 ctx.fillRect(0, 0, W, H);
 
-                ctx.strokeStyle = "#2a2a3e";
+                ctx.strokeStyle = _cc.grid;
                 ctx.lineWidth = 1;
-                ctx.fillStyle = "#666";
+                ctx.fillStyle = _cc.label;
                 ctx.font = "11px -apple-system, sans-serif";
                 ctx.textAlign = "right";
                 ctx.textBaseline = "middle";
@@ -711,14 +885,14 @@
 
                 // Ap 线
                 if (seriesVisible[0]) {
-                ctx.lineWidth = 1;
+                ctx.lineWidth = __apLineW * 1.2;
                 ctx.lineJoin = "round";
                 for (var i = visibleStart + 1; i < visibleEnd; i++) {
                     ctx.beginPath();
                     ctx.moveTo(dxOf(i - 1), dyOf(ap[i - 1]));
-                    ctx.strokeStyle = ap[i] >= ap[i - 1] ? "#ef5350" : "#26a69a";
+                    ctx.strokeStyle = ap[i] >= ap[i - 1] ? _cc.up : _cc.down;
                     ctx.lineTo(dxOf(i), dyOf(ap[i]));
-                    ctx.stroke();
+                    strokeWithGlow();
                 }
 
                 // Ap 数据点
@@ -726,7 +900,7 @@
                 for (var i = visibleStart; i < visibleEnd; i += dotInterval) {
                     ctx.beginPath();
                     ctx.arc(dxOf(i), dyOf(ap[i]), 1.5, 0, Math.PI * 2);
-                    var dotColor = (i > visibleStart && ap[i] < ap[i - 1]) ? "#26a69a" : "#ef5350";
+                    var dotColor = (i > visibleStart && ap[i] < ap[i - 1]) ? _cc.down : _cc.up;
                     ctx.fillStyle = dotColor;
                     ctx.fill();
                 }

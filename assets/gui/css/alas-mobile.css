@@ -25,7 +25,8 @@
 }
 
 #pywebio-scope-content,
-#pywebio-scope-statistics-content {
+#pywebio-scope-statistics-content,
+#pywebio-scope-log-content {
     padding: .25rem;
     margin: 0
 }

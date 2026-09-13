@@ -2,7 +2,60 @@
 
 :root {
 	--alas-apple-bg: #0b1220;
-	--alas-apple-card-bg: rgba(15, 23, 42, 0.78);
+			--alas-card-user-bg: var(--alas-apple-card-bg);
+	--alas-card-user-blur: var(--alas-card-blur);
+	--alas-tile-user-bg: var(--alas-stat-panel-bg);
+	--alas-tile-user-blur: var(--alas-card-blur);
+
+	--alas-apple-card-bg: rgba(15, 23, 42, 0.45);
+		--alas-panel-bg: transparent;
+	/* 右栏滚动栏底图专用：只给 #pywebio-scope-logs，
+	   不牵动左侧卡片与 dashboard/stat_panels。 */
+		--alas-log-column-bg: rgba(15, 23, 42, 0.42);
+	/* 独立声明：不再继承基座的磨砂，改高级白不会动到这里。 */
+		--alas-log-column-blur: blur(6px) saturate(150%);
+		--alas-card-blur: blur(8px) saturate(150%);
+	/* 压在背景图上的深色渐变。自定义背景图覆盖 background-image 时会
+	   把这层渐变一起挤掉，background_image 会从这里读回它拼上；
+	   值只存在这一处，上游改了也不会与注入的样式漂移。 */
+	--alas-bg-overlay: linear-gradient(rgba(4, 9, 19, 0.56), rgba(7, 15, 29, 0.66));
+		--alas-card-title-shadow: 0 0 2px rgba(0, 0, 0, 0.75), 0 0 4px rgba(0, 0, 0, 0.5);
+		--alas-stat-grid-cols: max-content max-content max-content max-content max-content;
+	/* 右侧统计栏板块专用：只影响总览页右栏那五个板块，
+	   不牵动左侧导航/调度器列与 .apple-card。 */
+	--alas-stat-panel-bg: rgba(15, 23, 42, 0.28);
+	--alas-chart-bg: rgba(15, 23, 42, 0.55);
+	/* 见高级白同名令牌：canvas 位图自己的底色，不透明深紫。 */
+	--alas-chart-bitmap-bg: rgba(31, 23, 54, 0.97);
+	--ap-chart-container-bg: rgba(15, 23, 42, 0.55);
+	--ap-chart-container-border: rgba(148, 163, 184, 0.24);
+	--ap-chart-text: #aebdd0;
+	--ap-chart-tip-bg: rgba(30, 41, 59, 0.95);
+	--ap-chart-tip-border: rgba(148, 163, 184, 0.32);
+	--ap-chart-tip-color: #e1e9f5;
+	--ap-chart-btn-bg: rgba(148, 163, 184, 0.14);
+	--ap-chart-btn-border: rgba(148, 163, 184, 0.28);
+	--ap-chart-btn-color: #d2dceb;
+	--alas-table-head: rgba(8, 13, 26, 0.92);
+	--alas-table-surface: rgba(8, 13, 26, 0.90);
+	--alas-table-hover: rgba(96, 165, 250, 0.14);
+	--alas-chart-grid: rgba(148, 163, 184, 0.22);
+	--ap-series-1: #64b5f6;
+	--ap-series-2: #ffd54f;
+	--ap-series-3: #ce93d8;
+	/* 系列色 —— 与高级白同名令牌成对，供 canvas 曲线/数值/图例共用。
+	   高级黑底色深，沿用原始亮色；资产用 #81c784 与曲线一致
+	   （原值 #22d3ee 是青色，与曲线不同色）。 */
+	--ap-series-ma5: #ffeb3b;
+	--ap-series-ma10: #e91e63;
+	--ap-series-avg: #ff9800;
+	--ap-series-4: #81c784;
+	--ap-series-5: #1565c0;
+	--alas-chart-label: #aebdd0;
+		--alas-chart-glow: none;
+		--alas-chart-up: #ef5350;
+	--alas-chart-down: #26a69a;
+	--alas-log-divider: rgba(148, 163, 184, 0.24);
 	--alas-apple-card-bg-solid: #111827;
 	--alas-apple-glass-border: rgba(148, 163, 184, 0.24);
 	--alas-apple-text: #f4f8ff;
@@ -45,7 +98,7 @@
 }
 
 body {
-	background-image: linear-gradient(rgba(4, 9, 19, 0.56), rgba(7, 15, 29, 0.66)), var(--alas-apple-bg-image) !important;
+	background-image: var(--alas-bg-overlay), var(--alas-apple-bg-image) !important;
 }
 
 #pywebio-scope-content,
@@ -135,9 +188,10 @@ body {
 
 /* 高级材质关闭按钮 */
 .btn-off {
-	background-color: rgba(30, 41, 59, 0.85) !important;
-	border: 1px solid rgba(148, 163, 184, 0.35) !important;
-	color: var(--alas-apple-text) !important;
+	background-color: var(--alas-apple-accent) !important;
+	border: 1px solid var(--alas-apple-accent) !important;
+	border-radius: var(--radius-md, 12px) !important;
+	color: #ffffff !important;
 }
 
 .btn-off:hover {
@@ -281,17 +335,11 @@ select option {
 
 /* 高级材质暗色：统计表格颜色修复，只处理单元格 */
 
-#pywebio-scope-opsi_stats,
-#pywebio-scope-ship_exp_table,
-#pywebio-scope-commission_income {
-	background: transparent !important;
-}
-
 
 /* 普通统计表头 */
 #pywebio-scope-opsi_stats .simple-table th,
 #pywebio-scope-ship_exp_table .simple-table th {
-	background: rgba(15,23,42,0.96) !important;
+	background: var(--alas-table-head) !important;
 	color: var(--alas-apple-text) !important;
 }
 
@@ -299,7 +347,7 @@ select option {
 /* 普通统计数据 */
 #pywebio-scope-opsi_stats .simple-table td,
 #pywebio-scope-ship_exp_table .simple-table td {
-	background: rgba(15,23,42,0.92) !important;
+	background: var(--alas-table-surface) !important;
 	color: var(--alas-apple-text-secondary) !important;
 }
 
@@ -307,21 +355,21 @@ select option {
 /* 普通统计 hover */
 #pywebio-scope-opsi_stats .simple-table tr:hover td,
 #pywebio-scope-ship_exp_table .simple-table tr:hover td {
-	background: rgba(51,65,85,0.35) !important;
+	background: var(--alas-table-hover) !important;
 	color: #ffffff !important;
 }
 
 
 /* 委托收益 */
 #pywebio-scope-commission_income .commission-income-table th {
-	background: rgba(15,23,42,0.96) !important;
+	background: var(--alas-table-head) !important;
 	color: var(--alas-apple-text) !important;
 }
 
 
 #pywebio-scope-commission_income .commission-income-table td,
 #pywebio-scope-commission_income .commission-income-recent-row {
-	background: rgba(15,23,42,0.92) !important;
+	background: var(--alas-table-surface) !important;
 	color: var(--alas-apple-text-secondary) !important;
 	opacity: 1 !important;
 }
@@ -337,7 +385,7 @@ select option {
 /* 委托收益 hover */
 #pywebio-scope-commission_income .commission-income-table tr:hover td,
 #pywebio-scope-commission_income .commission-income-recent-row:hover {
-	background: rgba(51,65,85,0.35) !important;
+	background: var(--alas-table-hover) !important;
 	color: #ffffff !important;
 }
 
@@ -374,5 +422,89 @@ select option {
 
 /* 禁用默认浅色主题活动行背景 */
 .CodeMirror-activeline-background {
+	background: transparent !important;
+}
+
+/* 曲线与统计数值的「发光」观感。canvas 那边用 shadowBlur 画曲线，这里
+   用 text-shadow 让数值和图例文字跟着亮，两处观感才对得上。
+   数值颜色与对应曲线严格同色（见 --ap-series-*）。 */
+.ap-up { color: var(--alas-chart-up) !important; }
+.ap-down { color: var(--alas-chart-down) !important; }
+
+/* 数值与曲线严格同色，不做任何图像处理 ——
+   filter 会改变渲染色值，与"同色"的设计意图冲突，观感也会偏亮偏糊。
+   行动力那行本来就不带这个类，此处对齐它。 */
+/* 字重对齐「行动力」行的纯 <b>（bold = 700），
+   原来 600 会让四行币种的数字看着比行动力细一档。 */
+.ap-value {
+	font-weight: 700;
+}
+
+.ap-glow {
+	text-shadow: 0 0 3px currentColor, 0 0 9px currentColor;
+}
+
+.ap-series-1 { color: var(--ap-series-1) !important; }
+.ap-series-2 { color: var(--ap-series-2) !important; }
+.ap-series-3 { color: var(--ap-series-3) !important; }
+.ap-series-4 { color: var(--ap-series-4) !important; }
+.ap-series-5 { color: var(--ap-series-5) !important; }
+
+/* 统计数值行。原先固定 150px 100px 90px 90px 90px，资产那种
+   459115.0 会超出 90px 被折行，看着就和「最高/最低」标签不同行。
+   改成按内容撑开 + 数值列可伸缩，并禁止折行。 */
+/* 标注网格：容器持有列定义，所有行共用一套列宽。 */
+.ap-chart-stats,
+.ap-stat-row {
+	display: grid;
+	grid-template-columns: var(--alas-stat-grid-cols);
+	gap: 8px;
+	align-items: center;
+	white-space: nowrap;
+}
+
+/* 行本身不生成盒子，交给父网格统一排布，列宽才跨行一致。
+   代价：.ap-stat-row span 不再匹配（contents 盒子不参与
+   选择器匹配），所以数值样式写在 span 上。 */
+.ap-chart-stats > .ap-stat-row,
+.ap-stat-row > .ap-stat-row {
+	display: contents;
+}
+
+/* 标注行的中文标签色。原先四行币种写死 style="color:#aaa"，
+   比「行动力」那行（继承 --alas-chart-label）浅一档，看着发白。
+   统一走令牌，两个主题各自给合适的值。 */
+.ap-stat-row {
+	color: var(--alas-chart-label);
+}
+
+.ap-stat-row span {
+	/* 关键：让子元素保持 inline，与「行动力」那行一致。
+	   这里原本是 display:flex —— flex 会把子 <b> 块化（computed
+	   display 变成 block），于是四行币种的每个字段各占一行，而行动力
+	   那行的 span 不匹配这条选择器、保持 inline，五个字段同一行。
+	   这就是两处格式不一致的根源。 */
+	display: inline;
+}
+
+/* 见高级白同名规则：只把二级菜单统计页的图表底色钉回改动前的观感。
+
+高级黑改动前是 --alas-apple-card-bg 的 0.78（比本主题 --alas-chart-bg
+的 0.55 更深），两层都取 0.78 与改动前一致。
+*/
+#pywebio-scope-statistics-content .ap-chart-box {
+	background: rgba(15, 23, 42, 0.72) !important;
+	/* 关键：把图表背后的底图磨平。backdrop-filter 只作用于该元素
+	   后面的内容，底图自身的透明度不受影响；曲线在 canvas 上
+	   照原色绘制，因此这一步只增加线条与背景的分离度。
+	   不放在 canvas 上：canvas 有不透明填充，模糊会被挡住。 */
+	backdrop-filter: blur(12px) saturate(115%);
+	-webkit-backdrop-filter: blur(12px) saturate(115%);
+}
+
+#pywebio-scope-statistics-content canvas[id^="ap_cv_"] {
+	/* 这层 CSS 白色与容器的半透明底色是两层叠加，会让背景细节
+	   双重泛白、稀释曲线。canvas 位图内部自己已涂 --alas-chart-bg，
+	   这里保持透明，让容器成为唯一的半透明面。 */
 	background: transparent !important;
 }

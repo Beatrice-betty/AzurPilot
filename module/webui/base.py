@@ -93,28 +93,50 @@ class Frame(Base):
         with self._page_lock:
             self.page = name
             clear("content")
-        self.set_statistics_content_visible(name == "Stat")
+        self.set_secondary_content_visible(name)
         if collapse_menu:
             self.collapse_menu()
         if name:
             self.active_button("menu", name)
 
-    @staticmethod
-    def set_statistics_content_visible(visible: bool) -> None:
-        """在普通内容区与可复用的统计内容区之间切换。"""
+    # 页面名 -> 槽位 id；未命中的页面显示普通 content
+    SECONDARY_CONTENT = {
+        "Stat": "statistics-content",
+        "Log": "log-content",
+    }
+
+    @classmethod
+    def set_secondary_content_visible(cls, name=None) -> None:
+        """在普通内容区与可复用的二级内容区之间切换。
+
+        ``name`` 为 ``None`` 时回到普通内容区；否则显示
+        ``SECONDARY_CONTENT`` 中对应的槽位。各槽位互斥。
+        """
+        target = cls.SECONDARY_CONTENT.get(name)
         run_js(
             """
             (function () {
-                var content = document.getElementById("pywebio-scope-content");
-                var statistics = document.getElementById(
-                    "pywebio-scope-statistics-content"
-                );
-                if (content) content.style.display = visible ? "none" : "";
-                if (statistics) statistics.style.display = visible ? "" : "none";
+                var ids = [
+                    "pywebio-scope-content",
+                    "pywebio-scope-statistics-content",
+                    "pywebio-scope-log-content"
+                ];
+                var active = target
+                    ? "pywebio-scope-" + target
+                    : "pywebio-scope-content";
+                ids.forEach(function (id) {
+                    var el = document.getElementById(id);
+                    if (el) el.style.display = (id === active) ? "" : "none";
+                });
             })();
             """,
-            visible=visible,
+            target=target,
         )
+
+    @classmethod
+    def set_statistics_content_visible(cls, visible: bool) -> None:
+        """兼容旧调用点：True 显示统计页，False 回到普通内容区。"""
+        cls.set_secondary_content_visible("Stat" if visible else None)
 
     @staticmethod
     @use_scope("ROOT", clear=True)
@@ -135,6 +157,7 @@ class Frame(Base):
                 put_scope("menu"),
                 put_scope("content"),
                 put_scope("statistics-content").style("display: none;"),
+                put_scope("log-content").style("display: none;"),
             ],
         )
 

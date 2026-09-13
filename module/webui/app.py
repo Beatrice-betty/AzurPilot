@@ -90,7 +90,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _versioned_static_asset(relative_path: str) -> str:
-    """返回带内容哈希的相对静态资源地址。"""
+    """返回带内容哈希的相对静态资源地址。
+
+    哈希**每次调用时现算**，不能只在模块导入时算一次：主题 CSS 是请求时
+    读盘的，文件改了而 URL 里的哈希不变，浏览器就会一直用缓存里的旧样式，
+    改动永远到不了页面（实测踩过：加了 CSS 却怎么刷都不生效）。
+    """
     digest = sha256((PROJECT_ROOT / relative_path).read_bytes()).hexdigest()[:12]
     return f"static/{relative_path}?v={digest}"
 

@@ -71,6 +71,7 @@
     }
     var cleanup = function () {
         cleanupHandlers.forEach(function (item) {
+            if (item.type === "__disconnect") { item.target.disconnect(); return; }
             item.target.removeEventListener(item.type, item.handler, item.options);
         });
         cleanupHandlers = [];
@@ -81,6 +82,26 @@
         }
     };
     window.__resourceChartCleanups[chartId] = cleanup;
+
+    watchThemeRedraw();
+
+    // 容器尺寸变化后必须重新同步位图，否则重绘即非等比拉伸（重影）
+    var __resizeTimer = null;
+    function handleCanvasResize() {
+        if (__resizeTimer) { clearTimeout(__resizeTimer); }
+        __resizeTimer = setTimeout(function () {
+            __resizeTimer = null;
+            initChart();
+        }, 120);
+    }
+    if (typeof ResizeObserver === "function") {
+        var __ro = new ResizeObserver(handleCanvasResize);
+        __ro.observe(cv.parentElement || cv);
+        cleanupHandlers.push({
+            target: __ro, type: "__disconnect", handler: null, options: null });
+    }
+    addListener(window, "resize", handleCanvasResize);
+
 
     function addListener(target, type, handler, options) {
         if (!target) return;
@@ -141,14 +162,88 @@
         return indices;
     }
 
+
+    // 位图尺寸按 dpr 匹配显示尺寸。不要写 cv.style.width/height：canvas 是
+    // width:100% 自适应，把量到的像素写回内联样式后会自我强化（宽度由自己
+    // 上一步的值决定），容器变窄时报旧宽度、位图永不更新且无法恢复
+    function resizeCanvas() {
+
+        // 宽度取 getBoundingClientRect()：clientWidth 会四舍五入掉小数，差 1px 即被拉伸
+        var rect = cv.getBoundingClientRect();
+        var w = Math.round(rect.width);
+        var h = Math.round(cv.clientHeight);
+        if (!w) { w = Math.round(cv.clientWidth); }
+        if (!h) { h = 400; }
+        if (!w || !h) { return null; }
+        W = w;
+        H = h;
+        var bw = Math.round(w * dpr);
+        var bh = Math.round(h * dpr);
+        if (cv.width !== bw || cv.height !== bh) {
+            cv.width = bw;
+            cv.height = bh;
+        }
+        if (ovCv.width !== bw || ovCv.height !== bh) {
+            ovCv.width = bw;
+            ovCv.height = bh;
+        }
+        var c2 = cv.getContext("2d");
+        var o2 = ovCv.getContext("2d");
+        setCanvasTransform(c2);
+        o2.setTransform(1, 0, 0, 1, 0, 0);
+        return { w: w, h: h };
+    }
+
+
+    // canvas 的 fillStyle 不接受 var(--x)，必须读计算值
+    var __FALLBACK_CC = { bg: '#1a1a2e', grid: '#2a2a3e', label: '#666',
+                     up: '#ff6b6b', down: '#2ee6c5', lw: 'dark' };
+
+    // 不用 shadowBlur：蒙一层阴影会让细线发糊，K 线影线尤其明显
+    var __apLineW = 1;
+
+    var _cc = __FALLBACK_CC;
+
+    function chartThemeColors() {
+        var cs = getComputedStyle(document.documentElement);
+        function pick(n) { return (cs.getPropertyValue(n) || '').trim(); }
+        var isInline = !!(cv && cv.closest
+            && cv.closest('#pywebio-scope-stat_panels'));
+        return {
+            // 滚动栏用透明背景透出磨砂玻璃；二级菜单统计页保留主题底色
+            bg: isInline ? 'rgba(0, 0, 0, 0)'
+                : (pick('--alas-chart-bg') || pick('--ap-chart-container-bg')
+                   || __FALLBACK_CC.bg),
+            grid: pick('--alas-chart-grid') || __FALLBACK_CC.grid,
+            label: pick('--alas-chart-label') || __FALLBACK_CC.label,
+            up: pick('--alas-chart-up') || __FALLBACK_CC.up,
+            down: pick('--alas-chart-down') || __FALLBACK_CC.down,
+            lw: (cs.getPropertyValue('--alas-chart-lw') || '').trim()
+                || __FALLBACK_CC.lw
+        };
+    }
+
+    // 主题切换靠 <head> 里样式表增删，位图里烘焙的是旧主题颜色，必须重绘
+    var __themeWatch = null;
+    function watchThemeRedraw() {
+        if (__themeWatch || typeof MutationObserver !== 'function') { return; }
+        var pending = null;
+        __themeWatch = new MutationObserver(function () {
+            if (pending) { clearTimeout(pending); }
+            pending = setTimeout(function () {
+                pending = null;
+                initChart();
+            }, 80);
+        });
+        __themeWatch.observe(document.head, { childList: true });
+        cleanupHandlers.push({
+            target: __themeWatch, type: '__disconnect', handler: null, options: null });
+    }
+
     function initChart() {
-        W = cv.clientWidth;
-        H = cv.clientHeight;
-        if (!W || !H) { W = cv.parentElement.clientWidth || 900; H = 400; }
-        cv.width = W * dpr; cv.height = H * dpr;
-        cv.style.width = W + "px"; cv.style.height = H + "px";
-        ovCv.width = W * dpr; ovCv.height = H * dpr;
-        ovCv.style.width = W + "px"; ovCv.style.height = H + "px";
+        _cc = chartThemeColors();
+        __apLineW = (_cc.lw === 'light') ? 2.3 : 1.9;
+        resizeCanvas();
 
         var ctx = cv.getContext("2d");
         setCanvasTransform(ctx);
@@ -222,13 +317,16 @@
         };
 
         // ---- Draw background and grid ----
-        ctx.fillStyle = "#1a1a2e";
+        // 先复位变换再清屏，否则残留旧像素（重影）
+        setCanvasTransform(ctx);
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = _cc.bg;
         ctx.fillRect(0, 0, W, H);
 
         // Grid lines + 左轴参考刻度
-        ctx.strokeStyle = "#2a2a3e";
+        ctx.strokeStyle = _cc.grid;
         ctx.lineWidth = 1;
-        ctx.fillStyle = "#666";
+        ctx.fillStyle = _cc.label;
         ctx.font = "11px -apple-system, sans-serif";
         ctx.textAlign = "right";
         ctx.textBaseline = "middle";
@@ -256,7 +354,7 @@
         }
 
         // ---- X axis labels ----
-        ctx.fillStyle = "#666";
+        ctx.fillStyle = _cc.label;
         ctx.font = "10px -apple-system, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
@@ -276,7 +374,7 @@
             var meta = resourceMeta[si];
             var data = meta.data;
 
-            ctx.lineWidth = 1.5;
+            ctx.lineWidth = __apLineW * 1.5;
             ctx.lineJoin = "round";
             ctx.strokeStyle = meta.color;
             ctx.beginPath();
@@ -403,6 +501,9 @@
     }
 
     function renderZoomed() {
+        _cc = chartThemeColors();
+        __apLineW = (_cc.lw === 'light') ? 2.3 : 1.9;
+        resizeCanvas();
         // Redraw with zoom
         var visibleCount = clampPanForZoom();
         var visibleStart = Math.max(0, Math.floor(panOffset));
@@ -473,13 +574,16 @@
         };
 
         // Clear
-        ctx.fillStyle = "#1a1a2e";
+        // 先复位变换再清屏，否则残留旧像素（重影）
+        setCanvasTransform(ctx);
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = _cc.bg;
         ctx.fillRect(0, 0, W, H);
 
         // Grid & left axis 参考刻度
-        ctx.strokeStyle = "#2a2a3e";
+        ctx.strokeStyle = _cc.grid;
         ctx.lineWidth = 1;
-        ctx.fillStyle = "#666";
+        ctx.fillStyle = _cc.label;
         ctx.font = "11px -apple-system, sans-serif";
         ctx.textAlign = "right";
         ctx.textBaseline = "middle";
@@ -508,7 +612,7 @@
         }
 
         // X labels
-        ctx.fillStyle = "#666";
+        ctx.fillStyle = _cc.label;
         ctx.font = "10px -apple-system, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
@@ -528,7 +632,7 @@
             var meta = resourceMeta[si];
             var data = meta.data;
 
-            ctx.lineWidth = 1.5;
+            ctx.lineWidth = __apLineW * 1.5;
             ctx.lineJoin = "round";
             ctx.strokeStyle = meta.color;
             ctx.beginPath();

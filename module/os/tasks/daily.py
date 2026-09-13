@@ -128,7 +128,7 @@ class OpsiDaily(OSMap):
         # 第1步：清主舰队问号
         self.fleet_set(primary)
         self.device.screenshot()
-        if OSMap.clear_question(self):
+        if self.clear_question():
             event_solved = True
 
         # 第2步：主舰队未解决事件则重扫地图
@@ -144,7 +144,7 @@ class OpsiDaily(OSMap):
                     continue
                 self.fleet_set(fleet)
                 self.device.screenshot()
-                if OSMap.clear_question(self):
+                if self.clear_question():
                     event_solved = True
                     break
             # 恢复主舰队，避免后续步骤在非主舰队状态下执行
