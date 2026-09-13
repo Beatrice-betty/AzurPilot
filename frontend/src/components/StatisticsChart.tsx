@@ -32,54 +32,7 @@ export function StatisticsChart({series}: {series: StatSeries[]}) {
   const maximum = values.length ? Math.max(...values) : 0
   useEffect(() => {
     if (!element.current || !points.length) return
-    const el = element.current
-    const events = [
-      'mousemove', 'mousedown', 'mouseup', 'click', 'dblclick', 'contextmenu', 'wheel',
-      'pointermove', 'pointerdown', 'pointerup',
-      'touchstart', 'touchmove', 'touchend'
-    ]
-    function getWheelDelta(e: WheelEvent): number {
-      const rawWheelDelta = (e as unknown as { wheelDelta?: number }).wheelDelta
-      if (rawWheelDelta) return rawWheelDelta
-      const deltaY = e.deltaY
-      if (deltaY) {
-        const deltaX = e.deltaX
-        const delta = Math.abs(deltaY) > Math.abs(deltaX) ? -deltaY : -deltaX
-        const speed = e.deltaMode === 1 ? 40 : 1
-        return delta * speed
-      }
-      return -(e.detail || 0)
-    }
-    function fixCoords(event: Event) {
-      if (!el) return
-      const rect = el.getBoundingClientRect()
-      if (!rect.width || !rect.height) return
-      const scaleX = rect.width / (el.clientWidth || rect.width)
-      const scaleY = rect.height / (el.clientHeight || rect.height)
-      let clientX: number | undefined
-      let clientY: number | undefined
-      if ('clientX' in event && typeof (event as MouseEvent).clientX === 'number') {
-        clientX = (event as MouseEvent).clientX
-        clientY = (event as MouseEvent).clientY
-      } else if ('touches' in event && (event as TouchEvent).touches.length > 0) {
-        clientX = (event as TouchEvent).touches[0].clientX
-        clientY = (event as TouchEvent).touches[0].clientY
-      } else if ('changedTouches' in event && (event as TouchEvent).changedTouches.length > 0) {
-        clientX = (event as TouchEvent).changedTouches[0].clientX
-        clientY = (event as TouchEvent).changedTouches[0].clientY
-      }
-      if (clientX != null && clientY != null) {
-        const raw = event as unknown as { zrX?: number; zrY?: number; zrDelta?: number }
-        raw.zrX = (clientX - rect.left) / scaleX
-        raw.zrY = (clientY - rect.top) / scaleY
-        if (event.type === 'wheel') {
-          const delta = getWheelDelta(event as WheelEvent)
-          raw.zrDelta = delta ? delta / 120 : -((event as UIEvent).detail || 0) / 3
-        }
-      }
-    }
-    events.forEach(type => el.addEventListener(type, fixCoords, true))
-    const chart = echarts.init(el, undefined, {locale: 'ZH'})
+    const chart = echarts.init(element.current, undefined, {locale: 'ZH'})
     function render() {
       const colors = getComputedStyle(document.documentElement)
       const text = colors.getPropertyValue('--text').trim() || '#82929f'
@@ -100,15 +53,10 @@ export function StatisticsChart({series}: {series: StatSeries[]}) {
     }
     render()
     const observer = new ResizeObserver(() => chart.resize())
-    observer.observe(el)
+    observer.observe(element.current)
     const theme = new MutationObserver(render)
     theme.observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme']})
-    return () => {
-      events.forEach(type => el.removeEventListener(type, fixCoords, true))
-      observer.disconnect()
-      theme.disconnect()
-      chart.dispose()
-    }
+    return () => {observer.disconnect(); theme.disconnect(); chart.dispose()}
   }, [points, buckets, mode, current.label])
   return <section className={`panel statistics-chart ${expanded ? 'chart-expanded' : ''}`}>
     <div className="panel-heading"><h2>趋势与细节</h2><button className="text-button" onClick={() => setExpanded(!expanded)}>{expanded ? '收起图表' : '放大查看'}</button></div>
