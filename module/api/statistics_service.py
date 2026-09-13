@@ -75,7 +75,6 @@ def report(configs, instance, category, month, days, period):
             if name not in ('ActionPoint', 'YellowCoin', 'PurpleCoin')
         ]
         result['series'] = [series(rows, key, RESOURCE_LABELS[name]) for name, key in resource_items]
-        result['notes'].append('区间变化为首末采集值之差，不等同于总收入；未采集的数据保持缺失。')
         return result
 
     from module.statistics.cl1_database import db
@@ -105,7 +104,6 @@ def report(configs, instance, category, month, days, period):
                          data.get('siren_research_devices'), round(data.get('siren_research_rate', 0) * 100, 2),
                          {'exact': '实测', 'estimated': '估算', 'none': '暂无记录'}.get(data.get('by_hazard', {}).get(str(hazard), {}).get('source', 'none'))])
         result['tables'].append(table('短猫运行统计', ['侵蚀等级', '战斗次数', '有效轮数', '平均战斗秒数', '平均每轮秒数', '研究装置', '获取率（%）', '统计来源'], rows))
-        result['notes'].append('侵蚀1沿用旧口径：轮数 = 向上取整（战斗次数 ÷ 2），消耗 = 轮数 × 5；净行动力 = 明石购买 − 出击消耗。')
     elif category == 'action':
         from module.statistics.opsi_month import get_ap_timeline, get_coins_timeline
         ap = get_ap_timeline(year, month_number, instance)
@@ -117,7 +115,6 @@ def report(configs, instance, category, month, days, period):
         result['series'] = [series(ap_normalized, 'ap', '行动力'), series(ap, 'asset', '行动力资产'),
                             series(ap, 'distance', '海里数'), series(coins, 'yellow_coins', '作战补给凭证'),
                             series(coins, 'purple_coins', '特别兑换凭证')]
-        result['notes'].append('行动力为算上体力箱的总行动力。保留每种资源的独立采样时间，不用相邻资源的时间戳替代。资产与海里数仅在原记录包含时展示。')
     elif category == 'commission':
         from module.statistics.commission_income_stats import get_commission_income_interval_summary
         start = selected.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -146,7 +143,6 @@ def report(configs, instance, category, month, days, period):
         result['tables'].append(table('委托结算记录', ['时间', '委托数量', '钻石', '魔方', '心智单元', '石油', '物资'],
             [[item['ts'], item.get('commission_count', 1), *[item['items'].get(k) for k in ('Gem', 'Cube', 'Chip', 'Oil', 'Coin')]] for item in normalized]))
         result['series'] = [series([{'ts': item['ts'], **item['items']} for item in normalized], k, labels[k]) for k in ('Gem', 'Cube', 'Chip', 'Oil', 'Coin')]
-        result['notes'].append('图表表示每次结算收益。平均值按出现该资源的记录数计算；无结算记录时显示“—”。今日/本周使用当前日期，月度使用选定月份。')
     elif category == 'ships':
         from module.statistics.ship_exp_stats import ShipExpStats
         from module.statistics.opsi_month import get_opsi_stats
@@ -168,7 +164,6 @@ def report(configs, instance, category, month, days, period):
             f"上次检测：{data.get('last_check_time', '尚未检测')}；舰队：{data.get('fleet_index', '—')}。"))
         daily = [{'ts': key, **value} for key, value in sorted(data.get('daily_stats', {}).items())]
         result['series'] = [series(daily, 'total_exp_gained', '每日经验'), series(daily, 'battle_count', '每日战斗'), series(daily, 'total_run_time', '每日运行秒数')]
-        result['notes'].append('舰船与经验展示最新检测及全部保留的日记录。效率、所需战斗和用时均为沿用旧公式的估算，缺少时长样本时使用旧默认值。')
     elif category == 'loot':
         from module.statistics.azurstats import AzurStats
         rows = []
@@ -178,5 +173,4 @@ def report(configs, instance, category, month, days, period):
             if row[2] > 0:
                 rows.append([int(row[0]), datetime.fromtimestamp(row[1]).isoformat(sep=' '), float(row[2]), *[round(float(value), 4) for value in row[3:]]])
         result['tables'].append(table('短猫掉落收益', AzurStats.meowofficer_farming_labels, rows))
-        result['notes'].append('沿用旧版全设备累计掉落缓存，不按当前实例或月份过滤；上次记录时间见表格。')
     return result

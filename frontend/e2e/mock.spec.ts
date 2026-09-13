@@ -44,7 +44,7 @@ test('统计分类、K 线、时间过滤、表格导出与移动端布局', asy
   expect((await download).suggestedFilename()).toMatch(/\.csv$/)
   for (const label of ['大世界趋势', '大世界总结', '委托收益', '舰船经验', '短猫掉落']) {
     await page.getByRole('navigation', {name: '统计分类'}).getByRole('button', {name: label, exact: true}).click()
-    await expect(page.getByText('前端模拟数据，仅用于交互验证。')).toBeVisible()
+    await expect(page.locator('.period-controls strong')).toHaveText(label)
   }
   await page.getByRole('button', {name: '资源趋势', exact: true}).click()
   await page.getByLabel('图表起始时间').fill('2099-01-01T00:00')

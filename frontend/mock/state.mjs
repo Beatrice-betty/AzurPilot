@@ -153,7 +153,7 @@ export function createMockState({empty = false} = {}) {
         const series = Object.entries(activeLabels).map(([key, label]) => ({
           key, label, points: dispatch('statistics.resources', {instance: name, resource: key, days: params.days}).points
         }))
-        const result = {instance: name, category: params.category, month: params.month, metrics: [], series: [], tables: [], notes: ['前端模拟数据，仅用于交互验证。']}
+        const result = {instance: name, category: params.category, month: params.month, metrics: [], series: [], tables: [], notes: []}
         if (['resources', 'action', 'ships', 'commission'].includes(params.category)) result.series = series
         if (!['resources', 'action'].includes(params.category)) {
           result.metrics = [{label: '战斗次数', value: 1234, unit: '场'}, {label: '净行动力', value: 345, unit: ''}]
