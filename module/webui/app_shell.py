@@ -13,6 +13,7 @@ from module.webui.app_dependencies import (
     current_time,
     datetime,
     filepath_args,
+    logger,
     put_buttons,
     put_html,
     put_icon_buttons,
@@ -26,6 +27,7 @@ from module.webui.app_dependencies import (
     time_source_status,
     timedelta,
     timezone,
+    updater,
     use_scope,
     webconfig,
 )
@@ -68,8 +70,101 @@ def branch_is_unstable(branch) -> bool:
     return branch not in ("master", "main")
 
 
-# 未验证分支水印的铺排文案，每个元素是水印格内的一行。
-BRANCH_WATERMARK_LINES = ("您正在使用未经验证的版本", "可能存在未知问题")
+# 未验证分支水印的主提醒文案，中英各一行、同时展示。元信息统一使用 ASCII 标签。
+BRANCH_WATERMARK_NOTICE = "您正在使用未经验证的版本，可能存在未知问题"
+BRANCH_WATERMARK_NOTICE_EN = (
+    "You are using an unverified version, unknown issues may occur"
+)
+# 版本标识前缀，形如 ``Ver.<分支名>.<版本哈希>``。
+BRANCH_WATERMARK_VERSION_TAG = "Ver"
+# 分支标识前缀，形如 ``Branche is:<分支名>``。
+BRANCH_WATERMARK_BRANCH_TAG = "Branche is"
+
+# 水印字体：英文与数字统一走 JetBrains Mono NL，中文回退到界面主字体。
+# 注意 alas.css 里有 `body *:not(...) { font-family: 'MiSans' ... !important }`
+# 这条全局规则，其特异性(id 计数 2)高于本文件的 id+class 选择器，因此纯 CSS
+# 声明会被压掉，必须靠 JS 内联 `!important` 才能真正生效。
+BRANCH_WATERMARK_FONT_STACK = (
+    "'JetBrains Mono NL', 'MiSans', \"Microsoft YaHei\", sans-serif"
+)
+
+# 水印格内各行文本的裁剪上限。水印是 nowrap 平铺的，分支名/提交信息过长会
+# 撑破格子并互相重叠，这里按字符数截断并用省略号收尾。
+BRANCH_WATERMARK_MAX_BRANCH_LEN = 28
+BRANCH_WATERMARK_MAX_VERSION_LEN = 16
+BRANCH_WATERMARK_MAX_MESSAGE_LEN = 40
+
+# 水印行的展示类型，供 CSS 区分主提醒（中文为主、英文为副）、元信息。
+BRANCH_WATERMARK_KIND_TITLE = "title"
+BRANCH_WATERMARK_KIND_TITLE_EN = "title-en"
+BRANCH_WATERMARK_KIND_META = "meta"
+
+
+def _clip_watermark_text(text, limit: int) -> str:
+    """把任意文本压成单行并按字符数裁剪，超长部分用省略号收尾。"""
+    text = " ".join(str(text or "").split())
+    if len(text) <= limit:
+        return text
+    return text[: max(limit - 1, 1)] + "…"
+
+
+def build_branch_watermark_lines(branch, commit=None) -> list:
+    """构造未验证分支水印的文案行。
+
+    开头是中英双语的提醒（中文为主、英文为副），其后为 ASCII 元信息：
+    - 主提醒 ``您正在使用未经验证的版本，可能存在未知问题``
+    - 英文提醒 ``You are using an unverified version, unknown issues may occur``
+    - 版本标识 ``Ver.<分支名>.<版本哈希>``
+    - 分支标识 ``Branche is:<分支名>``
+    - 提交内容（裸写，不加前缀）
+
+    Args:
+        branch: 当前部署分支名，例如 dev / feature/new。
+        commit: ``updater.get_commit(short_sha1=True)`` 的返回值
+            ``(sha1, author, isotime, message)``。读取失败或为空时，
+            版本哈希回退为 ``unknown``，并省略提交行。
+
+    Returns:
+        ``[{"text": ..., "kind": "title"|"title-en"|"meta"}, ...]``
+    """
+    lines = [
+        {"text": BRANCH_WATERMARK_NOTICE, "kind": BRANCH_WATERMARK_KIND_TITLE},
+        {"text": BRANCH_WATERMARK_NOTICE_EN, "kind": BRANCH_WATERMARK_KIND_TITLE_EN},
+    ]
+
+    sha1 = message = None
+    if commit:
+        sha1 = commit[0] if len(commit) > 0 else None
+        message = commit[3] if len(commit) > 3 else None
+
+    branch_name = _clip_watermark_text(branch, BRANCH_WATERMARK_MAX_BRANCH_LEN)
+    version = _clip_watermark_text(sha1, BRANCH_WATERMARK_MAX_VERSION_LEN) or "unknown"
+
+    ver_segments = [BRANCH_WATERMARK_VERSION_TAG]
+    if branch_name:
+        ver_segments.append(branch_name)
+    ver_segments.append(version)
+    lines.append(
+        {
+            "text": ".".join(ver_segments),
+            "kind": BRANCH_WATERMARK_KIND_META,
+        }
+    )
+
+    if branch_name:
+        lines.append(
+            {
+                "text": f"{BRANCH_WATERMARK_BRANCH_TAG}:{branch_name}",
+                "kind": BRANCH_WATERMARK_KIND_META,
+            }
+        )
+
+    subject = _clip_watermark_text(message, BRANCH_WATERMARK_MAX_MESSAGE_LEN)
+    if subject:
+        lines.append({"text": subject, "kind": BRANCH_WATERMARK_KIND_META})
+
+    return lines
+
 
 # 未验证分支水印的样式：低调淡灰、pointer-events 穿透，避免影响观感与操作。
 # z-index 与首屏骨架同级（低于更新提示 2147483647）；暗色主题通过 body 上的
@@ -84,32 +179,59 @@ BRANCH_WATERMARK_CSS = """
     z-index: 2147483000;
     pointer-events: none;
     overflow: hidden;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
-        "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+/* 英文与数字统一用 JetBrains Mono NL，中文回退界面主字体。这条 !important
+   仍会被 alas.css 的全局 `body *:not(...) !important` 规则按特异性压掉，
+   实际生效靠注入 JS 里的内联 !important；此处保留以便全局规则变动时兜底。 */
+#alas-branch-watermark,
+#alas-branch-watermark .alas-wm-cell,
+#alas-branch-watermark .alas-wm-cell span{
+    font-family: 'JetBrains Mono NL', 'MiSans', "Microsoft YaHei",
+        sans-serif !important;
 }
 #alas-branch-watermark .alas-wm-cell{
     position: absolute;
-    width: 460px;
-    height: 260px;
+    width: 540px;
+    height: 340px;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     transform: rotate(-18deg);
     transform-origin: center center;
-    color: rgba(110, 110, 110, .26);
     white-space: nowrap;
 }
 #alas-branch-watermark .alas-wm-cell span{
     display: block;
-    font-size: 15px;
-    font-weight: 500;
-    line-height: 2.0;
     user-select: none;
     pointer-events: none;
 }
-body.webio-theme-dark #alas-branch-watermark .alas-wm-cell{
-    color: rgba(200, 200, 200, .20);
+#alas-branch-watermark .alas-wm-cell span.alas-wm-title{
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 2.2;
+    color: rgba(90, 90, 90, .34);
+}
+#alas-branch-watermark .alas-wm-cell span.alas-wm-title-en{
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 2.0;
+    color: rgba(100, 100, 100, .30);
+}
+#alas-branch-watermark .alas-wm-cell span.alas-wm-meta{
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.9;
+    color: rgba(120, 120, 120, .28);
+}
+body.webio-theme-dark #alas-branch-watermark .alas-wm-cell span.alas-wm-title{
+    color: rgba(210, 210, 210, .26);
+}
+body.webio-theme-dark #alas-branch-watermark .alas-wm-cell span.alas-wm-title-en{
+    color: rgba(205, 205, 205, .23);
+}
+body.webio-theme-dark #alas-branch-watermark .alas-wm-cell span.alas-wm-meta{
+    color: rgba(200, 200, 200, .22);
 }
 """
 
@@ -503,6 +625,9 @@ class AppShellMixin(WebUIMixinBase):
     def _inject_unverified_branch_watermark(self) -> None:
         """更新分支不是 master/main 时，注入全屏淡灰水印提醒。
 
+        水印除固定提醒文案外，还展示当前分支名、版本哈希与版本提交信息，
+        便于快速判断正在运行的是哪一个未验证构建。
+
         在登录后的会话外壳挂载阶段调用一次。通过 run_js 向 <body> 直挂一个
         fixed 全屏层，不属 PyWebIO scope，切换页面不会被清除；方法幂等，
         浏览器刷新重建会话后会先移除旧节点再重建。
@@ -514,8 +639,17 @@ class AppShellMixin(WebUIMixinBase):
             branch = getattr(State.deploy_config, "Branch", "master") or "master"
         except Exception:
             branch = "master"
+
         if not branch_is_unstable(branch):
             return
+
+        commit = None
+        try:
+            commit = updater.get_commit(short_sha1=True)
+        except Exception as e:
+            logger.warning(f"读取本地版本信息失败，水印仅显示分支名: {e}")
+
+        lines = build_branch_watermark_lines(branch, commit)
 
         run_js(f"""
         (function () {{
@@ -540,12 +674,10 @@ class AppShellMixin(WebUIMixinBase):
             box.id = BOX_ID;
             box.setAttribute("aria-hidden", "true");
 
-            var lines = [
-                {json.dumps(BRANCH_WATERMARK_LINES[0])},
-                {json.dumps(BRANCH_WATERMARK_LINES[1])}
-            ];
-            var cellW = 460;
-            var cellH = 260;
+            var lines = {json.dumps(lines, ensure_ascii=False)};
+            var fontStack = {json.dumps(BRANCH_WATERMARK_FONT_STACK)};
+            var cellW = 540;
+            var cellH = 340;
             var vw = window.innerWidth || document.documentElement.clientWidth || 1280;
             var vh = window.innerHeight || document.documentElement.clientHeight || 720;
             var cols = Math.ceil(vw / cellW) + 1;
@@ -558,12 +690,19 @@ class AppShellMixin(WebUIMixinBase):
                     cell.style.top = (r * cellH) + "px";
                     for (var i = 0; i < lines.length; i++) {{
                         var span = document.createElement("span");
-                        span.textContent = lines[i];
+                        span.className = "alas-wm-" + lines[i].kind;
+                        span.textContent = lines[i].text;
+                        // alas.css 的全局 `body *:not(...) !important` 字体规则
+                        // 特异性高于水印样式表，只能用内联 !important 反压。
+                        span.style.setProperty(
+                            "font-family", fontStack, "important"
+                        );
                         cell.appendChild(span);
                     }}
                     box.appendChild(cell);
                 }}
             }}
+
             document.body.appendChild(box);
         }})();
         """)
