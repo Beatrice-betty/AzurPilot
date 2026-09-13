@@ -114,9 +114,13 @@ class TestBranchWatermarkDisabled(unittest.TestCase):
         self.assertFalse(branch_watermark_disabled(object()))
         self.assertFalse(branch_watermark_disabled(
             SimpleNamespace(DisableBranchWatermark=False)))
-        # 空字符串（例如 yaml 写成 "") 也不能被当成真值
-        self.assertFalse(branch_watermark_disabled(
-            SimpleNamespace(DisableBranchWatermark="")))
+
+    def test_only_boolean_true_hides(self):
+        """非布尔真值不算开启：格式写错的 deploy.yaml 不能静默关掉水印。"""
+        for value in ("", "false", "False", "0", "no", "true", 0, 1, [], {}):
+            with self.subTest(value=value):
+                self.assertFalse(branch_watermark_disabled(
+                    SimpleNamespace(DisableBranchWatermark=value)))
 
     def test_explicit_true_hides(self):
         self.assertTrue(branch_watermark_disabled(
@@ -129,6 +133,50 @@ class TestBranchWatermarkDisabled(unittest.TestCase):
                 raise RuntimeError("boom")
 
         self.assertFalse(branch_watermark_disabled(Broken()))
+
+
+class TestDeployModelsExposeSwitch(unittest.TestCase):
+    """开关字段必须同时存在于各部署模型与模板。
+
+    WebUI 用的是 module/webui/config.py 的子类（继承 deploy/config.py），
+    Windows 启动器用的是 deploy/Windows/config.py 的独立模型，两者读写同一份
+    config/deploy.yaml；字段缺失会让开关在对应平台上静默失效（读不到就恒为
+    False，水印照样显示）。
+    """
+
+    def test_models_expose_field(self):
+        from deploy.config import DeployConfig
+
+        self.assertIs(DeployConfig.DisableBranchWatermark, False)
+
+        from module.webui.config import DeployConfig as WebUIDeployConfig
+
+        self.assertIs(WebUIDeployConfig.DisableBranchWatermark, False)
+
+        try:
+            from deploy.Windows.config import DeployConfig as WindowsDeployConfig
+        except Exception as e:  # 非 Windows 环境可能无法导入
+            self.skipTest(f"Windows 部署模型不可导入: {e}")
+        self.assertIs(WindowsDeployConfig.DisableBranchWatermark, False)
+
+    def test_deploy_templates_expose_field(self):
+        import glob
+        import os
+
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        patterns = [
+            "config/deploy.template*.yaml",
+            "deploy/template",
+            "deploy/Windows/template.yaml",
+        ]
+        files = []
+        for pattern in patterns:
+            files.extend(glob.glob(os.path.join(root, pattern)))
+        self.assertTrue(files, "未找到任何部署模板")
+        for path in files:
+            with self.subTest(template=os.path.basename(path)):
+                with open(path, encoding="utf-8") as f:
+                    self.assertIn("DisableBranchWatermark", f.read())
 
 
 if __name__ == "__main__":
