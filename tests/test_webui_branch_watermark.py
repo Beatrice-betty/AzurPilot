@@ -1,10 +1,12 @@
 import unittest
+from types import SimpleNamespace
 
 from module.webui.app_shell import (
     BRANCH_WATERMARK_MAX_MESSAGE_LEN,
     BRANCH_WATERMARK_NOTICE,
     BRANCH_WATERMARK_NOTICE_EN,
     branch_is_unstable,
+    branch_watermark_disabled,
     build_branch_watermark_lines,
 )
 
@@ -98,6 +100,35 @@ class TestBuildBranchWatermarkLines(unittest.TestCase):
         self.assertNotIn("\n", subject)
         self.assertTrue(subject.endswith("…"))
         self.assertEqual(len(subject), BRANCH_WATERMARK_MAX_MESSAGE_LEN)
+
+
+class TestBranchWatermarkDisabled(unittest.TestCase):
+    """关闭水印开关的读取：默认关闭（即显示水印），只有显式配置才隐藏。
+
+    配置缺失、属性不存在或读取异常都必须回退到「显示水印」，避免因为配置
+    问题把提醒静默关掉——水印里的版本信息是定位问题的唯一线索。
+    """
+
+    def test_default_is_show(self):
+        self.assertFalse(branch_watermark_disabled(None))
+        self.assertFalse(branch_watermark_disabled(object()))
+        self.assertFalse(branch_watermark_disabled(
+            SimpleNamespace(DisableBranchWatermark=False)))
+        # 空字符串（例如 yaml 写成 "") 也不能被当成真值
+        self.assertFalse(branch_watermark_disabled(
+            SimpleNamespace(DisableBranchWatermark="")))
+
+    def test_explicit_true_hides(self):
+        self.assertTrue(branch_watermark_disabled(
+            SimpleNamespace(DisableBranchWatermark=True)))
+
+    def test_read_error_falls_back_to_show(self):
+        class Broken:
+            @property
+            def DisableBranchWatermark(self):
+                raise RuntimeError("boom")
+
+        self.assertFalse(branch_watermark_disabled(Broken()))
 
 
 if __name__ == "__main__":
