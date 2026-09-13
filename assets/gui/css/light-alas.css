@@ -1,3 +1,60 @@
+:root {
+    --alas-stat-grid-cols: max-content max-content max-content max-content max-content;
+}
+
+:root {
+        --alas-card-bg: #ffffff;
+        --alas-chart-bg: #fafafa;
+        --ap-chart-container-bg: #fafafa;
+    --ap-chart-container-border: #e0e0e0;
+    --ap-chart-text: #79747e;
+    --ap-chart-tip-bg: #ffffff;
+    --ap-chart-tip-border: #e0e0e0;
+    --ap-chart-tip-color: #1a1861;
+    --ap-chart-btn-bg: #ffffff;
+    --ap-chart-btn-border: #79747e;
+    --ap-chart-btn-color: #4e4c97;
+    --alas-table-head: #f2f2f4;
+    --alas-table-surface: #ffffff;
+    --alas-table-hover: rgba(78, 76, 151, 0.10);
+    --alas-chart-grid: #e0e0e0;
+    /* canvas 位图自己的底色（二级菜单统计页用）。
+       与 --alas-chart-bg 分开：那个是半透明的，透出的是页面底图；
+       这里要不透明色，把位图后面的半透明 CSS 层整块挡住。
+       右栏滚动栏走透明分支，读不到这个值。 */
+    --alas-chart-bitmap-bg: rgba(245, 245, 247, 0.97);
+    --ap-series-1: #64b5f6;
+    --ap-series-2: #ffd54f;
+    --ap-series-3: #ce93d8;
+    --ap-series-4: #81c784;
+    --ap-series-5: #1565c0;
+    --alas-chart-label: #79747e;
+        --alas-chart-glow: none;
+        --alas-chart-up: #ef5350;
+    --alas-chart-down: #26a69a;
+    --alas-card-border: #e0e0e0;
+            --alas-panel-bg: #ffffff;
+    --alas-panel-border: #e0e0e0;
+    --alas-card-radius: 16px;
+    --alas-log-divider: #e0e0e0;
+
+#pywebio-scope-opsi_stats .simple-table th,
+#pywebio-scope-ship_exp_table .simple-table th {
+    background: var(--alas-table-head);
+}
+
+#pywebio-scope-opsi_stats .simple-table td,
+#pywebio-scope-ship_exp_table .simple-table td {
+    background: var(--alas-table-surface);
+}
+
+#pywebio-scope-opsi_stats .simple-table tr:hover td,
+#pywebio-scope-ship_exp_table .simple-table tr:hover td {
+    background: var(--alas-table-hover);
+}
+
+}
+
 .btn-menu:hover,
 .btn-menu-active {
     background-color: #e8e8f8;
@@ -163,7 +220,8 @@ pre.rich-traceback-code {
 }
 
 #pywebio-scope-content,
-#pywebio-scope-statistics-content {
+#pywebio-scope-statistics-content,
+#pywebio-scope-log-content {
     background-color: #f9f9f9;
 }
 
@@ -197,6 +255,9 @@ pre.rich-traceback-code {
 #pywebio-scope-stat-bar,
 #pywebio-scope-log-bar,
 #pywebio-scope-log,
+#pywebio-scope-dashboard,
+#pywebio-scope-stat_panels,
+#pywebio-scope-logs,
 #pywebio-scope-running,
 #pywebio-scope-pending,
 #pywebio-scope-waiting,
@@ -223,4 +284,63 @@ pre.rich-traceback-code {
 
 *[style*="--dashboard-limit--"] {
     color: #777777;
+}
+
+/* 曲线与统计数值的「发光」观感。canvas 那边用 shadowBlur 画曲线，这里
+   用 text-shadow 让数值和图例文字跟着亮，两处观感才对得上。
+   数值颜色与对应曲线严格同色（见 --ap-series-*）。 */
+/* 最高/最低 的提示色（红涨绿跌），与曲线同色系。
+   数值不加 text-shadow —— 那会让数字糊掉；要「发亮」用提高
+   饱和度与字重来加强，光晕只留给 canvas 里的曲线。 */
+.ap-up { color: var(--alas-chart-up) !important; }
+.ap-down { color: var(--alas-chart-down) !important; }
+
+/* 数值与曲线严格同色，不做任何图像处理 ——
+   filter 会改变渲染色值，与「同色」的设计意图冲突，观感也偏亮偏糊。
+   字重对齐「行动力」行的纯 <b>（bold = 700）。 */
+.ap-value {
+	font-weight: 700;
+}
+
+.ap-glow {
+	text-shadow: 0 0 2px rgba(0,0,0,.30), 0 0 7px currentColor;
+}
+
+.ap-series-1 { color: var(--ap-series-1) !important; }
+.ap-series-2 { color: var(--ap-series-2) !important; }
+.ap-series-3 { color: var(--ap-series-3) !important; }
+.ap-series-4 { color: var(--ap-series-4) !important; }
+.ap-series-5 { color: var(--ap-series-5) !important; }
+
+/* 统计数值行。原先固定 150px 100px 90px 90px 90px，资产那种
+   459115.0 会超出 90px 被折行，看着就和「最高/最低」标签不同行。
+   改成按内容撑开 + 数值列可伸缩，并禁止折行。 */
+/* 标注网格：容器持有列定义，所有行共用一套列宽。 */
+.ap-chart-stats,
+.ap-stat-row {
+	display: grid;
+	grid-template-columns: var(--alas-stat-grid-cols);
+	gap: 8px;
+	align-items: center;
+	white-space: nowrap;
+}
+
+/* 行本身不生成盒子，交给父网格统一排布，列宽才跨行一致。
+   代价：.ap-stat-row span 不再匹配（contents 盒子不参与
+   选择器匹配），所以数值样式写在 span 上。 */
+.ap-chart-stats > .ap-stat-row,
+.ap-stat-row > .ap-stat-row {
+	display: contents;
+}
+
+.ap-stat-row {
+	color: var(--alas-chart-label);
+}
+
+.ap-stat-row span {
+	/* 与高级材质同款：让子元素保持 inline。
+	   这里原本是 display:flex —— flex 会把子 <b> 块化，于是四个字段
+	   各占一行；「行动力」那行的 span 不匹配这条选择器、保持 inline，
+	   两处格式就对不上。原先还垫了一层 text-shadow，观感发虚。 */
+	display: inline;
 }

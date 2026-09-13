@@ -323,6 +323,38 @@ body.webio-theme-dark #alas-branch-watermark .alas-wm-cell span.alas-wm-meta{
 """
 
 
+def theme_css_source() -> str:
+    """返回当前主题的 CSS 文本，供背景注入拼回主题自己的叠加渐变。
+
+    高级黑在 body 上叠了一层深色渐变把背景压暗。自定义背景会直接覆盖
+    ``background-image``，不把那层渐变拼回去，深色主题下背景会突然变亮。
+
+    从主题文件读而不是另存一份，渐变值只存在一处，上游改了也不会漂移。
+    读不到时返回空串——背景本身还能用，只差那层叠加。
+    """
+    from module.webui.setting import State
+    from module.webui.utils import filepath_css
+
+    # 用全局 State.theme：本函数定义在 AppShellMixin 之前，引类会 NameError
+    theme = getattr(State, 'theme', None) or 'default'
+    names = {
+        'dark_advanced_material': (
+            'advanced-material-alas',
+            'dark-advanced-material-overrides-alas',
+        ),
+    }.get(theme, (f'{theme.replace("_", "-")}-alas',)
+          if theme not in ('default',) else ('light-alas',))
+
+    parts = []
+    for name in names:
+        try:
+            with open(filepath_css(name), 'r', encoding='utf-8') as f:
+                parts.append(f.read())
+        except OSError as e:
+            logger.warning(f'[WebUI-背景] 读主题 CSS {name} 失败: {e}')
+    return '\n'.join(parts)
+
+
 def _reload_theme_css(theme: str) -> None:
     """切换主题时移除旧主题的 <link> 与 <style>，并重新注入当前主题 CSS。
 

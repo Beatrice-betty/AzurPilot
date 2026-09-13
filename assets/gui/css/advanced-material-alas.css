@@ -36,7 +36,64 @@
 	--alas-apple-bg: #f5f5f7;
 	--alas-apple-bg-image: url("https://api.yppp.net/api.php");
 	--alas-apple-bg-noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-	--alas-apple-card-bg: rgba(255, 255, 255, 0.72);
+			--alas-card-user-bg: var(--alas-apple-card-bg);
+	--alas-card-user-blur: var(--alas-card-blur);
+	--alas-tile-user-bg: var(--alas-stat-panel-bg);
+	/* 贴片容器外侧，跟随卡片色以免与内部子板块有色差 */
+	--alas-tile-user-bg-outer: var(--alas-apple-card-bg);
+		--alas-log-user-bg: var(--alas-log-column-bg);
+	--alas-log-user-blur: var(--alas-log-column-blur);
+	--alas-tile-user-blur: var(--alas-card-blur);
+
+	--alas-apple-card-bg: rgba(255, 255, 255, 0.28);
+	/* 只给 #pywebio-scope-logs，不牵动左侧卡片与 dashboard/stat_panels */
+	--alas-log-column-bg: rgba(255, 255, 255, 0.22);
+		--alas-card-blur: blur(8px) saturate(160%);
+	/* 放进令牌，深色主题才能独立声明 */
+	--alas-log-column-blur: blur(7px) saturate(200%);
+		--alas-card-title-shadow: 0 0 2px rgba(255, 255, 255, 0.92), 0 0 6px rgba(255, 255, 255, 0.75);
+		--alas-stat-grid-cols: max-content max-content max-content max-content max-content;
+	/* 统计子板块自带磨砂规则，这里不要再刷底色 */
+	--alas-panel-bg: transparent;
+	/* 只作用于总览页右栏那五个板块，不牵动左侧列与 .apple-card */
+	--alas-stat-panel-bg: rgba(255, 255, 255, 0.18);
+	/* 卡片规则与【刷新】按钮定位共用这个内边距 */
+	--alas-stat-card-pad: 12px;
+	/* alas.css 只引用这三个令牌，颜色由各主题给 */
+	--alas-card-bg: var(--alas-apple-card-bg);
+	/* canvas 图表取色，见 ap_chart.js 的 chartColors() */
+	--alas-chart-bg: rgba(255, 255, 255, 0.34);
+	/* canvas 位图底色：不透明，挡住位图后面的半透明 Css 层 */
+	--alas-chart-bitmap-bg: rgba(240, 240, 243, 0.97);
+	/* 图表容器/控件/提示框，见 ap_chart_panel.html 的 .ap-chart-* 类 */
+	--ap-chart-container-bg: rgba(255, 255, 255, 0.34);
+	--ap-chart-container-border: rgba(0, 0, 0, 0.10);
+	--ap-chart-text: #6e6e73;
+	--ap-chart-tip-bg: rgba(255, 255, 255, 0.96);
+	--ap-chart-tip-border: rgba(0, 0, 0, 0.14);
+	--ap-chart-tip-color: #1d1d1f;
+	--ap-chart-btn-bg: rgba(0, 0, 0, 0.06);
+	--ap-chart-btn-border: rgba(0, 0, 0, 0.14);
+	--ap-chart-btn-color: #424245;
+		--alas-table-head: rgba(255, 255, 255, 0.55);
+	--alas-table-surface: rgba(255, 255, 255, 0.38);
+	--alas-table-hover: rgba(0, 122, 255, 0.10);
+		--ap-series-1: #64b5f6;
+	--ap-series-2: #ffd54f;
+	--ap-series-3: #ce93d8;
+	--ap-series-4: #81c784;
+	--ap-series-5: #1565c0;
+	--ap-series-ma5: #ffeb3b;
+	--ap-series-ma10: #e91e63;
+	--ap-series-avg: #ff9800;
+		--alas-chart-up: #ef5350;
+	--alas-chart-down: #26a69a;
+		--alas-chart-label: #5F5F66;
+	--alas-chart-grid: rgba(29, 29, 31, 0.14);
+		--alas-chart-glow: none;
+	--alas-card-border: var(--alas-apple-glass-border);
+	--alas-card-radius: var(--radius-lg, 16px);
+	--alas-log-divider: var(--alas-apple-glass-border);
 	--alas-apple-card-bg-solid: #ffffff;
 	--alas-apple-glass-border: rgba(255, 255, 255, 0.4);
 	--alas-apple-text: #1d1d1f;
@@ -134,12 +191,13 @@ body {
 	letter-spacing: -0.01em;
 }
 
-body *:not(#pywebio-scope-log):not(#pywebio-scope-log *) {
+body *:not([id^="pywebio-scope-log"]):not([id^="pywebio-scope-log"] *) {
 	font-family: var(--alas-font-stack) !important;
 }
 
 #pywebio-scope-content,
-#pywebio-scope-statistics-content {
+#pywebio-scope-statistics-content,
+#pywebio-scope-log-content {
 	background-color: transparent !important;
 }
 
@@ -345,16 +403,32 @@ body *:not(#pywebio-scope-log):not(#pywebio-scope-log *) {
 #pywebio-scope-log-bar,
 #pywebio-scope-log,
 .container-log,
+#pywebio-scope-dashboard,
+#pywebio-scope-stat_panels,
 #pywebio-scope-groups>*:not(#pywebio-scope-navigator) {
-	background-color: var(--alas-apple-card-bg) !important;
-	backdrop-filter: blur(16px) saturate(180%);
-	-webkit-backdrop-filter: blur(16px) saturate(180%);
+		background-color: var(--alas-card-user-bg) !important;
+	backdrop-filter: var(--alas-card-user-blur) !important;
+	-webkit-backdrop-filter: var(--alas-card-user-blur) !important;
 	border-radius: var(--radius-lg) !important;
 	border: 1px solid var(--alas-apple-glass-border) !important;
 	box-shadow: var(--alas-apple-shadow) !important;
 	padding: var(--spacing-md) !important;
 	margin-bottom: var(--spacing-md) !important;
 	transition: box-shadow var(--ease-spring-normal), transform var(--ease-spring-fast) !important;
+	animation: ios-slide-up var(--ease-spring-normal) both;
+}
+
+/* 右栏滚动栏底图：比里层统计板块实一点以保持层次 */
+#pywebio-scope-logs {
+	/* 日志栏归「贴片」组：滑块调贴片时它与统计板块一起动 */
+	background-color: var(--alas-log-user-bg) !important;
+	backdrop-filter: var(--alas-log-user-blur) !important;
+	-webkit-backdrop-filter: var(--alas-log-user-blur) !important;
+	border-radius: var(--radius-lg) !important;
+	border: 1px solid var(--alas-apple-glass-border) !important;
+	box-shadow: var(--alas-apple-shadow) !important;
+	padding: var(--spacing-md) !important;
+	margin-bottom: var(--spacing-md) !important;
 	animation: ios-slide-up var(--ease-spring-normal) both;
 }
 
@@ -514,6 +588,23 @@ body *:not(#pywebio-scope-log):not(#pywebio-scope-log *) {
 	padding: 8px 16px !important;
 	white-space: nowrap;
 	margin: 4px 0 !important;
+}
+
+.btn-off {
+	background-color: var(--alas-apple-accent) !important;
+	backdrop-filter: blur(16px) saturate(1.8) !important;
+	-webkit-backdrop-filter: blur(16px) saturate(1.8) !important;
+	border: 1px solid var(--alas-apple-accent) !important;
+	border-radius: var(--radius-md, 12px) !important;
+	color: #ffffff !important;
+	padding: 8px 16px !important;
+	box-shadow: var(--alas-apple-shadow-xs) !important;
+}
+
+.btn-off:hover {
+	background-color: var(--alas-apple-accent-hover) !important;
+	border-color: var(--alas-apple-accent-hover) !important;
+	color: #ffffff !important;
 }
 
 /* 主要按钮（边框镂空风格） */
@@ -1027,9 +1118,13 @@ details[open]>summary::after {
 #pywebio-scope-ap_chart,
 #pywebio-scope-ship_exp_table,
 #pywebio-scope-commission_income {
-	background-color: var(--alas-apple-card-bg) !important;
-	backdrop-filter: blur(16px) saturate(180%);
-	-webkit-backdrop-filter: blur(16px) saturate(180%);
+	/* 贴片走自己的用户层令牌，与卡片组脱钩 */
+	background-color: var(--alas-tile-user-bg) !important;
+	/* 定位上下文：【刷新】绝对定位到本卡片右上角 */
+	position: relative !important;
+	--alas-card-pad: var(--alas-stat-card-pad, 12px);
+	backdrop-filter: var(--alas-tile-user-blur) !important;
+	-webkit-backdrop-filter: var(--alas-tile-user-blur) !important;
 	border-radius: var(--radius-lg) !important;
 	border: 1px solid var(--alas-apple-glass-border) !important;
 	box-shadow: var(--alas-apple-shadow) !important;
@@ -1037,6 +1132,17 @@ details[open]>summary::after {
 	margin: 0 0 var(--spacing-md) 0 !important;
 	transition: box-shadow var(--transition-normal);
 	animation: ios-slide-up var(--ease-spring-normal) both;
+}
+
+#pywebio-scope-resource_chart {
+	background-color: var(--alas-card-user-bg) !important;
+	backdrop-filter: var(--alas-card-user-blur) !important;
+	-webkit-backdrop-filter: var(--alas-card-user-blur) !important;
+	border-radius: var(--radius-lg) !important;
+	border: 1px solid var(--alas-apple-glass-border) !important;
+	box-shadow: var(--alas-apple-shadow) !important;
+	padding: var(--spacing-md) !important;
+	margin: 0 0 var(--spacing-md) 0 !important;
 }
 
 #pywebio-scope-opsi_stats:hover,
@@ -1058,9 +1164,29 @@ details[open]>summary::after {
 	animation-delay: 0.15s;
 }
 
-#pywebio-scope-commission_income {
+#pywebio-scope-resource_chart {
 	animation-delay: 0.20s;
+}
+
+#pywebio-scope-commission_income {
+	animation-delay: 0.25s;
 	color: var(--alas-apple-text) !important;
+}
+
+/* 把二级菜单统计页的图表底色钉回改动前的观感 */
+#pywebio-scope-statistics-content .ap-chart-box {
+	background: rgba(255, 255, 255, 0.42) !important;
+	/* 关键：把图表背后的底图磨平。backdrop-filter 只作用于该元素
+	   后面的内容，底图自身的透明度不受影响；曲线在 canvas 上
+	   照原色绘制，因此这一步只增加线条与背景的分离度。
+	   不放在 canvas 上：canvas 有不透明填充，模糊会被挡住。 */
+	backdrop-filter: blur(12px) saturate(115%);
+	-webkit-backdrop-filter: blur(12px) saturate(115%);
+}
+
+#pywebio-scope-statistics-content canvas[id^="ap_cv_"] {
+	/* 容器已是半透明面，这里保持透明，避免两层叠加泛白 */
+	background: transparent !important;
 }
 
 /* 表格样式 */
@@ -1076,7 +1202,7 @@ details[open]>summary::after {
 #pywebio-scope-opsi_stats th,
 #pywebio-scope-ship_exp_table th,
 #pywebio-scope-commission_income th {
-	background-color: var(--alas-apple-bg) !important;
+	background-color: var(--alas-table-head) !important;
 	color: var(--alas-apple-text-secondary) !important;
 	font-weight: 600 !important;
 	font-size: 12px !important;
@@ -1108,7 +1234,7 @@ details[open]>summary::after {
 	font-size: 14px !important;
 	border: none !important;
 	border-bottom: 1px solid var(--alas-apple-border) !important;
-	background-color: transparent !important;
+	background-color: var(--alas-table-surface) !important;
 }
 
 #pywebio-scope-opsi_stats tr:last-child td,
@@ -1126,7 +1252,7 @@ details[open]>summary::after {
 #pywebio-scope-opsi_stats tr:hover td,
 #pywebio-scope-ship_exp_table tr:hover td,
 #pywebio-scope-commission_income tr:hover td {
-	background-color: rgba(0, 122, 255, 0.06) !important;
+	background-color: var(--alas-table-hover) !important;
 }
 
 /* 统计板块文本 */
@@ -1150,7 +1276,7 @@ details[open]>summary::after {
 #pywebio-scope-commission_income .commission-income-summary,
 #pywebio-scope-commission_income .commission-income-table-wrap,
 #pywebio-scope-commission_income .commission-income-recent {
-	background-color: rgba(255, 255, 255, 0.88) !important;
+	background-color: var(--alas-table-surface) !important;
 	backdrop-filter: blur(18px) saturate(180%) !important;
 	-webkit-backdrop-filter: blur(18px) saturate(180%) !important;
 	border: 1px solid rgba(255, 255, 255, 0.62) !important;
@@ -1162,7 +1288,7 @@ details[open]>summary::after {
 }
 
 #pywebio-scope-commission_income .commission-income-metric-card {
-	background-color: rgba(255, 255, 255, 0.82) !important;
+	background-color: var(--alas-table-surface) !important;
 	border: 1px solid var(--alas-apple-border) !important;
 	border-radius: var(--radius-sm) !important;
 	box-shadow: var(--alas-apple-shadow-xs) !important;
@@ -1171,18 +1297,18 @@ details[open]>summary::after {
 
 #pywebio-scope-commission_income .commission-income-table {
 	overflow: hidden !important;
-	background-color: rgba(255, 255, 255, 0.78) !important;
+	background-color: var(--alas-table-surface) !important;
 	border: 1px solid var(--alas-apple-border) !important;
 	border-radius: var(--radius-sm) !important;
 }
 
 #pywebio-scope-commission_income .commission-income-table th {
-	background-color: rgba(245, 245, 247, 0.96) !important;
+	background-color: var(--alas-table-head) !important;
 	color: var(--alas-apple-text-secondary) !important;
 }
 
 #pywebio-scope-commission_income .commission-income-table td {
-	background-color: rgba(255, 255, 255, 0.72) !important;
+	background-color: var(--alas-table-surface) !important;
 	color: var(--alas-apple-text) !important;
 }
 
@@ -1191,7 +1317,7 @@ details[open]>summary::after {
 }
 
 #pywebio-scope-commission_income .commission-income-recent-row {
-	background-color: rgba(255, 255, 255, 0.72) !important;
+	background-color: var(--alas-table-surface) !important;
 	border: 1px solid var(--alas-apple-border) !important;
 	border-radius: var(--radius-sm) !important;
 	color: var(--alas-apple-text) !important;
@@ -1212,8 +1338,8 @@ details[open]>summary::after {
 #pywebio-scope-manage_import_panel,
 *[style*="--manage-config-card--"] {
 	background-color: transparent !important;
-	backdrop-filter: blur(16px) saturate(180%);
-	-webkit-backdrop-filter: blur(16px) saturate(180%);
+	backdrop-filter: var(--alas-card-blur) !important;
+	-webkit-backdrop-filter: var(--alas-card-blur) !important;
 	border-radius: var(--radius-lg) !important;
 	border: 1px solid var(--alas-apple-glass-border) !important;
 	box-shadow: var(--alas-apple-shadow) !important;
@@ -1602,4 +1728,144 @@ button[style*="--menu-Overview--"] {
 		animation-iteration-count: 1 !important;
 		transition-duration: 0.01ms !important;
 	}
+}
+
+#pywebio-scope-log-container #pywebio-scope-log-bar {
+	background-color: transparent !important;
+	backdrop-filter: none !important;
+	-webkit-backdrop-filter: none !important;
+	border: 0 !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
+	padding: 0 !important;
+	margin: 0 !important;
+	animation: none !important;
+}
+
+#pywebio-scope-log-container #pywebio-scope-log-bar:hover {
+	box-shadow: none !important;
+	transform: none !important;
+}
+
+#pywebio-scope-overview #pywebio-scope-log-container #pywebio-scope-log {
+	background-color: transparent !important;
+	backdrop-filter: none !important;
+	-webkit-backdrop-filter: none !important;
+	border: 0 !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
+	margin: 0 !important;
+	animation: none !important;
+}
+
+#pywebio-scope-log-container #pywebio-scope-log-header {
+	padding-bottom: .5rem !important;
+	border-bottom: 1px solid var(--alas-log-divider, var(--alas-card-border)) !important;
+}
+
+#pywebio-scope-statistics-toolbar .btn-sm,
+#pywebio-scope-ap-chart-refresh .btn-sm {
+	min-height: 0 !important;
+	padding: 3px 10px !important;
+	font-size: 12px !important;
+	line-height: 1.35 !important;
+	border-radius: 8px !important;
+}
+
+#pywebio-scope-logs {
+	position: relative;
+}
+
+#pywebio-scope-logs > #pywebio-scope-log-container > #pywebio-scope-log-header {
+	position: relative;
+	z-index: 3;
+}
+
+#pywebio-scope-log-bg-page {
+	position: absolute;
+	top: calc(var(--spacing-md, 12px) + 58px);
+	right: var(--spacing-md, 12px);
+	bottom: var(--spacing-md, 12px);
+	left: var(--spacing-md, 12px);
+	overflow-y: auto;
+	z-index: 2;
+}
+
+#pywebio-scope-log-bg-page textarea {
+	padding: 2px 8px !important;
+	font-size: 13px !important;
+	line-height: 18px !important;
+	min-height: 0 !important;
+	resize: none !important;
+	overflow: hidden !important;
+}
+
+/* 数值与曲线同色：数值用粗体实色，曲线细所以看着淡，无需配不同颜色 */
+.ap-up { color: var(--alas-chart-up) !important; }
+.ap-down { color: var(--alas-chart-down) !important; }
+
+/* 不加 filter：会改变渲染色值，与「同色」的意图冲突 */
+/* 字重对齐「行动力」行的 <b>（700） */
+.ap-value {
+	font-weight: 700;
+}
+
+.ap-glow {
+	text-shadow: 0 0 2px rgba(0,0,0,.30), 0 0 7px currentColor;
+}
+
+.ap-series-1 { color: var(--ap-series-1) !important; }
+.ap-series-2 { color: var(--ap-series-2) !important; }
+.ap-series-3 { color: var(--ap-series-3) !important; }
+.ap-series-4 { color: var(--ap-series-4) !important; }
+.ap-series-5 { color: var(--ap-series-5) !important; }
+
+/* 按内容撑开 + 数值列可伸缩，禁止折行（固定列宽会把大数值折行） */
+/* 标注网格 */
+.ap-chart-stats,
+.ap-stat-row {
+	display: grid;
+	grid-template-columns: var(--alas-stat-grid-cols);
+	gap: 8px;
+	align-items: center;
+	white-space: nowrap;
+}
+
+/* display:contents：容器持有列定义，各行共用列宽 */
+.ap-chart-stats > .ap-stat-row,
+.ap-stat-row > .ap-stat-row {
+	display: contents;
+}
+
+.ap-stat-row {
+	color: var(--alas-chart-label);
+}
+
+.ap-stat-row span {
+	/* 必须 inline：flex 会把子 <b> 块化，四行币种会各占一行 */
+	display: inline;
+}
+
+#pywebio-scope-groups > [id^="pywebio-scope-group_"] > p,
+#pywebio-scope-groups > p,
+#pywebio-scope-running > p,
+#pywebio-scope-pending > p,
+#pywebio-scope-waiting > p {
+    text-shadow: var(--alas-card-title-shadow, none);
+}
+
+/* 右栏滚动栏（统计板块 + 日志栏）归「贴片」组，与卡片组脱钩 */
+#pywebio-scope-stat_panels {
+	background-color: var(--alas-tile-user-bg-outer) !important;
+	backdrop-filter: var(--alas-tile-user-blur) !important;
+	-webkit-backdrop-filter: var(--alas-tile-user-blur) !important;
+	border-radius: var(--radius-lg) !important;
+}
+
+/* 日志栏归「贴片」，但走自己那对令牌（底色/磨砂半径与统计板块不同） */
+#pywebio-scope-logs {
+	background-color: var(--alas-log-user-bg) !important;
+	backdrop-filter: var(--alas-log-user-blur) !important;
+	-webkit-backdrop-filter: var(--alas-log-user-blur) !important;
+	border-radius: var(--radius-lg) !important;
 }

@@ -518,6 +518,28 @@ def load_webui_styles(theme=None, is_mobile=None, preloaded_styles=()):
     styles.extend(theme_styles.get(theme, ("light-alas",)))
 
     add_css_files(filepath_css(name) for name in styles)
+    add_background_css()
+
+
+def add_background_css() -> None:
+    """注入自定义背景图覆盖样式（在主题 CSS 之后）。
+
+    走 add_css_files 而不是 put_html：后者会把 ``<style>`` 放进内容容器，
+    进不了 ``<head>``，改 ``body`` 的规则根本不生效（实测）。
+
+    必须排在主题 CSS 之后，才能盖住主题里 body 的 ``background-image``。
+    抽签结果按会话缓存，所以重复调用只会重复写同一个文件、不会换图。
+    """
+    from module.webui.background_image import background_css_file
+
+    path = background_css_file()
+    if path is None:
+        return
+    # 主题切换时连背景一起重放，所以先清掉注入记录，否则会被当成已注入跳过
+    injected_styles = getattr(local, "webui_injected_styles", None)
+    if injected_styles is not None:
+        injected_styles.discard(str(path))
+    add_css_files((str(path),))
 
 
 def _read(path):

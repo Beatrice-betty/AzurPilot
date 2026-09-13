@@ -34,7 +34,7 @@ summary {
     line-height: var(--alas-menu-line-height);
 }
 
-body *:not(#pywebio-scope-log):not(#pywebio-scope-log *):not(.CodeMirror-line):not(pre.rich-traceback-code) {
+body *:not([id^="pywebio-scope-log"]):not([id^="pywebio-scope-log"] *):not(.CodeMirror-line):not(pre.rich-traceback-code) {
     font-family: 'MiSans', "Microsoft YaHei", sans-serif !important;
 }
 
@@ -563,7 +563,8 @@ pre.rich-traceback-code {
 }
 
 #pywebio-scope-content,
-#pywebio-scope-statistics-content {
+#pywebio-scope-statistics-content,
+#pywebio-scope-log-content {
     overflow: auto;
     padding: .625rem;
     flex-grow: 1;
@@ -646,6 +647,10 @@ pre.rich-traceback-code {
     margin-top: 0;
     overflow-y: auto;
     display: flex;
+    /* 必须自带高度：二级页会把 content 设为 display:none，
+       只靠子内容撑高时 flex 容器会塌成 0，aside/menu 随之被压扁消失。 */
+    height: 100%;
+    min-height: 0;
 }
 
 #pywebio-scope-_groups {
@@ -765,7 +770,8 @@ pre.rich-traceback-code {
     padding: 0 0 0;
 }
 
-#pywebio-scope-log {
+#pywebio-scope-log,
+#pywebio-scope-log-page {
     line-height: 1.2;
     font-size: 0.85rem;
     font-family: 'JetBrains Mono NL', Menlo, consolas, DejaVu Sans Mono, Courier New, monospace !important;
@@ -795,14 +801,142 @@ pre.rich-traceback-code {
     height: 100%;
 }
 
+/* 日志二级页：按钮条 + 铺满的日志体 */
+#pywebio-scope-log-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+#pywebio-scope-log-page-bar {
+    display: flex;
+    justify-content: flex-end;
+    gap: .5rem;
+    margin: .3125rem;
+}
+
+#pywebio-scope-log-page {
+    min-height: 0;
+}
+
 #pywebio-scope-logs {
     display: grid;
     grid-auto-flow: column;
-
     height: 100%;
     overflow-y: auto;
     grid-template-rows: auto 1fr;
+}
 
+#pywebio-scope-overview > #pywebio-scope-schedulers {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+#pywebio-scope-overview > #pywebio-scope-panel_column {
+    grid-column: 2;
+    grid-row: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#pywebio-scope-overview > #pywebio-scope-panel_column > #pywebio-scope-dashboard {
+    grid-column: 1;
+    grid-row: 1;
+    box-sizing: border-box;
+    width: auto;
+    min-height: min-content;
+    margin: .3125rem .3125rem .75rem;
+    padding: .5rem .625rem;
+    /* 色值一律走主题令牌：写死具体颜色会让面板只对某一种主题正确。
+       回退值取浅色，保证未被主题覆盖时也是可读的。 */
+    border: 1px solid var(--alas-card-border, rgba(0, 0, 0, .08));
+    border-radius: var(--alas-card-radius, 16px);
+    background: var(--alas-card-bg, rgba(255, 255, 255, .82));
+    /* 不能写 overflow:hidden —— 会把最后一行仪表裁掉 */
+    overflow: visible;
+    /* 紧凑化：字号、图标、间距整体缩小 */
+    font-size: .8rem;
+}
+
+#pywebio-scope-overview > #pywebio-scope-panel_column > #pywebio-scope-dashboard > * {
+    grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+}
+
+#pywebio-scope-overview > #pywebio-scope-panel_column > #pywebio-scope-stat_panels,
+#pywebio-scope-overview > #pywebio-scope-panel_column > #pywebio-scope-logs {
+    grid-column: 1;
+    grid-row: 2;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* 日志面板：标题条 + 滚动区同处一个圆角面板 */
+#pywebio-scope-overview > #pywebio-scope-panel_column > #pywebio-scope-logs {
+    display: block;
+    margin: .3125rem;
+    padding: .625rem;
+    border: 1px solid var(--alas-card-border, rgba(0, 0, 0, .08));
+    border-radius: var(--alas-card-radius, 16px);
+    background: var(--alas-card-bg, rgba(255, 255, 255, .82));
+    overflow: hidden;
+}
+
+#pywebio-scope-log-container {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
+}
+
+#pywebio-scope-log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    width: 100%;
+    padding-bottom: .5rem;
+    border-bottom: 1px solid var(--alas-log-divider, var(--alas-card-border, rgba(0, 0, 0, .08)));
+}
+
+#pywebio-scope-log-container #pywebio-scope-log-bar {
+    display: flex;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+#pywebio-scope-log-header > #pywebio-scope-log-bar-btns {
+    display: grid;
+    grid-auto-flow: column;
+    gap: .375rem;
+}
+
+#pywebio-scope-overview > #pywebio-scope-panel_column > #pywebio-scope-dashboard
+    [style*="--dashboard-value--"] {
+    font-size: .95rem;
+}
+
+#pywebio-scope-overview > #pywebio-scope-panel_column > #pywebio-scope-dashboard
+    [style*="--dashboard-total--"] {
+    font-size: .95rem;
+}
+
+#pywebio-scope-overview > #pywebio-scope-panel_column > #pywebio-scope-dashboard
+    [style*="--dashboard-help--"] {
+    font-size: .7rem;
+}
+
+#pywebio-scope-overview > #pywebio-scope-panel_column > #pywebio-scope-dashboard
+    [style*="--dashboard-limit--"] {
+    font-size: .78rem;
 }
 
 [id^="pywebio-scope-overview-task_"] {
@@ -1345,4 +1479,94 @@ body.alas-login-page::after,
     .alas-login-page #input-container .input-container .btn-group {
         grid-template-columns: 1fr;
     }
+}
+
+body[theme="light"] #pywebio-scope-overview > #pywebio-scope-panel_column > #pywebio-scope-dashboard,
+body[theme="light_advanced_material"] #pywebio-scope-overview > #pywebio-scope-panel_column > #pywebio-scope-dashboard {
+    background: rgba(255, 255, 255, .82);
+    border-color: rgba(80, 100, 120, .2);
+}
+
+/* 图表容器与控件（webapp/ap_chart_panel.html、webapp/resource_chart.html）。
+   这两个模板由 str.format() 渲染，CSS 花括号会被当成占位符，所以样式必须放在
+   这里而不是模板的 <style> 块里。默认用 entry 令牌兜底，高级材质主题再用
+   --ap-chart-* 令牌覆盖成磨砂玻璃质感。 */
+.ap-chart-box {
+    position: relative;
+    background: var(--ap-chart-container-bg, var(--alas-entry-surface));
+    border: 1px solid var(--ap-chart-container-border, var(--alas-entry-border));
+    border-radius: 16px;
+    padding: 6px;
+}
+
+/* 总览右栏里的图表不再自画一个纯色浮窗：卡片面与边框交给子板块的
+   磨砂玻璃，图表直接铺在玻璃上。二级菜单统计页不受影响 —— 那边
+   容器直接铺在页面上，需要自己的底色，否则网格线看不清。 */
+#pywebio-scope-stat_panels .ap-chart-box {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+}
+
+.ap-chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: var(--ap-chart-text, var(--alas-entry-muted));
+}
+
+.ap-chart-stats {
+    font-size: 12px;
+    color: var(--ap-chart-text, var(--alas-entry-muted));
+}
+
+.ap-chart-tip {
+    display: none;
+    position: absolute;
+    pointer-events: none;
+    background: var(--ap-chart-tip-bg, var(--alas-entry-surface));
+    border: 1px solid var(--ap-chart-tip-border, var(--alas-entry-border));
+    border-radius: 12px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--ap-chart-tip-color, var(--alas-entry-text));
+    z-index: 10;
+    white-space: nowrap;
+}
+
+.ap-chart-ctrl {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    display: flex;
+    gap: 4px;
+}
+
+.ap-chart-ctrl button {
+    background: var(--ap-chart-btn-bg, var(--alas-entry-surface-muted));
+    border: 1px solid var(--ap-chart-btn-border, var(--alas-entry-border));
+    border-radius: 10px;
+    padding: 2px 8px;
+    font-size: 11px;
+    color: var(--ap-chart-btn-color, var(--alas-entry-muted));
+    cursor: pointer;
+}
+
+
+/* 统计栏各子板块的卡片。高级材质主题用它自己的磨砂规则与 --ap-chart-* 令牌
+   覆盖这里；普通材质与浅色主题没有磨砂玻璃，用这里的中性值兜底，这样内容
+   不会紧贴着外层卡片边框。 */
+#pywebio-scope-opsi_stats,
+#pywebio-scope-ap_chart,
+#pywebio-scope-resource_chart,
+#pywebio-scope-ship_exp_table,
+#pywebio-scope-commission_income {
+    background: var(--alas-panel-bg, var(--alas-card-bg, #303338));
+    border: 1px solid var(--alas-panel-border, var(--alas-card-border, #36393f));
+    border-radius: var(--alas-card-radius, 16px);
+    padding: 12px 14px;
+    margin: 0 0 12px 0;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
 }
