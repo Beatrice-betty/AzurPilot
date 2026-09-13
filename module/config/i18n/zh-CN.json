@@ -6638,7 +6638,7 @@
       "WebuiSSLCert": "SSL 证书文件",
       "WebuiSSLCertHelp": "WebUI HTTPS 使用的 SSL 证书路径，需和密钥同时设置。",
       "DisableBranchWatermark": "关闭未经验证版本的水印",
-      "DisableBranchWatermarkHelp": "【默认关闭：不勾选时正常显示水印】水印用于提醒你当前运行的是未经验证的构建，并展示分支名、版本哈希与提交信息。\n⚠ 不了解 AzurPilot、或不清楚 master / dev 等分支作用的人，禁止开启本项。\n⚠ 需要截图反馈问题、或请他人协助定位问题的人，禁止开启本项：水印中的分支名、版本哈希与提交信息是判断你实际运行了哪一份代码的唯一线索，隐藏后问题将无法定位。\n水印只在 dev / app 等未经验证的分支上出现，master / main 属已验证分支、本来就不显示水印，因此本开关只对未经验证的分支有意义；修改后需重启 AzurPilot 生效。",
+      "DisableBranchWatermarkHelp": "【默认关闭：不勾选时正常显示水印】水印用于提醒你当前运行的是未经验证的构建，并展示分支名、版本哈希与提交信息。\n⚠ 不了解 AzurPilot、或不清楚 master / dev 等分支作用的人，禁止开启本项。\n⚠ 需要截图反馈问题、或请他人协助定位问题的人，禁止开启本项：水印中的分支名、版本哈希与提交信息是判断你实际运行了哪一份代码的唯一线索，隐藏后问题将无法定位。\n修改后需重启 AzurPilot 生效。",
       "WatermarkHiddenNow": "水印已隐藏；重新开启水印需刷新页面或重启 AzurPilot。"
     },
     "StartupRun": {
