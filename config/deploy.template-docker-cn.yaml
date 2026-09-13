@@ -236,8 +236,8 @@ Deploy:
     # Disable the watermark for unverified builds
     # [默认关闭] false：显示水印，提醒当前运行的是未经验证的构建
     # [Default] false: the watermark is shown
-    # [仅了解 AzurPilot 与各分支用途的用户] true：隐藏所有未验证版本水印（含 master）
-    # [Only for users who know AzurPilot and its branches] true: hide every unverified-build watermark
+    # [仅了解 AzurPilot 与各分支用途的用户] true：隐藏未经验证分支（dev/app 等）的水印；master/main 属已验证分支，本就不显示水印
+    # [Only for users who know AzurPilot and its branches] true: hide the watermark on unverified branches (dev/app); master/main are verified and never show it
     # [警告] 不了解 AzurPilot / 各分支作用的人，以及需要用截图反馈问题的人，禁止开启
     # [WARNING] Never enable this if you are unfamiliar with AzurPilot/branches or need to report issues with screenshots
     DisableBranchWatermark: false
