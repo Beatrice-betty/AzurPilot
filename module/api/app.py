@@ -64,8 +64,8 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
     routes = [Route('/healthz', health), WebSocketRoute('/api/v1/ws', gateway.endpoint)]
     if (dist / 'assets').is_dir():
         routes.append(Mount('/assets', StaticFiles(directory=dist / 'assets')))
-    if (dist / 'favicon.svg').is_file():
-        routes.append(Route('/favicon.svg', lambda request: FileResponse(dist / 'favicon.svg')))
+    if (dist / 'azurpilot.svg').is_file():
+        routes.append(Route('/azurpilot.svg', lambda request: FileResponse(dist / 'azurpilot.svg')))
     if mount_mcp:
         from mcp_server_sse import app as mcp_app, configure_auth
         configure_auth(password, public_bind=bool(password))
