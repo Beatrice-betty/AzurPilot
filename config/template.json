@@ -241,6 +241,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",
@@ -324,6 +325,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",
@@ -407,6 +409,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",
@@ -509,6 +512,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",
@@ -601,6 +605,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",
@@ -693,6 +698,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",
@@ -777,6 +783,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",
@@ -860,6 +867,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",
@@ -943,6 +951,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",
@@ -1030,6 +1039,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",
@@ -1085,6 +1095,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",
@@ -1146,6 +1157,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",
@@ -1201,6 +1213,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",
@@ -1259,6 +1272,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",
@@ -1349,6 +1363,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",
@@ -1446,6 +1461,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",
@@ -1533,6 +1549,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",
@@ -1620,6 +1637,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",
@@ -1707,6 +1725,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",
@@ -1790,6 +1809,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",
@@ -1876,6 +1896,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",
@@ -1931,6 +1952,7 @@
     },
     "StopCondition": {
       "OilLimit": 1000,
+      "OilLimitHardFloor": 500,
       "CoinLimit": 0,
       "RunCount": 0,
       "MapAchievement": "non_stop",

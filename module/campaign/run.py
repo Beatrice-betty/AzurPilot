@@ -136,7 +136,7 @@ class CampaignRun(CampaignEvent, ShopStatus):
             self.status_get_gems()
             # 金币限制
             self.get_coin()
-            if self.get_oil() < max(500, self.config.StopCondition_OilLimit):
+            if self.get_oil() < max(self.config.StopCondition_OilLimitHardFloor, self.config.StopCondition_OilLimit):
                 logger.hr('触发停止条件: 石油上限')
                 self.config.task_delay(minute=(120, 240))
                 return True

@@ -1417,6 +1417,10 @@
       "name": "Delay when oil falls below X",
       "help": "Delay the task when oil is too low, continue sortie when oil is sufficient"
     },
+    "OilLimitHardFloor": {
+      "name": "Oil stop floor",
+      "help": "Actual stop threshold is max(floor, oil limit). 500 is a legacy safety net; lower it if you run low-cost maps and want to drain oil further. Set 0 to make oil limit take effect directly"
+    },
     "CoinLimit": {
       "name": "Delay when coins reach X",
       "help": "Delay the current task when coins are found to be at or above this number. The task will resume after coins drop below the limit.\n0 means no coin limit"

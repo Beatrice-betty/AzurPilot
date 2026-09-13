@@ -431,6 +431,9 @@ OperationHandover:
     display: hide
 StopCondition:
   OilLimit: 1000
+  # 石油停止下限：实际停止阈值为 max(下限, OilLimit)，历史遗留的 500 安全网。
+  # 低耗监工希望把油打到更低时可以调小（#444）
+  OilLimitHardFloor: 500
   CoinLimit: 0
   RunCount: 0
   MapAchievement:
