@@ -10,7 +10,7 @@ import { StatisticsTable } from '../components/StatisticsTable'
 import { downloadCsv } from '../components/statisticsData'
 
 const StatisticsChart = lazy(() => import('../components/StatisticsChart').then(module => ({default: module.StatisticsChart})))
-const categories = {resources: '资源趋势', action: '行动力与凭证', opsi: '大世界运行', commission: '委托收益', ships: '舰船经验', loot: '短猫掉落'}
+const categories = {resources: '资源趋势', action: '大世界趋势', opsi: '大世界总结', commission: '委托收益', ships: '舰船经验', loot: '短猫掉落'}
 type Category = Parameters['statistics.report']['category']
 
 export function Statistics() {

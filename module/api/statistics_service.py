@@ -70,7 +70,11 @@ def report(configs, instance, category, month, days, period):
         if len(rows) > 50000:
             result['notes'].append('记录超过 50,000 条，当前展示最近 50,000 条，请缩短时间范围查看细节。')
             rows = rows[-50000:]
-        result['series'] = [series(rows, key, RESOURCE_LABELS[name]) for name, key in RESOURCE_COLUMNS.items()]
+        resource_items = [
+            (name, key) for name, key in RESOURCE_COLUMNS.items()
+            if name not in ('ActionPoint', 'YellowCoin', 'PurpleCoin')
+        ]
+        result['series'] = [series(rows, key, RESOURCE_LABELS[name]) for name, key in resource_items]
         result['notes'].append('区间变化为首末采集值之差，不等同于总收入；未采集的数据保持缺失。')
         return result
 
@@ -106,10 +110,14 @@ def report(configs, instance, category, month, days, period):
         from module.statistics.opsi_month import get_ap_timeline, get_coins_timeline
         ap = get_ap_timeline(year, month_number, instance)
         coins = get_coins_timeline(year, month_number, instance)
-        result['series'] = [series(ap, 'ap', '行动力'), series(ap, 'asset', '行动力资产'),
+        ap_normalized = [
+            {**row, 'ap': row['ap_total'] if row.get('ap_total') is not None else row.get('ap')}
+            for row in ap
+        ]
+        result['series'] = [series(ap_normalized, 'ap', '行动力'), series(ap, 'asset', '行动力资产'),
                             series(ap, 'distance', '海里数'), series(coins, 'yellow_coins', '作战补给凭证'),
                             series(coins, 'purple_coins', '特别兑换凭证')]
-        result['notes'].append('保留每种资源的独立采样时间，不用相邻资源的时间戳替代。资产与海里数仅在原记录包含时展示。')
+        result['notes'].append('行动力为算上体力箱的总行动力。保留每种资源的独立采样时间，不用相邻资源的时间戳替代。资产与海里数仅在原记录包含时展示。')
     elif category == 'commission':
         from module.statistics.commission_income_stats import get_commission_income_interval_summary
         start = selected.replace(day=1, hour=0, minute=0, second=0, microsecond=0)

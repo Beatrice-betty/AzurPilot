@@ -42,7 +42,7 @@ test('统计分类、K 线、时间过滤、表格导出与移动端布局', asy
   const download = page.waitForEvent('download')
   await page.getByRole('button', {name: '导出本类数据'}).click()
   expect((await download).suggestedFilename()).toMatch(/\.csv$/)
-  for (const label of ['行动力与凭证', '大世界运行', '委托收益', '舰船经验', '短猫掉落']) {
+  for (const label of ['大世界趋势', '大世界总结', '委托收益', '舰船经验', '短猫掉落']) {
     await page.getByRole('navigation', {name: '统计分类'}).getByRole('button', {name: label, exact: true}).click()
     await expect(page.getByText('前端模拟数据，仅用于交互验证。')).toBeVisible()
   }
@@ -50,7 +50,7 @@ test('统计分类、K 线、时间过滤、表格导出与移动端布局', asy
   await page.getByLabel('图表起始时间').fill('2099-01-01T00:00')
   await expect(page.getByText('这段时间没有有效记录')).toBeVisible()
   await page.getByRole('button', {name: '全部时间', exact: true}).click()
-  await page.getByLabel('图表类型').selectOption('area')
+  await page.getByLabel('图表类型').selectOption('candlestick')
   await page.screenshot({path: 'test-results/statistics-resources-new.png', fullPage: true})
   await page.setViewportSize({width: 390, height: 844})
   await page.screenshot({path: 'test-results/statistics-mobile-new.png', fullPage: true})

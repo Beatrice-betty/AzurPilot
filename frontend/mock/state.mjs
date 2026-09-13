@@ -147,8 +147,12 @@ export function createMockState({empty = false} = {}) {
       }
       case 'statistics.refreshLoot': return {refreshed: true}
       case 'statistics.report': {
-        const labels = {Oil: '石油', Coin: '物资', Gem: '钻石', Cube: '心智魔方', ActionPoint: '行动力', YellowCoin: '作战补给凭证', PurpleCoin: '特别兑换凭证'}
-        const series = Object.entries(labels).map(([key, label]) => ({key, label, points: dispatch('statistics.resources', {instance: name, resource: key, days: params.days}).points}))
+        const resourceLabels = {Oil: '石油', Coin: '物资', Gem: '钻石', Cube: '心智魔方'}
+        const actionLabels = {ActionPoint: '行动力', YellowCoin: '作战补给凭证', PurpleCoin: '特别兑换凭证'}
+        const activeLabels = params.category === 'action' ? actionLabels : resourceLabels
+        const series = Object.entries(activeLabels).map(([key, label]) => ({
+          key, label, points: dispatch('statistics.resources', {instance: name, resource: key, days: params.days}).points
+        }))
         const result = {instance: name, category: params.category, month: params.month, metrics: [], series: [], tables: [], notes: ['前端模拟数据，仅用于交互验证。']}
         if (['resources', 'action', 'ships', 'commission'].includes(params.category)) result.series = series
         if (!['resources', 'action'].includes(params.category)) {
