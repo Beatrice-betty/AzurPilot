@@ -77,7 +77,7 @@ export function App() {
   }, [instance, connection, notify, previewEnabled])
   if (connection === 'auth') return <Login/>
   return <div className={`app-shell ${mobileOpen ? 'mobile-open' : ''}`}>
-    <aside className="sidebar"><div className="sidebar-brand"><span>AzurPilot<span className="brand-dot">.</span></span><button className="mobile-close icon-button" aria-label="关闭导航" onClick={() => setMobileOpen(false)}><X size={18}/></button></div>
+    <aside className="sidebar"><div className="sidebar-brand"><div className="brand-title"><img src="/azurpilot.svg" alt="AzurPilot" className="brand-logo"/><span>AzurPilot</span></div><button className="mobile-close icon-button" aria-label="关闭导航" onClick={() => setMobileOpen(false)}><X size={18}/></button></div>
       <InstanceSwitcher onCreate={() => setCreating(true)}/>
       <div className="sidebar-label">工作空间</div>
       <nav className="primary-nav"><NavLink to={`${base}/overview`}><LayoutDashboard size={17}/>运行总览<span className="nav-pill">总览</span></NavLink><NavLink to={`${base}/statistics`}><ChartNoAxesCombined size={17}/>资源统计</NavLink><NavLink to={`${base}/settings`}><Settings2 size={17}/>系统设置</NavLink></nav>

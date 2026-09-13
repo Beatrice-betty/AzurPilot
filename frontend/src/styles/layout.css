@@ -1,9 +1,9 @@
 .app-shell {display: grid; grid-template-columns: var(--sidebar-width) minmax(0, 1fr); min-height: var(--viewport-height)}
 .brand-mark {color: #77dec7; display: grid; place-items: center; width: 39px; height: 39px; margin-bottom: 39px}
 .sidebar {position: sticky; top: 0; height: var(--viewport-height); background: var(--sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 0 15px; z-index: 20}
-.sidebar-brand {height: 72px; flex-shrink: 0; padding: 24px 9px 0; display: flex; flex-direction: column; gap: 4px}
-.sidebar-brand > span {font-size: 23px; font-weight: 750; letter-spacing: -.8px}
-.brand-dot {color: var(--accent)}
+.sidebar-brand {height: 72px; flex-shrink: 0; padding: 24px 9px 0; display: flex; align-items: center; justify-content: space-between}
+.brand-title {display: inline-flex; align-items: center; gap: 9px; font-size: 22px; font-weight: 750; letter-spacing: -.8px}
+.brand-logo {width: 28px; height: 28px; border-radius: 6px; flex-shrink: 0}
 .instance-picker {position: relative; margin: 2px 0 26px; flex-shrink: 0}
 .instance-switcher {display: flex; width: 100%; gap: 10px; align-items: center; text-align: left; padding: 12px 9px; background: var(--surface-muted); border: 1px solid var(--border); border-radius: 9px}
 .instance-switcher:hover, .instance-switcher[aria-expanded='true'] {border-color: var(--accent)}
