@@ -70,6 +70,10 @@ def branch_is_unstable(branch) -> bool:
     return branch not in ("master", "main")
 
 
+# 水印层与其样式表的 DOM id，注入与移除共用（关闭水印后需要移除已注入的节点）。
+BRANCH_WATERMARK_BOX_ID = "alas-branch-watermark"
+BRANCH_WATERMARK_CSS_ID = "alas-branch-watermark-style"
+
 # 未验证分支水印的主提醒文案，中英各一行、同时展示。元信息统一使用 ASCII 标签。
 BRANCH_WATERMARK_NOTICE = "您正在使用未经验证的版本，可能存在未知问题"
 BRANCH_WATERMARK_NOTICE_EN = (
@@ -98,6 +102,26 @@ BRANCH_WATERMARK_MAX_MESSAGE_LEN = 40
 BRANCH_WATERMARK_KIND_TITLE = "title"
 BRANCH_WATERMARK_KIND_TITLE_EN = "title-en"
 BRANCH_WATERMARK_KIND_META = "meta"
+
+
+def branch_watermark_disabled(config) -> bool:
+    """部署配置是否要求关闭未验证版本水印。
+
+    默认（配置缺失、属性不存在或读取异常）返回 False，即保持显示水印；
+    只有用户在 WebUI 设置里显式打开「关闭未经验证版本的水印」时才返回 True。
+    水印里的分支名、版本哈希与提交信息是判断实际运行代码的唯一线索，
+    因此关闭与否只由用户显式配置决定，不做任何隐式推断。
+
+    Args:
+        config: DeployConfig 实例，或任何可能带 DisableBranchWatermark 的对象。
+
+    Returns:
+        bool: True 表示应当隐藏水印。
+    """
+    try:
+        return bool(getattr(config, "DisableBranchWatermark", False))
+    except Exception:
+        return False
 
 
 def _clip_watermark_text(text, limit: int) -> str:
@@ -622,6 +646,23 @@ class AppShellMixin(WebUIMixinBase):
         );
         """)
 
+    @staticmethod
+    def _remove_branch_watermark() -> None:
+        """移除已注入的水印层与样式表（关闭水印开关后调用）。
+
+        Pages: 会话外壳（登录后任意主界面）
+        """
+        run_js(f"""
+        (function () {{
+            ["{BRANCH_WATERMARK_BOX_ID}", "{BRANCH_WATERMARK_CSS_ID}"].forEach(function (id) {{
+                var node = document.getElementById(id);
+                if (node && node.parentNode) {{
+                    node.parentNode.removeChild(node);
+                }}
+            }});
+        }})();
+        """)
+
     def _inject_unverified_branch_watermark(self) -> None:
         """更新分支不是 master/main 时，注入全屏淡灰水印提醒。
 
@@ -637,8 +678,20 @@ class AppShellMixin(WebUIMixinBase):
         try:
             State.deploy_config.read()
             branch = getattr(State.deploy_config, "Branch", "master") or "master"
+            disabled = branch_watermark_disabled(State.deploy_config)
         except Exception:
             branch = "master"
+            disabled = False
+
+        if disabled:
+            # 用户显式关闭：移除本会话可能已注入的水印层，并留下明确警告，
+            # 避免后续用无版本信息的截图反馈问题时无法定位。
+            self._remove_branch_watermark()
+            logger.warning(
+                "已按 WebUI 设置关闭未验证版本水印（WebUI.DisableBranchWatermark=true）；"
+                "该设置仅限了解各分支用途的用户使用，请勿据此截图反馈问题"
+            )
+            return
 
         if not branch_is_unstable(branch):
             return
@@ -653,8 +706,8 @@ class AppShellMixin(WebUIMixinBase):
 
         run_js(f"""
         (function () {{
-            var BOX_ID = "alas-branch-watermark";
-            var CSS_ID = "alas-branch-watermark-style";
+            var BOX_ID = {json.dumps(BRANCH_WATERMARK_BOX_ID)};
+            var CSS_ID = {json.dumps(BRANCH_WATERMARK_CSS_ID)};
 
             var oldBox = document.getElementById(BOX_ID);
             if (oldBox && oldBox.parentNode) {{

@@ -253,6 +253,8 @@
     color: var(--alas-entry-muted);
     font-size: .8125rem;
     line-height: 1.45;
+    /* 允许帮助文本用换行分段（如关闭水印的长警告） */
+    white-space: pre-line;
 }
 
 .deploy-setting-input,

@@ -149,9 +149,22 @@ class DeveloperSettingsMixin(WebUIMixinBase):
                 failed: {json.dumps(t("Gui.DeploySetting.Failed"))},
                 yes: {json.dumps(t("Gui.DeploySetting.Enabled"))},
                 no: {json.dumps(t("Gui.DeploySetting.Disabled"))},
-                demo: {json.dumps(t("Gui.DeploySetting.DemoDisabled"))}
+                demo: {json.dumps(t("Gui.DeploySetting.DemoDisabled"))},
+                watermarkHidden: {json.dumps(t("Gui.DeploySetting.WatermarkHiddenNow"))},
+                disableWatermarkKey: "DisableBranchWatermark"
               }};
               let schema = null;
+
+              // 关闭水印开关保存后立即生效：直接移除水印层与样式表；
+              // 重新开启水印需要刷新页面（水印在会话外壳挂载时注入）。
+              function removeBranchWatermark() {{
+                ["alas-branch-watermark", "alas-branch-watermark-style"].forEach(function (id) {{
+                  const node = document.getElementById(id);
+                  if (node && node.parentNode) {{
+                    node.parentNode.removeChild(node);
+                  }}
+                }});
+              }}
 
               function escapeHtml(value) {{
                 return String(value == null ? '' : value)
@@ -234,18 +247,25 @@ class DeveloperSettingsMixin(WebUIMixinBase):
                 saveBtn.disabled = true;
                 saveBtn.textContent = text.saving;
                 statusEl.textContent = text.saving;
+                const values = collectValues();
+                const watermarkDisabled = values[text.disableWatermarkKey] === true;
                 try {{
                   const resp = await fetch('/api/deploy/settings', {{
                     method: 'POST',
                     headers: {{'Content-Type': 'application/json'}},
-                    body: JSON.stringify({{values: collectValues()}})
+                    body: JSON.stringify({{values: values}})
                   }});
                   const result = await resp.json();
                   if (!result.success) {{
                     throw new Error(result.error || 'unknown error');
                   }}
+                  if (watermarkDisabled) {{
+                    removeBranchWatermark();
+                  }}
                   await refresh();
-                  statusEl.textContent = text.saved;
+                  statusEl.textContent = watermarkDisabled
+                    ? text.saved + ' ' + text.watermarkHidden
+                    : text.saved;
                 }} catch (err) {{
                   statusEl.textContent = text.failed + ': ' + (err.message || err);
                 }} finally {{

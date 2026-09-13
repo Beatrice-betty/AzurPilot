@@ -114,6 +114,8 @@ DEPLOY_GROUPS: tuple[tuple[str, tuple[DeployField, ...]], ...] = (
             DeployField("CDN", "cdn"),
             DeployField("WebuiSSLKey", "nullable_string"),
             DeployField("WebuiSSLCert", "nullable_string"),
+            # 关闭未验证版本水印：默认关闭（false = 显示水印），仅限了解分支用途的用户使用
+            DeployField("DisableBranchWatermark", "bool"),
         ),
     ),
 )
