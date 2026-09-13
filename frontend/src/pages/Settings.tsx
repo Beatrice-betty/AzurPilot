@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useParams } from 'react-router-dom'
 import { Palette, Settings2, Trash2 } from 'lucide-react'
 import { api } from '../api/client'
-import type { Settings as SettingsData, Value } from '../api/types'
+import type { Settings as SettingsData } from '../api/types'
 import { languages, useApp, useConnection } from '../app/context'
 import { ErrorBox, Loading, Modal, PageTitle } from '../components/ui'
+import { editor, prepareValue } from '../config/editors'
+import { EditStatus } from '../components/EditStatus'
 import { FieldInput } from '../components/FieldInput'
 
 export function Settings() {
@@ -17,70 +19,31 @@ export function Settings() {
   const [startup, setStartup] = useState(false)
   const connection = useConnection()
 
-  const pendingDeploy = useRef<Record<string, Value>>({})
-  const deployTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const deployQueue = editor('deploy')
+  const startupQueue = editor(`startup:${instance}`)
+  const deployEdits = useSyncExternalStore(deployQueue.subscribe, deployQueue.getSnapshot)
+  const startupEdits = useSyncExternalStore(startupQueue.subscribe, startupQueue.getSnapshot)
+  const startupValue = startupEdits.edits.enabled?.value ?? startup
 
   useEffect(() => {
     if (connection !== 'ready') return
     let active = true
+    const confirmedDeploy = deployQueue.confirmed()
+    const confirmedStartup = startupQueue.confirmed()
     void Promise.all([api.request('settings.get', {}), api.request('startup.get', {instance})])
       .then(([data, start]) => {
         if (active) {
           setData(data)
           setStartup(start.enabled)
+          deployQueue.reconcile(confirmedDeploy)
+          startupQueue.reconcile(confirmedStartup)
         }
       })
       .catch(error => {
         if (active) setError(error.message)
       })
     return () => { active = false }
-  }, [connection, instance])
-
-  const flushDeploy = useCallback(async () => {
-    if (deployTimer.current) {
-      clearTimeout(deployTimer.current)
-      deployTimer.current = null
-    }
-    if (!Object.keys(pendingDeploy.current).length) return
-    const values = {...pendingDeploy.current}
-    pendingDeploy.current = {}
-    try {
-      await api.request('settings.patch', {values})
-      notify('部署设置已自动更新，重启服务后生效')
-    } catch (err) {
-      notify((err as Error).message, true)
-    }
-  }, [notify])
-
-  const changeDeployField = useCallback((key: string, value: Value, immediate = false) => {
-    pendingDeploy.current[key] = value
-    setData(prev => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        groups: prev.groups.map(g => ({
-          ...g,
-          fields: g.fields.map(f => f.key === key ? {...f, value} : f)
-        }))
-      }
-    })
-    if (immediate) {
-      void flushDeploy()
-    } else {
-      if (deployTimer.current) clearTimeout(deployTimer.current)
-      deployTimer.current = setTimeout(() => {
-        void flushDeploy()
-      }, 400)
-    }
-  }, [flushDeploy])
-
-  useEffect(() => {
-    return () => {
-      if (Object.keys(pendingDeploy.current).length) {
-        void flushDeploy()
-      }
-    }
-  }, [flushDeploy])
+  }, [connection, instance, deployQueue, startupQueue])
 
   async function remove() {
     setBusy(true)
@@ -97,22 +60,11 @@ export function Settings() {
     }
   }
 
-  async function setAutoRun() {
-    setBusy(true)
-    try {
-      await api.request('startup.set', {instance, enabled: !startup})
-      setStartup(!startup)
-    } catch (error) {
-      setError((error as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
   return (
     <>
       <PageTitle title="系统设置" />
       {error && <ErrorBox message={error} />}
+      {(deployEdits.storageError || startupEdits.storageError) && <ErrorBox message={deployEdits.storageError || startupEdits.storageError} />}
       <section className="panel config-group">
         <div className="panel-heading">
           <div>
@@ -158,7 +110,8 @@ export function Settings() {
             <label>启动服务时自动运行 {instance}</label>
             <p>服务启动后自动接续此实例的任务调度。</p>
           </div>
-          <FieldInput id="startup" value={startup} onChange={setAutoRun} label="启动时自动运行" disabled={busy || connection !== 'ready'} />
+          <div className="field-control"><FieldInput id="startup" value={startupValue} onChange={value => startupQueue.change('enabled', value)} label="启动时自动运行" />
+            <EditStatus id="startup" edit={startupEdits.edits.enabled} retry={startupQueue.retry} /></div>
         </div>
         <div className="field-row">
           <div className="field-label">
@@ -197,13 +150,16 @@ export function Settings() {
                       label={field.label}
                       type={field.type}
                       options={field.options}
-                      value={field.value}
-                      disabled={busy || connection !== 'ready'}
+                      value={deployEdits.edits[field.key]?.value ?? field.value}
+                      preserveText
+                      invalid={deployEdits.edits[field.key]?.status === 'error'}
+                      disabled={data.demo}
                       onChange={value => {
-                        const immediate = ['select', 'checkbox'].includes(field.type)
-                        changeDeployField(field.key, value, immediate)
+                        const {payload, error} = prepareValue(value, field)
+                        deployQueue.change(field.key, value, payload, error)
                       }}
                     />
+                    <EditStatus id={`deploy-${field.key}`} edit={deployEdits.edits[field.key]} retry={deployQueue.retry} />
                   </div>
                 </div>
               ))}

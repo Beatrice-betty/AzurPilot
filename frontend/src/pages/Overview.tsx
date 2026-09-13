@@ -7,6 +7,7 @@ import { useApp, useConnection } from '../app/context'
 import { Empty, ErrorBox, Loading, PageTitle } from '../components/ui'
 import { MonitorPanel } from '../components/MonitorPanel'
 import { ResourceCards } from '../components/ResourceCards'
+import { editor } from '../config/editors'
 
 export function Overview() {
   const {instance = ''} = useParams()
@@ -25,7 +26,11 @@ export function Overview() {
   async function toggle() {
     if (!data) return
     setBusy(true)
-    try { setData(await api.request(data.status === 'running' ? 'scheduler.stop' : 'scheduler.start', {instance})); notify(data.status === 'running' ? '调度器已停止' : '调度器已启动') }
+    try {
+      if (data.status !== 'running') await editor(`config:${instance}`).settled()
+      setData(await api.request(data.status === 'running' ? 'scheduler.stop' : 'scheduler.start', {instance}))
+      notify(data.status === 'running' ? '调度器已停止' : '调度器已启动')
+    }
     catch (error) { notify((error as Error).message, true) } finally { setBusy(false) }
   }
   if (error) return <ErrorBox message={error}/>

@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, useSyncExt
 import { api } from '../api/client'
 import type { Instance, Schema } from '../api/types'
 import type { Parameters } from '../api/generated'
+import { resumeEditors } from '../config/editors'
 
 export const languages = {'zh-CN': '简体中文', 'zh-TW': '繁体中文', 'en-US': 'English', 'ja-JP': '日本語', 'zh-MIAO': '喵语'}
 type Language = NonNullable<Parameters['schema.get']['language']>
@@ -33,6 +34,7 @@ export function AppProvider({children}: {children: ReactNode}) {
     localStorage.setItem('azurpilot.theme', theme)
   }, [theme])
   useEffect(() => { api.connect(); return () => api.disconnect() }, [])
+  useEffect(() => { if (connection === 'ready') resumeEditors() }, [connection])
   const notify = useCallback((message: string, error = false) => setToast({message, error}), [])
   const refresh = useCallback(async () => setInstances(await api.request('instances.list', {})), [])
   useEffect(() => {

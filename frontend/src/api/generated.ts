@@ -6,7 +6,7 @@ export interface Parameters {
   "instances.create": { name: string; source?: string | null }
   "instances.delete": { instance: string; revision: string }
   "config.get": { instance: string }
-  "config.patch": { instance: string; revision: string; changes: Array<{ path: string; value: unknown }> }
+  "config.patch": { instance: string; revision?: string | null; changes: Array<{ path: string; value: unknown }> }
   "overview.get": { instance: string }
   "scheduler.start": { instance: string }
   "scheduler.stop": { instance: string }

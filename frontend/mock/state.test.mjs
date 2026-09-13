@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { createMockState } from './state.mjs'
 
 describe('前端模拟服务', () => {
-  it('配置按实例隔离，拒绝过期版本和非原子保存', () => {
+  it('配置按实例隔离，合并过期快照的字段修改并拒绝非原子保存', () => {
     const {dispatch} = createMockState()
     const initial = dispatch('config.get', {instance: 'demo-main'})
     const params = {instance: 'demo-main', revision: initial.revision, changes: [{path: 'Alas.Emulator.Serial', value: 'mock-serial'}]}
     const saved = dispatch('config.patch', params)
     expect(saved.values.Alas.Emulator.Serial).toBe('mock-serial')
     expect(dispatch('config.get', {instance: 'demo-alt'}).values.Alas.Emulator.Serial).toBe('127.0.0.1:5557')
-    expect(() => dispatch('config.patch', params)).toThrow(/其他页面/)
+    expect(dispatch('config.patch', params)).toEqual(saved)
     expect(() => dispatch('config.patch', {...params, revision: saved.revision, changes: [{path: 'Alas.Emulator.Serial', value: '不应部分保存'}, {path: 'Main.Scheduler.Enable', value: 'false'}]})).toThrow()
     expect(dispatch('config.get', {instance: 'demo-main'})).toEqual(saved)
   })

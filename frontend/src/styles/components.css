@@ -178,3 +178,5 @@
 .storage-field {display: grid; gap: 12px}
 .storage-field pre {margin: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-muted); font: 13px/1.9 "Cascadia Code", "Consolas", "Microsoft YaHei", monospace; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 480px; overflow-y: auto}
 .storage-field .button {justify-self: start}
+.edit-status { margin-top: 6px; font-size: 12px; color: var(--muted); }
+.edit-error { color: var(--red); }

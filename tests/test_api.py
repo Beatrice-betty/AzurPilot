@@ -57,13 +57,15 @@ class ConfigApiTests(unittest.TestCase):
             with self.subTest(name=name), self.assertRaises(ApiError):
                 self.configs.path(name, exists=False)
 
-    def test_patch_is_atomic_and_rejects_stale_revision(self):
+    def test_patch_merges_fields_from_stale_revision(self):
         original = self.configs.get('testpilot')
         changed = self.configs.patch('testpilot', original['revision'], [ConfigChange(path='Alas.Emulator.Serial', value='127.0.0.1:5555')])
         self.assertEqual('127.0.0.1:5555', changed['values']['Alas']['Emulator']['Serial'])
-        with self.assertRaises(ApiError) as context:
-            self.configs.patch('testpilot', original['revision'], [ConfigChange(path='Alas.Emulator.Serial', value='auto')])
-        self.assertEqual('CONFLICT', context.exception.code)
+        updated = self.configs.patch('testpilot', original['revision'], [ConfigChange(path='Main.Scheduler.Enable', value=True)])
+        self.assertEqual('127.0.0.1:5555', updated['values']['Alas']['Emulator']['Serial'])
+        self.assertTrue(updated['values']['Main']['Scheduler']['Enable'])
+        latest = self.configs.patch('testpilot', original['revision'], [ConfigChange(path='Alas.Emulator.Serial', value='auto')])
+        self.assertEqual('auto', latest['values']['Alas']['Emulator']['Serial'])
 
     def test_invalid_batch_does_not_partially_save(self):
         original = self.configs.get('testpilot')
@@ -96,7 +98,7 @@ class ConfigApiTests(unittest.TestCase):
                 self.configs.validate(path, True)
             self.assertEqual('READ_ONLY', context.exception.code)
 
-    def test_storage_can_only_be_cleared_with_revision(self):
+    def test_storage_can_only_be_cleared(self):
         import json
         path = self.configs.path('testpilot')
         data = self.configs.get('testpilot')['values']
@@ -109,9 +111,21 @@ class ConfigApiTests(unittest.TestCase):
         cleared = self.configs.patch('testpilot', original['revision'], [ConfigChange(path='Alas.Storage.Storage', value={})])
         self.assertEqual({}, cleared['values']['Alas']['Storage']['Storage'])
         self.assertEqual(original['values']['Alas']['Emulator'], cleared['values']['Alas']['Emulator'])
-        with self.assertRaises(ApiError) as conflict:
-            self.configs.patch('testpilot', original['revision'], [ConfigChange(path='Alas.Storage.Storage', value={})])
-        self.assertEqual('CONFLICT', conflict.exception.code)
+        self.assertEqual(cleared, self.configs.patch('testpilot', original['revision'], [ConfigChange(path='Alas.Storage.Storage', value={})]))
+
+    def test_invalid_yaml_and_dates_do_not_replace_saved_config(self):
+        original = self.configs.get('testpilot')
+        invalid = [('Alas.Error.OnePushConfig', 'provider: ['),
+                   ('Alas.Error.OnePushConfig', '- invalid'),
+                   ('Main.Scheduler.NextRun', '2026-02-30 12:00:00'),
+                   ('Main.Scheduler.NextRun', '2026-1-1 12:00:00'),
+                   ('Main.Scheduler.NextRun', '')]
+        for path, value in invalid:
+            with self.subTest(path=path, value=value), self.assertRaises(ApiError) as context:
+                self.configs.patch('testpilot', None, [ConfigChange(path=path, value=value)])
+            self.assertEqual('INVALID_PARAMS', context.exception.code)
+            self.assertEqual(original, self.configs.get('testpilot'))
+        self.configs.patch('testpilot', None, [ConfigChange(path='Alas.Error.OnePushConfig', value='provider: null')])
 
     def test_duplicate_creation_and_recoverable_deletion(self):
         created = self.configs.create('second', 'testpilot')
@@ -177,13 +191,18 @@ class SocketApiTests(unittest.TestCase):
             ws.send_json(payload)
             self.assertEqual('DUPLICATE_REQUEST', ws.receive_json()['error']['code'])
 
-    def test_revision_conflict_over_real_websocket(self):
+    def test_field_updates_over_real_websocket_accept_stale_or_missing_revision(self):
         with self.client.websocket_connect('/api/v1/ws') as ws:
             self.login(ws)
             config = self.call(ws, 'config.get', {'instance': 'testpilot'})['result']
             params = {'instance': 'testpilot', 'revision': config['revision'], 'changes': [{'path': 'Alas.Emulator.Serial', 'value': '5555'}]}
             self.assertTrue(self.call(ws, 'config.patch', params)['ok'])
-            self.assertEqual('CONFLICT', self.call(ws, 'config.patch', params)['error']['code'])
+            self.assertTrue(self.call(ws, 'config.patch', params)['ok'])
+            del params['revision']
+            params['changes'] = [{'path': 'Main.Scheduler.Enable', 'value': True}]
+            merged = self.call(ws, 'config.patch', params)
+            self.assertTrue(merged['ok'])
+            self.assertEqual('5555', merged['result']['values']['Alas']['Emulator']['Serial'])
 
     def test_subscribe_sends_scoped_snapshot(self):
         with self.client.websocket_connect('/api/v1/ws') as ws:

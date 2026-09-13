@@ -51,7 +51,7 @@ npm run dev:mock --prefix frontend
 
 若 5173 已被占用，可执行 `npm run dev:mock --prefix frontend -- --port 5175` 更换页面端口。
 
-模拟服务从公开的 `args.json`、`menu.json`、翻译文件和 `template.json` 读取元数据，所有实例、部署设置和日志写入只存在内存，重启即重置；不读取或修改用户配置、不启动游戏进程。它使用真实 WebSocket 信封和生成的参数契约，覆盖实例创建/复制/删除、配置保存与版本冲突、模拟启停、日志订阅、预览、统计和启动偏好。
+模拟服务从公开的 `args.json`、`menu.json`、翻译文件和 `template.json` 读取元数据，所有实例、部署设置和日志写入只存在内存，重启即重置；不读取或修改用户配置、不启动游戏进程。它使用真实 WebSocket 信封和生成的参数契约，覆盖实例创建/复制/删除、配置字段合并与校验错误、模拟启停、日志订阅、预览、统计和启动偏好。
 
 默认包含 `demo-main`（正常数据）、`demo-alt`（不同连接与空统计）和 `demo-error`（错误状态与无截图）。预览是 1280×720 的 SVG 测试图；运行中的实例每三秒产生一条日志。此服务用于验证前端交互，真实运行、完整业务校验和安全策略仍以 Python API 测试为准。
 
@@ -63,7 +63,7 @@ npm run dev:mock --prefix frontend
 | `AZURPILOT_MOCK_PASSWORD` | 设置测试密码，验证登录和重连；默认无需认证 |
 | `AZURPILOT_MOCK_SCENARIO=empty` | 从零实例开始，测试欢迎页和首次创建 |
 
-浏览器刷新保留本次模拟服务的数据。验证两个标签页同时保存时，后保存者会收到 `CONFLICT`，可以测试草稿保留和重新加载流程。
+浏览器刷新保留本次模拟服务的数据。两个标签页可直接保存各自修改的字段，无关字段互不覆盖；同字段按服务端接收顺序写入。输入立即提交，断线时保留草稿并在重连后自动保存；格式错误保留输入并在字段下方提示。
 
 ## 目录职责
 
@@ -73,6 +73,7 @@ npm run dev:mock --prefix frontend
 | `src/api/generated.ts` | 从 Python 模型生成的方法参数类型 |
 | `src/api/contract.json` | 版本化参数 JSON Schema |
 | `src/api/types.ts` | 响应数据及页面领域类型 |
+| `src/config` | 跨页面字段保存队列、草稿恢复、重试与数值输入校验 |
 | `src/app` | 应用布局、连接状态、共享元数据 |
 | `src/components` | 可复用表单、弹窗、空状态等 |
 | `src/pages` | 总览、配置、分类统计和系统设置 |

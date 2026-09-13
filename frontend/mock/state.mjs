@@ -113,7 +113,6 @@ export function createMockState({empty = false} = {}) {
       case 'config.get': return snapshot(name)
       case 'config.patch': {
         const data = snapshot(name)
-        if (params.revision !== data.revision) fail('CONFLICT', '配置已被其他页面修改，请重新加载后保存')
         const seen = new Set()
         for (const {path, value} of params.changes) {
           const [task, group, arg] = validateField(path, value)

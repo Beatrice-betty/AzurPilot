@@ -7,8 +7,9 @@ const YamlEditor = lazy(() => import('./YamlEditor').then(module => ({default: m
 interface Props {
   id: string; value: Value; onChange: (value: Value) => void; type?: string
   options?: Value[]; disabled?: boolean; label: string; mode?: string; translateOption?: (value: Value) => string
+  preserveText?: boolean; invalid?: boolean
 }
-export function FieldInput({id, value, onChange, type, options, disabled, label, mode, translateOption}: Props) {
+export function FieldInput({id, value, onChange, type, options, disabled, label, mode, translateOption, preserveText, invalid}: Props) {
   // 只读时间沿用旧界面的原始文本，保留秒、小数秒和历史格式。
   if (type === 'datetime' && disabled) return <input id={id} aria-label={label} readOnly value={String(value ?? '').replace('T', ' ')} />
   if (mode === 'yaml' || type === 'yaml') return <Suspense fallback={<div role="status">正在加载编辑器…</div>}><YamlEditor id={id} value={String(value ?? '')} onChange={onChange} disabled={disabled} label={label}/></Suspense>
@@ -28,12 +29,14 @@ export function FieldInput({id, value, onChange, type, options, disabled, label,
     </select>
   }
   if (type === 'textarea' || type === 'task_priority') return <AutoTextarea id={id} value={String(value ?? '')} disabled={disabled} onChange={onChange}/>
-  const isNumber = typeof value === 'number' || type === 'int' || type === 'number'
-  return <input id={id} disabled={disabled} type={type === 'password' ? 'password' : type === 'datetime' ? 'datetime-local' : isNumber ? 'number' : 'text'}
+  const isNumber = typeof value === 'number' || ['int', 'number', 'float'].includes(type ?? '')
+  return <input id={id} disabled={disabled} aria-invalid={invalid || undefined} aria-describedby={`${id}-status`}
+    inputMode={isNumber ? 'decimal' : undefined}
+    type={type === 'password' ? 'password' : type === 'datetime' && !preserveText ? 'datetime-local' : isNumber && !preserveText ? 'number' : 'text'}
     step={type === 'datetime' ? 1 : 'any'} autoComplete={type === 'password' ? 'new-password' : 'off'}
-    value={type === 'datetime' ? String(value ?? '').replace(' ', 'T').slice(0, 23) : value === null ? '' : String(value)}
+    value={type === 'datetime' && !preserveText ? String(value ?? '').replace(' ', 'T').slice(0, 23) : value === null ? '' : String(value)}
     onChange={event => {
       const next = event.target.value
-      onChange(type === 'datetime' ? (next.length === 16 ? `${next.replace('T', ' ')}:00` : next.replace('T', ' ')) : isNumber && next !== '' ? Number(next) : next)
+      onChange(preserveText ? next : type === 'datetime' ? (next.length === 16 ? `${next.replace('T', ' ')}:00` : next.replace('T', ' ')) : isNumber && next !== '' ? Number(next) : next)
     }}/>
 }

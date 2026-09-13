@@ -1,4 +1,4 @@
-"""参数定义驱动的配置服务，负责路径约束、校验及乐观并发控制。"""
+"""参数定义驱动的配置服务，在跨进程事务内校验并合并字段修改。"""
 import copy
 import hashlib
 import json
@@ -7,6 +7,8 @@ import re
 import threading
 from datetime import datetime
 from pathlib import Path
+
+import yaml
 
 from deploy.atomic import atomic_write
 from module.api.protocol import ApiError
@@ -111,7 +113,7 @@ class ConfigService:
         field = self.args
         for part in parts:
             field = field.get(part, {})
-        # 旧界面的存储区禁止编辑内容，但允许显式清空；仍使用配置事务与版本校验。
+        # 存储区禁止编辑内容，但允许通过同一配置事务显式清空。
         if field.get('type') == 'storage' and field.get('display') != 'hide' and type(value) is dict and not value:
             return parts
         if not field or field.get('display') in ('hide', 'disabled', 'readonly', 'display') or field.get('type') in ('storage', 'stored', 'state', 'lock'):
@@ -138,10 +140,12 @@ class ConfigService:
         if not valid or (isinstance(value, str) and len(value) > 20000) or (type(value) is float and not math.isfinite(value)):
             raise ApiError('INVALID_PARAMS', f'参数类型或长度不正确：{path}')
         rule = field.get('validate')
-        if rule == 'datetime':
+        if rule == 'datetime' or kind == 'datetime':
             try:
+                if not isinstance(value, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', value):
+                    raise ValueError()
                 datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
-            except ValueError as exc:
+            except (ValueError, TypeError) as exc:
                 raise ApiError('INVALID_PARAMS', f'日期格式应为 YYYY-MM-DD HH:mm:ss：{path}') from exc
         elif isinstance(rule, list) and len(rule) == 2:
             if type(value) not in (int, float) or not rule[0] <= value <= rule[1]:
@@ -149,13 +153,22 @@ class ConfigService:
         elif isinstance(rule, str) and isinstance(value, (str, int, float)):
             if not re.fullmatch(rule, str(value)):
                 raise ApiError('INVALID_PARAMS', f'参数格式不正确：{path}')
+        if field.get('mode') == 'yaml' or kind == 'yaml':
+            try:
+                parsed = yaml.safe_load(value)
+            except (yaml.YAMLError, ValueError, RecursionError) as exc:
+                mark = getattr(exc, 'problem_mark', None)
+                location = f'（第 {mark.line + 1} 行，第 {mark.column + 1} 列）' if mark else ''
+                raise ApiError('INVALID_PARAMS', f'YAML 格式不正确{location}：{path}') from exc
+            if parsed is not None and not isinstance(parsed, dict):
+                raise ApiError('INVALID_PARAMS', f'YAML 顶层必须是键值映射：{path}')
         return parts
 
     def patch(self, name, revision, changes):
         with self.lock, config_transaction(self.path(name)):
-            data, current = self.read(name)
-            if revision != current:
-                raise ApiError('CONFLICT', '配置已被其他页面或运行任务修改，请重新加载后保存')
+            # revision 仅为旧客户端兼容参数。字段赋值合并到锁内最新快照，
+            # 无关字段的运行状态更新不应拒绝用户输入；同字段按事务顺序生效。
+            data, _ = self.read(name)
             seen = set()
             for change in changes:
                 task, group, arg = self.validate(change.path, change.value)
@@ -163,9 +176,6 @@ class ConfigService:
                     raise ApiError('INVALID_PARAMS', '同一次保存不能重复修改同一个参数')
                 seen.add(change.path)
                 data.setdefault(task, {}).setdefault(group, {})[arg] = change.value
-            # 保存前再次核对运行器写回，避免耗时校验期间覆盖新版本。
-            if self.read(name)[1] != current:
-                raise ApiError('CONFLICT', '运行任务刚刚更新了配置，请重新加载')
             atomic_write(str(self.path(name)), json.dumps(data, ensure_ascii=False, indent=2))
             return self.get(name)
 

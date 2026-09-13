@@ -37,10 +37,10 @@
 失败：
 
 ```json
-{"v":1,"type":"response","id":"request-42","ok":false,"error":{"code":"CONFLICT","message":"配置已被其他页面或运行任务修改，请重新加载后保存","details":null}}
+{"v":1,"type":"response","id":"request-42","ok":false,"error":{"code":"INVALID_PARAMS","message":"参数格式不正确：Main.Scheduler.NextRun","details":null}}
 ```
 
-同一连接最近 128 个请求 ID 不允许重复。ID 用于关联请求，**不是**跨连接的幂等键。客户端不会在断线或超时后自动重试写操作；必须先查询最终状态，防止重复启停或创建实例。默认请求超时 45 秒，超时不代表服务端事务回滚。
+同一连接最近 128 个请求 ID 不允许重复。ID 用于关联请求，**不是**跨连接的幂等键。配置字段赋值由独立队列在断线或超时后自动重试；启停、创建、删除等操作不自动重试，必须先查询最终状态。默认请求超时 45 秒，超时不代表服务端事务回滚。
 
 ## 方法
 
@@ -55,7 +55,7 @@
 | `instances.create` | name、可选 source | 从模板或已有实例复制配置 |
 | `instances.delete` | instance、revision | 停止状态下将配置移至备份 |
 | `config.get` | instance | 当前值及 revision |
-| `config.patch` | instance、revision、changes | 校验后原子保存全部修改 |
+| `config.patch` | instance、changes、可选 revision | 锁内合并指定字段，校验后原子保存 |
 | `overview.get` | instance | 资源、任务计划、连接配置与状态 |
 | `scheduler.start` | instance | 启动调度器，返回当前总览 |
 | `scheduler.stop` | instance | 停止调度器并执行配置的收尾动作 |
@@ -79,15 +79,19 @@
 
 ## 配置事务
 
-revision 是磁盘 JSON 内容的 SHA-256。`config.patch` 仅接受 `Task.Group.Argument` 形式的叶子路径，最多 200 项修改。完整校验成功后一次性原子替换；失败不保存任何字段。
+revision 是磁盘 JSON 内容的 SHA-256，仅用于读取快照和删除保护；配置保存接受旧版客户端传入 revision，但不再据此拒绝写入。`config.patch` 仅接受 `Task.Group.Argument` 形式的叶子路径，最多 200 项修改。完整校验成功后一次性原子替换；失败不保存任何字段。
 
 ```json
-{"v":1,"type":"request","id":"save-1","method":"config.patch","params":{"instance":"alas","revision":"读取到的SHA256","changes":[{"path":"Alas.Emulator.Serial","value":"127.0.0.1:5555"},{"path":"Main.Scheduler.Enable","value":true}]}}
+{"v":1,"type":"request","id":"save-1","method":"config.patch","params":{"instance":"alas","changes":[{"path":"Alas.Emulator.Serial","value":"127.0.0.1:5555"},{"path":"Main.Scheduler.Enable","value":true}]}}
 ```
 
-API 和核心运行器共用跨进程事务锁。运行器保存时重新读取文件，仅合并自己修改的字段，避免用旧快照覆盖前端修改。发生冲突时，前端保留草稿、展示错误，由用户重新加载后保存。直接绕开配置服务的外部脚本不受此事务锁约束。
+API 和核心运行器共用跨进程事务锁。API 只合并请求指定的字段，其他页面或运行任务更新无关字段不会拒绝保存。同一字段的显式修改按服务端事务顺序生效。运行器加载时保留独立快照，在再次加载或保存时检查待写字段；磁盘值已变化时放弃该字段的旧任务回写，保留外部编辑。
 
-隐藏、固定和只读字段由服务端强制拒绝修改；`storage` 的唯一例外是通过 `config.patch` 将值清空为 `{}`，用于恢复旧版清除内部任务状态的按钮，其他状态内容仍禁止写入。布尔值必须是真正的 JSON boolean；数值范围来自参数定义；日期格式为 `YYYY-MM-DD HH:mm:ss`；多选值必须来自声明的候选项。
+前端任务参数、部署设置及启动偏好共用页面之外的保存队列，输入时同步保留原文并立即发起字段提交，不等待失焦或防抖。每个作用域串行提交，正在等待响应的字段继续接受输入，尚未发送的同字段输入合并为最新值。响应只确认对应输入版本，不覆盖后续输入。启动调度器或任务工具前会等待该实例队列保存完成，停止操作不受待保存内容影响。
+
+每个字段显示保存中、已保存或错误状态。格式错误只阻止该字段写入，原文保留用于修正；其他字段照常保存。连接和临时服务错误自动重试；页面切换不停止队列。未确认的输入保存在当前标签页的 sessionStorage，刷新并重新认证后恢复所有作用域的待提交项，已确认项不再重放。浏览器禁用或耗尽存储时明确提示，并继续在内存中保留输入。关闭标签页前应确认已保存；离线期间无法使服务端立即生效。游戏任务在下一次读取或绑定配置时使用新值，部署设置仍按各项既有规则在重启服务后生效。直接绕开配置服务的外部脚本不受事务锁约束。
+
+隐藏、固定和只读字段由服务端强制拒绝修改；`storage` 的唯一例外是通过 `config.patch` 将值清空为 `{}`，用于恢复旧版清除内部任务状态的按钮，其他状态内容仍禁止写入。布尔值必须是真正的 JSON boolean；数值范围来自参数定义；日期格式为 `YYYY-MM-DD HH:mm:ss`；多选值必须来自声明的候选项。YAML 字段使用安全解析器校验语法和顶层映射结构，并返回可定位的行列错误；保留原始文本存储。
 
 ## 订阅与恢复
 

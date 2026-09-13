@@ -188,6 +188,8 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
 
     def load(self):
         self.data = self.read_file(self.config_name)
+        self._discard_stale_changes(self.data)
+        self._loaded_data = copy.deepcopy(self.data)
         self.config_override()
 
         for path, value in self.modified.items():
@@ -369,6 +371,22 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
             logger.critical("[Config] 请启用至少一个任务")
             raise RequestHumanTakeover
 
+    def _discard_stale_changes(self, current):
+        """保留加载后发生的外部修改，禁止旧任务回写同一字段。"""
+        baseline = getattr(self, '_loaded_data', None)
+        if baseline is None:
+            return
+        missing = object()
+        discarded = set()
+        for path in list(self.modified):
+            if deep_get(current, keys=path, default=missing) != deep_get(baseline, keys=path, default=missing):
+                self.modified.pop(path)
+                discarded.add(path)
+        # 保存也可能发生在 bind() 之后；同步被拒绝的属性，避免继续使用旧值。
+        for attr, path in self.bound.items():
+            if path in discarded and attr not in getattr(self, 'overridden', {}):
+                super().__setattr__(attr, deep_get(current, keys=path))
+
     def save(self, mod_name='alas'):
         if not self.modified:
             return False
@@ -376,10 +394,12 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
         # 避免用户编辑其他参数时被旧的运行器快照覆盖。
         with config_transaction(filepath_config(self.config_name, mod_name)):
             current = self.read_file(self.config_name)
+            self._discard_stale_changes(current)
             for path, value in self.modified.items():
                 deep_set(current, keys=path, value=value)
             self.write_file(self.config_name, data=current)
             self.data = current
+            self._loaded_data = copy.deepcopy(current)
             logger.info(f"[配置] 已保存 {filepath_config(self.config_name, mod_name)}，共 {len(self.modified)} 项修改")
             # 写入成功后再清理，磁盘错误不会丢失待保存的更改。
             self.modified.clear()

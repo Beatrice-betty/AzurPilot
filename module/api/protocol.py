@@ -53,7 +53,7 @@ class ConfigChange(Params):
 
 
 class PatchParams(InstanceParams):
-    revision: StrictStr = Field(min_length=1, max_length=64)
+    revision: StrictStr | None = Field(default=None, min_length=1, max_length=64)
     changes: list[ConfigChange] = Field(min_length=1, max_length=200)
 
 

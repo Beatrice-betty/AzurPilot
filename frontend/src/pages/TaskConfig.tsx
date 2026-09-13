@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Play, Search, Settings2, Ship } from 'lucide-react'
 import { api } from '../api/client'
-import type { Config, Value } from '../api/types'
+import type { Config } from '../api/types'
 import { useApp, useConnection } from '../app/context'
 import { Empty, ErrorBox, Loading, Modal, PageTitle } from '../components/ui'
 import { FieldInput } from '../components/FieldInput'
 import { StorageField } from '../components/StorageField'
+import { editor, prepareValue } from '../config/editors'
+import { EditStatus } from '../components/EditStatus'
 import { isFieldVisible } from './configVisibility'
 
 export function TaskConfig() {
@@ -20,116 +22,33 @@ export function TaskConfig() {
   const [busy, setBusy] = useState(false)
   const [confirmRun, setConfirmRun] = useState(false)
 
-  const pendingChanges = useRef<Map<string, Value>>(new Map())
-  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const savingRef = useRef(false)
-  const configRef = useRef(config)
-  configRef.current = config
-
+  const queue = editor(`config:${instance}`)
+  const {edits, storageError} = useSyncExternalStore(queue.subscribe, queue.getSnapshot)
   const reload = useCallback(async () => {
     try {
+      const confirmed = queue.confirmed()
       setConfig(await api.request('config.get', {instance}))
+      queue.reconcile(confirmed)
       setError('')
     } catch (error) {
       setError((error as Error).message)
     }
-  }, [instance])
+  }, [instance, queue])
 
   useEffect(() => {
-    if (connection === 'ready' && !config) void reload()
-  }, [connection, reload, config])
-
-  const flushChanges = useCallback(async () => {
-    if (debounceTimer.current) {
-      clearTimeout(debounceTimer.current)
-      debounceTimer.current = null
-    }
-    if (!pendingChanges.current.size || savingRef.current || !configRef.current) return
-    const currentConfig = configRef.current
-    const changes = Array.from(pendingChanges.current.entries()).map(([path, value]) => ({path, value}))
-    pendingChanges.current.clear()
-    savingRef.current = true
-
-    try {
-      const updated = await api.request('config.patch', {
-        instance,
-        revision: currentConfig.revision,
-        changes,
-      })
-      setConfig(updated)
-    } catch (err) {
-      notify((err as Error).message, true)
-      try {
-        const fresh = await api.request('config.get', {instance})
-        setConfig(fresh)
-      } catch {}
-    } finally {
-      savingRef.current = false
-      if (pendingChanges.current.size) {
-        void flushChanges()
-      }
-    }
-  }, [instance, notify])
-
-  const queueChange = useCallback((path: string, value: Value, immediate = false) => {
-    pendingChanges.current.set(path, value)
-
-    // 乐观更新本地 config，避免输入卡顿
-    setConfig(prev => {
-      if (!prev) return prev
-      const [tName, gName, aName] = path.split('.')
-      return {
-        ...prev,
-        values: {
-          ...prev.values,
-          [tName]: {
-            ...prev.values[tName],
-            [gName]: {
-              ...prev.values[tName]?.[gName],
-              [aName]: value,
-            },
-          },
-        },
-      }
-    })
-
-    if (immediate) {
-      void flushChanges()
-    } else {
-      if (debounceTimer.current) clearTimeout(debounceTimer.current)
-      debounceTimer.current = setTimeout(() => {
-        void flushChanges()
-      }, 350)
-    }
-  }, [flushChanges])
-
-  // 组件卸载时刷新未提交的修改
-  useEffect(() => {
-    return () => {
-      if (pendingChanges.current.size) {
-        void flushChanges()
-      }
-    }
-  }, [flushChanges])
-
-  async function clearStorage(path: string) {
-    if (!config) return
-    setBusy(true)
-    setError('')
-    try {
-      const updated = await api.request('config.patch', {instance, revision: config.revision, changes: [{path, value: {}}]})
-      setConfig(updated)
-      notify('任务内部状态已清除')
-    } catch (error) {
-      setError((error as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }
+    if (connection !== 'ready') return
+    let active = true
+    const confirmed = queue.confirmed()
+    void api.request('config.get', {instance}).then(value => {
+      if (active) { setConfig(value); queue.reconcile(confirmed); setError('') }
+    }).catch(error => { if (active) setError(error.message) })
+    return () => { active = false }
+  }, [connection, instance, task, queue])
 
   async function run() {
     setBusy(true)
     try {
+      await queue.settled()
       await api.request('tasks.run', {instance, task})
       navigate(`/i/${instance}/overview`)
       notify('任务已启动')
@@ -144,7 +63,8 @@ export function TaskConfig() {
   const groups = schema?.args[task]
   const visibleGroups = Object.entries(groups ?? {}).map(([group, fields]) => {
     const visible = Object.entries(fields).filter(([arg, field]) => {
-      const value = config?.values[task]?.[group]?.[arg] ?? field.value
+      const edit = edits[`${task}.${group}.${arg}`]
+      const value = edit?.status === 'saved' ? edit.value : config?.values[task]?.[group]?.[arg] ?? field.value
       return isFieldVisible(arg, field, value) && `${t(`${group}.${arg}.name`)} ${group}.${arg}`.toLowerCase().includes(search.toLowerCase())
     })
     return {group, visible}
@@ -165,6 +85,7 @@ export function TaskConfig() {
         ) : undefined}
       />
       {error && <ErrorBox message={error} retry={reload} />}
+      {storageError && <ErrorBox message={storageError} />}
       <div className="config-toolbar">
         <div className="input-icon">
           <Search size={17} />
@@ -206,7 +127,8 @@ export function TaskConfig() {
                 </div>
                 {visible.map(([arg, field]) => {
                   const path = `${task}.${group}.${arg}`
-                  const value = config.values[task]?.[group]?.[arg] ?? field.value
+                  const edit = edits[path]
+                  const value = edit ? edit.value : config.values[task]?.[group]?.[arg] ?? field.value
                   const label = t(`${group}.${arg}.name`)
                   const help = t(`${group}.${arg}.help`)
                   const readonly = ['disabled', 'readonly', 'display'].includes(field.display ?? '') || ['storage', 'stored', 'state', 'lock'].includes(field.type)
@@ -223,7 +145,7 @@ export function TaskConfig() {
                       </div>
                       <div className="field-control">
                         {field.type === 'storage' ? (
-                          <StorageField value={value} disabled={busy || connection !== 'ready'} onClear={() => void clearStorage(path)} />
+                          <StorageField value={value} disabled={false} onClear={() => queue.change(path, {})} />
                         ) : (
                           <FieldInput
                             id={path}
@@ -231,15 +153,18 @@ export function TaskConfig() {
                             mode={field.mode}
                             type={field.type === 'input' && typeof field.value === 'number' ? 'number' : field.type}
                             options={field.option}
-                            disabled={readonly || busy || connection !== 'ready'}
+                            disabled={readonly}
+                            preserveText
+                            invalid={edit?.status === 'error'}
                             label={label}
                             translateOption={option => t(`${group}.${arg}.${option}`)}
                             onChange={next => {
-                              const immediate = ['checkbox', 'select', 'multiselect', 'switch'].includes(field.type)
-                              queueChange(path, next, immediate)
+                              const {payload, error} = prepareValue(next, field)
+                              queue.change(path, next, payload, error)
                             }}
                           />
                         )}
+                        <EditStatus id={path} edit={edit} retry={queue.retry} />
                       </div>
                     </div>
                   )
