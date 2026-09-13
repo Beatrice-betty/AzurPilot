@@ -173,6 +173,7 @@ def retry(func):
             self (NemuIpcImpl):
         """
         init = None
+        last_error = None
         for _ in range(RETRY_TRIES):
             # 重试时延长超时时间
             if func.__name__ == 'screenshot':
@@ -200,6 +201,7 @@ def retry(func):
             # NemuIpcError
             except NemuIpcError as e:
                 logger.error(e)
+                last_error = e
 
                 def init():
                     self.reconnect()
@@ -209,11 +211,20 @@ def retry(func):
             # 未知异常，可能是损坏的图像
             except Exception as e:
                 logger.exception(e)
+                last_error = e
 
                 def init():
                     pass
 
         if func.__name__ in ['connect_with_retry', 'screenshot', 'down', 'up']:
+            if isinstance(last_error, ctypes.ArgumentError):
+                # ctypes 参数类型错误属于调用方 bug（例如把 numpy 整数传给未声明
+                # argtypes 的函数），不是模拟器掉线：抛 EmulatorNotRunningError
+                # 会触发无谓的模拟器重启，还会把真实原因埋进重启日志里。
+                logger.critical(
+                    f'[设备-NemuIpc] {func.__name__}() 参数错误，不按模拟器掉线处理'
+                )
+                raise last_error
             logger.critical(f'[设备-NemuIpc] 重试 {func.__name__}() 失败')
             raise EmulatorNotRunningError
 
@@ -473,6 +484,13 @@ class NemuIpcImpl:
         """
         if self.connect_id == 0:
             self.connect()
+
+        # click/drag/swipe 的坐标来自 numpy（np.int64），而 nemu 的函数没有声明
+        # argtypes，ctypes 无法转换 numpy 标量，会抛
+        # ArgumentError: Don't know how to convert parameter 3；被 retry 包装成
+        # EmulatorNotRunningError 后 Alas 会误判为掉线并重启模拟器。
+        # 这里统一转成 Python int。
+        x, y = int(x), int(y)
 
         ret = self.run_func(
             self.lib.nemu_input_event_touch_down,
