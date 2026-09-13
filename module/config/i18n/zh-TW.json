@@ -112,7 +112,7 @@
     },
     "CoalitionScuttle": {
       "name": "聯盟沉船Plus",
-      "help": "聯盟活動中艦船被擊沉後刷取好感度，建議多隊出擊，第一隊就沉，建議看相關教程"
+      "help": "聯盟活動中艦船被擊沉後刷取好感度，建議多隊出擊，第一隊就沉，建議看相關教學"
     },
     "MaritimeEscort": {
       "name": "商路護航Plus",
@@ -372,7 +372,7 @@
     },
     "IslandPearlSell": {
       "name": "每週珍珠採購與售賣",
-      "help": "僅支援minitouch。每週二 01:00 自動處理珍珠：先採購本週珍珠，再售賣已有珍珠。金幣一定要夠購買200x220個這是最低要求能一次買光本週珍珠, 否則可能會報錯."
+      "help": "僅支援minitouch。每週二 01:00 自動處理珍珠：先採購本週珍珠，再售賣已有珍珠。金幣一定要夠購買200x220個這是最低要求能一次買光本週珍珠，否則可能會報錯."
     },
     "FleetScan": {
       "name": "艦隊掃描",
@@ -474,7 +474,7 @@
     },
     "RandomDelay": {
       "name": "每日重啟隨機延後",
-      "help": "每天重啟客戶端時，在伺服器刷新時間後隨機延後 X 分鐘再執行，用於錯開多個客戶端登入。\n支援單個數字或區間，例如 5, 50；填 0 可關閉。"
+      "help": "每天重啟客戶端時，在伺服器重新整理時間後隨機延後 X 分鐘再執行，用於錯開多個客戶端登入。\n支援單個數字或區間，例如 5, 50；填 0 可關閉。"
     },
     "ClearCache": {
       "name": "重啟時同時清理快取",
@@ -500,7 +500,7 @@
     },
     "Serial": {
       "name": "模擬器 Serial",
-      "help": "常見的模擬器 Serial 可以查詢下方列表\n填 \"auto\" 自動檢測模擬器，多個模擬器正在執行或使用不支援自動檢測的模擬器時無法使用 \"auto\"，必須手動填寫\n\n模擬器預設 Serial：\n- 藍疊模擬器 127.0.0.1:5555\n- 藍疊模擬器4 Hyper-v版，填\"bluestacks4-hyperv\"自動連線，多開填\"bluestacks4-hyperv-2\"以此類推\n- 藍疊模擬器5 Hyper-v版，填\"bluestacks5-hyperv\"自動連線，多開填\"bluestacks5-hyperv-1\"以此類推\n- 夜神模擬器 127.0.0.1:62001\n- 夜神模擬器64位 127.0.0.1:59865\n- MuMu模擬器/MuMu模擬器X 127.0.0.1:7555\n- MuMu模擬器12 127.0.0.1:16384\n- MuMu Pro (macOS) 127.0.0.1:16384，多開依次為 127.0.0.1:16416, 127.0.0.1:16448 ...\n- 逍遙模擬器 127.0.0.1:21503\n- 雷電模擬器 emulator-5554 或 127.0.0.1:5555\n如果你使用了模擬器的多開功能，它們的 Serial 將不是預設的，可以在 console.bat 中執行 `adb devices` 查詢，或根據模擬器官方的教程填寫"
+      "help": "常見的模擬器 Serial 可以查詢下方列表\n填 \"auto\" 自動檢測模擬器，多個模擬器正在執行或使用不支援自動檢測的模擬器時無法使用 \"auto\"，必須手動填寫\n\n模擬器預設 Serial：\n- 藍疊模擬器 127.0.0.1:5555\n- 藍疊模擬器4 Hyper-v版，填\"bluestacks4-hyperv\"自動連線，多開填\"bluestacks4-hyperv-2\"以此類推\n- 藍疊模擬器5 Hyper-v版，填\"bluestacks5-hyperv\"自動連線，多開填\"bluestacks5-hyperv-1\"以此類推\n- 夜神模擬器 127.0.0.1:62001\n- 夜神模擬器64位 127.0.0.1:59865\n- MuMu模擬器/MuMu模擬器X 127.0.0.1:7555\n- MuMu模擬器12 127.0.0.1:16384\n- MuMu Pro (macOS) 127.0.0.1:16384，多開依次為 127.0.0.1:16416, 127.0.0.1:16448 ...\n- 逍遙模擬器 127.0.0.1:21503\n- 雷電模擬器 emulator-5554 或 127.0.0.1:5555\n如果你使用了模擬器的多開功能，它們的 Serial 將不是預設的，可以在 console.bat 中執行 `adb devices` 查詢，或根據模擬器官方的教學填寫"
     },
     "PackageName": {
       "name": "遊戲伺服器",
@@ -652,7 +652,7 @@
   "EmulatorInfo": {
     "_info": {
       "name": "模擬器設定",
-      "help": "下列數值是根據Serial自動填充的，如果不懂請不要隨意修改，修改埠即可自動啟動對應例項"
+      "help": "下列數值是根據Serial自動填充的，如果不懂請不要隨意修改，修改埠即可自動啟動對應實例"
     },
     "Emulator": {
       "name": "選擇模擬器類型",
@@ -677,7 +677,7 @@
       "SSH": "SSH"
     },
     "name": {
-      "name": "模擬器例項名稱",
+      "name": "模擬器實例名稱",
       "help": ""
     },
     "path": {
@@ -1143,7 +1143,7 @@
       "name": "每次退役 X 艘",
       "help": "",
       "retire_all": "退役全部",
-      "retire_10": "退役10個"
+      "retire_10": "退役10艘"
     }
   },
   "Campaign": {
@@ -1455,7 +1455,7 @@
     },
     "DailyRunCount": {
       "name": "每日出擊 X 次",
-      "help": "每天最多執行作戰檔案多少次。\n0 表示不限制。\n達到次數後會延遲到下一次伺服器刷新，不會關閉任務。"
+      "help": "每天最多執行作戰檔案多少次。\n0 表示不限制。\n達到次數後會延遲到下一次伺服器重新整理，不會關閉任務。"
     },
     "AutoClear": {
       "name": "自動開荒",
@@ -1482,7 +1482,7 @@
     },
     "DailyRunCountRecord": {
       "name": "每日出擊次數記錄時間",
-      "help": "腳本自動維護的額度記錄時間，用於伺服器刷新後重置。"
+      "help": "腳本自動維護的額度記錄時間，用於伺服器重新整理後重置。"
     },
     "DailyRunCountLimit": {
       "name": "上次每日出擊次數",
@@ -2087,7 +2087,7 @@
     },
     "PresetFilter": {
       "name": "委託過濾器",
-      "help": "如果對委託的產出和收益沒有足夠的瞭解，不建議編寫自定義過濾器，建議使用預最佳化委託過濾器\n如果24小時執行刷緊急委託功能，應當使用（7x24刷委託）的過濾器\n不推薦在執行刷緊急委託功能的同時使用石油優先過濾器",
+      "help": "如果對委託的產出和收益沒有足夠的瞭解，不建議編寫自定義過濾器，建議使用預設最佳化委託過濾器\n如果24小時執行刷緊急委託功能，應當使用（7x24刷委託）的過濾器\n不推薦在執行刷緊急委託功能的同時使用石油優先過濾器",
       "cube": "鑽石>魔方>石油",
       "cube_24h": "鑽石>魔方>石油（7x24刷委託）",
       "chip": "鑽石>心智>魔方",
@@ -2273,7 +2273,7 @@
     },
     "PresetFilter": {
       "name": "科研過濾器",
-      "help": "科研掉落和專案重新整理見 https://azur-stats.lyoko.io/，對這些沒有基本瞭解的人不建議編寫自定義過濾器，建議使用預最佳化科研過濾器",
+      "help": "科研掉落和專案重新整理見 https://azur-stats.lyoko.io/，對這些沒有基本瞭解的人不建議編寫自定義過濾器，建議使用預設最佳化科研過濾器",
       "custom": "自定義",
       "series_9_blueprint_ta152": "九期 藍圖+Ta152",
       "series_9_blueprint_only": "九期 僅藍圖",
@@ -3566,7 +3566,7 @@
     },
     "ExecuteFixedPatrolScan": {
       "name": "強制移動等級",
-      "help": "明石被艦隊擋住或刷新在雷達外面時，要不要讓艦隊動一動去處理它。0=關閉：不處理；1=效率模式：只切換艦隊看雷達，一支都不挪動，最快；找不到就放棄；2=保守模式：先只掃雷達（不動），掃不到再逐個挪動艦隊+掃圖找，更穩但會挪動、慢一點。預設 0 關閉；舊版布林 true 遷移為 2、false 遷移為 0。",
+      "help": "明石被艦隊擋住或重新整理在雷達外面時，要不要讓艦隊動一動去處理它。0=關閉：不處理；1=效率模式：只切換艦隊看雷達，一支都不挪動，最快；找不到就放棄；2=保守模式：先只掃雷達（不動），掃不到再逐個挪動艦隊+掃圖找，更穩但會挪動、慢一點。預設 0 關閉；舊版布林 true 遷移為 2、false 遷移為 0。",
       "0": "關閉",
       "1": "效率模式",
       "2": "保守模式"
@@ -3656,7 +3656,7 @@
   "OpsiFleetAutoChange": {
     "_info": {
       "name": "侵蝕一艦隊自動配隊",
-      "help": "自動更換已滿經驗的艦船\n當經驗檢測發現指定艦位已滿經驗時，自動進入船塢選擇替換艦船\n使用大世界經驗檢測的目標等級和自訂檢測艦位設定\n使用教程：1.必須將所有常用艦船全部取消，只能留下練級艦船 2.必須啟用自訂艦船檢測並設定艦位 3.艦隊必須為艦隊1"
+      "help": "自動更換已滿經驗的艦船\n當經驗檢測發現指定艦位已滿經驗時，自動進入船塢選擇替換艦船\n使用大世界經驗檢測的目標等級和自訂檢測艦位設定\n使用教學：1.必須將所有常用艦船全部取消，只能留下練級艦船 2.必須啟用自訂艦船檢測並設定艦位 3.艦隊必須為艦隊1"
     },
     "Enable": {
       "name": "啟用自動配隊",
@@ -3756,7 +3756,7 @@
     },
     "Task": {
       "name": "執行任務",
-      "help": "推薦選擇智慧排程，防溢出任務對此有專門處理",
+      "help": "推薦選擇智慧排程，防溢位任務對此有專門處理",
       "OpsiScheduling": "智慧排程（推薦）",
       "OpsiHazard1Leveling": "侵蝕1練級",
       "OpsiMeowfficerFarming": "短貓相接"
@@ -3767,7 +3767,7 @@
     },
     "ActionPointLowerbound": {
       "name": "當前行動力下限",
-      "help": "防溢出任務會持續執行，直到當前行動力低於此值"
+      "help": "防溢位任務會持續執行，直到當前行動力低於此值"
     }
   },
   "IslandPlan": {
@@ -4098,7 +4098,7 @@
     "Meal1": {
       "name": "餐品1",
       "help": "",
-      "None": "None",
+      "None": "無",
       "tofu": "豆腐",
       "omurice": "蛋包飯",
       "cabbage_tofu": "白菜豆腐湯",
@@ -4121,7 +4121,7 @@
     "Meal2": {
       "name": "餐品2",
       "help": "",
-      "None": "None",
+      "None": "無",
       "tofu": "豆腐",
       "omurice": "蛋包飯",
       "cabbage_tofu": "白菜豆腐湯",
@@ -4144,7 +4144,7 @@
     "Meal3": {
       "name": "餐品3",
       "help": "",
-      "None": "None",
+      "None": "無",
       "tofu": "豆腐",
       "omurice": "蛋包飯",
       "cabbage_tofu": "白菜豆腐湯",
@@ -4167,7 +4167,7 @@
     "Meal4": {
       "name": "餐品4",
       "help": "",
-      "None": "None",
+      "None": "無",
       "tofu": "豆腐",
       "omurice": "蛋包飯",
       "cabbage_tofu": "白菜豆腐湯",
@@ -4190,7 +4190,7 @@
     "Meal5": {
       "name": "餐品5",
       "help": "",
-      "None": "None",
+      "None": "無",
       "tofu": "豆腐",
       "omurice": "蛋包飯",
       "cabbage_tofu": "白菜豆腐湯",
@@ -4213,7 +4213,7 @@
     "Meal6": {
       "name": "餐品6",
       "help": "",
-      "None": "None",
+      "None": "無",
       "tofu": "豆腐",
       "omurice": "蛋包飯",
       "cabbage_tofu": "白菜豆腐湯",
@@ -4236,7 +4236,7 @@
     "Meal7": {
       "name": "餐品7",
       "help": "",
-      "None": "None",
+      "None": "無",
       "tofu": "豆腐",
       "omurice": "蛋包飯",
       "cabbage_tofu": "白菜豆腐湯",
@@ -4259,7 +4259,7 @@
     "Meal8": {
       "name": "餐品8",
       "help": "",
-      "None": "None",
+      "None": "無",
       "tofu": "豆腐",
       "omurice": "蛋包飯",
       "cabbage_tofu": "白菜豆腐湯",
@@ -4288,7 +4288,7 @@
     "AwayCook": {
       "name": "常駐餐品",
       "help": "以上全做完則做常駐餐品",
-      "None": "None",
+      "None": "無",
       "tofu": "豆腐",
       "omurice": "蛋包飯",
       "cabbage_tofu": "白菜豆腐湯",
@@ -4327,7 +4327,7 @@
     "Meal1": {
       "name": "餐品1",
       "help": "",
-      "None": "None",
+      "None": "無",
       "apple_juice": "蘋果汁",
       "banana_mango": "香蕉芒果汁",
       "honey_lemon": "蜂蜜檸檬水",
@@ -4348,7 +4348,7 @@
     "Meal2": {
       "name": "餐品2",
       "help": "",
-      "None": "None",
+      "None": "無",
       "apple_juice": "蘋果汁",
       "banana_mango": "香蕉芒果汁",
       "honey_lemon": "蜂蜜檸檬水",
@@ -4369,7 +4369,7 @@
     "Meal3": {
       "name": "餐品3",
       "help": "",
-      "None": "None",
+      "None": "無",
       "apple_juice": "蘋果汁",
       "banana_mango": "香蕉芒果汁",
       "honey_lemon": "蜂蜜檸檬水",
@@ -4390,7 +4390,7 @@
     "Meal4": {
       "name": "餐品4",
       "help": "",
-      "None": "None",
+      "None": "無",
       "apple_juice": "蘋果汁",
       "banana_mango": "香蕉芒果汁",
       "honey_lemon": "蜂蜜檸檬水",
@@ -4411,7 +4411,7 @@
     "Meal5": {
       "name": "餐品5",
       "help": "",
-      "None": "None",
+      "None": "無",
       "apple_juice": "蘋果汁",
       "banana_mango": "香蕉芒果汁",
       "honey_lemon": "蜂蜜檸檬水",
@@ -4432,7 +4432,7 @@
     "Meal6": {
       "name": "餐品6",
       "help": "",
-      "None": "None",
+      "None": "無",
       "apple_juice": "蘋果汁",
       "banana_mango": "香蕉芒果汁",
       "honey_lemon": "蜂蜜檸檬水",
@@ -4453,7 +4453,7 @@
     "Meal7": {
       "name": "餐品7",
       "help": "",
-      "None": "None",
+      "None": "無",
       "apple_juice": "蘋果汁",
       "banana_mango": "香蕉芒果汁",
       "honey_lemon": "蜂蜜檸檬水",
@@ -4474,7 +4474,7 @@
     "Meal8": {
       "name": "餐品8",
       "help": "",
-      "None": "None",
+      "None": "無",
       "apple_juice": "蘋果汁",
       "banana_mango": "香蕉芒果汁",
       "honey_lemon": "蜂蜜檸檬水",
@@ -4501,7 +4501,7 @@
     "AwayCook": {
       "name": "常駐餐品",
       "help": "以上全做完則做常駐餐品",
-      "None": "None",
+      "None": "無",
       "apple_juice": "蘋果汁",
       "banana_mango": "香蕉芒果汁",
       "honey_lemon": "蜂蜜檸檬水",
@@ -4534,7 +4534,7 @@
     "Meal1": {
       "name": "餐品1",
       "help": "",
-      "None": "None",
+      "None": "無",
       "roasted_skewer": "碳烤肉串",
       "chicken_potato": "禽肉馬鈴薯拼盤",
       "carrot_omelette": "胡蘿蔔厚蛋燒",
@@ -4551,7 +4551,7 @@
     "Meal2": {
       "name": "餐品2",
       "help": "",
-      "None": "None",
+      "None": "無",
       "roasted_skewer": "碳烤肉串",
       "chicken_potato": "禽肉馬鈴薯拼盤",
       "carrot_omelette": "胡蘿蔔厚蛋燒",
@@ -4568,7 +4568,7 @@
     "Meal3": {
       "name": "餐品3",
       "help": "",
-      "None": "None",
+      "None": "無",
       "roasted_skewer": "碳烤肉串",
       "chicken_potato": "禽肉馬鈴薯拼盤",
       "carrot_omelette": "胡蘿蔔厚蛋燒",
@@ -4585,7 +4585,7 @@
     "Meal4": {
       "name": "餐品4",
       "help": "",
-      "None": "None",
+      "None": "無",
       "roasted_skewer": "碳烤肉串",
       "chicken_potato": "禽肉馬鈴薯拼盤",
       "carrot_omelette": "胡蘿蔔厚蛋燒",
@@ -4602,7 +4602,7 @@
     "Meal5": {
       "name": "餐品5",
       "help": "",
-      "None": "None",
+      "None": "無",
       "roasted_skewer": "碳烤肉串",
       "chicken_potato": "禽肉馬鈴薯拼盤",
       "carrot_omelette": "胡蘿蔔厚蛋燒",
@@ -4619,7 +4619,7 @@
     "Meal6": {
       "name": "餐品6",
       "help": "",
-      "None": "None",
+      "None": "無",
       "roasted_skewer": "碳烤肉串",
       "chicken_potato": "禽肉馬鈴薯拼盤",
       "carrot_omelette": "胡蘿蔔厚蛋燒",
@@ -4636,7 +4636,7 @@
     "Meal7": {
       "name": "餐品7",
       "help": "",
-      "None": "None",
+      "None": "無",
       "roasted_skewer": "碳烤肉串",
       "chicken_potato": "禽肉馬鈴薯拼盤",
       "carrot_omelette": "胡蘿蔔厚蛋燒",
@@ -4653,7 +4653,7 @@
     "Meal8": {
       "name": "餐品8",
       "help": "",
-      "None": "None",
+      "None": "無",
       "roasted_skewer": "碳烤肉串",
       "chicken_potato": "禽肉馬鈴薯拼盤",
       "carrot_omelette": "胡蘿蔔厚蛋燒",
@@ -4676,7 +4676,7 @@
     "AwayCook": {
       "name": "常駐餐品",
       "help": "以上全做完則做常駐餐品",
-      "None": "None",
+      "None": "無",
       "roasted_skewer": "碳烤肉串",
       "chicken_potato": "禽肉馬鈴薯拼盤",
       "carrot_omelette": "胡蘿蔔厚蛋燒",
@@ -4705,7 +4705,7 @@
     "Meal1": {
       "name": "餐品1",
       "help": "",
-      "None": "None",
+      "None": "無",
       "apple_pie": "蘋果派",
       "corn_cup": "玉米杯",
       "orange_pie": "香橙派",
@@ -4724,7 +4724,7 @@
     "Meal2": {
       "name": "餐品2",
       "help": "",
-      "None": "None",
+      "None": "無",
       "apple_pie": "蘋果派",
       "corn_cup": "玉米杯",
       "orange_pie": "香橙派",
@@ -4743,7 +4743,7 @@
     "Meal3": {
       "name": "餐品3",
       "help": "",
-      "None": "None",
+      "None": "無",
       "apple_pie": "蘋果派",
       "corn_cup": "玉米杯",
       "orange_pie": "香橙派",
@@ -4762,7 +4762,7 @@
     "Meal4": {
       "name": "餐品4",
       "help": "",
-      "None": "None",
+      "None": "無",
       "apple_pie": "蘋果派",
       "corn_cup": "玉米杯",
       "orange_pie": "香橙派",
@@ -4781,7 +4781,7 @@
     "Meal5": {
       "name": "餐品5",
       "help": "",
-      "None": "None",
+      "None": "無",
       "apple_pie": "蘋果派",
       "corn_cup": "玉米杯",
       "orange_pie": "香橙派",
@@ -4800,7 +4800,7 @@
     "Meal6": {
       "name": "餐品6",
       "help": "",
-      "None": "None",
+      "None": "無",
       "apple_pie": "蘋果派",
       "corn_cup": "玉米杯",
       "orange_pie": "香橙派",
@@ -4819,7 +4819,7 @@
     "Meal7": {
       "name": "餐品7",
       "help": "",
-      "None": "None",
+      "None": "無",
       "apple_pie": "蘋果派",
       "corn_cup": "玉米杯",
       "orange_pie": "香橙派",
@@ -4838,7 +4838,7 @@
     "Meal8": {
       "name": "餐品8",
       "help": "",
-      "None": "None",
+      "None": "無",
       "apple_pie": "蘋果派",
       "corn_cup": "玉米杯",
       "orange_pie": "香橙派",
@@ -4863,7 +4863,7 @@
     "AwayCook": {
       "name": "常駐餐品",
       "help": "以上全做完則做常駐餐品",
-      "None": "None",
+      "None": "無",
       "apple_pie": "蘋果派",
       "corn_cup": "玉米杯",
       "orange_pie": "香橙派",
@@ -4898,10 +4898,10 @@
     "Meal1": {
       "name": "餐品1",
       "help": "",
-      "None": "None",
+      "None": "無",
       "iced_coffee": "冰咖啡",
       "omelette": "歐姆蛋",
-      "cheese": "芝士",
+      "cheese": "起司",
       "latte": "拿鐵",
       "citrus_coffee": "柑橘咖啡",
       "strawberry_milkshake": "草莓奶綠",
@@ -4916,10 +4916,10 @@
     "Meal2": {
       "name": "餐品2",
       "help": "",
-      "None": "None",
+      "None": "無",
       "iced_coffee": "冰咖啡",
       "omelette": "歐姆蛋",
-      "cheese": "芝士",
+      "cheese": "起司",
       "latte": "拿鐵",
       "citrus_coffee": "柑橘咖啡",
       "strawberry_milkshake": "草莓奶綠",
@@ -4934,10 +4934,10 @@
     "Meal3": {
       "name": "餐品3",
       "help": "",
-      "None": "None",
+      "None": "無",
       "iced_coffee": "冰咖啡",
       "omelette": "歐姆蛋",
-      "cheese": "芝士",
+      "cheese": "起司",
       "latte": "拿鐵",
       "citrus_coffee": "柑橘咖啡",
       "strawberry_milkshake": "草莓奶綠",
@@ -4952,10 +4952,10 @@
     "Meal4": {
       "name": "餐品4",
       "help": "",
-      "None": "None",
+      "None": "無",
       "iced_coffee": "冰咖啡",
       "omelette": "歐姆蛋",
-      "cheese": "芝士",
+      "cheese": "起司",
       "latte": "拿鐵",
       "citrus_coffee": "柑橘咖啡",
       "strawberry_milkshake": "草莓奶綠",
@@ -4970,10 +4970,10 @@
     "Meal5": {
       "name": "餐品5",
       "help": "",
-      "None": "None",
+      "None": "無",
       "iced_coffee": "冰咖啡",
       "omelette": "歐姆蛋",
-      "cheese": "芝士",
+      "cheese": "起司",
       "latte": "拿鐵",
       "citrus_coffee": "柑橘咖啡",
       "strawberry_milkshake": "草莓奶綠",
@@ -4988,10 +4988,10 @@
     "Meal6": {
       "name": "餐品6",
       "help": "",
-      "None": "None",
+      "None": "無",
       "iced_coffee": "冰咖啡",
       "omelette": "歐姆蛋",
-      "cheese": "芝士",
+      "cheese": "起司",
       "latte": "拿鐵",
       "citrus_coffee": "柑橘咖啡",
       "strawberry_milkshake": "草莓奶綠",
@@ -5006,10 +5006,10 @@
     "Meal7": {
       "name": "餐品7",
       "help": "",
-      "None": "None",
+      "None": "無",
       "iced_coffee": "冰咖啡",
       "omelette": "歐姆蛋",
-      "cheese": "芝士",
+      "cheese": "起司",
       "latte": "拿鐵",
       "citrus_coffee": "柑橘咖啡",
       "strawberry_milkshake": "草莓奶綠",
@@ -5024,10 +5024,10 @@
     "Meal8": {
       "name": "餐品8",
       "help": "",
-      "None": "None",
+      "None": "無",
       "iced_coffee": "冰咖啡",
       "omelette": "歐姆蛋",
-      "cheese": "芝士",
+      "cheese": "起司",
       "latte": "拿鐵",
       "citrus_coffee": "柑橘咖啡",
       "strawberry_milkshake": "草莓奶綠",
@@ -5048,10 +5048,10 @@
     "AwayCook": {
       "name": "常駐餐品",
       "help": "以上全做完則做常駐餐品",
-      "None": "None",
+      "None": "無",
       "iced_coffee": "冰咖啡",
       "omelette": "歐姆蛋",
-      "cheese": "芝士",
+      "cheese": "起司",
       "latte": "拿鐵",
       "citrus_coffee": "柑橘咖啡",
       "strawberry_milkshake": "草莓奶綠",
@@ -5137,7 +5137,7 @@
     },
     "RejectFilter": {
       "name": "駁回物品過濾",
-      "help": "設定需要駁回的物品，支援 Cheese（芝士）和 Tofu（豆腐），用 > 分隔。如 \"Cheese > Tofu\" 表示檢測到芝士或豆腐時駁回。"
+      "help": "設定需要駁回的物品，支援 Cheese（起司）和 Tofu（豆腐），用 > 分隔。如 \"Cheese > Tofu\" 表示檢測到起司或豆腐時駁回。"
     },
     "UrgentDetectRefreshTime": {
       "name": "緊急委託檢測重新整理時間",
@@ -5159,7 +5159,7 @@
   "IslandPearlSell": {
     "_info": {
       "name": "每週珍珠採購與售賣",
-      "help": "僅支援minitouch。每週二 01:00 自動處理珍珠：先按最高採購價採購本週珍珠，再按最低售賣價售賣已有珍珠。其他未完成流程會延遲到次日 01:00 重試。金幣一定要夠購買200x220個這是最低要求能一次買光本週珍珠, 否則可能會報錯."
+      "help": "僅支援minitouch。每週二 01:00 自動處理珍珠：先按最高採購價採購本週珍珠，再按最低售賣價售賣已有珍珠。其他未完成流程會延遲到次日 01:00 重試。金幣一定要夠購買200x220個這是最低要求能一次買光本週珍珠，否則可能會報錯."
     },
     "BuyPrice": {
       "name": "最高採購價格",
@@ -5240,7 +5240,7 @@
     "Char1": {
       "name": "角色1",
       "help": "",
-      "None": "None",
+      "None": "無",
       "WorkerJuu": "工作啾",
       "Cheshire": "柴郡",
       "YingSwei": "應瑞",
@@ -5280,7 +5280,7 @@
     "Char2": {
       "name": "角色2",
       "help": "",
-      "None": "None",
+      "None": "無",
       "WorkerJuu": "工作啾",
       "Cheshire": "柴郡",
       "YingSwei": "應瑞",
@@ -5320,7 +5320,7 @@
     "Product1": {
       "name": "餐品1",
       "help": "",
-      "None": "None",
+      "None": "無",
       "double_bamboo_shoots": "涼拌雙筍",
       "tofu_meat": "肉末燒豆腐",
       "tofu_combo": "經典豆腐套餐",
@@ -5333,7 +5333,7 @@
     "Product2": {
       "name": "餐品2",
       "help": "",
-      "None": "None",
+      "None": "無",
       "double_bamboo_shoots": "涼拌雙筍",
       "tofu_meat": "肉末燒豆腐",
       "tofu_combo": "經典豆腐套餐",
@@ -5346,7 +5346,7 @@
     "Product3": {
       "name": "餐品3",
       "help": "",
-      "None": "None",
+      "None": "無",
       "double_bamboo_shoots": "涼拌雙筍",
       "tofu_meat": "肉末燒豆腐",
       "tofu_combo": "經典豆腐套餐",
@@ -5359,7 +5359,7 @@
     "Product4": {
       "name": "餐品4",
       "help": "",
-      "None": "None",
+      "None": "無",
       "double_bamboo_shoots": "涼拌雙筍",
       "tofu_meat": "肉末燒豆腐",
       "tofu_combo": "經典豆腐套餐",
@@ -5372,7 +5372,7 @@
     "Product5": {
       "name": "餐品5",
       "help": "",
-      "None": "None",
+      "None": "無",
       "double_bamboo_shoots": "涼拌雙筍",
       "tofu_meat": "肉末燒豆腐",
       "tofu_combo": "經典豆腐套餐",
@@ -5408,7 +5408,7 @@
     "Char1": {
       "name": "角色1",
       "help": "",
-      "None": "None",
+      "None": "無",
       "WorkerJuu": "工作啾",
       "Cheshire": "柴郡",
       "YingSwei": "應瑞",
@@ -5448,7 +5448,7 @@
     "Char2": {
       "name": "角色2",
       "help": "",
-      "None": "None",
+      "None": "無",
       "WorkerJuu": "工作啾",
       "Cheshire": "柴郡",
       "YingSwei": "應瑞",
@@ -5488,7 +5488,7 @@
     "Product1": {
       "name": "餐品1",
       "help": "",
-      "None": "None",
+      "None": "無",
       "spring_flower_tea": "迎春花茶",
       "strawberry_lemon": "草莓蜜沁",
       "strawberry_honey": "草莓蜂蜜冰沙",
@@ -5503,7 +5503,7 @@
     "Product2": {
       "name": "餐品2",
       "help": "",
-      "None": "None",
+      "None": "無",
       "spring_flower_tea": "迎春花茶",
       "strawberry_lemon": "草莓蜜沁",
       "strawberry_honey": "草莓蜂蜜冰沙",
@@ -5518,7 +5518,7 @@
     "Product3": {
       "name": "餐品3",
       "help": "",
-      "None": "None",
+      "None": "無",
       "spring_flower_tea": "迎春花茶",
       "strawberry_lemon": "草莓蜜沁",
       "strawberry_honey": "草莓蜂蜜冰沙",
@@ -5533,7 +5533,7 @@
     "Product4": {
       "name": "餐品4",
       "help": "",
-      "None": "None",
+      "None": "無",
       "spring_flower_tea": "迎春花茶",
       "strawberry_lemon": "草莓蜜沁",
       "strawberry_honey": "草莓蜂蜜冰沙",
@@ -5548,7 +5548,7 @@
     "Product5": {
       "name": "餐品5",
       "help": "",
-      "None": "None",
+      "None": "無",
       "spring_flower_tea": "迎春花茶",
       "strawberry_lemon": "草莓蜜沁",
       "strawberry_honey": "草莓蜂蜜冰沙",
@@ -5563,7 +5563,7 @@
     "SeasonalFallback": {
       "name": "季節飲品備用飲品",
       "help": "白熊飲品目前季節飲品庫存不足時替換成該飲品",
-      "None": "None",
+      "None": "無",
       "spring_flower_tea": "迎春花茶",
       "strawberry_lemon": "草莓蜜沁",
       "strawberry_honey": "草莓蜂蜜冰沙",
@@ -5588,7 +5588,7 @@
     "Char1": {
       "name": "角色1",
       "help": "",
-      "None": "None",
+      "None": "無",
       "WorkerJuu": "工作啾",
       "Cheshire": "柴郡",
       "YingSwei": "應瑞",
@@ -5628,7 +5628,7 @@
     "Char2": {
       "name": "角色2",
       "help": "",
-      "None": "None",
+      "None": "無",
       "WorkerJuu": "工作啾",
       "Cheshire": "柴郡",
       "YingSwei": "應瑞",
@@ -5668,7 +5668,7 @@
     "Product1": {
       "name": "餐品1",
       "help": "",
-      "None": "None",
+      "None": "無",
       "orchard_duo": "果園二重奏",
       "succulently_sweet": "香甜組合",
       "berry_orange": "莓果香橙甜點組",
@@ -5678,7 +5678,7 @@
     "Product2": {
       "name": "餐品2",
       "help": "",
-      "None": "None",
+      "None": "無",
       "orchard_duo": "果園二重奏",
       "succulently_sweet": "香甜組合",
       "berry_orange": "莓果香橙甜點組",
@@ -5688,7 +5688,7 @@
     "Product3": {
       "name": "餐品3",
       "help": "",
-      "None": "None",
+      "None": "無",
       "orchard_duo": "果園二重奏",
       "succulently_sweet": "香甜組合",
       "berry_orange": "莓果香橙甜點組",
@@ -5698,7 +5698,7 @@
     "Product4": {
       "name": "餐品4",
       "help": "",
-      "None": "None",
+      "None": "無",
       "orchard_duo": "果園二重奏",
       "succulently_sweet": "香甜組合",
       "berry_orange": "莓果香橙甜點組",
@@ -5708,7 +5708,7 @@
     "Product5": {
       "name": "餐品5",
       "help": "",
-      "None": "None",
+      "None": "無",
       "orchard_duo": "果園二重奏",
       "succulently_sweet": "香甜組合",
       "berry_orange": "莓果香橙甜點組",
@@ -5728,7 +5728,7 @@
     "Char1": {
       "name": "角色1",
       "help": "",
-      "None": "None",
+      "None": "無",
       "WorkerJuu": "工作啾",
       "Cheshire": "柴郡",
       "YingSwei": "應瑞",
@@ -5768,7 +5768,7 @@
     "Char2": {
       "name": "角色2",
       "help": "",
-      "None": "None",
+      "None": "無",
       "WorkerJuu": "工作啾",
       "Cheshire": "柴郡",
       "YingSwei": "應瑞",
@@ -5808,7 +5808,7 @@
     "Product1": {
       "name": "餐品1",
       "help": "",
-      "None": "None",
+      "None": "無",
       "roasted_skewer": "碳烤肉串",
       "stir_fried_chicken": "爆炒禽肉",
       "steak_bowl": "漢堡肉飯",
@@ -5819,7 +5819,7 @@
     "Product2": {
       "name": "餐品2",
       "help": "",
-      "None": "None",
+      "None": "無",
       "roasted_skewer": "碳烤肉串",
       "stir_fried_chicken": "爆炒禽肉",
       "steak_bowl": "漢堡肉飯",
@@ -5830,7 +5830,7 @@
     "Product3": {
       "name": "餐品3",
       "help": "",
-      "None": "None",
+      "None": "無",
       "roasted_skewer": "碳烤肉串",
       "stir_fried_chicken": "爆炒禽肉",
       "steak_bowl": "漢堡肉飯",
@@ -5841,7 +5841,7 @@
     "Product4": {
       "name": "餐品4",
       "help": "",
-      "None": "None",
+      "None": "無",
       "roasted_skewer": "碳烤肉串",
       "stir_fried_chicken": "爆炒禽肉",
       "steak_bowl": "漢堡肉飯",
@@ -5852,7 +5852,7 @@
     "Product5": {
       "name": "餐品5",
       "help": "",
-      "None": "None",
+      "None": "無",
       "roasted_skewer": "碳烤肉串",
       "stir_fried_chicken": "爆炒禽肉",
       "steak_bowl": "漢堡肉飯",
@@ -5873,7 +5873,7 @@
     "Char1": {
       "name": "角色1",
       "help": "",
-      "None": "None",
+      "None": "無",
       "WorkerJuu": "工作啾",
       "Cheshire": "柴郡",
       "YingSwei": "應瑞",
@@ -5913,7 +5913,7 @@
     "Char2": {
       "name": "角色2",
       "help": "",
-      "None": "None",
+      "None": "無",
       "WorkerJuu": "工作啾",
       "Cheshire": "柴郡",
       "YingSwei": "應瑞",
@@ -5953,8 +5953,8 @@
     "Product1": {
       "name": "餐品1",
       "help": "",
-      "None": "None",
-      "cheese": "芝士",
+      "None": "無",
+      "cheese": "起司",
       "citrus_coffee": "柑橘咖啡",
       "strawberry_milkshake": "草莓奶綠",
       "morning_light": "晨光活力組合",
@@ -5964,8 +5964,8 @@
     "Product2": {
       "name": "餐品2",
       "help": "",
-      "None": "None",
-      "cheese": "芝士",
+      "None": "無",
+      "cheese": "起司",
       "citrus_coffee": "柑橘咖啡",
       "strawberry_milkshake": "草莓奶綠",
       "morning_light": "晨光活力組合",
@@ -5975,8 +5975,8 @@
     "Product3": {
       "name": "餐品3",
       "help": "",
-      "None": "None",
-      "cheese": "芝士",
+      "None": "無",
+      "cheese": "起司",
       "citrus_coffee": "柑橘咖啡",
       "strawberry_milkshake": "草莓奶綠",
       "morning_light": "晨光活力組合",
@@ -5986,8 +5986,8 @@
     "Product4": {
       "name": "餐品4",
       "help": "",
-      "None": "None",
-      "cheese": "芝士",
+      "None": "無",
+      "cheese": "起司",
       "citrus_coffee": "柑橘咖啡",
       "strawberry_milkshake": "草莓奶綠",
       "morning_light": "晨光活力組合",
@@ -5997,8 +5997,8 @@
     "Product5": {
       "name": "餐品5",
       "help": "",
-      "None": "None",
-      "cheese": "芝士",
+      "None": "無",
+      "cheese": "起司",
       "citrus_coffee": "柑橘咖啡",
       "strawberry_milkshake": "草莓奶綠",
       "morning_light": "晨光活力組合",
@@ -6007,7 +6007,7 @@
     },
     "BoostReplaceFilter": {
       "name": "啾咖啡加成替換過濾",
-      "help": "多個加成餐品時按過濾順序優先替換第一個；替換槽位從餐品5→1倒查替換最後一個非空餐品\n可用餐品key對照：cheese:芝士, strawberry_milkshake:草莓奶綠, morning_light:晨光活力組合, wake_up_call:醒神套餐, fruity_fruitier:果香雙杯樂\n示例：30 > 20 > cheese > 10"
+      "help": "多個加成餐品時按過濾順序優先替換第一個；替換槽位從餐品5→1倒查替換最後一個非空餐品\n可用餐品key對照：cheese:起司, strawberry_milkshake:草莓奶綠, morning_light:晨光活力組合, wake_up_call:醒神套餐, fruity_fruitier:果香雙杯樂\n示例：30 > 20 > cheese > 10"
     }
   },
   "FleetInfo": {
@@ -6387,7 +6387,7 @@
     },
     "Overview": {
       "Scheduler": "排程器",
-      "Dashboard": "儀表盤",
+      "Dashboard": "儀表板",
       "SecondsAgo": "秒前",
       "MinutesAgo": "分鐘前",
       "HoursAgo": "小時前",
@@ -6521,7 +6521,7 @@
       "StatusStarting": "正在連線",
       "StatusFailed": "連線失敗",
       "ConfigureHint": "設定教學：",
-      "SSHNotInstall": "系統中沒有 ssh 工具，請參考教程下載或安裝 ssh"
+      "SSHNotInstall": "系統中沒有 ssh 工具，請參考教學下載或安裝 ssh"
     },
     "Launcher": {
       "StartupTitle": "啟動器設定",
