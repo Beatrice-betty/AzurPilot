@@ -193,7 +193,9 @@ def alas_template():
     for file in os.listdir('./config'):
         name, extension = os.path.splitext(file)
         if name == 'template' and extension == '.json':
-            out.append(f'{name}-alas')
+            # 主模块（template.json）在前端以 template-ap 展示，
+            # 实际模块名仍为 alas，由 get_config_mod() 负责映射回去。
+            out.append(f'{name}-{DEFAULT_CONFIG_NAME}')
 
     out.extend(list_mod_template())
 

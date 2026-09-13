@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING, cast
 
 from module.webui.app_dependencies import (
+    DEFAULT_CONFIG_NAME,
     ProcessManager,
     State,
     alas_instance,
@@ -62,9 +63,11 @@ class InstanceMixin(WebUIMixinBase):
 
             def get_unused_name():
                 all_name = alas_instance()
+                if DEFAULT_CONFIG_NAME not in all_name:
+                    return DEFAULT_CONFIG_NAME
                 for i in range(2, 100):
-                    if f"alas{i}" not in all_name:
-                        return f"alas{i}"
+                    if f"{DEFAULT_CONFIG_NAME}-{i}" not in all_name:
+                        return f"{DEFAULT_CONFIG_NAME}-{i}"
                 else:
                     return ""
 
@@ -106,7 +109,7 @@ class InstanceMixin(WebUIMixinBase):
                     name="AddAlas_copyfrom",
                     label=t("Gui.AddAlas.CopyFrom"),
                     options=alas_template() + alas_instance(),
-                    value=origin or "template-alas",
+                    value=origin or "template-ap",
                     scope=s,
                 )
                 put_buttons(

@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from module.webui.app_dependencies import (
     Any,
+    DEFAULT_CONFIG_NAME,
     Dict,
     IS_ON_PHONE_CLOUD,
     List,
@@ -99,9 +100,11 @@ def app_manage(gui: "AlasGUI") -> None:
 
     def get_unused_name():
         all_name = alas_instance()
+        if DEFAULT_CONFIG_NAME not in all_name:
+            return DEFAULT_CONFIG_NAME
         for i in range(2, 100):
-            if f"alas{i}" not in all_name:
-                return f"alas{i}"
+            if f"{DEFAULT_CONFIG_NAME}-{i}" not in all_name:
+                return f"{DEFAULT_CONFIG_NAME}-{i}"
         return ""
 
     def validate_name(name: str):
@@ -363,7 +366,7 @@ def app_manage(gui: "AlasGUI") -> None:
                 name="ManageNew_copyfrom",
                 label=t("Gui.AppManage.CopyFrom"),
                 options=alas_template() + alas_instance(),
-                value="template-alas",
+                value="template-ap",
             )
             put_scope("manage_add_feedback")
             put_buttons(
