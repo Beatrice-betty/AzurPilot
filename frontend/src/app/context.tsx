@@ -7,16 +7,17 @@ import { resumeEditors } from '../config/editors'
 export const languages = {'zh-CN': '简体中文', 'zh-TW': '繁体中文', 'en-US': 'English', 'ja-JP': '日本語', 'zh-MIAO': '喵语'}
 type Language = NonNullable<Parameters['schema.get']['language']>
 
-interface AppContext {
+export interface AppContextValue {
   instances: Instance[]; schema?: Schema; refresh: () => Promise<void>; t: (key: string) => string
   notify: (message: string, error?: boolean) => void
   previewEnabled: boolean; setPreviewEnabled: (enabled: boolean) => void
   theme: 'light' | 'dark'; setTheme: (theme: 'light' | 'dark') => void
   language: Language; setLanguage: (language: Language) => void
 }
-const Context = createContext<AppContext | null>(null)
+export const AppContext = createContext<AppContextValue | null>(null)
+const Context = AppContext
 export const useConnection = () => useSyncExternalStore(api.subscribe, api.getSnapshot)
-export const useApp = () => useContext(Context)!
+export const useApp = () => useContext(AppContext)!
 
 export function AppProvider({children}: {children: ReactNode}) {
   const connection = useConnection()

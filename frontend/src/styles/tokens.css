@@ -6,9 +6,7 @@
   --border: #e9eef1; --accent: #138b78; --accent-hover: #0b7969; --accent-soft: #eaf7f3;
   --navy: #111f2e; --red: #c15b60; --radius: 12px; --shadow: 0 3px 18px #18343d03;
   --sidebar: #fff; --sidebar-width: 221px;
-  /* 使用布局缩放同步放大字体、间距和图标，并修正视口高度。 */
-  --ui-scale: 1.25; --viewport-height: calc(100dvh / var(--ui-scale));
-  zoom: var(--ui-scale);
+  --ui-scale: 1; --viewport-height: 100dvh;
   --syntax-key: #126c9a; --syntax-string: #237342; --syntax-value: #96509e;
   --syntax-comment: #72818a; --syntax-punctuation: #657581;
   font-size: 13px;

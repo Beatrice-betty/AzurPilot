@@ -1,10 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { Anchor, ArrowRight, ChartNoAxesCombined, ChevronDown, Compass, LayoutDashboard, Menu, Plus, Search, Settings2, Wifi, WifiOff, X } from 'lucide-react'
+import { ArrowRight, ChartNoAxesCombined, Compass, LayoutDashboard, Menu, Plus, Settings2, Wifi, WifiOff, X } from 'lucide-react'
 import { api } from '../api/client'
 import { useApp, useConnection } from './context'
 import { ErrorBox, Loading, Modal } from '../components/ui'
 import { InstanceSwitcher } from '../components/InstanceSwitcher'
+import { TaskNav } from '../components/TaskNav'
 
 export function CreateInstance({onClose}: {onClose: () => void}) {
   const [name, setName] = useState('')
@@ -58,7 +59,6 @@ export function App() {
   const navigate = useNavigate()
   const location = useLocation()
   const [creating, setCreating] = useState(false)
-  const [search, setSearch] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)
   const current = instances.find(item => item.name === instance)
   const base = instance ? `/i/${instance}` : ''
@@ -82,12 +82,7 @@ export function App() {
       <div className="sidebar-label">工作空间</div>
       <nav className="primary-nav"><NavLink to={`${base}/overview`}><LayoutDashboard size={17}/>运行总览<span className="nav-pill">总览</span></NavLink><NavLink to={`${base}/statistics`}><ChartNoAxesCombined size={17}/>资源统计</NavLink><NavLink to={`${base}/settings`}><Settings2 size={17}/>系统设置</NavLink></nav>
       <div className="sidebar-label">任务配置 <span>{schema ? Object.values(schema.menu).flatMap(group => group.tasks).length : '—'}</span></div>
-      <div className="nav-search"><Search size={14}/><input aria-label="搜索任务" value={search} onChange={event => setSearch(event.target.value)} placeholder="搜索任务…"/></div>
-      <nav className="task-nav">{schema && Object.entries(schema.menu).map(([key, group]) => {
-        const tasks = group.tasks.filter(task => t(`Task.${task}.name`).toLowerCase().includes(search.toLowerCase()) || task.toLowerCase().includes(search.toLowerCase()))
-        if (!tasks.length) return null
-        return <details key={key} open={search || tasks.some(task => location.pathname.endsWith(`/task/${task}`)) ? true : undefined}><summary><Anchor size={14}/>{t(`Menu.${key}.name`)}<ChevronDown size={13}/></summary><div>{tasks.map(task => <NavLink key={task} to={`${base}/task/${task}`}><span/>{t(`Task.${task}.name`)}</NavLink>)}</div></details>
-      })}</nav>
+      <TaskNav/>
       <div className="sidebar-footer"><span className={`connection-dot ${connection === 'ready' ? 'online' : ''}`}/><span>{connection === 'ready' ? '服务连接正常' : '等待服务连接'}</span></div>
     </aside>
     <div className="main-shell"><header className="topbar"><button className="mobile-toggle icon-button" aria-label="打开导航" onClick={() => setMobileOpen(true)}><Menu size={20}/></button><div className="breadcrumb"><Link to={base ? `${base}/overview` : '/'}>工作空间</Link><span>/</span><Link to={base ? `${base}/overview` : '/'}>{instance ?? '欢迎'}</Link>{currentTask ? <><span>/</span><Link to={`${base}/task/Alas`}>任务配置</Link><span>/</span><Link to={`${base}/task/${currentTask}`}><strong>{t(`Task.${currentTask}.name`)}</strong></Link></> : <><span>/</span><Link to={location.pathname}><strong>{activeSection}</strong></Link></>}</div><div className="topbar-right"><span className="connection-label">{connection === 'ready' ? <Wifi size={14}/> : <WifiOff size={14}/>}{connection === 'ready' ? '已连接' : '连接中'}</span><span className="topbar-divider"/><span className="version">控制台 / v1</span></div></header>

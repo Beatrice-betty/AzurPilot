@@ -90,7 +90,7 @@ test('配置字体、多行输入与 YAML 编辑实时保存及主题颜色', as
   await expect(editor).toBeVisible()
   await expect(page.locator('.field-label small')).toHaveCount(0)
   expect(await page.locator('.field-label label').first().evaluate(node => parseFloat(getComputedStyle(node).fontSize))).toBeGreaterThanOrEqual(14)
-  expect(await page.locator('html').evaluate(node => getComputedStyle(node).zoom)).toBe('1.25')
+  expect(await page.locator('html').evaluate(node => getComputedStyle(node).zoom || '1')).toBe('1')
   const row = editor.locator('xpath=ancestor::div[contains(@class,"field-row")]')
   const label = await row.locator('.field-label').boundingBox()
   const input = await row.locator('.field-control').boundingBox()
