@@ -683,17 +683,28 @@ class AppShellMixin(WebUIMixinBase):
             branch = "master"
             disabled = False
 
+        # 只有非稳定分支（dev / app 等）才会注入水印；master / main 视为已验证
+        # 分支，本就不显示水印，开关对它们没有意义。
+        unstable = branch_is_unstable(branch)
+
         if disabled:
-            # 用户显式关闭：移除本会话可能已注入的水印层，并留下明确警告，
-            # 避免后续用无版本信息的截图反馈问题时无法定位。
+            # 用户显式关闭：移除本会话可能已注入的水印层；未验证分支上要留下明确
+            # 警告，避免后续用无版本信息的截图反馈问题时无法定位。
             self._remove_branch_watermark()
-            logger.warning(
-                "已按 WebUI 设置关闭未验证版本水印（WebUI.DisableBranchWatermark=true）；"
-                "该设置仅限了解各分支用途的用户使用，请勿据此截图反馈问题"
-            )
+            if unstable:
+                logger.warning(
+                    f"未验证分支 {branch} 的水印已按 WebUI 设置关闭"
+                    "（WebUI.DisableBranchWatermark=true）；该设置仅限了解各分支用途的用户使用，"
+                    "请勿据此截图反馈问题"
+                )
+            else:
+                logger.info(
+                    f"水印开关已打开，但当前分支 {branch} 属已验证分支，"
+                    "本来就不显示未验证版本水印"
+                )
             return
 
-        if not branch_is_unstable(branch):
+        if not unstable:
             return
 
         commit = None
