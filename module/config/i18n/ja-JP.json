@@ -6668,6 +6668,9 @@
       "InvalidFeedBack": "フォーマットエラー。例: {0}",
       "Clear": "クリア",
       "RunNow": "今すぐ実行",
+      "RunNowSchedulerStopped": "スケジューラーが起動していません。上部のスイッチまたは概要ページから起動してください",
+      "RunNowTaskDisabled": "このタスクは無効です。「スケジュール有効」にチェックしてから実行してください",
+      "SchedulerQuickBar": "スケジューラー",
       "EnterPassword": "パスワードを入力してください",
       "ChooseFile": "ファイルを選択"
     },

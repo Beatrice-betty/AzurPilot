@@ -352,6 +352,9 @@ Text:
   InvalidFeedBack:
   Clear:
   RunNow:
+  RunNowSchedulerStopped:
+  RunNowTaskDisabled:
+  SchedulerQuickBar:
   EnterPassword:
   ChooseFile:
 

@@ -6668,6 +6668,9 @@
       "InvalidFeedBack": "格式错误喵。示例：{0}",
       "Clear": "清除喵",
       "RunNow": "立即运行喵",
+      "RunNowSchedulerStopped": "调度器未启动喵，请先通过上方开关或总览页启动",
+      "RunNowTaskDisabled": "该任务未启用喵，请先勾选\"启用调度\"再立即运行",
+      "SchedulerQuickBar": "调度器喵",
       "EnterPassword": "输入密码喵",
       "ChooseFile": "选择文件喵"
     },

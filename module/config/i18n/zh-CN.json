@@ -6668,6 +6668,9 @@
       "InvalidFeedBack": "格式错误。 示例：{0}",
       "Clear": "清除",
       "RunNow": "立即运行",
+      "RunNowSchedulerStopped": "调度器未启动，请先通过上方开关或总览页启动",
+      "RunNowTaskDisabled": "该任务未启用，请先勾选\"启用调度\"再立即运行",
+      "SchedulerQuickBar": "调度器",
       "EnterPassword": "输入密码",
       "ChooseFile": "选择文件"
     },

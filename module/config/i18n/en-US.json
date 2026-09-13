@@ -6668,6 +6668,9 @@
       "InvalidFeedBack": "Format error. Example: {0}",
       "Clear": "Clear",
       "RunNow": "Run Now",
+      "RunNowSchedulerStopped": "Scheduler is not running. Start it with the switch above or on the overview page.",
+      "RunNowTaskDisabled": "Task is not enabled. Turn on its scheduler before running now.",
+      "SchedulerQuickBar": "Scheduler",
       "EnterPassword": "Enter password",
       "ChooseFile": "Select file"
     },

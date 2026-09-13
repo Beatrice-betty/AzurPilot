@@ -6,6 +6,7 @@ from typing import cast
 import module.webui.lang as lang
 from module.webui.app_dependencies import (
     Any,
+    BinarySwitchButton,
     clear,
     Dict,
     List,
@@ -401,6 +402,10 @@ class TaskConfigMixin(WebUIMixinBase):
                 )
             )
 
+        # 任务页顶部工具行：调度器启停开关，调完设置不必回总览页启动（#392）
+        if "Scheduler" in self.ALAS_ARGS[task]:
+            group_outputs.append(put_scope("scheduler_quick_bar"))
+
         if task == "Alas":
             group_outputs.append(put_scope("group_StartupRun"))
 
@@ -442,6 +447,40 @@ class TaskConfigMixin(WebUIMixinBase):
                 self._os_simulator()
         elif render_event_calculator:
             self._render_event_calculator(config)
+        if "Scheduler" in self.ALAS_ARGS[task]:
+            with use_scope("scheduler_quick_bar"):
+                self._render_scheduler_quick_bar()
+
+    def _render_scheduler_quick_bar(self) -> None:
+        """渲染任务设置页顶部的调度器启停开关（#392）。
+
+        与总览页的开关行为一致：启动后进入调度循环，停止时按
+        Optimization_WhenSchedulerStopped 处理正在运行的任务。
+        """
+        with use_scope("scheduler_quick_bar"):
+            put_row(
+                [
+                    put_text(t("Gui.Text.SchedulerQuickBar")).style(
+                        "font-size: .9rem; margin: auto .25rem auto 0;"
+                    ),
+                    put_scope("scheduler_btn_task"),
+                ],
+                size="auto 1fr",
+            ).style("margin: .2rem 0 .6rem;")
+        switch_scheduler = BinarySwitchButton(
+            label_on=t("Gui.Button.Stop"),
+            label_off=t("Gui.Button.Start"),
+            onclick_on=lambda: self.alas.stop_by_user(
+                self.alas_config.Optimization_WhenSchedulerStopped
+            ),
+            onclick_off=self._alas_start,
+            get_state=lambda: self.alas.alive,
+            color_on="off",
+            color_off="on",
+            scope="scheduler_btn_task",
+        )
+        # 按钮的首次渲染与状态轮询均由周期任务完成；页面切换时随 pending 任务清理
+        self.task_handler.add(switch_scheduler.g(), 1, True)
 
     def _build_config_group(
         self,
@@ -466,7 +505,16 @@ class TaskConfigMixin(WebUIMixinBase):
                 # 立即运行按钮：清空 NextRun 触发调度器立即执行该任务
                 run_now_path = f"{task}.Scheduler.NextRun"
 
-                def _run_now(_path=run_now_path):
+                def _run_now(_path=run_now_path, _task=task):
+                    # 静默失效场景提示：调度器未启动或任务未启用时，
+                    # 清空 NextRun 不会有任何效果（#392）
+                    if not self.alas.alive:
+                        toast(t("Gui.Text.RunNowSchedulerStopped"), color="warning")
+                        return
+                    current = self.alas_config.read_file(self.alas_name)
+                    if not deep_get(current, f"{_task}.Scheduler.Enable", False):
+                        toast(t("Gui.Text.RunNowTaskDisabled"), color="warning")
+                        return
                     self.modified_config_queue.put({"name": _path, "value": ""})
                     toast(t("Gui.Text.RunNow"))
 
