@@ -456,17 +456,12 @@ class TaskConfigMixin(WebUIMixinBase):
 
         与总览页的开关行为一致：启动后进入调度循环，停止时按
         Optimization_WhenSchedulerStopped 处理正在运行的任务。
+        左右布局（标题居左、按钮居右）由 alas.css 的
+        #pywebio-scope-scheduler_quick_bar 控制，与总览页工具行一致。
         """
         with use_scope("scheduler_quick_bar"):
-            put_row(
-                [
-                    put_text(t("Gui.Text.SchedulerQuickBar")).style(
-                        "font-size: .9rem; margin: auto .25rem auto 0;"
-                    ),
-                    put_scope("scheduler_btn_task"),
-                ],
-                size="auto 1fr",
-            ).style("margin: .2rem 0 .6rem;")
+            put_text(t("Gui.Text.SchedulerQuickBar"))
+            put_scope("scheduler_btn_task")
         switch_scheduler = BinarySwitchButton(
             label_on=t("Gui.Button.Stop"),
             label_off=t("Gui.Button.Start"),

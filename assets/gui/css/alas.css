@@ -683,6 +683,27 @@ pre.rich-traceback-code {
     margin: .2rem .25rem .1rem .25rem !important;
 }
 
+/* 任务设置页顶部的调度器快捷开关（#392），布局对齐总览页工具行 */
+#pywebio-scope-scheduler_quick_bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    row-gap: .25rem;
+}
+
+#pywebio-scope-scheduler_quick_bar > p {
+    font-size: 1.05rem;
+    font-weight: 500;
+    margin: 0 .25rem !important;
+    text-shadow: var(--alas-card-title-shadow, none);
+}
+
+/* 窄屏换行时按钮仍保持右对齐 */
+#pywebio-scope-scheduler_quick_bar > [id^="pywebio-scope-scheduler_btn_task"] {
+    margin-left: auto;
+}
+
 #pywebio-scope-groups {
     overflow-y: auto;
 }
