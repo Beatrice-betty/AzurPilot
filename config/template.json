@@ -1959,7 +1959,7 @@
   },
   "Commission": {
     "Scheduler": {
-      "Enable": false,
+      "Enable": true,
       "PushNotification": false,
       "NextRun": "2020-01-01 00:00:00",
       "Command": "Commission",
@@ -2024,7 +2024,7 @@
   },
   "Research": {
     "Scheduler": {
-      "Enable": false,
+      "Enable": true,
       "PushNotification": false,
       "NextRun": "2020-01-01 00:00:00",
       "Command": "Research",
@@ -2130,7 +2130,7 @@
   },
   "Reward": {
     "Scheduler": {
-      "Enable": false,
+      "Enable": true,
       "PushNotification": false,
       "NextRun": "2020-01-01 00:00:00",
       "Command": "Reward",
