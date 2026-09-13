@@ -430,7 +430,7 @@
     },
     "Enable": {
       "name": "Enable this feature",
-      "help": "Add this task to the scheduler\nCommission, Research, and Reward tasks are always enabled",
+      "help": "Add this task to the scheduler",
       "True": "Enabled",
       "False": "Disabled"
     },
