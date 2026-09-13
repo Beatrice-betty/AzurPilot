@@ -119,9 +119,12 @@ def branch_watermark_disabled(config) -> bool:
         bool: True 表示应当隐藏水印。
     """
     try:
-        return bool(getattr(config, "DisableBranchWatermark", False))
+        value = getattr(config, "DisableBranchWatermark", False)
     except Exception:
         return False
+    # 只认真正的布尔 True：deploy.yaml 里误写成字符串（"false" / "0" / "no"）
+    # 或数字 1 都不算开启，避免格式错误的值被当成真、把水印静默关掉。
+    return value is True
 
 
 def _clip_watermark_text(text, limit: int) -> str:
