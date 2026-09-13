@@ -6636,7 +6636,10 @@
       "WebuiSSLKey": "SSL Key File",
       "WebuiSSLKeyHelp": "SSL key path for WebUI HTTPS. Must be set together with the certificate.",
       "WebuiSSLCert": "SSL Certificate File",
-      "WebuiSSLCertHelp": "SSL certificate path for WebUI HTTPS. Must be set together with the key."
+      "WebuiSSLCertHelp": "SSL certificate path for WebUI HTTPS. Must be set together with the key.",
+      "DisableBranchWatermark": "Disable the unverified-build watermark",
+      "DisableBranchWatermarkHelp": "[The watermark is shown unless you tick this box]\n⚠ Do NOT enable this if you do not understand AzurPilot, or what branches such as master / dev mean.\n⚠ Do NOT enable this if you need to report a problem with screenshots or ask others for help: the watermark is the only clue telling which build you are actually running, and hiding it makes the problem impossible to locate.\nRestart AzurPilot for the change to take effect.",
+      "WatermarkHiddenNow": "Watermark hidden; refresh the page or restart AzurPilot to show it again."
     },
     "StartupRun": {
       "Title": "Auto-run on Startup",

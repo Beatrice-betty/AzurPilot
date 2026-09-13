@@ -6636,7 +6636,10 @@
       "WebuiSSLKey": "SSL 密钥文件",
       "WebuiSSLKeyHelp": "WebUI HTTPS 使用的 SSL 密钥路径，需和证书同时设置喵。",
       "WebuiSSLCert": "SSL 证书文件",
-      "WebuiSSLCertHelp": "WebUI HTTPS 使用的 SSL 证书路径，需和密钥同时设置喵。"
+      "WebuiSSLCertHelp": "WebUI HTTPS 使用的 SSL 证书路径，需和密钥同时设置喵。",
+      "DisableBranchWatermark": "关闭未经验证版本的水印喵",
+      "DisableBranchWatermarkHelp": "【不勾选的时候正常显示水印喵】\n⚠ 不了解 AzurPilot、或者搞不清 master / dev 等分支作用的人，禁止开启本项喵。\n⚠ 需要截图反馈问题、或者请别人帮忙定位问题的人，禁止开启本项喵：水印里的分支名、版本哈希和提交信息是判断你跑了哪一份代码的唯一线索喵，藏起来之后就定位不了问题喵。\n改完要重启 AzurPilot 才生效喵。",
+      "WatermarkHiddenNow": "水印已经藏起来啦喵；想再打开水印要刷新页面或者重启 AzurPilot 喵。"
     },
     "StartupRun": {
       "Title": "启动时自动运行喵",

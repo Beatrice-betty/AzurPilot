@@ -6636,7 +6636,10 @@
       "WebuiSSLKey": "SSL キーファイル",
       "WebuiSSLKeyHelp": "WebUI HTTPS 用の SSL キーです。証明書とセットで設定してください。",
       "WebuiSSLCert": "SSL 証明書ファイル",
-      "WebuiSSLCertHelp": "WebUI HTTPS 用の SSL 証明書です。キーとセットで設定してください。"
+      "WebuiSSLCertHelp": "WebUI HTTPS 用の SSL 証明書です。キーとセットで設定してください。",
+      "DisableBranchWatermark": "未検証バージョンの透かしを非表示にする",
+      "DisableBranchWatermarkHelp": "【チェックしない場合は透かしを表示します】\n⚠ AzurPilot や master / dev などのブランチの役割を理解していない場合は、この項目を有効にしないでください。\n⚠ スクリーンショットで問題を報告する場合や、他者に調査を依頼する場合は、この項目を有効にしないでください。透かしのバージョン情報は、実際に動作しているコードを特定する唯一の手がかりであり、隠すと問題の特定が不可能になります。\n変更後は AzurPilot の再起動が必要です。",
+      "WatermarkHiddenNow": "透かしを非表示にしました。再度表示するにはページを再読み込みするか、AzurPilot を再起動してください。"
     },
     "StartupRun": {
       "Title": "起動時に自動実行",

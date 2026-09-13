@@ -70,6 +70,10 @@ def branch_is_unstable(branch) -> bool:
     return branch not in ("master", "main")
 
 
+# 水印层与其样式表的 DOM id，注入与移除共用（关闭水印后需要移除已注入的节点）。
+BRANCH_WATERMARK_BOX_ID = "alas-branch-watermark"
+BRANCH_WATERMARK_CSS_ID = "alas-branch-watermark-style"
+
 # 未验证分支水印的主提醒文案，中英各一行、同时展示。元信息统一使用 ASCII 标签。
 BRANCH_WATERMARK_NOTICE = "您正在使用未经验证的版本，可能存在未知问题"
 BRANCH_WATERMARK_NOTICE_EN = (
@@ -98,6 +102,89 @@ BRANCH_WATERMARK_MAX_MESSAGE_LEN = 40
 BRANCH_WATERMARK_KIND_TITLE = "title"
 BRANCH_WATERMARK_KIND_TITLE_EN = "title-en"
 BRANCH_WATERMARK_KIND_META = "meta"
+
+# 读不到分支（部署配置读取失败、git 也拿不到）时使用的占位名，按未经验证处理。
+BRANCH_WATERMARK_UNKNOWN_BRANCH = "unknown"
+
+
+def resolve_watermark_branch(branch=None) -> str:
+    """规范化水印使用的分支名，取值无效时返回占位名。
+
+    ``git rev-parse --abbrev-ref HEAD`` 在游离头指针时返回 ``HEAD``；空值与 ``HEAD``
+    都不能当作「已验证分支」，统一替换为 BRANCH_WATERMARK_UNKNOWN_BRANCH。
+
+    Args:
+        branch: 部署配置或 git 给出的分支名。
+
+    Returns:
+        str: 可用于水印展示的分支名。
+    """
+    branch = str(branch or "").strip()
+    if not branch or branch.upper() == "HEAD":
+        return BRANCH_WATERMARK_UNKNOWN_BRANCH
+    return branch
+
+
+def branch_needs_watermark(branch) -> bool:
+    """是否需要注入未验证版本水印。
+
+    与 ``branch_is_unstable()`` 的区别：无法确定分支（占位名或空值）时按未经验证
+    处理。水印是排查问题的诊断信息，配置读不到时更应该显示，不能静默隐藏；而
+    ``branch_is_unstable()`` 对空值返回 False 的既有契约保持不变（它只回答
+    「这个分支名是否属于稳定分支」）。
+
+    Args:
+        branch: 分支名。
+
+    Returns:
+        bool: True 表示应当注入水印。
+    """
+    branch = str(branch or "").strip()
+    if not branch or branch.lower() == BRANCH_WATERMARK_UNKNOWN_BRANCH:
+        return True
+    return branch_is_unstable(branch)
+
+
+def detect_git_branch() -> str:
+    """读取当前工作区实际的 git 分支名，失败返回空串。
+
+    仅作为部署配置不可用时的兜底：配置坏了也应尽量展示真实的构建信息。
+
+    Returns:
+        str: 分支名；读取失败或游离头指针时返回空串。
+    """
+    try:
+        log = updater.execute_output(f'"{updater.git}" rev-parse --abbrev-ref HEAD')
+    except Exception as e:
+        logger.warning(f"读取当前 git 分支失败: {e}")
+        return ""
+    branch = (log or "").strip()
+    if branch.upper() == "HEAD":
+        return ""
+    return branch
+
+
+def branch_watermark_disabled(config) -> bool:
+    """部署配置是否要求关闭未验证版本水印。
+
+    默认（配置缺失、属性不存在或读取异常）返回 False，即保持显示水印；
+    只有用户在 WebUI 设置里显式打开「关闭未经验证版本的水印」时才返回 True。
+    水印里的分支名、版本哈希与提交信息是判断实际运行代码的唯一线索，
+    因此关闭与否只由用户显式配置决定，不做任何隐式推断。
+
+    Args:
+        config: DeployConfig 实例，或任何可能带 DisableBranchWatermark 的对象。
+
+    Returns:
+        bool: True 表示应当隐藏水印。
+    """
+    try:
+        value = getattr(config, "DisableBranchWatermark", False)
+    except Exception:
+        return False
+    # 只认真正的布尔 True：deploy.yaml 里误写成字符串（"false" / "0" / "no"）
+    # 或数字 1 都不算开启，避免格式错误的值被当成真、把水印静默关掉。
+    return value is True
 
 
 def _clip_watermark_text(text, limit: int) -> str:
@@ -622,6 +709,23 @@ class AppShellMixin(WebUIMixinBase):
         );
         """)
 
+    @staticmethod
+    def _remove_branch_watermark() -> None:
+        """移除已注入的水印层与样式表（关闭水印开关后调用）。
+
+        Pages: 会话外壳（登录后任意主界面）
+        """
+        run_js(f"""
+        (function () {{
+            ["{BRANCH_WATERMARK_BOX_ID}", "{BRANCH_WATERMARK_CSS_ID}"].forEach(function (id) {{
+                var node = document.getElementById(id);
+                if (node && node.parentNode) {{
+                    node.parentNode.removeChild(node);
+                }}
+            }});
+        }})();
+        """)
+
     def _inject_unverified_branch_watermark(self) -> None:
         """更新分支不是 master/main 时，注入全屏淡灰水印提醒。
 
@@ -634,13 +738,43 @@ class AppShellMixin(WebUIMixinBase):
 
         Pages: 会话外壳（登录后任意主界面）
         """
+        branch = ""
+        disabled = False
         try:
             State.deploy_config.read()
-            branch = getattr(State.deploy_config, "Branch", "master") or "master"
-        except Exception:
-            branch = "master"
+            branch = getattr(State.deploy_config, "Branch", "") or ""
+            disabled = branch_watermark_disabled(State.deploy_config)
+        except Exception as e:
+            logger.warning(f"读取部署配置失败，改按实际 git 分支判断是否注入水印: {e}")
 
-        if not branch_is_unstable(branch):
+        if not str(branch).strip():
+            # 配置读不到时不能当成已验证的 master：退回实际 git 分支，仍拿不到就
+            # 按未知分支处理（fail-safe，见 branch_needs_watermark）。
+            branch = detect_git_branch()
+        branch = resolve_watermark_branch(branch)
+
+        # 只有非稳定分支（dev / app 等）才需要水印；master / main 视为已验证
+        # 分支，本就不显示水印，开关对它们没有意义。
+        unstable = branch_needs_watermark(branch)
+
+        if disabled:
+            # 用户显式关闭：移除本会话可能已注入的水印层；未验证分支上要留下明确
+            # 警告，避免后续用无版本信息的截图反馈问题时无法定位。
+            self._remove_branch_watermark()
+            if unstable:
+                logger.warning(
+                    f"未验证分支 {branch} 的水印已按 WebUI 设置关闭"
+                    "（WebUI.DisableBranchWatermark=true）；该设置仅限了解各分支用途的用户使用，"
+                    "请勿据此截图反馈问题"
+                )
+            else:
+                logger.info(
+                    f"水印开关已打开，但当前分支 {branch} 属已验证分支，"
+                    "本来就不显示未验证版本水印"
+                )
+            return
+
+        if not unstable:
             return
 
         commit = None
@@ -653,8 +787,8 @@ class AppShellMixin(WebUIMixinBase):
 
         run_js(f"""
         (function () {{
-            var BOX_ID = "alas-branch-watermark";
-            var CSS_ID = "alas-branch-watermark-style";
+            var BOX_ID = {json.dumps(BRANCH_WATERMARK_BOX_ID)};
+            var CSS_ID = {json.dumps(BRANCH_WATERMARK_CSS_ID)};
 
             var oldBox = document.getElementById(BOX_ID);
             if (oldBox && oldBox.parentNode) {{
