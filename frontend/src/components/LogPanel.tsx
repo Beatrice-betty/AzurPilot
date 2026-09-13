@@ -6,10 +6,10 @@ import type { Logs as LogsData, LogEntry } from '../api/types'
 import { useApp, useConnection } from '../app/context'
 import { Empty } from '../components/ui'
 
-const LOG_LINE_RE = /^([A-Z]{4,8})\s+(?:(\d{4}-\d{2}-\d{2})\s+)?(\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)\s*│\s*([\s\S]*)$/
-const RULE_RE = /^[═─]{3,}\s*(.*?)\s*[═─]{3,}$/
-const PURE_RULE_RE = /^[═─]{5,}$/
-const CENTER_TITLE_RE = /^\s{10,}(.*?)\s{10,}$/
+export const LOG_LINE_RE = /^([A-Z]{4,8})\s+(?:(\d{4}-\d{2}-\d{2})\s+)?(\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)\s*│\s*([\s\S]*)$/
+export const RULE_RE = /^[═─]{3,}\s*(.*?)\s*[═─]{3,}$/
+export const PURE_RULE_RE = /^[═─]{3,}$/
+export const CENTER_TITLE_RE = /^\s{3,}(.*?)\s{3,}$/
 
 function highlightText(text: string, search: string): ReactNode {
   if (!text) return null
@@ -84,28 +84,38 @@ function renderSearchHighlights(text: string, searchLower: string, keyPrefix: st
   return <span key={keyPrefix}>{nodes}</span>
 }
 
-function LogLine({entry, search}: {entry: LogEntry; search: string}) {
-  const text = entry.text.trimEnd()
+export function LogLine({entry, search, isCenter}: {entry: LogEntry; search: string; isCenter?: boolean}) {
+  const rawText = entry.text.replace(/[\r\n]+$/, '')
+  const trimmed = rawText.trim()
 
-  // 1. 判断是否为分割线 (Rule)
-  const isPureRule = PURE_RULE_RE.test(text)
-  const ruleMatch = !isPureRule ? RULE_RE.exec(text) : null
-  const centerMatch = (!isPureRule && !ruleMatch) ? CENTER_TITLE_RE.exec(text) : null
-
-  if (isPureRule || ruleMatch || centerMatch) {
-    const title = ruleMatch ? ruleMatch[1].trim() : centerMatch ? centerMatch[1].trim() : ''
-    const char = text.includes('═') ? '═' : '─'
+  // 1. 判断是否为纯分割线 (Pure Rule)
+  const isPureRule = PURE_RULE_RE.test(trimmed)
+  if (isPureRule) {
+    const char = trimmed.includes('═') ? '═' : '─'
     return (
       <div className={`log-rule ${char === '═' ? 'rule-double' : 'rule-single'}`}>
         <span className="rule-bar" />
-        {title && <span className="rule-title">{highlightText(title, search)}</span>}
         <span className="rule-bar" />
       </div>
     )
   }
 
-  // 2. 判断是否为标准日志行
-  const logMatch = LOG_LINE_RE.exec(text)
+  // 2. 判断是否为带线标题 (Rule with title, 如 level 1/2)
+  const ruleMatch = RULE_RE.exec(trimmed)
+  if (ruleMatch && ruleMatch[1].trim()) {
+    const title = ruleMatch[1].trim()
+    const char = trimmed.includes('═') ? '═' : '─'
+    return (
+      <div className={`log-rule ${char === '═' ? 'rule-double' : 'rule-single'}`}>
+        <span className="rule-bar" />
+        <span className="rule-title">{highlightText(title, search)}</span>
+        <span className="rule-bar" />
+      </div>
+    )
+  }
+
+  // 3. 判断是否为标准日志行
+  const logMatch = LOG_LINE_RE.exec(rawText)
   if (logMatch) {
     const [, levelStr, dateStr, timeStr, messageStr] = logMatch
     const levelKey = levelStr.toLowerCase()
@@ -119,10 +129,28 @@ function LogLine({entry, search}: {entry: LogEntry; search: string}) {
     )
   }
 
-  // 3. 其他非标准行或多行 Traceback
+  // 4. 判断是否为居中标题 (level 0 或其他居中文本)
+  const isSingleLine = !rawText.includes('\n')
+  const centerMatch = isSingleLine ? CENTER_TITLE_RE.exec(rawText) : null
+  const shouldCenter = Boolean(
+    isSingleLine && trimmed && (
+      isCenter ||
+      (centerMatch && centerMatch[1].trim())
+    )
+  )
+  if (shouldCenter) {
+    const title = trimmed
+    return (
+      <div className="log-line log-entry-line log-center-title">
+        <span className="center-title-text">{highlightText(title, search)}</span>
+      </div>
+    )
+  }
+
+  // 5. 其他非标准行或多行 Traceback
   return (
     <div className={`log-line log-entry-line log-raw level-${entry.level.toLowerCase()}`}>
-      <span className="log-msg">{highlightText(text, search)}</span>
+      <span className="log-msg">{highlightText(rawText, search)}</span>
     </div>
   )
 }
@@ -221,9 +249,25 @@ export function LogPanel({active = true}: {active?: boolean}) {
       </div>
       <div className="log-content" ref={scroll} aria-label="运行日志内容">
         {visible.length ? (
-          visible.map(entry => (
-            <LogLine key={entry.id} entry={entry} search={search} />
-          ))
+          visible.map((entry, index) => {
+            const prev = visible[index - 1]
+            const next = visible[index + 1]
+            const isCenterByContext = Boolean(
+              prev && next &&
+              PURE_RULE_RE.test(prev.text.trim()) && prev.text.includes('═') &&
+              PURE_RULE_RE.test(next.text.trim()) && next.text.includes('═') &&
+              !PURE_RULE_RE.test(entry.text.trim()) &&
+              !LOG_LINE_RE.test(entry.text.trim())
+            )
+            return (
+              <LogLine
+                key={entry.id}
+                entry={entry}
+                search={search}
+                isCenter={isCenterByContext}
+              />
+            )
+          })
         ) : (
           <Empty icon={<Terminal size={26} />} title={entries.length ? '没有匹配的日志' : '日志通道已就绪'}>
             {entries.length ? '尝试调整筛选条件。' : '启动任务后，运行日志将在这里实时显示。'}

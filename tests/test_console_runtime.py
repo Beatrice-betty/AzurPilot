@@ -55,6 +55,26 @@ class RuntimeTests(unittest.TestCase):
             manager.state = 2
             self.assertNotIn('running', {task['state'] for task in runtime.overview('pilot')['tasks']})
 
+    def test_logs_preserves_spaces_for_level_0_rule_title_and_tracebacks(self):
+        from rich.rule import Rule
+        from rich.text import Text
+        manager = SimpleNamespace(renderables=[
+            Rule(characters='═'),
+            Rule('COMMISSION', characters=' '),
+            Rule(characters='═'),
+            Text('    indented text\n'),
+        ])
+        configs = SimpleNamespace(path=Mock())
+        with patch('module.api.runtime_service.ProcessManager._processes', {'pilot': manager}):
+            runtime = RuntimeService(configs)
+            logs = runtime.logs('pilot')
+            entries = logs['entries']
+            self.assertEqual(4, len(entries))
+            self.assertTrue(entries[1]['text'].startswith('   '))
+            self.assertTrue(entries[1]['text'].endswith('   '))
+            self.assertEqual('COMMISSION', entries[1]['text'].strip())
+            self.assertTrue(entries[3]['text'].startswith('    '))
+
     def test_capture_is_cached_and_never_launches_adb(self):
         hub = PreviewHub()
         configs = SimpleNamespace(path=Mock())

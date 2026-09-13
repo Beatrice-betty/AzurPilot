@@ -1,3 +1,3 @@
 import { defineConfig } from 'vitest/config'
 
-export default defineConfig({test: {include: ['src/**/*.test.ts', 'mock/**/*.test.mjs']}})
+export default defineConfig({test: {include: ['src/**/*.test.{ts,tsx}', 'mock/**/*.test.mjs']}})

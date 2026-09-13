@@ -83,6 +83,8 @@
 .log-rule .rule-bar {flex: 1; height: 1px; background: currentColor; opacity: .35}
 .log-rule.rule-double .rule-bar {height: 2px; border-top: 1px solid currentColor; border-bottom: 1px solid currentColor; background: transparent; opacity: .45}
 .log-rule .rule-title {font-weight: 700; color: var(--text); padding: 0 4px; letter-spacing: .5px}
+.log-line.log-center-title {display: flex; justify-content: center; align-items: center; padding: 3px 0; text-align: center}
+.log-line.log-center-title .center-title-text {font-weight: 700; color: var(--text); padding: 0 4px; letter-spacing: .5px; font-size: 11px}
 .hl-bool-true {color: #22c55e; font-style: italic; font-weight: 550}
 .hl-bool-false {color: #ef4444; font-style: italic; font-weight: 550}
 .hl-none {color: #d946ef; font-style: italic}

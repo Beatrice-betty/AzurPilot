@@ -97,7 +97,7 @@ class RuntimeService:
             for renderable in renderables[start:]:
                 with console.capture() as capture:
                     console.print(renderable)
-                content = capture.get().strip()
+                content = capture.get().rstrip('\r\n')
                 cache['sequence'] += 1
                 match = re.search(r'\b(DEBUG|INFO|WARNING|ERROR|CRITICAL)\b', content)
                 cache['entries'].append({'id': cache['sequence'], 'level': match[1] if match else 'INFO',
