@@ -23,7 +23,12 @@ from module.device.pkg_resources import get_distribution
 _ = get_distribution
 
 from adbutils import AdbError, Network
-from starlette.responses import JSONResponse, HTMLResponse, StreamingResponse
+from starlette.responses import (
+    FileResponse,
+    JSONResponse,
+    HTMLResponse,
+    StreamingResponse,
+)
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocketDisconnect
 from module.device.method.scrcpy import const as scrcpy_const
@@ -1782,7 +1787,38 @@ async def api_import_legacy_upload(request):
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 
+def api_background_image(request):
+    """按文件名返回 ``bg/`` 下的背景图。
+
+    文件名经 :func:`safe_local_path` 校验：只接受裸文件名与图片扩展名，
+    拒绝路径分隔符和 ``..``，避免顺着这个路由读到目录外的文件。
+    """
+    from module.webui.background_image import PLACE_ROOT, safe_local_path
+
+    name = request.path_params.get("name", "")
+    path = safe_local_path(name, PLACE_ROOT)
+    if path is None:
+        return JSONResponse({"success": False, "error": "not found"},
+                            status_code=404)
+    return FileResponse(path)
+
+
+def api_background_extracted(request):
+    """返回 ``bg/提取/`` 下【提取】下载的背景图。"""
+    from module.webui.background_image import PLACE_EXTRACTED, safe_local_path
+
+    name = request.path_params.get("name", "")
+    path = safe_local_path(name, PLACE_EXTRACTED)
+    if path is None:
+        return JSONResponse({"success": False, "error": "not found"},
+                            status_code=404)
+    return FileResponse(path)
+
+
 api_routes = [
+    # 注意顺序：extracted 必须在 {name} 之前，否则会被当成文件名吃掉
+    Route("/api/background/extracted/{name}", api_background_extracted),
+    Route("/api/background/{name}", api_background_image),
     Route("/api/cl1_stats", api_cl1_stats),
     Route("/api/ap_timeline", api_ap_timeline),
     Route("/api/notify", api_notify, methods=["POST"]),

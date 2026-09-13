@@ -26,6 +26,10 @@ import pywebio.output as pywebio_output
 import pywebio.pin as pywebio_pin
 from pywebio import config as _webconfig
 from pywebio.input import actions, file_upload as _file_upload, input_group
+from pywebio.io_ctrl import (
+    output_register_callback as _output_register_callback,
+)
+
 from pywebio.output import (
     Output,
     clear,
@@ -41,6 +45,7 @@ from pywebio.output import (
     put_loading,
     put_markdown,
     put_row,
+    put_success,
     put_table,
     put_text,
     put_warning,
@@ -91,7 +96,7 @@ from module.webui.patch import (
     patch_executor,
     patch_mimetype,
 )
-from module.webui.pin import put_checkbox, put_input, put_select
+from module.webui.pin import put_checkbox, put_input, put_select, put_textarea
 from module.webui.process_manager import ProcessManager
 from module.webui.remote_access import RemoteAccess
 from module.webui.setting import State
@@ -139,6 +144,7 @@ pin_on_change: Callable[..., Any] = cast(
     Callable[..., Any], getattr(pywebio_pin, "pin_on_change")
 )
 eval_js: Callable[..., Any] = cast(Callable[..., Any], _eval_js)
+output_register_callback: Callable[..., Any] = cast(Callable[..., Any], _output_register_callback)
 file_upload: Callable[..., Any] = cast(Callable[..., Any], _file_upload)
 put_button: Callable[..., Any] = cast(Callable[..., Any], _put_button)
 set_env: Callable[..., Any] = cast(Callable[..., Any], _set_env)

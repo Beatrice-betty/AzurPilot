@@ -6,6 +6,7 @@ from module.webui.app_dependencies import (
     json,
     put_button,
     put_html,
+    put_scope,
     put_text,
     t,
     use_scope,
@@ -18,6 +19,17 @@ from module.webui.app_helpers import (
 
 
 from module.webui.app_types import WebUIMixinBase
+
+
+# 图表前端要用的译文键（ap_chart.js 通过 __I18N__ 接收）；图例名与 tooltip 名同义复用
+_CHART_I18N_KEYS = (
+    "ChartSeriesAp", "ChartSeriesPurple", "ChartSeriesYellow",
+    "ChartSeriesAsset", "ChartSeriesDistance",
+    "ChartMean", "ChartAp", "ChartDelta", "ChartSource",
+    "ChartYellow", "ChartPurple", "ChartAsset", "ChartDistance",
+    "ChartOpen", "ChartClose", "ChartMa5", "ChartMa10",
+    "ChartHigh", "ChartLow", "ChartChange", "ChartDensity",
+)
 
 
 class ActionPointStatisticsMixin(WebUIMixinBase):
@@ -87,6 +99,22 @@ class ActionPointStatisticsMixin(WebUIMixinBase):
             current_view=chart_data["current_view"],
         )
         self._render_ap_chart_content(chart_data, auxiliary_data)
+
+    def _render_ap_chart_refresh_slot(self) -> None:
+        """把【刷新】投进模板标题行里的 holder（须在 put_html 之后调用）。
+
+        holder 是模板里写死的 div，与标题同处一个 flex 行，按钮天然落在
+        卡片右上角。这里用 put_button(scope=...) 直接投进去，不用 use_scope
+        包一层 —— 实测那样建出来的 scope 会挂到 statistics-content 下，
+        与卡片平级，按钮就跑到卡片外面了。
+        """
+        put_button(
+            t("Gui.Stat.Refresh"),
+            onclick=self._refresh_statistics_page,
+            color="secondary",
+            small=True,
+            scope="ap-chart-refresh",
+        )
 
     @staticmethod
     def _normalize_ap_chart_points(timeline):
@@ -220,7 +248,7 @@ class ActionPointStatisticsMixin(WebUIMixinBase):
         else:
             ap_change = closes[-1] - opens[0] if len(closes) > 0 else 0
             data_points_text = t("Gui.Stat.CandlesCount", count=len(labels))
-        change_color = "#ef5350" if ap_change >= 0 else "#26a69a"
+        change_color = "#C62828" if ap_change >= 0 else "#00796B"
         change_sign = "+" if ap_change >= 0 else ""
 
         return {
@@ -334,13 +362,13 @@ class ActionPointStatisticsMixin(WebUIMixinBase):
                         if len(valid_yellow_coins) >= 2
                         else 0
                     )
-                    yc_change_color = "#ef5350" if yc_change >= 0 else "#26a69a"
+                    yc_change_color = "#C62828" if yc_change >= 0 else "#00796B"
                     yc_change_sign = "+" if yc_change >= 0 else ""
                     yc_max = max(valid_yellow_coins)
                     yc_min = min(valid_yellow_coins)
 
-                    stats_html += f'<div style="display:grid; grid-template-columns:150px 100px 90px 90px 90px; gap:8px; margin-bottom:2px; font-size:12px; color:#aaa;"><span>黄币: <b style="color:#ffd54f">{yc_cur}</b></span><span>变化: <b style="color:{yc_change_color}">{yc_change_sign}{yc_change}</b></span><span>最高: <b style="color:#ef5350">{yc_max}</b></span><span>最低: <b style="color:#26a69a">{yc_min}</b></span><span></span></div>'
-                    legend_html += '<span class="ap-legend-item" data-series="2" style="display:flex; align-items:center; gap:4px;cursor:pointer;opacity:1;"><span style="width:12px; height:2px; background:#ffd54f; border-radius:1px; border-top:1px dashed #ffd54f;"></span>黄币</span>'
+                    stats_html += f'<div class="ap-stat-row" style="font-size:12px;"><span>{t('Gui.Stat.ChartSeriesYellow')}: <b class="ap-value ap-series-2">{yc_cur}</b></span><span>{t('Gui.Stat.ChartChangeLabel')}: <b class="ap-value" style="color:{yc_change_color}">{yc_change_sign}{yc_change}</b></span><span>{t('Gui.Stat.ChartMaxLabel')}: <b class="ap-up">{yc_max}</b></span><span>{t('Gui.Stat.ChartMinLabel')}: <b class="ap-down">{yc_min}</b></span><span></span></div>'
+                    legend_html += f'<span class="ap-legend-item" data-series="2" style="display:flex; align-items:center; gap:4px;cursor:pointer;opacity:1;"><span style="width:12px; height:2px; background:var(--ap-series-2); border-radius:1px; border-top:1px dashed var(--ap-series-2);"></span>{t("Gui.Stat.ChartSeriesYellow")}</span>'
 
                 if valid_purple_coins:
                     pc_cur = valid_purple_coins[-1]
@@ -349,13 +377,13 @@ class ActionPointStatisticsMixin(WebUIMixinBase):
                         if len(valid_purple_coins) >= 2
                         else 0
                     )
-                    pc_change_color = "#ef5350" if pc_change >= 0 else "#26a69a"
+                    pc_change_color = "#C62828" if pc_change >= 0 else "#00796B"
                     pc_change_sign = "+" if pc_change >= 0 else ""
                     pc_max = max(valid_purple_coins)
                     pc_min = min(valid_purple_coins)
 
-                    stats_html += f'<div style="display:grid; grid-template-columns:150px 100px 90px 90px 90px; gap:8px; margin-bottom:2px; font-size:12px; color:#aaa;"><span>紫币: <b style="color:#ce93d8">{pc_cur}</b></span><span>变化: <b style="color:{pc_change_color}">{pc_change_sign}{pc_change}</b></span><span>最高: <b style="color:#ef5350">{pc_max}</b></span><span>最低: <b style="color:#26a69a">{pc_min}</b></span><span></span></div>'
-                    legend_html += '<span class="ap-legend-item" data-series="1" style="display:flex; align-items:center; gap:4px;cursor:pointer;opacity:1;"><span style="width:12px; height:2px; background:#ce93d8; border-radius:1px; border-top:1px dashed #ce93d8;"></span>紫币</span>'
+                    stats_html += f'<div class="ap-stat-row" style="font-size:12px;"><span>{t('Gui.Stat.ChartSeriesPurple')}: <b class="ap-value ap-series-3">{pc_cur}</b></span><span>{t('Gui.Stat.ChartChangeLabel')}: <b class="ap-value" style="color:{pc_change_color}">{pc_change_sign}{pc_change}</b></span><span>{t('Gui.Stat.ChartMaxLabel')}: <b class="ap-up">{pc_max}</b></span><span>{t('Gui.Stat.ChartMinLabel')}: <b class="ap-down">{pc_min}</b></span><span></span></div>'
+                    legend_html += f'<span class="ap-legend-item" data-series="1" style="display:flex; align-items:center; gap:4px;cursor:pointer;opacity:1;"><span style="width:12px; height:2px; background:var(--ap-series-3); border-radius:1px; border-top:1px dashed var(--ap-series-3);"></span>{t("Gui.Stat.ChartSeriesPurple")}</span>'
 
         return {
             "yellow_coins_list": yellow_coins_list,
@@ -403,13 +431,13 @@ class ActionPointStatisticsMixin(WebUIMixinBase):
                         if len(valid_distance) >= 2
                         else 0
                     )
-                    d_change_color = "#ef5350" if d_change >= 0 else "#26a69a"
+                    d_change_color = "#C62828" if d_change >= 0 else "#00796B"
                     d_change_sign = "+" if d_change >= 0 else ""
                     d_max = max(valid_distance)
                     d_min = min(valid_distance)
 
-                    stats_html += f'<div style="display:grid; grid-template-columns:150px 100px 90px 90px 90px; gap:8px; margin-bottom:2px; font-size:12px; color:#aaa;"><span>海里数: <b style="color:#1565c0">{d_cur}</b></span><span>变化: <b style="color:{d_change_color}">{d_change_sign}{d_change}</b></span><span>最高: <b style="color:#ef5350">{d_max}</b></span><span>最低: <b style="color:#26a69a">{d_min}</b></span><span></span></div>'
-                    legend_html += '<span class="ap-legend-item" data-series="4" style="display:flex; align-items:center; gap:4px;cursor:pointer;opacity:1;"><span style="width:12px; height:2px; background:#1565c0; border-radius:1px;"></span>海里数</span>'
+                    stats_html += f'<div class="ap-stat-row" style="font-size:12px;"><span>{t('Gui.Stat.ChartSeriesDistance')}: <b class="ap-value ap-series-5">{d_cur}</b></span><span>{t('Gui.Stat.ChartChangeLabel')}: <b class="ap-value" style="color:{d_change_color}">{d_change_sign}{d_change}</b></span><span>{t('Gui.Stat.ChartMaxLabel')}: <b class="ap-up">{d_max}</b></span><span>{t('Gui.Stat.ChartMinLabel')}: <b class="ap-down">{d_min}</b></span><span></span></div>'
+                    legend_html += f'<span class="ap-legend-item" data-series="4" style="display:flex; align-items:center; gap:4px;cursor:pointer;opacity:1;"><span style="width:12px; height:2px; background:var(--ap-series-5); border-radius:1px;"></span>{t("Gui.Stat.ChartSeriesDistance")}</span>'
 
         return {
             "distance_list": distance_list,
@@ -444,13 +472,13 @@ class ActionPointStatisticsMixin(WebUIMixinBase):
                 a_change = (
                     valid_asset[-1] - valid_asset[0] if len(valid_asset) >= 2 else 0
                 )
-                a_change_color = "#ef5350" if a_change >= 0 else "#26a69a"
+                a_change_color = "#C62828" if a_change >= 0 else "#00796B"
                 a_change_sign = "+" if a_change >= 0 else ""
                 a_max = max(valid_asset)
                 a_min = min(valid_asset)
 
-                stats_html += f'<div style="display:grid; grid-template-columns:150px 100px 90px 90px 90px; gap:8px; margin-bottom:2px; font-size:12px; color:#aaa;"><span>资产: <b style="color:#22d3ee">{a_cur:.1f}</b></span><span>变化: <b style="color:{a_change_color}">{a_change_sign}{a_change:.1f}</b></span><span>最高: <b style="color:#ef5350">{a_max:.1f}</b></span><span>最低: <b style="color:#26a69a">{a_min:.1f}</b></span><span></span></div>'
-                legend_html += '<span class="ap-legend-item" data-series="3" style="display:flex; align-items:center; gap:4px;cursor:pointer;opacity:1;"><span style="width:12px; height:2px; background:#22d3ee; border-radius:1px;"></span>资产</span>'
+                stats_html += f'<div class="ap-stat-row" style="font-size:12px;"><span>{t('Gui.Stat.ChartSeriesAsset')}: <b class="ap-value ap-series-4">{a_cur:.1f}</b></span><span>{t('Gui.Stat.ChartChangeLabel')}: <b class="ap-value" style="color:{a_change_color}">{a_change_sign}{a_change:.1f}</b></span><span>{t('Gui.Stat.ChartMaxLabel')}: <b class="ap-up">{a_max:.1f}</b></span><span>{t('Gui.Stat.ChartMinLabel')}: <b class="ap-down">{a_min:.1f}</b></span><span></span></div>'
+                legend_html += f'<span class="ap-legend-item" data-series="3" style="display:flex; align-items:center; gap:4px;cursor:pointer;opacity:1;"><span style="width:12px; height:2px; background:var(--ap-series-4); border-radius:1px;"></span>{t("Gui.Stat.ChartSeriesAsset")}</span>'
 
         return {
             "asset_list": asset_list,
@@ -510,6 +538,16 @@ class ActionPointStatisticsMixin(WebUIMixinBase):
         html_tpl = read_webapp_template("ap_chart_panel.html")
         html = html_tpl.format(
             chart_id=chart_id,
+            panel_title=t(
+                "Gui.Stat.ChartPanelTitle", view=chart_data["view_title"]
+            ),
+            lbl_ap=t("Gui.Stat.ChartApLabel"),
+            lbl_change=t("Gui.Stat.ChartChangeLabel"),
+            lbl_max=t("Gui.Stat.ChartMaxLabel"),
+            lbl_min=t("Gui.Stat.ChartMinLabel"),
+            lbl_mean=t("Gui.Stat.ChartMeanLabel"),
+            lbl_ap_series=t("Gui.Stat.ChartSeriesAp"),
+            lbl_reset=t("Gui.Stat.ChartResetBtn"),
             view_title=chart_data["view_title"],
             ap_cur=chart_data["ap_cur"],
             change_color=chart_data["change_color"],
@@ -530,6 +568,10 @@ class ActionPointStatisticsMixin(WebUIMixinBase):
                 "__CHART_TYPE__",
                 "line" if chart_data["is_detail_mode"] else current_view,
             )
+            .replace("__I18N__", json.dumps(
+                {k: t(f"Gui.Stat.{k}") for k in _CHART_I18N_KEYS},
+                ensure_ascii=False,
+            ))
             .replace("__LABELS__", json.dumps(chart_data["labels"], ensure_ascii=False))
             .replace("__OPENS__", json.dumps(chart_data["opens"]))
             .replace("__HIGHS__", json.dumps(chart_data["highs"]))
@@ -567,4 +609,8 @@ class ActionPointStatisticsMixin(WebUIMixinBase):
 
         with use_scope("ap_chart", clear=True):
             put_html(html)
+            # 模板已把 holder 写在标题行里（与标题同一 flex 行），
+            # 按钮直接投进那个 div 即可 —— 用 scope= 而不是 use_scope 包一层，
+            # 免得 scope 落到别处（实测会挂到 statistics-content 下）。
+            self._render_ap_chart_refresh_slot()
             run_js(js_code)

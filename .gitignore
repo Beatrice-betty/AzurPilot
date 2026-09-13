@@ -1,5 +1,8 @@
 ### AzurLaneAutoScript
 log
+# 自定义背景图：用户放的图片与运行时生成的覆盖样式，不属于源码
+/bg/
+config/webui_bg.css
 cache/
 .codex
 config/backup/*

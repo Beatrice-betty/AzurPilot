@@ -203,6 +203,90 @@ class RichLog:
         width = eval_js(js)
         return 80 if width is None else 128 if width > 128 else int(width)
 
+    def sync_width(self) -> None:
+        """让 console 列数跟随日志元素的实际宽度。
+
+        必须在日志 scope 建好之后调用 —— 页面渲染瞬间元素还不存在，
+        get_width() 会量到 undefined 并回退成写死的 80 列。
+
+        回调写法与 save_priority 一致：output_register_callback 拿 id，
+        前端用 WebIO.pushData(value, id) 回传。
+        """
+        try:
+            callback_id = output_register_callback(self._on_width_change)
+        except Exception as e:  # 无会话时不该拖垮日志
+            logger.warning(f"[WebUI] 日志宽度回调注册失败: {e}")
+            return
+
+        run_js(
+            """
+            (function () {
+                var id = '__CB__';
+                var name = '__SCOPE__';
+                function find() {
+                    var el = document.getElementById('pywebio-scope-' + name);
+                    if (!el) { el = document.getElementById('pywebio-scope-log'); }
+                    return el;
+                }
+                function cols(el) {
+                    var w = el.getBoundingClientRect().width;
+                    if (!w) { return 0; }
+                    var fs = parseFloat(getComputedStyle(el).fontSize) || 13;
+                    var cv = document.createElement('canvas');
+                    var ctx = cv.getContext('2d');
+                    ctx.font = '16px Menlo, consolas, DejaVu Sans Mono, '
+                             + 'Courier New, monospace';
+                    var unit = ctx.measureText('0').width;
+                    if (!unit) { return 0; }
+                    return Math.floor((w - 16) / fs / unit * 16);
+                }
+                function push() {
+                    var el = find();
+                    if (!el) { return; }
+                    var c = cols(el);
+                    if (c > 0) { WebIO.pushData(c, id); }
+                }
+                push();
+                if (window.__alasLogWidthTimer) {
+                    clearInterval(window.__alasLogWidthTimer);
+                }
+                // 元素可能晚于本脚本出现：先轮询到为止，再交给 ResizeObserver
+                var tries = 0;
+                var timer = setInterval(function () {
+                    tries += 1;
+                    var el = find();
+                    if (el && el.getBoundingClientRect().width) {
+                        clearInterval(timer);
+                        push();
+                        if (window.__alasLogWidthRO) {
+                            window.__alasLogWidthRO.disconnect();
+                        }
+                        var ro = new ResizeObserver(push);
+                        ro.observe(el);
+                        window.__alasLogWidthRO = ro;
+                    } else if (tries > 80) {
+                        clearInterval(timer);
+                    }
+                }, 250);
+                window.__alasLogWidthTimer = timer;
+                return 1;
+            })();
+""".replace("__CB__", str(callback_id))
+            .replace("__SCOPE__", str(self.scope)),
+        )
+
+    def _on_width_change(self, width) -> None:
+        """前端回传列数：更新 console 宽度并请求一次整屏重绘。"""
+        try:
+            cols = int(width)
+        except (TypeError, ValueError):
+            return
+        cols = max(20, min(400, cols))
+        if cols == self.console.width:
+            return
+        self.console.width = cols
+        self._width_refresh = True
+
     # 以下为已废弃的窗口宽度自适应回调代码，保留供参考
     # def _register_resize_callback(self):
     #     js = """
@@ -241,10 +325,20 @@ class RichLog:
                 html = self.render_many(pm.renderables[:])
                 self.reset()
                 self.extend(html)
+                self._width_refresh = False
                 counter = last_idx
                 while counter < pm.renderables_max_length * 2:
                     yield
                     idx = len(pm.renderables)
+                    if getattr(self, "_width_refresh", False):
+                        # 宽度变了，必须整屏重绘，否则旧行仍是旧宽度
+                        html = self.render_many(pm.renderables[:])
+                        self.reset()
+                        self.extend(html)
+                        self._width_refresh = False
+                        last_idx = len(pm.renderables)
+                        counter += 1
+                        continue
                     if idx < last_idx:
                         last_idx -= pm.renderables_reduce_length
                     if idx != last_idx:
