@@ -49,7 +49,7 @@ function Login() {
 }
 
 export function NavigationMark() {
-  return <svg width="28" height="28" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M16 3 28 28 16 22 4 28 16 3Z" fill="currentColor"/><path d="m16 12 4 9-4-2-4 2 4-9Z" fill="#101e2c"/></svg>
+  return <img src="/azurpilot.svg" alt="AzurPilot" width="28" height="28" className="brand-logo"/>
 }
 
 export function App() {
