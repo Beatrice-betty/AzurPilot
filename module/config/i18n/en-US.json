@@ -1604,7 +1604,7 @@
     },
     "AutoSearchMode": {
       "name": "Select submarine auto plan",
-      "help": "Only takes effect when using auto-search",
+      "help": "Applies to auto search sorties. With manual enemy search and \"standby\", in-game sub auto call is also turned off before entering (cleared maps only; the setting page does not exist on uncleared maps)",
       "sub_standby": "Standby",
       "sub_auto_call": "Auto-summon submarine"
     },
