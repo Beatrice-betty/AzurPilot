@@ -232,6 +232,15 @@ Deploy:
     # [少数情况] 如果你的屏幕分辨率低但 DPI 缩放高，使用 false 可以让 AzurPilot 显示得更小
     # [In few cases] false to make AzurPilot smaller, if you have a low resolution but high DPI scaling.
     DpiScaling: true
+    # 关闭未经验证版本的水印
+    # Disable the watermark for unverified builds
+    # [默认关闭] false：显示水印，提醒当前运行的是未经验证的构建
+    # [Default] false: the watermark is shown
+    # [仅了解 AzurPilot 与各分支用途的用户] true：隐藏所有未验证版本水印（含 master）
+    # [Only for users who know AzurPilot and its branches] true: hide every unverified-build watermark
+    # [警告] 不了解 AzurPilot / 各分支作用的人，以及需要用截图反馈问题的人，禁止开启
+    # [WARNING] Never enable this if you are unfamiliar with AzurPilot/branches or need to report issues with screenshots
+    DisableBranchWatermark: false
     # --key. WebUI 密码
     # --key. Password of web ui
     # 将 AzurPilot 暴露到公网时很有用

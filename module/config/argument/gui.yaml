@@ -322,6 +322,9 @@ DeploySetting:
   WebuiSSLKeyHelp:
   WebuiSSLCert:
   WebuiSSLCertHelp:
+  DisableBranchWatermark:
+  DisableBranchWatermarkHelp:
+  WatermarkHiddenNow:
 
 StartupRun:
   Title:
