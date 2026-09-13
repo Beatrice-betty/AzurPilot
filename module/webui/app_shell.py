@@ -103,6 +103,66 @@ BRANCH_WATERMARK_KIND_TITLE = "title"
 BRANCH_WATERMARK_KIND_TITLE_EN = "title-en"
 BRANCH_WATERMARK_KIND_META = "meta"
 
+# 读不到分支（部署配置读取失败、git 也拿不到）时使用的占位名，按未经验证处理。
+BRANCH_WATERMARK_UNKNOWN_BRANCH = "unknown"
+
+
+def resolve_watermark_branch(branch=None) -> str:
+    """规范化水印使用的分支名，取值无效时返回占位名。
+
+    ``git rev-parse --abbrev-ref HEAD`` 在游离头指针时返回 ``HEAD``；空值与 ``HEAD``
+    都不能当作「已验证分支」，统一替换为 BRANCH_WATERMARK_UNKNOWN_BRANCH。
+
+    Args:
+        branch: 部署配置或 git 给出的分支名。
+
+    Returns:
+        str: 可用于水印展示的分支名。
+    """
+    branch = str(branch or "").strip()
+    if not branch or branch.upper() == "HEAD":
+        return BRANCH_WATERMARK_UNKNOWN_BRANCH
+    return branch
+
+
+def branch_needs_watermark(branch) -> bool:
+    """是否需要注入未验证版本水印。
+
+    与 ``branch_is_unstable()`` 的区别：无法确定分支（占位名或空值）时按未经验证
+    处理。水印是排查问题的诊断信息，配置读不到时更应该显示，不能静默隐藏；而
+    ``branch_is_unstable()`` 对空值返回 False 的既有契约保持不变（它只回答
+    「这个分支名是否属于稳定分支」）。
+
+    Args:
+        branch: 分支名。
+
+    Returns:
+        bool: True 表示应当注入水印。
+    """
+    branch = str(branch or "").strip()
+    if not branch or branch.lower() == BRANCH_WATERMARK_UNKNOWN_BRANCH:
+        return True
+    return branch_is_unstable(branch)
+
+
+def detect_git_branch() -> str:
+    """读取当前工作区实际的 git 分支名，失败返回空串。
+
+    仅作为部署配置不可用时的兜底：配置坏了也应尽量展示真实的构建信息。
+
+    Returns:
+        str: 分支名；读取失败或游离头指针时返回空串。
+    """
+    try:
+        log = updater.execute_output(f'"{updater.git}" rev-parse --abbrev-ref HEAD')
+    except Exception as e:
+        logger.warning(f"读取当前 git 分支失败: {e}")
+        return ""
+    branch = (log or "").strip()
+    if branch.upper() == "HEAD":
+        return ""
+    return branch
+
 
 def branch_watermark_disabled(config) -> bool:
     """部署配置是否要求关闭未验证版本水印。
@@ -678,17 +738,24 @@ class AppShellMixin(WebUIMixinBase):
 
         Pages: 会话外壳（登录后任意主界面）
         """
+        branch = ""
+        disabled = False
         try:
             State.deploy_config.read()
-            branch = getattr(State.deploy_config, "Branch", "master") or "master"
+            branch = getattr(State.deploy_config, "Branch", "") or ""
             disabled = branch_watermark_disabled(State.deploy_config)
-        except Exception:
-            branch = "master"
-            disabled = False
+        except Exception as e:
+            logger.warning(f"读取部署配置失败，改按实际 git 分支判断是否注入水印: {e}")
 
-        # 只有非稳定分支（dev / app 等）才会注入水印；master / main 视为已验证
+        if not str(branch).strip():
+            # 配置读不到时不能当成已验证的 master：退回实际 git 分支，仍拿不到就
+            # 按未知分支处理（fail-safe，见 branch_needs_watermark）。
+            branch = detect_git_branch()
+        branch = resolve_watermark_branch(branch)
+
+        # 只有非稳定分支（dev / app 等）才需要水印；master / main 视为已验证
         # 分支，本就不显示水印，开关对它们没有意义。
-        unstable = branch_is_unstable(branch)
+        unstable = branch_needs_watermark(branch)
 
         if disabled:
             # 用户显式关闭：移除本会话可能已注入的水印层；未验证分支上要留下明确

@@ -5,9 +5,12 @@ from module.webui.app_shell import (
     BRANCH_WATERMARK_MAX_MESSAGE_LEN,
     BRANCH_WATERMARK_NOTICE,
     BRANCH_WATERMARK_NOTICE_EN,
+    BRANCH_WATERMARK_UNKNOWN_BRANCH,
     branch_is_unstable,
+    branch_needs_watermark,
     branch_watermark_disabled,
     build_branch_watermark_lines,
+    resolve_watermark_branch,
 )
 
 
@@ -177,6 +180,41 @@ class TestDeployModelsExposeSwitch(unittest.TestCase):
             with self.subTest(template=os.path.basename(path)):
                 with open(path, encoding="utf-8") as f:
                     self.assertIn("DisableBranchWatermark", f.read())
+
+
+class TestWatermarkBranchResolution(unittest.TestCase):
+    """分支名规范化与「是否需要水印」的判定。
+
+    部署配置读取失败时不能把构建当成已验证的 master：先退回实际 git 分支，
+    仍拿不到就按未知分支处理——水印是排查问题的诊断信息，宁可多显示，
+    也不能因为一次读取失败被静默吞掉。
+    """
+
+    def test_resolve_keeps_real_branch(self):
+        self.assertEqual(resolve_watermark_branch("dev"), "dev")
+        self.assertEqual(resolve_watermark_branch(" feature/x "), "feature/x")
+
+    def test_resolve_maps_empty_and_detached_head_to_unknown(self):
+        for value in (None, "", "   ", "HEAD", " head "):
+            with self.subTest(value=value):
+                self.assertEqual(
+                    resolve_watermark_branch(value),
+                    BRANCH_WATERMARK_UNKNOWN_BRANCH)
+
+    def test_stable_branches_need_no_watermark(self):
+        for branch in ("master", "main", "Master", "  main  "):
+            with self.subTest(branch=branch):
+                self.assertFalse(branch_needs_watermark(branch))
+
+    def test_unstable_branches_need_watermark(self):
+        for branch in ("dev", "app", "v2020.07.15", "feature/x"):
+            with self.subTest(branch=branch):
+                self.assertTrue(branch_needs_watermark(branch))
+
+    def test_unknown_branch_fails_safe_to_watermark(self):
+        for branch in (None, "", "   ", "unknown", "UNKNOWN", "Unknown"):
+            with self.subTest(branch=branch):
+                self.assertTrue(branch_needs_watermark(branch))
 
 
 if __name__ == "__main__":
