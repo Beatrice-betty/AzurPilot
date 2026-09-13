@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { CalendarClock, ChevronRight, Clock3, Compass, Play, Radio, Settings2, ShieldCheck, Square, Waves } from 'lucide-react'
+import { CalendarClock, ChevronRight, Clock3, Play, Square } from 'lucide-react'
 import { api } from '../api/client'
 import type { Overview as OverviewData } from '../api/types'
 import { useApp, useConnection } from '../app/context'
-import { Empty, ErrorBox, Loading, PageTitle, StatusBadge } from '../components/ui'
+import { Empty, ErrorBox, Loading, PageTitle } from '../components/ui'
 import { MonitorPanel } from '../components/MonitorPanel'
 import { ResourceCards } from '../components/ResourceCards'
 
@@ -33,12 +33,10 @@ export function Overview() {
   const pending = data.tasks.filter(task => task.state === 'pending').length
   const running = data.tasks.filter(task => task.state === 'running').length
   return <>
-    <PageTitle eyebrow="FLEET COMMAND CENTER" title="运行总览" description="你的舰队，一切尽在掌握。" actions={<><Link className="button secondary" to={`/i/${instance}/task/Alas`}><Settings2 size={16}/>连接设置</Link><button className={`button ${data.status === 'running' ? 'danger' : 'primary'}`} onClick={toggle} disabled={busy || connection !== 'ready'}>{data.status === 'running' ? <Square size={15}/> : <Play size={15}/>} {busy ? '正在处理…' : data.status === 'running' ? '停止运行' : '启动调度器'}</button></>}/>
-    <section className="command-banner"><div className="command-icon"><Compass size={32} strokeWidth={1.4}/></div><div><div className="banner-title">{data.status === 'running' ? '航线已规划，自动化正在进行' : data.status === 'error' ? '航行需要你的关注' : '一切就绪，等待你的出航指令'}<StatusBadge status={data.status}/></div><p>当前实例 <strong>{instance}</strong><span>·</span>{data.emulator.Serial === 'auto' ? '自动识别模拟器' : String(data.emulator.Serial ?? '尚未设置模拟器')}<span>·</span>{data.tasks.length} 项任务已启用</p></div><div className="banner-decoration"><Waves size={110} strokeWidth={0.7}/></div></section>
+    <PageTitle title="运行总览" actions={<button className={`button ${data.status === 'running' ? 'danger' : 'primary'}`} onClick={toggle} disabled={busy || connection !== 'ready'}>{data.status === 'running' ? <Square size={15}/> : <Play size={15}/>} {busy ? '正在处理…' : data.status === 'running' ? '停止运行' : '启动调度器'}</button>}/>
     <ResourceCards instance={instance} resources={data.resources}/>
-    <div className="overview-grid"><section className="panel schedule-panel"><div className="panel-heading"><div><CalendarClock size={18}/><h2>任务计划</h2><span className="count-badge">{data.tasks.length}</span></div><span className="small-label">自动同步</span></div><div className="schedule-summary"><div><span className="tiny-dot teal"/>运行中 <strong>{running}</strong></div><div>待执行 <strong>{pending}</strong></div><div><Clock3 size={13}/>等待中 <strong>{data.tasks.length - pending - running}</strong></div><span>下次运行时间</span></div><div className="task-table">{data.tasks.length ? data.tasks.map((task, index) => <Link className="task-row" key={task.name} to={`/i/${instance}/task/${task.name}`}><span className="task-order">{String(index + 1).padStart(2, '0')}</span><div className="task-row-name"><strong>{task.label}</strong><small>{task.name}</small></div><span className={`task-state ${task.state}`}>{{running: '运行中', pending: '待执行', waiting: '等待中'}[task.state]}</span><time>{task.state === 'running' ? '正在执行' : task.pending ? '等待调度' : task.nextRun.slice(5, 16)}</time><ChevronRight size={14}/></Link>) : <Empty icon={<CalendarClock size={30}/>} title="还没有启用的任务">从左侧任务配置中启用日常任务。</Empty>}</div></section>
+    <div className="overview-grid"><section className="panel schedule-panel"><div className="panel-heading"><div><CalendarClock size={18}/><h2>任务计划</h2><span className="count-badge">{data.tasks.length}</span></div><span className="small-label">自动同步</span></div><div className="schedule-summary"><div><span className="tiny-dot teal"/>运行中 <strong>{running}</strong></div><div>待执行 <strong>{pending}</strong></div><div><Clock3 size={13}/>等待中 <strong>{data.tasks.length - pending - running}</strong></div><span>下次运行时间</span></div><div className="task-table">{data.tasks.length ? data.tasks.map((task, index) => <Link className="task-row" key={task.name} to={`/i/${instance}/task/${task.name}`}><span className="task-order">{String(index + 1).padStart(2, '0')}</span><div className="task-row-name"><strong>{task.label}</strong></div><span className={`task-state ${task.state}`}>{{running: '运行中', pending: '待执行', waiting: '等待中'}[task.state]}</span><time>{task.state === 'running' ? '正在执行' : task.pending ? '等待调度' : task.nextRun.slice(5, 16)}</time><ChevronRight size={14}/></Link>) : <Empty icon={<CalendarClock size={30}/>} title="还没有启用的任务">从左侧任务配置中启用日常任务。</Empty>}</div></section>
       <MonitorPanel instance={instance}/>
     </div>
-    <div className="quiet-note"><ShieldCheck size={14}/>任务独立运行，关闭浏览器不会中断调度。<span><Radio size={12}/> 实时状态同步</span></div>
   </>
 }

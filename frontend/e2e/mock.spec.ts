@@ -73,7 +73,7 @@ test('下拉切换实例、创建入口与草稿隔离', async ({page}) => {
   await page.getByRole('menuitemradio', {name: 'demo-alt', exact: true}).click()
   await page.getByRole('button', {name: '放弃修改并离开'}).click()
   await expect(page).toHaveURL(/demo-alt\/overview/)
-  await page.getByRole('link', {name: '连接设置', exact: true}).click()
+  await page.goto('/#/i/demo-alt/task/Alas')
   await expect(serial).toHaveValue('127.0.0.1:5557')
   await page.getByRole('button', {name: '切换实例'}).click()
   await page.keyboard.press('End')

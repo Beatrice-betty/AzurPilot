@@ -37,7 +37,7 @@ export function Settings() {
     setBusy(true)
     try {await api.request('startup.set', {instance, enabled: !startup}); setStartup(!startup)} catch (error) {setError((error as Error).message)} finally {setBusy(false)}
   }
-  return <><PageTitle eyebrow="WORKSPACE SETTINGS" title="系统设置" description="管理实例、服务连接与运行环境。" actions={<button className="button primary" onClick={save} disabled={!Object.keys(draft).length || busy || connection !== 'ready'}><Save size={16}/>保存设置</button>}/>
+  return <><PageTitle title="系统设置" actions={<button className="button primary" onClick={save} disabled={!Object.keys(draft).length || busy || connection !== 'ready'}><Save size={16}/>保存设置</button>}/>
     {error && <ErrorBox message={error}/>}
     <section className="panel config-group"><div className="panel-heading"><div><Palette size={18}/><h2>界面偏好</h2></div></div>
       <div className="field-row"><div className="field-label"><label htmlFor="ui-theme">界面主题</label><p>即时切换当前浏览器的外观。</p></div><div className="field-control"><select id="ui-theme" value={theme} onChange={event => setTheme(event.target.value as typeof theme)}><option value="light">浅色</option><option value="dark">深色</option></select></div></div>

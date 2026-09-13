@@ -1,9 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Anchor, ArrowRight, ChartNoAxesCombined, ChevronDown, Compass, LayoutDashboard, Menu, Plus, Search, Settings2, Wifi, WifiOff, X } from 'lucide-react'
 import { api } from '../api/client'
 import { useApp, useConnection } from './context'
-import { ErrorBox, Loading, Modal, StatusBadge } from '../components/ui'
+import { ErrorBox, Loading, Modal } from '../components/ui'
 import { InstanceSwitcher } from '../components/InstanceSwitcher'
 
 export function CreateInstance({onClose}: {onClose: () => void}) {
@@ -39,7 +39,7 @@ function Login() {
     try { await api.login(password) } catch (error) { setError((error as Error).message) } finally { setBusy(false) }
   }
   return <div className="login-page"><div className="login-art"><Compass size={200} strokeWidth={0.5}/><span>让每一次出航，都井然有序。</span></div>
-    <form onSubmit={submit} className="login-card"><div className="brand-mark"><NavigationMark/></div><div className="eyebrow">AZURPILOT CONTROL CENTER</div><h1>欢迎回到指挥室</h1><p className="muted">输入访问密码，连接你的自动化舰队。</p>
+    <form onSubmit={submit} className="login-card"><div className="brand-mark"><NavigationMark/></div><h1>欢迎回到指挥室</h1>
       <label htmlFor="password">访问密码</label><input id="password" type="password" autoComplete="current-password" autoFocus required value={password} onChange={event => setPassword(event.target.value)}/>
       {error && <ErrorBox message={error}/>}
       <button className="button primary" disabled={busy}>{busy ? '正在验证…' : '进入控制台'}<ArrowRight size={16}/></button>
@@ -62,6 +62,8 @@ export function App() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const current = instances.find(item => item.name === instance)
   const base = instance ? `/i/${instance}` : ''
+  const taskMatch = location.pathname.match(/\/task\/([^/]+)/)
+  const currentTask = taskMatch ? taskMatch[1] : null
   const activeSection = location.pathname.includes('/task/') ? '任务配置' : location.pathname.endsWith('/statistics') ? '资源统计' : location.pathname.endsWith('/settings') ? '系统设置' : location.pathname.endsWith('/logs') ? '运行日志' : '运行总览'
   useEffect(() => {
     if (connection === 'ready' && instances.length && (!instance || !instances.some(item => item.name === instance))) {
@@ -75,7 +77,7 @@ export function App() {
   }, [instance, connection, notify, previewEnabled])
   if (connection === 'auth') return <Login/>
   return <div className={`app-shell ${mobileOpen ? 'mobile-open' : ''}`}>
-    <aside className="sidebar"><div className="sidebar-brand"><span>AzurPilot<span className="brand-dot">.</span></span><small>自动化指挥中心</small><button className="mobile-close icon-button" aria-label="关闭导航" onClick={() => setMobileOpen(false)}><X size={18}/></button></div>
+    <aside className="sidebar"><div className="sidebar-brand"><span>AzurPilot<span className="brand-dot">.</span></span><button className="mobile-close icon-button" aria-label="关闭导航" onClick={() => setMobileOpen(false)}><X size={18}/></button></div>
       <InstanceSwitcher onCreate={() => setCreating(true)}/>
       <div className="sidebar-label">工作空间</div>
       <nav className="primary-nav"><NavLink to={`${base}/overview`}><LayoutDashboard size={17}/>运行总览<span className="nav-pill">总览</span></NavLink><NavLink to={`${base}/statistics`}><ChartNoAxesCombined size={17}/>资源统计</NavLink><NavLink to={`${base}/settings`}><Settings2 size={17}/>系统设置</NavLink></nav>
@@ -86,12 +88,11 @@ export function App() {
         if (!tasks.length) return null
         return <details key={key} open={search || tasks.some(task => location.pathname.endsWith(`/task/${task}`)) ? true : undefined}><summary><Anchor size={14}/>{t(`Menu.${key}.name`)}<ChevronDown size={13}/></summary><div>{tasks.map(task => <NavLink key={task} to={`${base}/task/${task}`}><span/>{t(`Task.${task}.name`)}</NavLink>)}</div></details>
       })}</nav>
-      <div className="sidebar-footer"><span className={`connection-dot ${connection === 'ready' ? 'online' : ''}`}/><div>{connection === 'ready' ? '服务连接正常' : '等待服务连接'}<small>持续守候 · 随时启航</small></div></div>
+      <div className="sidebar-footer"><span className={`connection-dot ${connection === 'ready' ? 'online' : ''}`}/><span>{connection === 'ready' ? '服务连接正常' : '等待服务连接'}</span></div>
     </aside>
-    <div className="main-shell"><header className="topbar"><button className="mobile-toggle icon-button" aria-label="打开导航" onClick={() => setMobileOpen(true)}><Menu size={20}/></button><div className="breadcrumb">工作空间 <span>/</span> {instance ?? '欢迎'} <span>/</span> <strong>{activeSection}</strong></div><div className="topbar-right"><span className="connection-label">{connection === 'ready' ? <Wifi size={14}/> : <WifiOff size={14}/>}{connection === 'ready' ? '已连接' : '连接中'}</span><span className="topbar-divider"/><span className="version">控制台 / v1</span></div></header>
+    <div className="main-shell"><header className="topbar"><button className="mobile-toggle icon-button" aria-label="打开导航" onClick={() => setMobileOpen(true)}><Menu size={20}/></button><div className="breadcrumb"><Link to={base ? `${base}/overview` : '/'}>工作空间</Link><span>/</span><Link to={base ? `${base}/overview` : '/'}>{instance ?? '欢迎'}</Link>{currentTask ? <><span>/</span><Link to={`${base}/task/Alas`}>任务配置</Link><span>/</span><Link to={`${base}/task/${currentTask}`}><strong>{t(`Task.${currentTask}.name`)}</strong></Link></> : <><span>/</span><Link to={location.pathname}><strong>{activeSection}</strong></Link></>}</div><div className="topbar-right"><span className="connection-label">{connection === 'ready' ? <Wifi size={14}/> : <WifiOff size={14}/>}{connection === 'ready' ? '已连接' : '连接中'}</span><span className="topbar-divider"/><span className="version">控制台 / v1</span></div></header>
       {connection !== 'ready' && <div className="connection-banner" role="status"><WifiOff size={16}/>正在连接后端，连接恢复后将自动同步状态。操作暂不可用。</div>}
-      <main>{!schema ? <Loading/> : !instances.length ? <div className="welcome"><Compass size={84} strokeWidth={1}/><div className="eyebrow">WELCOME ABOARD</div><h1>从一个新实例开始</h1><p>连接模拟器，安排任务，让 AzurPilot 接管日常。</p><button className="button primary" onClick={() => setCreating(true)}><Plus size={17}/>创建第一个实例</button></div> : current ? <Outlet key={instance}/> : <Loading/>}</main>
-      <footer className="page-footer"><span><Anchor size={12}/> AZURPILOT</span><span>{current && <StatusBadge status={current.status}/>}为每一次出航做好准备</span></footer>
+      <main>{!schema ? <Loading/> : !instances.length ? <div className="welcome"><Compass size={84} strokeWidth={1}/><h1>从一个新实例开始</h1><button className="button primary" onClick={() => setCreating(true)}><Plus size={17}/>创建第一个实例</button></div> : current ? <Outlet key={instance}/> : <Loading/>}</main>
     </div>{creating && <CreateInstance onClose={() => setCreating(false)}/>}
   </div>
 }

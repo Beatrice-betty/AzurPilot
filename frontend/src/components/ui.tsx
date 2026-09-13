@@ -20,6 +20,6 @@ export function Modal({title, children, onClose}: {title: string; children: Reac
     {children}
   </dialog>
 }
-export function PageTitle({eyebrow, title, description, actions}: {eyebrow: string; title: string; description: string; actions?: ReactNode}) {
-  return <div className="page-title"><div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p>{description}</p></div><div className="title-actions">{actions}</div></div>
+export function PageTitle({title, actions}: {title: string; actions?: ReactNode}) {
+  return <div className="page-title"><h1>{title}</h1>{actions && <div className="title-actions">{actions}</div>}</div>
 }

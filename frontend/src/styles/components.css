@@ -20,13 +20,6 @@
 .status.error {background: #c95e6212; color: var(--red)}
 .status.updating {background: #d9b25a16; color: #b2954a}
 .tiny-dot.teal {color: #269a81}
-.command-banner {display: flex; align-items: center; gap: 18px; position: relative; padding: 24px; background: linear-gradient(100deg, var(--surface) 60%, var(--accent-soft)); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 22px; overflow: hidden}
-.command-banner::before {content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 3px; background: #79cbb5}
-.command-icon {width: 53px; height: 53px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; flex-shrink: 0}
-.banner-title {display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 600}
-.command-banner p {font-size: 10px; color: var(--muted); margin-top: 7px; display: flex; flex-wrap: wrap; gap: 9px}
-.command-banner p strong {font-weight: 500; color: #6a7d89}
-.banner-decoration {position: absolute; right: -8px; top: 0; opacity: .1; color: var(--accent); pointer-events: none}
 .resource-grid {display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 17px; margin-bottom: 23px}
 .resource-card {padding: 19px 20px 15px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow)}
 .resource-heading {display: flex; justify-content: space-between; align-items: center; color: #81919c; font-size: 11px; margin-bottom: 15px}
@@ -50,8 +43,7 @@
 .task-row:last-child {border-bottom: 0}
 .task-row:hover .task-row-name strong {color: var(--accent)}
 .task-order {font-size: 9px; color: #abb7c1; font-variant-numeric: tabular-nums}
-.task-row-name strong {font-size: 11px; font-weight: 550; line-height: 1.6}
-.task-row-name small {display: block; font-size: 8px; color: #a0aeb8; margin-top: 2px; letter-spacing: .2px; overflow: hidden; text-overflow: ellipsis}
+.task-row-name strong {font-size: 14px; font-weight: 600; line-height: 1.4}
 .task-state {font-size: 8px; color: #93a3b0; display: block; background: var(--surface-muted); text-align: center; border-radius: 3px; padding: 3px}
 .task-state.pending {color: var(--accent); background: var(--accent-soft)}
 .task-row time {font-size: 9px; text-align: right; font-variant-numeric: tabular-nums; color: #94a4b1}
@@ -83,8 +75,6 @@
 .log-line.error, .log-line.critical, .log-line.error .log-level, .log-line.critical .log-level {color: #c16c72}
 .log-filters {display: flex; align-items: center; gap: 12px; padding: 14px 20px; font-size: 11px; color: var(--muted)}
 .log-filters .input-icon {flex: 1}
-.quiet-note {font-size: 9px; color: #9aabb5; margin: 16px 2px 0; display: flex; align-items: center; gap: 7px}
-.quiet-note > span {display: flex; gap: 6px; align-items: center; margin-left: auto}
 .empty {min-height: 160px; height: 100%; padding: 35px 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); gap: 12px; text-align: center; line-height: 1.8; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; font-size: 11px}
 .empty > svg {color: #a7b9c1; margin-bottom: 3px}
 .empty strong {font-weight: 500; font-size: 12px; color: #8398a5}

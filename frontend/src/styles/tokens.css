@@ -44,7 +44,6 @@ svg {flex-shrink: 0; vertical-align: middle}
 ::-webkit-scrollbar-thumb {background: #95a5b73c; border-radius: 8px}
 .muted, .small-label {color: var(--muted)}
 .small-label {font-size: 11px}
-.eyebrow {font-size: 9px; color: var(--accent); font-weight: 700; letter-spacing: 2.2px; margin-bottom: 8px}
 .spin {animation: spin 1.2s linear infinite}
 @keyframes spin {to {transform: rotate(360deg)}}
 @media (prefers-reduced-motion: reduce) {*, *::before, *::after {animation: none !important; transition: none !important; scroll-behavior: auto !important}}
