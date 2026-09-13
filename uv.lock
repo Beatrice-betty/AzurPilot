@@ -30,15 +30,6 @@ wheels = [
 ]
 
 [[package]]
-name = "aiofiles"
-version = "23.1.0"
-source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/40/a0/07be94aecba162ed5147359f9883e82afd2ac13aed33678a008fc8c36f8b/aiofiles-23.1.0.tar.gz", hash = "sha256:edd247df9a19e0db16534d4baaf536d6609a43e1de5401d7a4c1c148753a1635" }
-wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/a8/76/635aa4f210d46ca105bfedd42d41f649b91d3e58422912726fc5e7965442/aiofiles-23.1.0-py3-none-any.whl", hash = "sha256:9312414ae06472eb6f1d163f555e466a23aed1c8f60c30cccf7121dba2e53eb2" },
-]
-
-[[package]]
 name = "aiohappyeyeballs"
 version = "2.7.1"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
@@ -229,15 +220,11 @@ version = "0.0.0"
 source = { virtual = "." }
 dependencies = [
     { name = "adbutils" },
-    { name = "aiofiles" },
     { name = "aiohttp" },
     { name = "aiortc" },
     { name = "anyio" },
-    { name = "chardet" },
     { name = "imageio" },
     { name = "imageio-ffmpeg" },
-    { name = "importlib-metadata" },
-    { name = "importlib-resources" },
     { name = "inflection" },
     { name = "jellyfish" },
     { name = "lz4" },
@@ -253,29 +240,21 @@ dependencies = [
     { name = "opencv-python" },
     { name = "packaging" },
     { name = "pillow" },
-    { name = "pip" },
     { name = "psutil" },
     { name = "pycryptodome" },
     { name = "pydantic" },
-    { name = "pygments" },
     { name = "pypresence" },
     { name = "pyyaml" },
     { name = "pyzmq" },
     { name = "rapidocr" },
-    { name = "retrying" },
     { name = "rich" },
     { name = "scipy" },
-    { name = "setuptools" },
-    { name = "sse-starlette" },
     { name = "starlette" },
-    { name = "typing-extensions" },
     { name = "uiautomator2" },
     { name = "uiautomator2cache" },
     { name = "uv" },
     { name = "uvicorn", extra = ["standard"] },
-    { name = "watchdog" },
     { name = "windowsml", marker = "sys_platform == 'win32'" },
-    { name = "wrapt" },
     { name = "zerorpc" },
 ]
 
@@ -287,15 +266,11 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "adbutils", specifier = "==0.11.0" },
-    { name = "aiofiles", specifier = "==23.1.0" },
     { name = "aiohttp", specifier = ">=3.13.2" },
     { name = "aiortc", specifier = ">=1.14.0" },
     { name = "anyio", specifier = "==4.13.0" },
-    { name = "chardet", specifier = "==5.1.0" },
     { name = "imageio", specifier = "==2.26.0" },
     { name = "imageio-ffmpeg", specifier = "==0.6.0" },
-    { name = "importlib-metadata", specifier = "==8.0.0" },
-    { name = "importlib-resources", specifier = "==6.0.0" },
     { name = "inflection", specifier = "==0.5.1" },
     { name = "jellyfish", specifier = "==1.2.1" },
     { name = "lz4", specifier = "==4.4.5" },
@@ -312,29 +287,21 @@ requires-dist = [
     { name = "opencv-python", specifier = "==5.0.0.93" },
     { name = "packaging", specifier = "==24.2" },
     { name = "pillow", specifier = "==12.3.0" },
-    { name = "pip", specifier = "==26.0.1" },
     { name = "psutil", specifier = "==7.2.2" },
     { name = "pycryptodome", specifier = "==3.23.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
-    { name = "pygments", specifier = "==2.20.0" },
     { name = "pypresence", specifier = "==4.2.1" },
     { name = "pyyaml", specifier = "==6.0.3" },
     { name = "pyzmq", specifier = "==27.1.0" },
     { name = "rapidocr", specifier = "==3.9.0" },
-    { name = "retrying", specifier = "==1.3.4" },
     { name = "rich", specifier = "==11.2.0" },
     { name = "scipy", specifier = "==1.18.0" },
-    { name = "setuptools", specifier = "==75.8.2" },
-    { name = "sse-starlette", specifier = "==3.0.3" },
     { name = "starlette", specifier = "==0.49.1" },
-    { name = "typing-extensions", specifier = ">=4.15.0" },
     { name = "uiautomator2", specifier = "==2.16.17" },
     { name = "uiautomator2cache", specifier = "==0.3.0.1" },
     { name = "uv", specifier = "==0.11.32" },
     { name = "uvicorn", extras = ["standard"], specifier = "==0.44.0" },
-    { name = "watchdog", specifier = ">=6.0.0" },
     { name = "windowsml", marker = "sys_platform == 'win32'", specifier = "==2.1.74" },
-    { name = "wrapt", specifier = "==1.15.0" },
     { name = "zerorpc", specifier = "==0.6.3" },
 ]
 
@@ -392,15 +359,6 @@ wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/dc/78/aa01ac599a8a4322533d45a1f9bc93b338276d2d59dabbe7c6d92a775c81/cffi-2.1.0-cp314-cp314t-win32.whl", hash = "sha256:7d034dcffa09e9a46c93fa3a3be402096cb5354ac6e41ab8e5cc9cd8b642ad76" },
     { url = "https://mirrors.aliyun.com/pypi/packages/b9/26/d00496b22de4d4228f32dde94ad996f350c8aad676d63bcca0743c8dea4d/cffi-2.1.0-cp314-cp314t-win_amd64.whl", hash = "sha256:0582a58f3051372229ca8e7f5f589f9e5632678208d8636fea3676711fdf7fe5" },
     { url = "https://mirrors.aliyun.com/pypi/packages/d5/dd/0c7dbf815a579ff005008a2d815a55d6bb047c349eef536d9dc53d3f0a8d/cffi-2.1.0-cp314-cp314t-win_arm64.whl", hash = "sha256:510aeeeac94811b138077451da1fb18b308a5feab47dd2b603af55804155e1c8" },
-]
-
-[[package]]
-name = "chardet"
-version = "5.1.0"
-source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/41/32/cdc91dcf83849c7385bf8e2a5693d87376536ed000807fa07f5eab33430d/chardet-5.1.0.tar.gz", hash = "sha256:0d62712b956bc154f85fb0a266e2a3c5913c2967e00348701b32411d6def31e5" }
-wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/74/8f/8fc49109009e8d2169d94d72e6b1f4cd45c13d147ba7d6170fb41f22b08f/chardet-5.1.0-py3-none-any.whl", hash = "sha256:362777fb014af596ad31334fde1e8c327dfdb076e1960d1694662d46a6917ab9" },
 ]
 
 [[package]]
@@ -897,27 +855,6 @@ wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/a0/2d/43c8522a2038e9d0e7dbdf3a61195ecc31ca576fb1527a528c877e87d973/imageio_ffmpeg-0.6.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:c7e46fcec401dd990405049d2e2f475e2b397779df2519b544b8aab515195282" },
     { url = "https://mirrors.aliyun.com/pypi/packages/a0/13/59da54728351883c3c1d9fca1710ab8eee82c7beba585df8f25ca925f08f/imageio_ffmpeg-0.6.0-py3-none-win32.whl", hash = "sha256:196faa79366b4a82f95c0f4053191d2013f4714a715780f0ad2a68ff37483cc2" },
     { url = "https://mirrors.aliyun.com/pypi/packages/2c/c6/fa760e12a2483469e2bf5058c5faff664acf66cadb4df2ad6205b016a73d/imageio_ffmpeg-0.6.0-py3-none-win_amd64.whl", hash = "sha256:02fa47c83703c37df6bfe4896aab339013f62bf02c5ebf2dce6da56af04ffc0a" },
-]
-
-[[package]]
-name = "importlib-metadata"
-version = "8.0.0"
-source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-dependencies = [
-    { name = "zipp" },
-]
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/20/ff/bd28f70283b9cca0cbf0c2a6082acbecd822d1962ae7b2a904861b9965f8/importlib_metadata-8.0.0.tar.gz", hash = "sha256:188bd24e4c346d3f0a933f275c2fec67050326a856b9a359881d7c2a697e8812" }
-wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/dc/ef/38766b2edb096260d9b1b6ad35adaa0bce3b0567abb452b21eb074af88c4/importlib_metadata-8.0.0-py3-none-any.whl", hash = "sha256:15584cf2b1bf449d98ff8a6ff1abef57bf20f3ac6454f431736cd3e660921b2f" },
-]
-
-[[package]]
-name = "importlib-resources"
-version = "6.0.0"
-source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/78/1f/65a619c18b0ecd55ac165c7ed119c846051991d01c2cfc0ff7818e4573f0/importlib_resources-6.0.0.tar.gz", hash = "sha256:4cf94875a8368bd89531a756df9a9ebe1f150e0f885030b461237bc7f2d905f2" }
-wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/29/d1/bed03eca30aa05aaf6e0873de091f9385c48705c4a607c2dfe3edbe543e8/importlib_resources-6.0.0-py3-none-any.whl", hash = "sha256:d952faee11004c045f785bb5636e8f885bed30dc3c940d5d42798a2a4541c185" },
 ]
 
 [[package]]
@@ -1483,15 +1420,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pip"
-version = "26.0.1"
-source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/48/83/0d7d4e9efe3344b8e2fe25d93be44f64b65364d3c8d7bc6dc90198d5422e/pip-26.0.1.tar.gz", hash = "sha256:c4037d8a277c89b320abe636d59f91e6d0922d08a05b60e85e53b296613346d8" }
-wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/de/f0/c81e05b613866b76d2d1066490adf1a3dbc4ee9d9c839961c3fc8a6997af/pip-26.0.1-py3-none-any.whl", hash = "sha256:bdb1b08f4274833d62c1aa29e20907365a2ceb950410df15fc9521bad440122b" },
-]
-
-[[package]]
 name = "portalocker"
 version = "3.2.0"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
@@ -1973,18 +1901,6 @@ wheels = [
 ]
 
 [[package]]
-name = "retrying"
-version = "1.3.4"
-source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-dependencies = [
-    { name = "six" },
-]
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/ce/70/15ce8551d65b324e18c5aa6ef6998880f21ead51ebe5ed743c0950d7d9dd/retrying-1.3.4.tar.gz", hash = "sha256:345da8c5765bd982b1d1915deb9102fd3d1f7ad16bd84a9700b85f64d24e8f3e" }
-wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/8f/04/9e36f28be4c0532c0e9207ff9dc01fb13a2b0eb036476a213b0000837d0e/retrying-1.3.4-py3-none-any.whl", hash = "sha256:8cc4d43cb8e1125e0ff3344e9de678fefd85db3b750b81b2240dc0183af37b35" },
-]
-
-[[package]]
 name = "rich"
 version = "11.2.0"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
@@ -2089,15 +2005,6 @@ wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/f7/86/5185061a1fcc41d18c5dc2463969b3a3964b31d9ac67b2fb05d4c7ff7670/scipy-1.18.0-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:9aac6192fac56bf2ca534389d24623f07b39ff83317d58287285e7fbd622ff76" },
     { url = "https://mirrors.aliyun.com/pypi/packages/31/8e/f04c68e39919a010d34f2ee1367fd705b0a25a02f609d755f0bfbc0a15fc/scipy-1.18.0-cp314-cp314t-win_amd64.whl", hash = "sha256:e40baea28ae7f5475c779741e2d90b1247c78531207b49c7030e698ff81cee3f" },
     { url = "https://mirrors.aliyun.com/pypi/packages/d5/19/969dc072906c84dd0a3b05dcf57ea750936087d7873549e408b35cfc3f97/scipy-1.18.0-cp314-cp314t-win_arm64.whl", hash = "sha256:368e0a705903c466aa5f08eefb39e6b1b6b2d659e7352a31fd9e2438365be0f8" },
-]
-
-[[package]]
-name = "setuptools"
-version = "75.8.2"
-source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/d1/53/43d99d7687e8cdef5ab5f9ec5eaf2c0423c2b35133a2b7e7bc276fc32b21/setuptools-75.8.2.tar.gz", hash = "sha256:4880473a969e5f23f2a2be3646b2dfd84af9028716d398e46192f84bc36900d2" }
-wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/a9/38/7d7362e031bd6dc121e5081d8cb6aa6f6fedf2b67bf889962134c6da4705/setuptools-75.8.2-py3-none-any.whl", hash = "sha256:558e47c15f1811c1fa7adbd0096669bf76c1d3f433f58324df69f3f5ecac4e8f" },
 ]
 
 [[package]]
@@ -2314,24 +2221,6 @@ wheels = [
 ]
 
 [[package]]
-name = "watchdog"
-version = "6.0.0"
-source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/db/7d/7f3d619e951c88ed75c6037b246ddcf2d322812ee8ea189be89511721d54/watchdog-6.0.0.tar.gz", hash = "sha256:9ddf7c82fda3ae8e24decda1338ede66e1c99883db93711d8fb941eaa2d8c282" }
-wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/a9/c7/ca4bf3e518cb57a686b2feb4f55a1892fd9a3dd13f470fca14e00f80ea36/watchdog-6.0.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:7607498efa04a3542ae3e05e64da8202e58159aa1fa4acddf7678d34a35d4f13" },
-    { url = "https://mirrors.aliyun.com/pypi/packages/5c/51/d46dc9332f9a647593c947b4b88e2381c8dfc0942d15b8edc0310fa4abb1/watchdog-6.0.0-py3-none-manylinux2014_armv7l.whl", hash = "sha256:9041567ee8953024c83343288ccc458fd0a2d811d6a0fd68c4c22609e3490379" },
-    { url = "https://mirrors.aliyun.com/pypi/packages/d4/57/04edbf5e169cd318d5f07b4766fee38e825d64b6913ca157ca32d1a42267/watchdog-6.0.0-py3-none-manylinux2014_i686.whl", hash = "sha256:82dc3e3143c7e38ec49d61af98d6558288c415eac98486a5c581726e0737c00e" },
-    { url = "https://mirrors.aliyun.com/pypi/packages/ab/cc/da8422b300e13cb187d2203f20b9253e91058aaf7db65b74142013478e66/watchdog-6.0.0-py3-none-manylinux2014_ppc64.whl", hash = "sha256:212ac9b8bf1161dc91bd09c048048a95ca3a4c4f5e5d4a7d1b1a7d5752a7f96f" },
-    { url = "https://mirrors.aliyun.com/pypi/packages/2c/3b/b8964e04ae1a025c44ba8e4291f86e97fac443bca31de8bd98d3263d2fcf/watchdog-6.0.0-py3-none-manylinux2014_ppc64le.whl", hash = "sha256:e3df4cbb9a450c6d49318f6d14f4bbc80d763fa587ba46ec86f99f9e6876bb26" },
-    { url = "https://mirrors.aliyun.com/pypi/packages/62/ae/a696eb424bedff7407801c257d4b1afda455fe40821a2be430e173660e81/watchdog-6.0.0-py3-none-manylinux2014_s390x.whl", hash = "sha256:2cce7cfc2008eb51feb6aab51251fd79b85d9894e98ba847408f662b3395ca3c" },
-    { url = "https://mirrors.aliyun.com/pypi/packages/b5/e8/dbf020b4d98251a9860752a094d09a65e1b436ad181faf929983f697048f/watchdog-6.0.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:20ffe5b202af80ab4266dcd3e91aae72bf2da48c0d33bdb15c66658e685e94e2" },
-    { url = "https://mirrors.aliyun.com/pypi/packages/07/f6/d0e5b343768e8bcb4cda79f0f2f55051bf26177ecd5651f84c07567461cf/watchdog-6.0.0-py3-none-win32.whl", hash = "sha256:07df1fdd701c5d4c8e55ef6cf55b8f0120fe1aef7ef39a1c6fc6bc2e606d517a" },
-    { url = "https://mirrors.aliyun.com/pypi/packages/db/d9/c495884c6e548fce18a8f40568ff120bc3a4b7b99813081c8ac0c936fa64/watchdog-6.0.0-py3-none-win_amd64.whl", hash = "sha256:cbafb470cf848d93b5d013e2ecb245d4aa1c8fd0504e863ccefa32445359d680" },
-    { url = "https://mirrors.aliyun.com/pypi/packages/33/e8/e40370e6d74ddba47f002a32919d91310d6074130fe4e17dabcafc15cbf1/watchdog-6.0.0-py3-none-win_ia64.whl", hash = "sha256:a1914259fa9e1454315171103c6a30961236f508b9b623eae470268bbcc6a22f" },
-]
-
-[[package]]
 name = "watchfiles"
 version = "1.2.0"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
@@ -2507,15 +2396,6 @@ dependencies = [
 sdist = { url = "https://mirrors.aliyun.com/pypi/packages/73/ff/d61ef9f5d10e671421d1368e87d3525325483ebd7da262b1d3087443662b/zerorpc-0.6.3.tar.gz", hash = "sha256:d2ee247a566fc703f29c277d767f6f61f1e12f76d0402faea4bd815f32cbf37f" }
 wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/c5/f9/2ada1ffbc1f89708fbbebd67806417d7ada0262484b743345289e6d4c637/zerorpc-0.6.3-py3-none-any.whl", hash = "sha256:0a91ab78db756aec25d5c7c326f8d0dcdf852144acba2cced2cfb2e736c51628" },
-]
-
-[[package]]
-name = "zipp"
-version = "4.1.0"
-source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/b9/d8/eab98a517c14134c0b2eb4e2387bc5f457334293ec5d2dd3857ec2966802/zipp-4.1.0.tar.gz", hash = "sha256:4cb57381f544315db7688e976e922a2b18cdb513d21cc194eb42232ba2a3e602" }
-wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/3a/13/547360d81e6d88d58492968ffda9f9542854f11310ee556fef14260cc886/zipp-4.1.0-py3-none-any.whl", hash = "sha256:25ad4e16390cd314347dd8f1de67a2ac538ae658ed4ab9db16029c07c188e97f" },
 ]
 
 [[package]]

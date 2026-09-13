@@ -107,19 +107,23 @@ DEPLOY_GROUPS: tuple[tuple[str, tuple[DeployField, ...]], ...] = (
         (
             DeployField("WebuiHost"),
             DeployField("WebuiPort", "int"),
-            DeployField("Language", "select", tuple(LANGUAGES)),
-            DeployField("Theme", "select", tuple(THEME_OPTIONS)),
-            DeployField("DpiScaling", "bool"),
             DeployField("Password", "nullable_string"),
-            DeployField("CDN", "cdn"),
             DeployField("WebuiSSLKey", "nullable_string"),
             DeployField("WebuiSSLCert", "nullable_string"),
         ),
     ),
 )
 
+# 旧前端兼容字段定义，仅用于兼容历史 deploy.yaml，不呈现在前端配置界面中
+LEGACY_DEPLOY_FIELDS = {
+    "Language": DeployField("Language", "select", tuple(LANGUAGES)),
+    "Theme": DeployField("Theme", "select", tuple(THEME_OPTIONS)),
+    "DpiScaling": DeployField("DpiScaling", "bool"),
+    "CDN": DeployField("CDN", "cdn"),
+}
 DEPLOY_FIELDS = {
-    field.key: field for _, fields in DEPLOY_GROUPS for field in fields
+    **{field.key: field for _, fields in DEPLOY_GROUPS for field in fields},
+    **LEGACY_DEPLOY_FIELDS,
 }
 
 
