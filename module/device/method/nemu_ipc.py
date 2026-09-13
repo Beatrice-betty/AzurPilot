@@ -173,7 +173,6 @@ def retry(func):
             self (NemuIpcImpl):
         """
         init = None
-        last_error = None
         for _ in range(RETRY_TRIES):
             # 重试时延长超时时间
             if func.__name__ == 'screenshot':
@@ -201,30 +200,33 @@ def retry(func):
             # NemuIpcError
             except NemuIpcError as e:
                 logger.error(e)
-                last_error = e
 
                 def init():
                     self.reconnect()
             # 不可处理 - 必须向上抛出以触发模拟器重启
             except EmulatorNotRunningError:
                 raise
+            # 调用方参数错误：numpy 标量传给未声明 argtypes 的函数（ArgumentError），
+            # 或 None / nan / inf 之类的坐标（TypeError / ValueError / OverflowError）。
+            # 触控函数遇到这类错误重试没有意义，更不能当作模拟器掉线去重启模拟器。
+            except (ctypes.ArgumentError, TypeError, ValueError, OverflowError) as e:
+                if func.__name__ in ['down', 'up']:
+                    logger.critical(
+                        f'[设备-NemuIpc] {func.__name__}() 参数错误，不按模拟器掉线处理: {e}'
+                    )
+                    raise
+                logger.exception(e)
+
+                def init():
+                    pass
             # 未知异常，可能是损坏的图像
             except Exception as e:
                 logger.exception(e)
-                last_error = e
 
                 def init():
                     pass
 
         if func.__name__ in ['connect_with_retry', 'screenshot', 'down', 'up']:
-            if isinstance(last_error, ctypes.ArgumentError):
-                # ctypes 参数类型错误属于调用方 bug（例如把 numpy 整数传给未声明
-                # argtypes 的函数），不是模拟器掉线：抛 EmulatorNotRunningError
-                # 会触发无谓的模拟器重启，还会把真实原因埋进重启日志里。
-                logger.critical(
-                    f'[设备-NemuIpc] {func.__name__}() 参数错误，不按模拟器掉线处理'
-                )
-                raise last_error
             logger.critical(f'[设备-NemuIpc] 重试 {func.__name__}() 失败')
             raise EmulatorNotRunningError
 
@@ -489,7 +491,9 @@ class NemuIpcImpl:
         # argtypes，ctypes 无法转换 numpy 标量，会抛
         # ArgumentError: Don't know how to convert parameter 3；被 retry 包装成
         # EmulatorNotRunningError 后 Alas 会误判为掉线并重启模拟器。
-        # 这里统一转成 Python int。
+        # 这里统一转成 Python int；None / nan / inf 之类的无效坐标会抛
+        # TypeError / ValueError / OverflowError，由 retry 包装按「调用方参数错误」
+        # 直接抛出，同样不会触发模拟器重启。
         x, y = int(x), int(y)
 
         ret = self.run_func(

@@ -191,6 +191,20 @@ class TestTouchArgumentTypes(unittest.TestCase):
         impl.down(120.7, 240.2)  # 截断成 int，不应抛异常
         self.assertEqual(tuple(lib.touch_down_calls[-1]), (1, 0, 120, 240))
 
+    def test_invalid_point_never_reaches_dll(self):
+        """None / nan / inf 之类无效坐标不落到 DLL，也不被当成模拟器掉线。
+
+        转换失败抛出的 TypeError / ValueError / OverflowError 会被 retry 包装按
+        「调用方参数错误」直接抛出（见 TestRetryErrorClassification），
+        而不是重试后包装成 EmulatorNotRunningError 去重启模拟器。
+        """
+        impl, lib = self._build()
+        for value in (None, float("nan"), float("inf")):
+            with self.subTest(value=value):
+                with self.assertRaises((TypeError, ValueError, OverflowError)):
+                    impl.down(value, 10)
+        self.assertFalse(lib.touch_down_calls, "无效坐标不应调用底层 DLL")
+
 
 class TestRetryErrorClassification(unittest.TestCase):
     """参数类型错误不是模拟器掉线，不能被包装成 EmulatorNotRunningError。
