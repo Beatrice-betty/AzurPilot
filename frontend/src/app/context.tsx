@@ -8,7 +8,7 @@ export const languages = {'zh-CN': '简体中文', 'zh-TW': '繁体中文', 'en-
 type Language = NonNullable<Parameters['schema.get']['language']>
 
 export interface AppContextValue {
-  instances: Instance[]; schema?: Schema; refresh: () => Promise<void>; t: (key: string) => string
+  instancesLoaded: boolean; instances: Instance[]; schema?: Schema; refresh: () => Promise<void>; t: (key: string) => string
   notify: (message: string, error?: boolean) => void
   previewEnabled: boolean; setPreviewEnabled: (enabled: boolean) => void
   theme: 'light' | 'dark'; setTheme: (theme: 'light' | 'dark') => void
@@ -22,6 +22,7 @@ export const useApp = () => useContext(AppContext)!
 export function AppProvider({children}: {children: ReactNode}) {
   const connection = useConnection()
   const [instances, setInstances] = useState<Instance[]>([])
+  const [instancesLoaded, setInstancesLoaded] = useState(false)
   const [schema, setSchema] = useState<Schema>()
   const [previewEnabled, setPreviewEnabled] = useState(false)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => localStorage.getItem('azurpilot.theme') === 'dark' ? 'dark' : 'light')
@@ -42,7 +43,7 @@ export function AppProvider({children}: {children: ReactNode}) {
     if (connection !== 'ready') return
     let active = true
     void api.request('instances.list', {}).then(instances => {
-      if (active) setInstances(instances)
+      if (active) {setInstances(instances); setInstancesLoaded(true)}
     }).catch(error => notify(error.message, true))
     return () => { active = false }
   }, [connection, notify])
@@ -71,7 +72,7 @@ export function AppProvider({children}: {children: ReactNode}) {
     for (const part of key.split('.')) value = value && typeof value === 'object' ? (value as Record<string, unknown>)[part] : undefined
     return typeof value === 'string' && value !== key ? value : key.split('.').filter(item => item !== 'name' && item !== '_info').at(-1) ?? key
   }, [schema])
-  return <Context.Provider value={{instances, schema, refresh, t, notify, previewEnabled, setPreviewEnabled, theme, setTheme, language, setLanguage}}>
+  return <Context.Provider value={{instancesLoaded, instances, schema, refresh, t, notify, previewEnabled, setPreviewEnabled, theme, setTheme, language, setLanguage}}>
     {children}
     {toast && <div role={toast.error ? 'alert' : 'status'} className={`toast ${toast.error ? 'error' : ''}`} onClick={() => setToast(undefined)}>{toast.message}</div>}
   </Context.Provider>

@@ -34,6 +34,7 @@ const mockTranslations: Record<string, string> = {
 }
 
 const mockContext: AppContextValue = {
+  instancesLoaded: true,
   instances: [{ name: 'default', status: 'stopped', serial: '127.0.0.1:5555', server: 'cn' }],
   schema: mockSchema,
   refresh: async () => {},
@@ -61,8 +62,8 @@ describe('TaskNav 导航组件', () => {
 
     // 检查容器与搜索框
     expect(html).toContain('task-nav-container')
-    expect(html).toContain('nav-search')
-    expect(html).toContain('搜索任务…')
+    expect(html).toContain('展开任务搜索')
+    expect(html).not.toContain('搜索任务…')
 
     // 检查一级菜单项按钮
     expect(html).toContain('task-group-button')

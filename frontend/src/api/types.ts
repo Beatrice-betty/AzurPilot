@@ -2,7 +2,13 @@ export type Scalar = string | number | boolean | null
 export type Value = Scalar | Value[] | {[key: string]: Value}
 export type Values = Record<string, Record<string, Record<string, Value>>>
 export type Status = 'running' | 'stopped' | 'error' | 'updating'
-export interface Instance { name: string; status: Status; serial: string; server: string }
+export interface Instance { name: string; status: Status; serial: string; server: string; currentTask?: string | null }
+export interface UpdateStatus {
+  state: string; localHead: string | null; upstreamHead: string | null; branch: string
+  ahead: number; behind: number; available: boolean; busy: boolean; canApply: boolean; canCancel: boolean; error: string
+}
+export interface Commit { sha: string; author: string; date: string; message: string }
+export interface CommitHistory { entries: Commit[]; total: number; hasMore: boolean; localHead: string | null; upstreamHead: string | null }
 export interface Field { type: string; value: Value; mode?: string; display?: string; option?: Value[]; validate?: string | number[] }
 export interface Schema {
   menu: Record<string, { menu: string; page: string; tasks: string[] }>
@@ -33,6 +39,11 @@ export interface Settings { groups: {key: string; label: string; fields: DeployF
 export interface ApiEvent { v: 1; type: 'event'; topic: string; seq: number; data: unknown }
 export interface ApiResponse { v: 1; type: 'response'; id: string; ok: boolean; result?: unknown; error?: {code: string; message: string} }
 export interface Results {
+  'updater.status': UpdateStatus
+  'updater.commits': CommitHistory
+  'updater.fetch': {accepted: boolean}
+  'updater.apply': {accepted: boolean}
+  'updater.cancel': {accepted: boolean}
   'system.ping': {pong: boolean}
   'auth.login': {authenticated: boolean}
   'events.subscribe': {topics: string[]; instance: string | null}

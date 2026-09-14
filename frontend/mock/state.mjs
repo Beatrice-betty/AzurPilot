@@ -40,6 +40,10 @@ function validateField(path, value) {
 export function createMockState({empty = false} = {}) {
   const instances = new Map()
   const startup = new Set()
+  const commits = Array.from({length: 123}, (_, index) => ({sha: createHash('sha1').update(`mock-commit-${123 - index}`).digest('hex'), author: 'AzurPilot', date: new Date(Date.UTC(2026, 8, 14, 0, -index)).toISOString(), message: index === 0 ? 'feat(webui): 新增主页与实例状态\n\n统一全局设置和更新入口。' : `fix(runtime): 改善任务运行稳定性 ${123 - index}`}))
+  let localHead = commits[3].sha
+  let upstreamHead = commits[0].sha
+  const updateStatus = () => ({state: localHead === upstreamHead ? 'idle' : 'available', localHead, upstreamHead, branch: 'dev', ahead: 0, behind: commits.findIndex(item => item.sha === localHead), available: localHead !== upstreamHead, busy: false, canApply: localHead !== upstreamHead, canCancel: false, error: ''})
   const settings = {groups: [{key: 'Webui', label: 'WebUI 设置', fields: [
     {key: 'WebuiHost', type: 'string', label: '监听地址', help: '模拟部署设置，仅在当前 mock 会话中保留。', value: '127.0.0.1', options: []},
     {key: 'WebuiPort', type: 'int', label: '监听端口', help: '用于验证数值输入与保存。', value: 22267, options: []},
@@ -96,9 +100,14 @@ export function createMockState({empty = false} = {}) {
     const name = params.instance
     if (name != null) get(name)
     switch (method) {
+      case 'updater.status': return updateStatus()
+      case 'updater.commits': return {entries: commits.slice(params.offset, params.offset + params.limit), total: commits.length, hasMore: params.offset + params.limit < commits.length, localHead, upstreamHead}
+      case 'updater.fetch': return {accepted: true}
+      case 'updater.apply': localHead = upstreamHead; return {accepted: true}
+      case 'updater.cancel': return {accepted: true}
       case 'system.ping': return {pong: true}
       case 'schema.get': return {args, menu, translations: locales[params.language]}
-      case 'instances.list': return [...instances].map(([name, item]) => ({name, status: item.status, serial: item.values.Alas.Emulator.Serial, server: item.values.Alas.Emulator.ServerName}))
+      case 'instances.list': return [...instances].map(([name, item]) => ({name, status: item.status, currentTask: item.status === 'running' ? 'Commission' : null, serial: item.values.Alas.Emulator.Serial, server: item.values.Alas.Emulator.ServerName}))
       case 'instances.create': {
         if (!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(params.name) || /^(template|deploy|backup|con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(params.name)) fail('INVALID_PARAMS', '实例名称无效')
         if ([...instances.keys()].some(name => name.toLowerCase() === params.name.toLowerCase())) fail('ALREADY_EXISTS', '同名实例已存在')

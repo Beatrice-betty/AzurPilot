@@ -503,6 +503,65 @@
         "type": "object"
       }
     },
+    "updater.status": {
+      "mutates": false,
+      "params": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "Params",
+        "type": "object"
+      }
+    },
+    "updater.commits": {
+      "mutates": false,
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "offset": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "limit": {
+            "default": 50,
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "title": "CommitsParams",
+        "type": "object"
+      }
+    },
+    "updater.fetch": {
+      "mutates": true,
+      "params": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "Params",
+        "type": "object"
+      }
+    },
+    "updater.apply": {
+      "mutates": true,
+      "params": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "Params",
+        "type": "object"
+      }
+    },
+    "updater.cancel": {
+      "mutates": true,
+      "params": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "Params",
+        "type": "object"
+      }
+    },
     "auth.login": {
       "mutates": false,
       "params": {

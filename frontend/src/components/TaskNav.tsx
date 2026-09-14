@@ -10,6 +10,7 @@ export function TaskNav({ defaultOpenKey }: { defaultOpenKey?: string } = {}) {
   const base = instance ? `/i/${instance}` : ''
 
   const [search, setSearch] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
   const [openMenuKey, setOpenMenuKey] = useState<string | null>(defaultOpenKey ?? null)
   const [flyoutTop, setFlyoutTop] = useState(0)
 
@@ -107,15 +108,17 @@ export function TaskNav({ defaultOpenKey }: { defaultOpenKey?: string } = {}) {
 
   return (
     <div className="task-nav-container" ref={navContainerRef}>
-      <div className="nav-search">
+      <div className="sidebar-label task-nav-heading">任务配置<button className="icon-button" aria-label={searchOpen ? '收起任务搜索' : '展开任务搜索'} aria-expanded={searchOpen} aria-controls="task-search" onClick={() => {setSearchOpen(!searchOpen); setSearch(''); setOpenMenuKey(null)}}><Search size={15}/></button></div>
+      {searchOpen && <div className="nav-search" id="task-search">
         <Search size={14} />
         <input
+          autoFocus
           aria-label="搜索任务"
           value={search}
           onChange={event => setSearch(event.target.value)}
           placeholder="搜索任务…"
         />
-      </div>
+      </div>}
 
       <nav className="task-nav">
         {schema &&

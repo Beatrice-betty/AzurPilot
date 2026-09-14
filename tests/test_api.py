@@ -165,6 +165,20 @@ class SocketApiTests(unittest.TestCase):
             self.assertTrue(self.call(ws, 'auth.login', {'password': 'test-secret'})['ok'])
             self.assertEqual('testpilot', self.call(ws, 'instances.list')['result'][0]['name'])
 
+    def test_update_methods_require_auth_and_validate_pagination(self):
+        with self.client.websocket_connect('/api/v1/ws') as ws:
+            ws.receive_json()
+            for method in ('updater.status', 'updater.commits', 'updater.fetch', 'updater.apply', 'updater.cancel'):
+                self.assertEqual('UNAUTHORIZED', self.call(ws, method)['error']['code'])
+            self.assertTrue(self.call(ws, 'auth.login', {'password': 'test-secret'})['ok'])
+            self.assertEqual('INVALID_PARAMS', self.call(ws, 'updater.commits', {'limit': 101})['error']['code'])
+            with patch('module.api.update_service.update_service') as updates:
+                updates.commits.return_value = {'entries': [], 'total': 0, 'hasMore': False,
+                                                'localHead': None, 'upstreamHead': None}
+                response = self.call(ws, 'updater.commits', {'offset': 50, 'limit': 50})
+                self.assertTrue(response['ok'])
+                updates.commits.assert_called_once_with(50, 50)
+
     def test_untrusted_origin_is_rejected_before_upgrade(self):
         with self.assertRaises(WebSocketDisconnect):
             with self.client.websocket_connect('/api/v1/ws', headers={'origin': 'https://evil.example'}):

@@ -7,6 +7,7 @@ import { useApp, useConnection } from '../app/context'
 import { Empty, ErrorBox, Loading, PageTitle } from '../components/ui'
 import { MonitorPanel } from '../components/MonitorPanel'
 import { ResourceCards } from '../components/ResourceCards'
+import { InstanceActions } from '../components/InstanceActions'
 import { editor } from '../config/editors'
 
 export function Overview() {
@@ -38,7 +39,7 @@ export function Overview() {
   const pending = data.tasks.filter(task => task.state === 'pending').length
   const running = data.tasks.filter(task => task.state === 'running').length
   return <>
-    <PageTitle title="运行总览" actions={<button className={`button ${data.status === 'running' ? 'danger' : 'primary'}`} onClick={toggle} disabled={busy || connection !== 'ready'}>{data.status === 'running' ? <Square size={15}/> : <Play size={15}/>} {busy ? '正在处理…' : data.status === 'running' ? '停止运行' : '启动调度器'}</button>}/>
+    <PageTitle title={instance} actions={<><InstanceActions instance={instance} status={data.status}/><button className={`button ${data.status === 'running' ? 'danger' : 'primary'}`} onClick={toggle} disabled={busy || connection !== 'ready'}>{data.status === 'running' ? <Square size={15}/> : <Play size={15}/>} {busy ? '正在处理…' : data.status === 'running' ? '停止运行' : '启动调度器'}</button></>}/>
     <ResourceCards instance={instance} resources={data.resources}/>
     <div className="overview-grid"><section className="panel schedule-panel"><div className="panel-heading"><div><CalendarClock size={18}/><h2>任务计划</h2><span className="count-badge">{data.tasks.length}</span></div><span className="small-label">自动同步</span></div><div className="schedule-summary"><div><span className="tiny-dot teal"/>运行中 <strong>{running}</strong></div><div>待执行 <strong>{pending}</strong></div><div><Clock3 size={13}/>等待中 <strong>{data.tasks.length - pending - running}</strong></div><span>下次运行时间</span></div><div className="task-table">{data.tasks.length ? data.tasks.map((task, index) => <Link className="task-row" key={task.name} to={`/i/${instance}/task/${task.name}`}><span className="task-order">{String(index + 1).padStart(2, '0')}</span><div className="task-row-name"><strong>{task.label}</strong></div><span className={`task-state ${task.state}`}>{{running: '运行中', pending: '待执行', waiting: '等待中'}[task.state]}</span><time>{task.state === 'running' ? '正在执行' : task.pending ? '等待调度' : task.nextRun.slice(5, 16)}</time><ChevronRight size={14}/></Link>) : <Empty icon={<CalendarClock size={30}/>} title="还没有启用的任务">从左侧任务配置中启用日常任务。</Empty>}</div></section>
       <MonitorPanel instance={instance}/>

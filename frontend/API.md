@@ -51,7 +51,7 @@
 | `auth.login` | password | 当前连接通过认证 |
 | `system.ping` | 无 | pong |
 | `schema.get` | 可选 language | 任务菜单、参数定义与指定语言翻译；默认 zh-CN |
-| `instances.list` | 无 | 实例名称、状态、序列号、服务器 |
+| `instances.list` | 无 | 实例名称、状态、序列号、服务器、currentTask（停止时为 null） |
 | `instances.create` | name、可选 source | 从模板或已有实例复制配置 |
 | `instances.delete` | instance、revision | 停止状态下将配置移至备份 |
 | `config.get` | instance | 当前值及 revision |
@@ -69,11 +69,18 @@
 | `settings.patch` | values | 校验并保存部署设置，重启生效 |
 | `startup.get` | instance | 当前实例是否启动时自动运行 |
 | `startup.set` | instance、enabled | 修改启动时自动运行 |
+| `updater.status` | 无 | 全局更新状态、localHead、upstreamHead、branch、ahead/behind、available、busy、canApply、canCancel、error |
+| `updater.commits` | offset（默认 0）、limit（默认 50，上限 100） | 本地与上游完整可达历史，含完整 SHA、作者、时间、提交正文、total、hasMore 与两端 HEAD |
+| `updater.fetch` | 无 | 后台获取远程更新，返回 accepted；不修改本地 HEAD |
+| `updater.apply` | 无 | 后台复用原更新器，等待任务退出、更新代码、同步依赖并重启 |
+| `updater.cancel` | 无 | 仅在等待任务结束阶段取消更新 |
 | `events.subscribe` | topics、可选 instance | 原子替换当前连接的订阅集合 |
 
 `instance` 必须指向 config 目录内已存在的实例，禁止路径分隔符、符号链接和系统保留名称。创建实例名称以英文字母开头，可包含字母、数字、短横线和下划线，总长不超过 64。运行实例禁止删除，已有运行实例禁止重复启动。
 
 状态枚举：`running`、`stopped`、`error`、`updating`。枚举表示工作进程状态，不能据此推断游戏中的具体画面。
+
+更新器接口不接收实例名；三个写方法沿用认证和 DEMO 只读限制。前端每三秒读取一次更新状态，重连后重新读取；后台操作立即响应，不占用 WebSocket 请求等待时间。HEAD 变化时提交列表返回第一页。`upstreamHead` 指配置分支的 `origin/<Branch>` 远程跟踪引用，获取更新后刷新；未获取时为 null。本地与上游分叉、没有新提交、更新器忙碌或监督器重启/依赖同步事件不可用时，`canApply` 为 false。
 
 `schema.get.language` 支持 `zh-CN`、`zh-TW`、`en-US`、`ja-JP`、`zh-MIAO`，只影响本次返回的翻译，不修改运行器或其他浏览器的语言。参数定义保留 `mode: yaml`，供前端选择多行 YAML 编辑器。
 

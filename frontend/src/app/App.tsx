@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowRight, ChartNoAxesCombined, Compass, LayoutDashboard, Menu, Plus, Settings2, Wifi, WifiOff, X } from 'lucide-react'
+import { ArrowRight, ChartNoAxesCombined, Compass, LayoutDashboard, House, Download, Menu, Settings2, Wifi, WifiOff, X } from 'lucide-react'
 import { api } from '../api/client'
 import { useApp, useConnection } from './context'
 import { ErrorBox, Loading, Modal } from '../components/ui'
 import { InstanceSwitcher } from '../components/InstanceSwitcher'
 import { TaskNav } from '../components/TaskNav'
+import { useUpdater } from './updater'
 
 export function CreateInstance({onClose}: {onClose: () => void}) {
   const [name, setName] = useState('')
@@ -54,22 +55,23 @@ export function NavigationMark() {
 
 export function App() {
   const connection = useConnection()
-  const {instances, schema, t, notify, previewEnabled} = useApp()
+  const {instancesLoaded, instances, schema, t, notify, previewEnabled} = useApp()
   const {instance} = useParams()
   const navigate = useNavigate()
   const location = useLocation()
   const [creating, setCreating] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const update = useUpdater()
   const current = instances.find(item => item.name === instance)
   const base = instance ? `/i/${instance}` : ''
   const taskMatch = location.pathname.match(/\/task\/([^/]+)/)
   const currentTask = taskMatch ? taskMatch[1] : null
-  const activeSection = location.pathname.includes('/task/') ? '任务配置' : location.pathname.endsWith('/statistics') ? '资源统计' : location.pathname.endsWith('/settings') ? '系统设置' : location.pathname.endsWith('/logs') ? '运行日志' : '运行总览'
+  const activeSection = location.pathname.includes('/task/') ? '任务配置' : location.pathname.endsWith('/statistics') ? '资源统计' : location.pathname.endsWith('/settings') ? '系统设置' : location.pathname.endsWith('/updater') ? '更新器' : instance ? instance : '主页'
   useEffect(() => {
-    if (connection === 'ready' && instances.length && (!instance || !instances.some(item => item.name === instance))) {
-      navigate(`/i/${instances[0].name}/overview`, {replace: true})
+    if (connection === 'ready' && instancesLoaded && instance && !instances.some(item => item.name === instance)) {
+      navigate('/', {replace: true})
     }
-  }, [connection, instances, instance, navigate])
+  }, [connection, instances, instance, navigate, instancesLoaded])
   useEffect(() => { setMobileOpen(false) }, [location.pathname])
   useEffect(() => {
     if (connection !== 'ready') return
@@ -77,17 +79,17 @@ export function App() {
   }, [instance, connection, notify, previewEnabled])
   if (connection === 'auth') return <Login/>
   return <div className={`app-shell ${mobileOpen ? 'mobile-open' : ''}`}>
-    <aside className="sidebar"><div className="sidebar-brand"><div className="brand-title"><img src="/azurpilot.svg" alt="AzurPilot" className="brand-logo"/><span>AzurPilot</span></div><button className="mobile-close icon-button" aria-label="关闭导航" onClick={() => setMobileOpen(false)}><X size={18}/></button></div>
-      <InstanceSwitcher onCreate={() => setCreating(true)}/>
-      <div className="sidebar-label">工作空间</div>
-      <nav className="primary-nav"><NavLink to={`${base}/overview`}><LayoutDashboard size={17}/>运行总览<span className="nav-pill">总览</span></NavLink><NavLink to={`${base}/statistics`}><ChartNoAxesCombined size={17}/>资源统计</NavLink><NavLink to={`${base}/settings`}><Settings2 size={17}/>系统设置</NavLink></nav>
-      <div className="sidebar-label">任务配置 <span>{schema ? Object.values(schema.menu).flatMap(group => group.tasks).length : '—'}</span></div>
-      <TaskNav/>
-      <div className="sidebar-footer"><span className={`connection-dot ${connection === 'ready' ? 'online' : ''}`}/><span>{connection === 'ready' ? '服务连接正常' : '等待服务连接'}</span></div>
+    <aside className="sidebar"><div className="sidebar-brand"><Link to="/" className="brand-title" aria-label="AzurPilot 主页"><img src="/azurpilot.svg" alt="" className="brand-logo"/><span>AzurPilot</span></Link><button className="mobile-close icon-button" aria-label="关闭导航" onClick={() => setMobileOpen(false)}><X size={18}/></button></div>
+      <nav className="primary-nav">
+        {instance ? <><NavLink to={`${base}/overview`}><LayoutDashboard size={17}/><span className="nav-instance-name">{instance}</span></NavLink><NavLink to={`${base}/statistics`}><ChartNoAxesCombined size={17}/>资源统计</NavLink></> : <><NavLink to="/" end><House size={17}/>主页</NavLink><NavLink to="/updater"><Download size={17}/>更新器{update.data?.available && <span className="tiny-dot teal"/>}</NavLink><NavLink to="/settings"><Settings2 size={17}/>系统设置</NavLink></>}
+      </nav>
+      {instance && <TaskNav/>}
     </aside>
-    <div className="main-shell"><header className="topbar"><button className="mobile-toggle icon-button" aria-label="打开导航" onClick={() => setMobileOpen(true)}><Menu size={20}/></button><div className="breadcrumb"><Link to={base ? `${base}/overview` : '/'}>工作空间</Link><span>/</span><Link to={base ? `${base}/overview` : '/'}>{instance ?? '欢迎'}</Link>{currentTask ? <><span>/</span><Link to={`${base}/task/Alas`}>任务配置</Link><span>/</span><Link to={`${base}/task/${currentTask}`}><strong>{t(`Task.${currentTask}.name`)}</strong></Link></> : <><span>/</span><Link to={location.pathname}><strong>{activeSection}</strong></Link></>}</div><div className="topbar-right"><span className="connection-label">{connection === 'ready' ? <Wifi size={14}/> : <WifiOff size={14}/>}{connection === 'ready' ? '已连接' : '连接中'}</span><span className="topbar-divider"/><span className="version">控制台 / v1</span></div></header>
+    <div className="main-shell"><header className="topbar"><button className="mobile-toggle icon-button" aria-label="打开导航" onClick={() => setMobileOpen(true)}><Menu size={20}/></button>
+      <div className="breadcrumb"><Link to="/">主页</Link>{instance ? <><span>/</span><InstanceSwitcher onCreate={() => setCreating(true)}/>{currentTask ? <><span>/</span><Link to={`${base}/task/Alas`}>任务配置</Link><span>/</span><Link className="breadcrumb-current" to={`${base}/task/${currentTask}`}><strong>{t(`Task.${currentTask}.name`)}</strong></Link></> : location.pathname.endsWith('/statistics') && <><span>/</span><strong>资源统计</strong></>}</> : activeSection !== '主页' && <><span>/</span><strong>{activeSection}</strong></>}</div>
+      <div className="topbar-right">{update.data?.available && <Link className="update-notice" to="/updater"><Download size={14}/><span>新版本可用</span></Link>}<span className="connection-label" title={connection === 'ready' ? '已连接' : '连接中'}>{connection === 'ready' ? <Wifi size={14}/> : <WifiOff size={14}/>}<span>{connection === 'ready' ? '已连接' : '连接中'}</span></span></div></header>
       {connection !== 'ready' && <div className="connection-banner" role="status"><WifiOff size={16}/>正在连接后端，配置输入会保留并在重连后保存；运行操作暂不可用。</div>}
-      <main>{!schema ? <Loading/> : !instances.length ? <div className="welcome"><Compass size={84} strokeWidth={1}/><h1>从一个新实例开始</h1><button className="button primary" onClick={() => setCreating(true)}><Plus size={17}/>创建第一个实例</button></div> : current ? <Outlet key={instance}/> : <Loading/>}</main>
+      <main>{!schema || ((instance || location.pathname === '/') && !instancesLoaded) ? <Loading/> : !instance || current ? <Outlet context={update} key={instance ?? 'home'}/> : <Loading/>}</main>
     </div>{creating && <CreateInstance onClose={() => setCreating(false)}/>}
   </div>
 }

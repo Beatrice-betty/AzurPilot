@@ -38,7 +38,17 @@ class Router:
             'settings.patch': Method(p.DeployParams, self.save_settings, True),
             'startup.get': Method(p.InstanceParams, self.get_startup),
             'startup.set': Method(p.StartupParams, self.set_startup, True),
+            'updater.status': Method(p.Params, lambda _: self.updates.status()),
+            'updater.commits': Method(p.CommitsParams, lambda x: self.updates.commits(x.offset, x.limit)),
+            'updater.fetch': Method(p.Params, lambda _: self.updates.start('fetch'), True),
+            'updater.apply': Method(p.Params, lambda _: self.updates.start('apply'), True),
+            'updater.cancel': Method(p.Params, lambda _: self.updates.cancel(), True),
         }
+
+    @property
+    def updates(self):
+        from module.api.update_service import update_service
+        return update_service
 
     def refresh_loot(self, params):
         from module.api.statistics_service import refresh_loot

@@ -39,6 +39,16 @@ def emit_screenshot(output):
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_instances_only_expose_live_current_task(self):
+        configs = SimpleNamespace(names=lambda: ['pilot'], read=lambda _: ({'Alas': {}}, 'revision'))
+        manager = SimpleNamespace(state=1, current_task='Commission')
+        with patch('module.api.runtime_service.ProcessManager._processes', {'pilot': manager}):
+            runtime = RuntimeService(configs)
+            self.assertEqual(runtime.instances()[0]['currentTask'], 'Commission')
+            for state in (2, 3, 4):
+                manager.state = state
+                self.assertIsNone(runtime.instances()[0]['currentTask'])
+
     def test_three_task_states_and_stopped_worker(self):
         data = {'Alas': {}, 'General': {},
                 'Main': {'Scheduler': {'Enable': True, 'NextRun': '2020-01-01 00:00:00'}},

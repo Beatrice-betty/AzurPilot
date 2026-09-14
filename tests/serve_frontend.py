@@ -27,6 +27,11 @@ def main():
             from module.api.protocol import ApiError
             raise ApiError('TEST_ENVIRONMENT', '浏览器测试服务不会执行游戏任务')
         runtime.start = runtime.stop = reject_execution
+        # 测试页面只能读取版本信息，禁止触发真实仓库获取、更新和取消。
+        from module.api.router import Method
+        from module.api.protocol import Params
+        for method in ('updater.fetch', 'updater.apply', 'updater.cancel'):
+            app.state.gateway.router.methods[method] = Method(Params, reject_execution, True)
         runtime.statistics = lambda instance, days, resource: {
             'instance': instance, 'resource': resource, 'points': [], 'truncated': False,
         }

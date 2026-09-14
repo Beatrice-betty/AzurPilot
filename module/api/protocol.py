@@ -86,6 +86,11 @@ class DeployParams(Params):
     values: dict[str, Any]
 
 
+class CommitsParams(Params):
+    offset: StrictInt = Field(default=0, ge=0)
+    limit: StrictInt = Field(default=50, ge=1, le=100)
+
+
 class StartupParams(InstanceParams):
     enabled: StrictBool
 

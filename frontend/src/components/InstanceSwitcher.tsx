@@ -35,12 +35,12 @@ export function InstanceSwitcher({onCreate}: {onCreate: () => void}) {
     items[next]?.focus()
   }}>
     <button ref={trigger} className="instance-switcher" aria-label="切换实例" aria-haspopup="menu" aria-expanded={open} aria-controls="instance-menu" onClick={() => setOpen(!open)}>
-      <span className="instance-icon"><Ship size={19}/></span><span className="instance-caption"><small>当前配置实例</small><strong>{instance ?? '尚未创建'}</strong></span><ChevronDown size={14}/>
+      <span className="instance-caption"><strong>{instance}</strong></span><ChevronDown size={12}/>
     </button>
     {open && <div className="instance-menu" id="instance-menu" role="menu" aria-label="配置实例">
       <div className="instance-options">{instances.map(item => <button key={item.name} role="menuitemradio" aria-checked={item.name === instance} onClick={() => {
         setOpen(false); trigger.current?.focus()
-        if (item.name !== instance) navigate(`/i/${item.name}/overview`)
+        if (item.name !== instance) navigate(`/i/${item.name}/${location.pathname.split('/').slice(3).join('/') || 'overview'}`)
       }}><Ship size={16}/><span>{item.name}</span>{item.name === instance && <Check size={16}/>}</button>)}</div>
       <button className="instance-create" role="menuitem" aria-label="创建实例" title="创建实例" disabled={connection !== 'ready'} onClick={() => {setOpen(false); onCreate()}}><Plus size={20}/></button>
     </div>}

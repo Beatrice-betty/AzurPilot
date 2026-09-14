@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
-import { Download, Pause, Play, Search, Terminal, Trash2 } from 'lucide-react'
+import { Download, Pause, Play, Search, SlidersHorizontal, Terminal, Trash2 } from 'lucide-react'
 import { api } from '../api/client'
 import type { Logs as LogsData, LogEntry } from '../api/types'
 import { useApp, useConnection } from '../app/context'
@@ -160,6 +160,7 @@ export function LogPanel({active = true}: {active?: boolean}) {
   const [entries, setEntries] = useState<LogEntry[]>([])
   const [search, setSearch] = useState('')
   const [level, setLevel] = useState('ALL')
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [follow, setFollow] = useState(true)
   const [floor, setFloor] = useState(0)
   const connection = useConnection()
@@ -224,6 +225,7 @@ export function LogPanel({active = true}: {active?: boolean}) {
           <span className="live-label"><i />实时</span>
         </div>
         <div>
+          <button className={`icon-button ${search || level !== 'ALL' ? 'filter-active' : ''}`} aria-label={filtersOpen ? '收起日志筛选' : '展开日志筛选'} title={filtersOpen ? '收起搜索和筛选' : '搜索和筛选'} aria-expanded={filtersOpen} aria-controls="log-filters" onClick={() => setFiltersOpen(!filtersOpen)}><SlidersHorizontal size={15}/></button>
           <button className="icon-button" onClick={() => setFollow(!follow)} aria-label={follow ? '暂停自动滚动' : '恢复自动滚动'}>
             {follow ? <Pause size={15} /> : <Play size={15} />}
           </button>
@@ -235,7 +237,7 @@ export function LogPanel({active = true}: {active?: boolean}) {
           </button>
         </div>
       </div>
-      <div className="log-filters">
+      {filtersOpen && <div className="log-filters" id="log-filters">
         <div className="input-icon">
           <Search size={15} />
           <input aria-label="搜索日志" placeholder="搜索日志内容…" value={search} onChange={event => setSearch(event.target.value)} />
@@ -246,7 +248,7 @@ export function LogPanel({active = true}: {active?: boolean}) {
           ))}
         </select>
         <span>最近 {entries.length} 条</span>
-      </div>
+      </div>}
       <div className="log-content" ref={scroll} aria-label="运行日志内容">
         {visible.length ? (
           visible.map((entry, index) => {

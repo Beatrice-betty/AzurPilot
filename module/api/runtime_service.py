@@ -29,6 +29,7 @@ class RuntimeService:
             emulator = data.get('Alas', {}).get('Emulator', {})
             manager = ProcessManager._processes.get(name)
             result.append({'name': name, 'status': STATES.get(manager.state, 'stopped') if manager else 'stopped',
+                           'currentTask': getattr(manager, 'current_task', None) if manager and manager.state == 1 else None,
                            'serial': emulator.get('Serial', 'auto'), 'server': emulator.get('ServerName', 'cn')})
         return result
 

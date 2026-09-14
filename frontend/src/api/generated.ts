@@ -20,6 +20,11 @@ export interface Parameters {
   "settings.patch": { values: Record<string, unknown> }
   "startup.get": { instance: string }
   "startup.set": { instance: string; enabled: boolean }
+  "updater.status": Record<string, never>
+  "updater.commits": { offset?: number; limit?: number }
+  "updater.fetch": Record<string, never>
+  "updater.apply": Record<string, never>
+  "updater.cancel": Record<string, never>
   "auth.login": { password?: string }
   "events.subscribe": { instance?: string | null; topics: Array<"instances" | "overview" | "logs" | "preview"> }
 }
