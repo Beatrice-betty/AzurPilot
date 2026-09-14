@@ -56,7 +56,7 @@
 .connection-dot {background: #d2ab67; width: 6px; height: 6px; border-radius: 50%}
 .connection-dot.online {background: #40b594; box-shadow: 0 0 0 3px #40b59412}
 .main-shell {min-width: 0; display: flex; flex-direction: column}
-.topbar {height: 69px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 31px; background: var(--surface); flex-shrink: 0}
+.topbar {height: var(--topbar-height, 69px); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 31px; background: var(--surface); flex-shrink: 0}
 .breadcrumb {font-size: 11px; color: var(--muted); display: flex; gap: 13px; align-items: center}
 .breadcrumb span {color: #c5cdd4}
 .breadcrumb strong {font-weight: 500; color: var(--text)}
@@ -69,6 +69,7 @@
 .topbar-divider {width: 1px; height: 14px; background: var(--border)}
 main {padding: 32px 32px 16px; max-width: 1600px; width: 100%; margin: 0 auto; flex: 1}
 .page-title {display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-bottom: 26px}
+.page-title h1 {font-size: 34px; font-weight: 700; letter-spacing: -.9px; line-height: 1.25}
 .title-actions {display: flex; gap: 10px; flex-wrap: wrap}
 .connection-banner {padding: 10px 32px; display: flex; gap: 9px; align-items: center; background: #fbf2db; color: #8f6d25; font-size: 11px}
 .mobile-toggle, .mobile-close {display: none !important}
@@ -84,9 +85,9 @@ main {padding: 32px 32px 16px; max-width: 1600px; width: 100%; margin: 0 auto; f
 .welcome {padding: 110px 20px; display: flex; flex-direction: column; align-items: center; gap: 20px; text-align: center}
 .welcome > svg {color: var(--accent); margin-bottom: 10px}
 .welcome p {color: var(--muted)}
-@media (min-width: 2000px) {main {padding: 40px 44px 20px}.page-title {margin-bottom: 32px}}
-@media (max-width: 1562.5px) {:root {--sidebar-width: 194px}main {padding: 25px 24px 15px}.topbar {padding: 0 24px}.sidebar {padding: 0 11px}.resource-value {font-size: 25px !important}.page-title h1 {font-size: 24px}}
+@media (min-width: 2000px) {main {padding: 40px 44px 20px}.page-title {margin-bottom: 32px}.page-title h1 {font-size: 38px}}
+@media (max-width: 1562.5px) {:root {--sidebar-width: 194px}main {padding: 25px 24px 15px}.topbar {padding: 0 24px}.sidebar {padding: 0 11px}.resource-value {font-size: 25px !important}.page-title h1 {font-size: 29px}}
 @media (max-width: 1275px) {.overview-grid {grid-template-columns: 1fr !important}.preview-screen {max-height: 360px}.page-title {align-items: flex-start}.title-actions {justify-content: flex-end}.config-layout {grid-template-columns: 1fr !important}.group-nav {display: none !important}.resource-grid {gap: 10px !important}.resource-card {padding: 15px !important}.resource-foot {font-size: 9px !important}}
-@media (max-width: 950px) {.app-shell {display: block}.sidebar {position: fixed; width: 220px; left: -230px; transition: left .2s; box-shadow: 20px 0 60px #10243730}.mobile-open .sidebar {left: 0}.mobile-toggle, .mobile-close {display: inline-flex !important}.mobile-close {position: absolute; right: 12px; top: 26px}.topbar {height: 58px; padding: 0 15px; gap: 12px}.breadcrumb {margin-right: auto; font-size: 10px; gap: 7px}.topbar-right .version, .topbar-divider {display: none}main {padding: 24px 17px 12px}.page-title {flex-wrap: wrap; gap: 17px}.title-actions {justify-content: flex-start}.resource-grid {grid-template-columns: 1fr 1fr !important}.field-row {flex-wrap: wrap; gap: 16px !important}.field-label {min-width: 100% !important}.field-control {width: 100% !important}.panel-heading {padding: 16px !important}.login-page {grid-template-columns: 1fr}.login-art {display: none}.config-toolbar > span {display: none}.task-row {grid-template-columns: 22px 1fr 50px 80px 10px !important}.log-filters {flex-wrap: wrap}.chart-metrics strong {font-size: 22px !important}.panel-heading > div {gap: 8px !important}.task-submenu-flyout {left: calc(100% + 4px); width: min(200px, calc(100vw - 235px)); box-shadow: 0 10px 30px #0c1c2e40}}
+@media (max-width: 950px) {.app-shell {display: block}.sidebar {position: fixed; width: 220px; left: -230px; transition: left .2s; box-shadow: 20px 0 60px #10243730}.mobile-open .sidebar {left: 0}.mobile-toggle, .mobile-close {display: inline-flex !important}.mobile-close {position: absolute; right: 12px; top: 26px}.topbar {height: 58px; padding: 0 15px; gap: 12px}.breadcrumb {margin-right: auto; font-size: 10px; gap: 7px}.topbar-right .version, .topbar-divider {display: none}main {padding: 24px 17px 12px}.page-title {flex-wrap: wrap; gap: 17px}.page-title h1 {font-size: 26px}.title-actions {justify-content: flex-start}.resource-grid {grid-template-columns: 1fr 1fr !important}.field-row {flex-wrap: wrap; gap: 16px !important}.field-label {min-width: 100% !important}.field-control {width: 100% !important}.panel-heading {padding: 16px !important}.login-page {grid-template-columns: 1fr}.login-art {display: none}.config-toolbar > span {display: none}.task-row {grid-template-columns: 22px 1fr 50px 80px 10px !important}.log-filters {flex-wrap: wrap}.chart-metrics strong {font-size: 22px !important}.panel-heading > div {gap: 8px !important}.task-submenu-flyout {left: calc(100% + 4px); width: min(200px, calc(100vw - 235px)); box-shadow: 0 10px 30px #0c1c2e40}}
 @media (max-width: 480px) {.task-submenu-flyout {left: 8px; right: 8px; width: auto; top: auto !important; bottom: 12px; max-height: 60vh; box-shadow: 0 10px 40px #00000050}}
 

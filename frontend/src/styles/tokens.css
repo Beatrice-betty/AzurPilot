@@ -6,6 +6,7 @@
   --border: #e9eef1; --accent: #138b78; --accent-hover: #0b7969; --accent-soft: #eaf7f3;
   --navy: #111f2e; --red: #c15b60; --radius: 12px; --shadow: 0 3px 18px #18343d03;
   --sidebar: #fff; --sidebar-width: 221px;
+  --topbar-height: 69px;
   --ui-scale: 1; --viewport-height: 100dvh;
   --syntax-key: #126c9a; --syntax-string: #237342; --syntax-value: #96509e;
   --syntax-comment: #72818a; --syntax-punctuation: #657581;
@@ -33,7 +34,7 @@ input:focus, select:focus, textarea:focus {outline: none; border-color: var(--ac
 input::placeholder {color: var(--muted)}
 input[type='checkbox'] {accent-color: var(--accent); width: 14px; height: 14px}
 h1, h2, h3, p {margin: 0}
-h1 {font-size: 27px; letter-spacing: -.7px; font-weight: 650; line-height: 1.4}
+h1 {font-size: 30px; letter-spacing: -.8px; font-weight: 700; line-height: 1.3}
 h2 {font-size: 14px; font-weight: 650}
 small {font-size: 11px}
 svg {flex-shrink: 0; vertical-align: middle}

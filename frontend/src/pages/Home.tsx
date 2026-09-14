@@ -5,12 +5,19 @@ import { useApp, useConnection } from '../app/context'
 import { CreateInstance } from '../app/App'
 import { PageTitle, StatusBadge } from '../components/ui'
 
+function getGreeting(): string {
+  const hour = new Date().getHours()
+  if (hour >= 5 && hour < 12) return '上午好，指挥官！'
+  if (hour >= 12 && hour < 18) return '下午好，指挥官！'
+  return '晚上好，指挥官！'
+}
+
 export function Home() {
   const {instances, t} = useApp()
   const connection = useConnection()
   const [creating, setCreating] = useState(false)
   return <>
-    <PageTitle title="主页" actions={<><Link className="button" to="/updater"><Download size={16}/>更新器</Link><Link className="button" to="/settings"><Settings2 size={16}/>系统设置</Link></>}/>
+    <PageTitle title={getGreeting()} actions={<><Link className="button" to="/updater"><Download size={16}/>更新器</Link><Link className="button" to="/settings"><Settings2 size={16}/>系统设置</Link></>}/>
     <section className="home-instances">
       <div className="home-section-heading"><h2>实例 <span className="count-badge">{instances.length}</span></h2><button className="button primary" disabled={connection !== 'ready'} onClick={() => setCreating(true)}><Plus size={16}/>新建实例</button></div>
       <div className="instance-grid">
