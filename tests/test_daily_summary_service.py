@@ -487,6 +487,7 @@ class TestDailySummaryNotify(unittest.TestCase):
 
             def notify(self, **kwargs):
                 self.kwargs = kwargs
+                return True
 
         notifier = FakeCustom()
         with (

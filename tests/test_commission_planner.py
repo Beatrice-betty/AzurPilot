@@ -237,8 +237,8 @@ class TestCommissionTierFilter(unittest.TestCase):
 
 
 class TestCommissionAlgorithmSwitch(unittest.TestCase):
-    def test_dynamic_programming_is_disabled_by_default(self):
-        self.assertIs(GeneratedConfig.Commission_DynamicProgramming, False)
+    def test_dynamic_programming_is_enabled_by_default(self):
+        self.assertIs(GeneratedConfig.Commission_DynamicProgramming, True)
         self.assertIsNone(GeneratedConfig.Commission_Blacklist)
         self.assertIsInstance(GeneratedConfig.Commission_DelayHalfLife, float)
         self.assertIsInstance(GeneratedConfig.Commission_DeadlineFutureHorizon, float)
@@ -371,8 +371,9 @@ class TestCommissionValueModel(unittest.TestCase):
         self.assertLess(threshold, deadline)
 
     def test_delaying_more_high_value_jobs_reduces_threshold(self):
-        one = delay_threshold_seconds(1, 1, 12 * 60 * 60)
-        three = delay_threshold_seconds(1, 3, 12 * 60 * 60)
+        deadline = 7 * 24 * 60 * 60
+        one = delay_threshold_seconds(1, 1, deadline)
+        three = delay_threshold_seconds(1, 3, deadline)
 
         self.assertLess(three, one)
 

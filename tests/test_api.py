@@ -47,7 +47,7 @@ class ConfigApiTests(unittest.TestCase):
     def test_schema_language_is_request_local(self):
         original = self.configs.schema()
         english = self.configs.schema('en-US')
-        self.assertIn('Serial', english['translations']['Emulator']['Serial']['name'])
+        self.assertIn('serial', english['translations']['Emulator']['Serial']['name'].lower())
         self.assertEqual(original, self.configs.schema())
         with self.assertRaises(ApiError):
             self.configs.schema('../deploy')

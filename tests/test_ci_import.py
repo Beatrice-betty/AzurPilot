@@ -25,11 +25,13 @@ PYTHON = sys.executable
 
 def _run_py(code: str, timeout: int = 120) -> subprocess.CompletedProcess:
     """在独立子进程中执行代码，隔离 import 副作用。"""
-    env = {**os.environ, "AZURPILOT_NTP_DISABLE": "1"}
+    env = {**os.environ, "AZURPILOT_NTP_DISABLE": "1", "PYTHONUTF8": "1"}
     return subprocess.run(
         [PYTHON, "-c", code],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=timeout,
         env=env,
         cwd=REPO_ROOT,
