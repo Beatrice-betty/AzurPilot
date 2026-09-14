@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { createHashRouter, RouterProvider, Navigate } from 'react-router-dom'
 import { App } from './app/App'
 import { AppProvider } from './app/context'
+import { Wallpaper } from './components/Wallpaper'
 import { Overview } from './pages/Overview'
 import { TaskConfig } from './pages/TaskConfig'
 import { Statistics } from './pages/Statistics'
@@ -14,6 +15,7 @@ import './styles/layout.css'
 import './styles/components.css'
 import './styles/insights.css'
 import './styles/home.css'
+import './styles/apple.css'
 
 class ErrorBoundary extends Component<{children: ReactNode}, {failed: boolean}> {
   state = {failed: false}
@@ -32,4 +34,4 @@ const router = createHashRouter([
   ]},
   {path: '*', element: <Navigate to="/" replace/>},
 ])
-createRoot(document.getElementById('root')!).render(<ErrorBoundary><AppProvider><RouterProvider router={router}/></AppProvider></ErrorBoundary>)
+createRoot(document.getElementById('root')!).render(<ErrorBoundary><AppProvider><Wallpaper/><RouterProvider router={router}/></AppProvider></ErrorBoundary>)

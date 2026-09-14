@@ -4,6 +4,7 @@ import { ArrowRight, ChartNoAxesCombined, Compass, LayoutDashboard, House, Downl
 import { api } from '../api/client'
 import { useApp, useConnection } from './context'
 import { ErrorBox, Loading, Modal } from '../components/ui'
+import { GlassMaterial } from '../components/GlassMaterial'
 import { InstanceSwitcher } from '../components/InstanceSwitcher'
 import { TaskNav } from '../components/TaskNav'
 import { useUpdater } from './updater'
@@ -79,17 +80,17 @@ export function App() {
   }, [instance, connection, notify, previewEnabled])
   if (connection === 'auth') return <Login/>
   return <div className={`app-shell ${mobileOpen ? 'mobile-open' : ''}`}>
-    <aside className="sidebar"><div className="sidebar-brand"><Link to="/" className="brand-title" aria-label="AzurPilot 主页"><img src="/azurpilot.svg" alt="" className="brand-logo"/><span>AzurPilot</span></Link><button className="mobile-close icon-button" aria-label="关闭导航" onClick={() => setMobileOpen(false)}><X size={18}/></button></div>
-      <nav className="primary-nav">
+    <a className="skip-link" href="#main-content" onClick={event => {event.preventDefault(); document.getElementById('main-content')?.focus()}}>跳转到内容</a><aside className="sidebar"><div className="sidebar-brand"><Link to="/" className="brand-title" aria-label="AzurPilot 主页"><img src="/azurpilot.svg" alt="" className="brand-logo"/><span>AzurPilot</span></Link><button className="mobile-close icon-button" aria-label="关闭导航" onClick={() => setMobileOpen(false)}><X size={18}/></button></div>
+      <nav className="primary-nav" aria-label="主导航">
         {instance ? <><NavLink to={`${base}/overview`}><LayoutDashboard size={17}/>运行总览</NavLink><NavLink to={`${base}/statistics`}><ChartNoAxesCombined size={17}/>资源统计</NavLink></> : <><NavLink to="/" end><House size={17}/>主页</NavLink><NavLink to="/updater"><Download size={17}/>更新器{update.data?.available && <span className="tiny-dot teal"/>}</NavLink><NavLink to="/settings"><Settings2 size={17}/>系统设置</NavLink></>}
       </nav>
       {instance && <TaskNav/>}
     </aside>
-    <div className="main-shell"><header className="topbar"><button className="mobile-toggle icon-button" aria-label="打开导航" onClick={() => setMobileOpen(true)}><Menu size={20}/></button>
+    <div className="main-shell"><header className="topbar"><GlassMaterial/><button className="mobile-toggle icon-button" aria-label="打开导航" onClick={() => setMobileOpen(true)}><Menu size={20}/></button>
       <div className="breadcrumb"><Link to="/">主页</Link>{instance ? <><span>/</span><InstanceSwitcher onCreate={() => setCreating(true)}/>{currentTask ? <><span>/</span><Link to={`${base}/task/Alas`}>任务配置</Link><span>/</span><Link className="breadcrumb-current" to={`${base}/task/${currentTask}`}><strong>{t(`Task.${currentTask}.name`)}</strong></Link></> : location.pathname.endsWith('/statistics') && <><span>/</span><strong>资源统计</strong></>}</> : activeSection !== '主页' && <><span>/</span><strong>{activeSection}</strong></>}</div>
       <div className="topbar-right">{update.data?.available && <Link className="update-notice" to="/updater"><Download size={14}/><span>新版本可用</span></Link>}<span className="connection-label" title={connection === 'ready' ? '已连接' : '连接中'}>{connection === 'ready' ? <Wifi size={14}/> : <WifiOff size={14}/>}<span>{connection === 'ready' ? '已连接' : '连接中'}</span></span></div></header>
       {connection !== 'ready' && <div className="connection-banner" role="status"><WifiOff size={16}/>正在连接后端，配置输入会保留并在重连后保存；运行操作暂不可用。</div>}
-      <main>{!schema || ((instance || location.pathname === '/') && !instancesLoaded) ? <Loading/> : !instance || current ? <Outlet context={update} key={instance ?? 'home'}/> : <Loading/>}</main>
+      <main id="main-content" tabIndex={-1}>{!schema || ((instance || location.pathname === '/') && !instancesLoaded) ? <Loading/> : !instance || current ? <Outlet context={update} key={instance ?? 'home'}/> : <Loading/>}</main>
     </div>{creating && <CreateInstance onClose={() => setCreating(false)}/>}
   </div>
 }

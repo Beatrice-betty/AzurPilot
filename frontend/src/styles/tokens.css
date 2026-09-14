@@ -1,23 +1,23 @@
 :root {
-  font-family: "Inter", "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
-  color: #263744; background: #f5f7f9; font-synthesis: none; text-rendering: optimizeLegibility;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #1d1d1f; background: #f5f5f7; font-synthesis: none; text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --bg: #f5f7f9; --surface: #fff; --surface-muted: #f8fafb; --text: #263744; --muted: #82909e;
-  --border: #e9eef1; --accent: #138b78; --accent-hover: #0b7969; --accent-soft: #eaf7f3;
-  --navy: #111f2e; --red: #c15b60; --radius: 12px; --shadow: 0 3px 18px #18343d03;
-  --sidebar: #fff; --sidebar-width: 221px;
+  --bg: #f5f5f7; --surface: #fff; --surface-muted: #f5f5f7; --text: #1d1d1f; --muted: #6e6e73;
+  --border: #e5e5ea; --accent: #0071e3; --accent-hover: #0062c4; --accent-soft: #e8f2ff;
+  --navy: #111f2e; --red: #c9342c; --radius: 20px; --shadow: 0 4px 24px #1d1d1f05;
+  --sidebar: #fff; --sidebar-width: 240px;
   --topbar-height: 69px;
   --ui-scale: 1; --viewport-height: 100dvh;
   --syntax-key: #126c9a; --syntax-string: #237342; --syntax-value: #96509e;
   --syntax-comment: #72818a; --syntax-punctuation: #657581;
-  font-size: 13px;
+  font-size: 14px;
 }
 :root[data-theme='dark'] {
   --syntax-key: #7ec9ee; --syntax-string: #a6d99e; --syntax-value: #dab0f5;
   --syntax-comment: #91a3b2; --syntax-punctuation: #c2cfd8;
-  color-scheme: dark; --bg: #111b26; --surface: #1a2735; --surface-muted: #16222f;
-  --text: #d7e2ea; --muted: #8a9cab; --border: #2a3845; --accent: #6bd4ba;
-  --accent-hover: #8de7d0; --accent-soft: #233d3c; --sidebar: #182431; --shadow: none;
+  color-scheme: dark; --bg: #161618; --surface: #242426; --surface-muted: #1c1c1e;
+  --text: #f5f5f7; --muted: #aaaab0; --border: #38383a; --accent: #64aaff;
+  --accent-hover: #8bbfff; --accent-soft: #25364d; --sidebar: #202022; --shadow: none;
 }
 * {box-sizing: border-box}
 body {margin: 0; color: var(--text); background: var(--bg)}
@@ -30,7 +30,7 @@ a {color: inherit; text-decoration: none}
 button {border: 0; background: none}
 button:focus-visible, a:focus-visible, summary:focus-visible {outline: 2px solid var(--accent); outline-offset: 4px}
 input, select, textarea {border: 1px solid var(--border); border-radius: 7px; padding: 10px 12px; color: var(--text); background: var(--surface); min-width: 0; transition: border-color .15s}
-input:focus, select:focus, textarea:focus {outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px #169b8810}
+input:focus, select:focus, textarea:focus {outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent)}
 input::placeholder {color: var(--muted)}
 input[type='checkbox'] {accent-color: var(--accent); width: 14px; height: 14px}
 h1, h2, h3, p {margin: 0}

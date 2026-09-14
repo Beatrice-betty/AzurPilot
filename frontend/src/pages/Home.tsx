@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Download, Plus, Server, Settings2 } from 'lucide-react'
+import { ArrowRight, Activity, CircleAlert, Layers3, Plus, Server } from 'lucide-react'
 import { useApp, useConnection } from '../app/context'
 import { CreateInstance } from '../app/App'
 import { PageTitle, StatusBadge } from '../components/ui'
@@ -17,7 +17,12 @@ export function Home() {
   const connection = useConnection()
   const [creating, setCreating] = useState(false)
   return <>
-    <PageTitle title={getGreeting()} actions={<><Link className="button" to="/updater"><Download size={16}/>更新器</Link><Link className="button" to="/settings"><Settings2 size={16}/>系统设置</Link></>}/>
+    <div className="home-intro"><span className="eyebrow">你的指挥中心</span><PageTitle title={getGreeting()}/><p>每一次出航，都井然有序。所有实例与任务，尽在掌握。</p></div>
+    <div className="home-summary" aria-label="实例状态摘要">
+      <div><Layers3 size={19}/><span>全部实例</span><strong>{instances.length}</strong></div>
+      <div><Activity size={19}/><span>运行中</span><strong>{instances.filter(item => item.status === 'running').length}</strong></div>
+      <div><CircleAlert size={19}/><span>需要处理</span><strong>{instances.filter(item => item.status === 'error').length}</strong></div>
+    </div>
     <section className="home-instances">
       <div className="home-section-heading"><h2>实例 <span className="count-badge">{instances.length}</span></h2><button className="button primary" disabled={connection !== 'ready'} onClick={() => setCreating(true)}><Plus size={16}/>新建实例</button></div>
       <div className="instance-grid">

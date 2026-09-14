@@ -1,5 +1,33 @@
 import { expect, test } from '@playwright/test'
 
+test('玻璃装饰不阻挡导航，背景失败降级并尊重减少动态效果', async ({page}) => {
+  let backgrounds = 0
+  await page.route('https://api.yppp.net/api.php', async route => {
+    backgrounds += 1
+    await route.fulfill({contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><rect width="1280" height="720" fill="#9acbff"/></svg>'})
+  })
+  await page.goto('/')
+  await expect(page.locator('.wallpaper img')).toBeVisible()
+  await expect(page.locator('.glass-material-lens')).toHaveCount(1)
+  await page.keyboard.press('Tab')
+  await expect(page.getByRole('link', {name: '跳转到内容'})).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('main')).toBeFocused()
+  await page.locator('.instance-card').first().click()
+  await page.getByRole('button', {name: '切换实例'}).click()
+  await expect(page.getByRole('menuitemradio').first()).toBeVisible()
+  await page.keyboard.press('Escape')
+  expect(backgrounds).toBe(1)
+  await page.emulateMedia({reducedMotion: 'reduce'})
+  await expect(page.locator('.glass-material-lens')).toHaveCount(0)
+  await expect(page.getByRole('button', {name: '切换实例'})).toBeVisible()
+  await page.unroute('https://api.yppp.net/api.php')
+  await page.route('https://api.yppp.net/api.php', route => route.abort())
+  await page.reload()
+  await expect(page.locator('.wallpaper img')).toHaveCount(0)
+  await expect(page.getByRole('heading', {name: 'demo-main', exact: true})).toBeVisible()
+})
+
 test('总览三态、资源搭配记忆、日志与被动截图切换', async ({page}) => {
   const methods: string[] = []
   page.on('websocket', socket => socket.on('framesent', frame => { methods.push(JSON.parse(String(frame.payload)).method) }))
@@ -137,8 +165,11 @@ test('输入框随内容和宽度变化增高，删除后缩回单行', async ({
   const wide = (await input.boundingBox())!.height
   await page.setViewportSize({width: 390, height: 844})
   await expect.poll(async () => (await input.boundingBox())!.height).toBeGreaterThan(wide)
+  await input.fill('单行')
+  const mobileSingle = (await input.boundingBox())!.height
+  expect(mobileSingle).toBeLessThan(80)
   await input.fill('')
-  expect((await input.boundingBox())!.height).toBeCloseTo(single, 0)
+  expect((await input.boundingBox())!.height).toBeCloseTo(mobileSingle, 0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.setViewportSize({width: 1440, height: 1100})
   const yaml = page.locator('[id="Alas.Error.OnePushConfig"]')
@@ -224,7 +255,7 @@ test('主页实例状态、任务搜索收起与导航固定', async ({page}) =>
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
   await page.goto('/')
-  await expect(page.getByRole('heading', {name: '主页', exact: true})).toBeVisible()
+  await expect(page.getByRole('heading', {name: /好，指挥官/})).toBeVisible()
   await expect(page.locator('.instance-card').filter({hasText: 'demo-main'})).toContainText('未运行')
   await expect(page.locator('.sidebar .instance-picker')).toHaveCount(0)
   await expect(page.locator('.sidebar-footer')).toHaveCount(0)
@@ -247,7 +278,7 @@ test('主页实例状态、任务搜索收起与导航固定', async ({page}) =>
   await page.goto('/#/i/demo-main/task/Alas')
   await expect(page.locator('[id="Alas.Emulator.Serial"]')).toBeVisible()
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
-  expect((await page.locator('.topbar').boundingBox())!.y).toBe(0)
+  expect((await page.locator('.topbar').boundingBox())!.y).toBe(12)
   await page.locator('.breadcrumb').getByRole('button', {name: '切换实例'}).click()
   await page.keyboard.press('Escape')
   await expect(page.getByRole('button', {name: '切换实例'})).toBeFocused()
@@ -305,13 +336,13 @@ test('实例设置保留自动运行和删除，删除后返回主页', async ({
   const name = `home_${Date.now()}`
   await page.getByLabel('实例名称').fill(name)
   await page.getByRole('dialog').getByRole('button', {name: '创建实例', exact: true}).click()
-  await page.locator('.primary-nav').getByRole('link', {name, exact: true}).click()
+  await page.locator('.primary-nav').getByRole('link', {name: '运行总览', exact: true}).click()
   await page.getByRole('button', {name: '实例设置'}).click()
   await page.getByLabel('启动时自动运行', {exact: true}).check()
   await expect(page.locator('#instance-startup-status')).toHaveText('已保存')
   await page.getByRole('button', {name: '删除实例', exact: true}).click()
   await page.getByRole('button', {name: '确认删除'}).click()
-  await expect(page.getByRole('heading', {name: '主页', exact: true})).toBeVisible()
+  await expect(page.getByRole('heading', {name: /好，指挥官/})).toBeVisible()
   await expect(page.locator('.instance-card').filter({hasText: name})).toHaveCount(0)
 })
 

@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useParams } from 'react-router-dom'
-import { Anchor, ChevronRight, Search } from 'lucide-react'
+import { Anchor, CalendarDays, ChevronRight, Compass, Gift, Palmtree, Search, Settings2, Ship, Sparkles, Swords, Wrench, type LucideIcon } from 'lucide-react'
 import { useApp } from '../app/context'
+
+const groupIcons: Record<string, LucideIcon> = {
+  Alas: Settings2, Farm: Swords, Event: Sparkles, EventDaily: CalendarDays,
+  Reward: Gift, DailyMission: CalendarDays, Opsi: Compass, Island: Palmtree, FleetManagement: Ship, Tool: Wrench,
+}
 
 export function TaskNav({ defaultOpenKey }: { defaultOpenKey?: string } = {}) {
   const { schema, t } = useApp()
@@ -134,6 +139,7 @@ export function TaskNav({ defaultOpenKey }: { defaultOpenKey?: string } = {}) {
               location.pathname.endsWith(`/task/${task}`)
             )
             const isExpanded = openMenuKey === key
+            const GroupIcon = groupIcons[key] ?? Anchor
 
             return (
               <button
@@ -153,7 +159,7 @@ export function TaskNav({ defaultOpenKey }: { defaultOpenKey?: string } = {}) {
                 aria-haspopup="menu"
                 aria-expanded={isExpanded}
               >
-                <Anchor size={14} className="task-group-icon" />
+                <GroupIcon size={18} className="task-group-icon" />
                 <span className="task-group-title">{t(`Menu.${key}.name`)}</span>
                 <span className="task-group-badge">{filteredTasks.length}</span>
                 <ChevronRight size={13} className="task-group-arrow" />
