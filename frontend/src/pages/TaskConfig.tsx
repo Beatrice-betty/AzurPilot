@@ -121,7 +121,7 @@ export function TaskConfig() {
                 <div className="panel-heading">
                   <div>
                     <span className="group-indicator" />
-                    <h2>{t(`${group}._info.name`)}</h2>
+                    <h2 data-text={t(`${group}._info.name`)}>{t(`${group}._info.name`)}</h2>
                   </div>
                   <span className="small-label">{visible.length} 项设置</span>
                 </div>

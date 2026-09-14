@@ -13,14 +13,14 @@ export function Loading() { return <div className="loading" role="status"><Loade
 export function ErrorBox({message, retry}: {message: string; retry?: () => void}) {
   return <div role="alert" className="error-box"><AlertCircle size={18}/><span>{message}</span>{retry && <button onClick={retry}>重试</button>}</div>
 }
-export function Modal({title, children, onClose}: {title: string; children: ReactNode; onClose: () => void}) {
+export function Modal({title, children, onClose, className = ''}: {title: string; children: ReactNode; onClose: () => void; className?: string}) {
   const ref = useRef<HTMLDialogElement>(null)
   useEffect(() => { ref.current?.showModal(); return () => ref.current?.close() }, [])
-  return <dialog ref={ref} onCancel={onClose} className="modal">
+  return <dialog ref={ref} onCancel={onClose} className={`modal ${className}`.trim()}>
     <div className="panel-heading"><h2>{title}</h2><button className="icon-button" aria-label="关闭" onClick={onClose}><X size={20}/></button></div>
     {children}
   </dialog>
 }
-export function PageTitle({title, actions}: {title: string; actions?: ReactNode}) {
-  return <div className="page-title"><h1>{title}</h1>{actions && <div className="title-actions"><GlassMaterial/>{actions}</div>}</div>
+export function PageTitle({title, actions, className = ''}: {title: string; actions?: ReactNode; className?: string}) {
+  return <div className={`page-title ${className}`.trim()}><h1 data-text={title}>{title}</h1>{actions && <div className="title-actions"><GlassMaterial/>{actions}</div>}</div>
 }

@@ -44,7 +44,7 @@ export function Settings() {
         <div className="panel-heading">
           <div>
             <Palette size={18} />
-            <h2>界面偏好</h2>
+            <h2 data-text="界面偏好">界面偏好</h2>
           </div>
         </div>
         <div className="field-row">
@@ -77,7 +77,7 @@ export function Settings() {
         data.groups.map(group => (
           <section className="panel config-group" key={group.key}>
             <div className="panel-heading">
-              <h2>{t(`Gui.DeploySetting.Group${group.key}`)}</h2>
+              <h2 data-text={t(`Gui.DeploySetting.Group${group.key}`)}>{t(`Gui.DeploySetting.Group${group.key}`)}</h2>
             </div>
             {group.fields
               .filter(field => !['CDN', 'DpiScaling', 'Theme', 'Language'].includes(field.key))
