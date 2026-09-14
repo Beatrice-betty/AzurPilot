@@ -54,7 +54,7 @@
 .commit-pagination > span {margin-right: auto; color: var(--muted); font-size: 12px}
 @media (max-width: 950px) {
   .topbar {gap: 8px}
-  .sidebar {z-index: 40}
+  .sidebar {z-index: 100}
   .topbar-right {gap: 8px}
   .topbar-right .connection-label span {display: none}
   .breadcrumb .instance-caption strong {max-width: 100px}
