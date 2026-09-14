@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
 import { AlertCircle, LoaderCircle, X } from 'lucide-react'
 import { GlassMaterial } from './GlassMaterial'
 import type { Status } from '../api/types'
@@ -21,6 +21,15 @@ export function Modal({title, children, onClose, className = ''}: {title: string
     {children}
   </dialog>
 }
+
+/** 用文字轮廓裁切背景滤镜，避免模糊扩散到标题外的矩形区域。 */
+function createTitleMask(title: string) {
+  const escaped = title.replace(/[&<>]/g, character => ({'&': '&amp;', '<': '&lt;', '>': '&gt;'}[character]!))
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 100" preserveAspectRatio="none"><text x="0" y="82" textLength="1000" lengthAdjust="spacingAndGlyphs" fill="white" stroke="white" stroke-width="4" paint-order="stroke" font-family="-apple-system,BlinkMacSystemFont,SF Pro Text,Segoe UI,PingFang SC,Microsoft YaHei,sans-serif" font-size="84" font-weight="700">${escaped}</text></svg>`
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`
+}
+
 export function PageTitle({title, actions, className = ''}: {title: string; actions?: ReactNode; className?: string}) {
-  return <div className={`page-title ${className}`.trim()}><h1 data-text={title}>{title}</h1>{actions && <div className="title-actions"><GlassMaterial/>{actions}</div>}</div>
+  const titleStyle = {'--page-title-mask': createTitleMask(title)} as CSSProperties
+  return <div className={`page-title ${className}`.trim()}><h1 data-text={title} style={titleStyle}>{title}</h1>{actions && <div className="title-actions"><GlassMaterial/>{actions}</div>}</div>
 }
