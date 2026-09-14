@@ -58,7 +58,7 @@ export function RightRail({instance, onMobileClose}: {instance: string; onMobile
   const pending = data?.tasks.filter(task => task.state === 'pending').length ?? 0
   const waiting = data?.tasks.filter(task => task.state === 'waiting').length ?? 0
 
-  return <aside className="right-rail" aria-label="调度与任务">
+  return <aside className="right-rail" id="right-rail-menu" aria-label="调度与任务">
     <div className="right-rail-header">
       <div>
         <span className="right-rail-eyebrow">实例工作区</span>

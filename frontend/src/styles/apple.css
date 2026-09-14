@@ -22,31 +22,36 @@ body {background: var(--bg); background-attachment: fixed}
 .wallpaper img {width: 100%; height: 100%; object-fit: cover; opacity: 1}
 .lucide {stroke-width: 1.75}
 
-/* 桌面端三列采用悬浮圆角矩形，而不是贴边侧栏。 */
-.app-shell {padding: 14px; gap: 14px; align-items: start}
+/* 左侧栏贴住视口边缘；PC 保留右栏占位，顶栏跨过右栏一直贯穿到屏幕右缘。 */
+.app-shell {padding: 0; gap: 14px; align-items: start}
 .app-shell.with-rail {grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--right-rail-width)}
 .sidebar {
-  top: 14px;
-  height: calc(var(--viewport-height) - 28px);
+  top: 0;
+  height: var(--viewport-height);
   background: var(--glass-tint);
   backdrop-filter: blur(24px) saturate(130%);
   -webkit-backdrop-filter: blur(24px) saturate(130%);
   border: 1px solid var(--glass-edge);
-  border-radius: 26px;
+  border-left: 0;
+  border-radius: 0 26px 26px 0;
   box-shadow: var(--glass-shadow);
   padding: 0 14px 14px;
   overflow: visible;
 }
 .right-rail {
-  top: 14px;
-  height: calc(var(--viewport-height) - 28px);
+  position: sticky;
+  top: 56px;
+  height: calc(var(--viewport-height) - 56px);
   background: var(--glass-tint);
   backdrop-filter: blur(24px) saturate(130%);
   -webkit-backdrop-filter: blur(24px) saturate(130%);
   border: 1px solid var(--glass-edge);
-  border-radius: 26px;
-  box-shadow: var(--glass-shadow);
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0 0 0 26px;
+  box-shadow: 0 18px 56px #0003, var(--glass-shadow);
   overflow: hidden;
+  z-index: 70;
 }
 .right-rail-header {border-bottom-color: color-mix(in srgb, var(--border) 64%, transparent)}
 .scheduler-widget {border-radius: 18px; background: color-mix(in srgb, var(--surface) 72%, transparent); border-color: color-mix(in srgb, var(--border) 70%, transparent); box-shadow: inset 0 1px 0 color-mix(in srgb, white 46%, transparent)}
@@ -72,7 +77,8 @@ body {background: var(--bg); background-attachment: fixed}
 .task-submenu-item.active .task-submenu-dot {box-shadow: none}
 .nav-search {border-radius: 10px; background: var(--surface-muted); color: var(--muted)}
 .nav-search input {font-size: 13px; min-height: 38px}
-.topbar {margin: 0 24px; top: 14px; height: 56px; padding: 0 18px; border: 1px solid var(--glass-edge); border-radius: 26px; background: transparent; box-shadow: var(--glass-shadow); isolation: isolate}
+.topbar {position: sticky; z-index: 80; margin: 0 0 0 24px; top: 0; height: 56px; padding: 0 18px; border: 1px solid var(--glass-edge); border-radius: 26px 0 0 26px; background: transparent; box-shadow: var(--glass-shadow); isolation: isolate}
+.app-shell.with-rail .topbar {width: calc(100% + var(--right-rail-width) + 14px - 24px)}
 .topbar > :not(.glass-material), .title-actions > :not(.glass-material) {position: relative; z-index: 1}
 .breadcrumb {font-size: 13px; gap: 10px}
 .breadcrumb .instance-caption strong {font-size: 13px}
@@ -291,9 +297,12 @@ input, select, textarea {border-radius: 10px; min-height: 40px; background: var(
 [data-theme='dark'] .rail-queue-group.waiting {box-shadow: inset 0 1px 0 #ffffff06}
 @media (max-width: 950px) {
   :root {--topbar-height: 76px}
-  .sidebar {width: 232px; left: -250px; top: 10px; height: calc(var(--viewport-height) - 20px)}
+  .app-shell {padding: 0}
+  .sidebar {width: 232px; left: -250px; top: 0; height: var(--viewport-height); border-radius: 0 26px 26px 0}
   .sidebar-brand {height: 56px; min-height: 56px}
-  .topbar {margin: 10px 12px 0; top: 10px; padding: 0 10px; height: 56px; min-height: 56px; gap: 6px}
+  .topbar, .app-shell.with-rail .topbar {width: auto; margin: 0 0 0 12px; top: 0; padding: 0 10px; height: 56px; min-height: 56px; gap: 6px; border-radius: 26px 0 0 26px}
+  .right-rail {position: fixed; top: 56px; right: 0; width: min(360px, calc(100vw - 12px)); height: calc(var(--viewport-height) - 56px); opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-12px) scale(.985); transform-origin: top right; transition: opacity .18s ease, transform .22s cubic-bezier(.22,.61,.36,1), visibility .18s}
+  .rail-open .right-rail {opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0) scale(1)}
   main {padding: 28px 18px}
   .breadcrumb {font-size: 12px; gap: 6px}
   .page-title {gap: 18px}
