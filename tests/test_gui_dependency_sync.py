@@ -329,6 +329,7 @@ class TestGuiDualStackSockets(unittest.TestCase):
             patch.object(gui.State, "deploy_config", deployment),
             patch.object(sys, "argv", ["gui.py", "--host", "0.0.0.0", "--port", "23456"]),
             patch("gui.sys.platform", "linux"),
+            patch("deploy.frontend.ensure_frontend"),
             patch("uvicorn.Config", return_value=uvicorn_config) as config_factory,
             patch("gui._create_dual_stack_sockets", return_value=listeners) as create_sockets,
             patch("gui._run_uvicorn_server") as run_server,
@@ -361,6 +362,7 @@ class TestGuiDualStackSockets(unittest.TestCase):
             patch.object(gui.State, "deploy_config", deployment),
             patch.object(sys, "argv", ["gui.py", "--host", "::", "--port", "23456"]),
             patch("gui.sys.platform", "linux"),
+            patch("deploy.frontend.ensure_frontend"),
             patch("uvicorn.Config", return_value=uvicorn_config) as config_factory,
             patch("gui._create_dual_stack_sockets", return_value=listeners) as create_sockets,
             patch("gui._run_uvicorn_server") as run_server,
@@ -392,6 +394,7 @@ class TestGuiDualStackSockets(unittest.TestCase):
             patch.object(gui.State, "deploy_config", deployment),
             patch.object(sys, "argv", ["gui.py", "--host", "127.0.0.1", "--port", "23456"]),
             patch("gui.sys.platform", "linux"),
+            patch("deploy.frontend.ensure_frontend"),
             patch("uvicorn.Config", return_value=uvicorn_config) as config_factory,
             patch("gui._create_dual_stack_sockets") as create_sockets,
             patch("gui._run_uvicorn_server") as run_server,
@@ -487,6 +490,24 @@ class TestGuiReadyHandshake(unittest.TestCase):
 
 
 class TestWebUISupervisor(unittest.TestCase):
+    def setUp(self):
+        build = patch('deploy.frontend.ensure_frontend')
+        self.build_frontend = build.start()
+        self.addCleanup(build.stop)
+
+    def test_failed_frontend_build_prevents_child_creation(self):
+        self.build_frontend.side_effect = RuntimeError('构建失败')
+        with (
+            patch('gui._recover_orphaned_workers', return_value=True),
+            patch('gui._prepare_dependency_sync_before_webui_start', return_value=(True, None, None, None)),
+            patch('gui._stop_webui_process_tree'),
+            patch('gui._stop_dependency_sync_service'),
+            patch('gui.logger.exception_context'),
+            patch('gui.Process') as process_factory,
+        ):
+            gui.run_webui_supervisor()
+        process_factory.assert_not_called()
+
     @staticmethod
     def _service():
         return Mock(), Mock(), Mock()
@@ -512,6 +533,7 @@ class TestWebUISupervisor(unittest.TestCase):
         sleep.assert_has_calls([call(1), call(2)])
         for process in processes:
             process.start.assert_called_once_with()
+        self.assertEqual(3, self.build_frontend.call_count)
 
     def test_supervisor_syncs_pending_environment_before_creating_webui(self):
         with (

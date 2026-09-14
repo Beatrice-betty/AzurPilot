@@ -232,28 +232,13 @@ Deploy:
     # [少数情况] 如果你的屏幕分辨率低但 DPI 缩放高，使用 false 可以让 AzurPilot 显示得更小
     # [In few cases] false to make AzurPilot smaller, if you have a low resolution but high DPI scaling.
     DpiScaling: true
-    # 关闭未经验证版本的水印
-    # Disable the watermark for unverified builds
-    # [默认关闭] false：显示水印，提醒当前运行的是未经验证的构建
-    # [Default] false: the watermark is shown
-    # [仅了解 AzurPilot 与各分支用途的用户] true：隐藏未经验证分支（dev/app 等）的水印
-    # [Only for users who know AzurPilot and its branches] true: hide the watermark on unverified branches (dev/app)
-    # [警告] 不了解 AzurPilot / 各分支作用的人，以及需要用截图反馈问题的人，禁止开启
-    # [WARNING] Never enable this if you are unfamiliar with AzurPilot/branches or need to report issues with screenshots
-    DisableBranchWatermark: false
     # --key. WebUI 密码
     # --key. Password of web ui
     # 将 AzurPilot 暴露到公网时很有用
     # Useful when expose AzurPilot to the public network
     Password: null
-    # --cdn. 使用 jsdelivr CDN 加载 PyWebIO 静态文件（css、js）
-    # --cdn. Use jsdelivr cdn for pywebio static files (css, js).
-    # 'true' 使用 jsdelivr CDN
-    # 'true' for jsdelivr cdn
-    # 'false' 自动使用自托管 CDN
-    # 'false' for self host cdn (automatically)
-    # 'https://path.to.your/cdn' 使用自定义 CDN
-    # 'https://path.to.your/cdn' to use custom cdn
+    # --cdn. 已废弃，React 前端静态资源始终由本地提供
+    # --cdn. Deprecated. React frontend static assets are always served locally.
     CDN: false
     # --run. 启动时自动运行指定的配置
     # --run. Auto-run specified config when startup
