@@ -132,8 +132,8 @@ main:focus {outline: none}
 .task-row-name strong {font-size: 13px; font-weight: 550}
 .schedule-summary {font-size: 12px}
 .monitor-tabs {height: 64px; padding: 10px 16px; gap: 10px; display: flex; align-items: center; border-bottom: 1px solid color-mix(in srgb, var(--glass-edge) 54%, var(--border))}
-.monitor-segmented {position: relative; display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 999px; background: #e6e6e6; border: 1px solid #d2d2d2; box-shadow: none; overflow: hidden; transform: translateX(-2px)}
-.monitor-segmented::before {content: ''; position: absolute; top: 3px; left: 3px; width: 92px; height: 34px; border-radius: 999px; background: #f3f3f3; transform: translateX(0); transition: transform .24s cubic-bezier(.22,.61,.36,1); pointer-events: none}
+.monitor-segmented {position: relative; display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 999px; background: #0000000d; border: 1px solid #00000012; box-shadow: none; overflow: hidden; transform: translateX(-2px)}
+.monitor-segmented::before {content: ''; position: absolute; top: 3px; left: 3px; width: 92px; height: 34px; border-radius: 999px; background: #ffffffa6; transform: translateX(0); transition: transform .24s cubic-bezier(.22,.61,.36,1); pointer-events: none}
 .monitor-segmented.preview::before {transform: translateX(94px)}
 .monitor-segmented button {position: relative; z-index: 1; width: 92px; height: 34px; padding: 0 15px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 550; box-sizing: border-box; cursor: pointer; transition: color .18s}
 .monitor-segmented button:hover {color: var(--text)}
@@ -141,8 +141,8 @@ main:focus {outline: none}
 .monitor-segmented button:active {filter: brightness(.94)}
 .monitor-segmented svg {stroke-width: 1.7}
 .monitor-tabs > a.text-button {margin-left: auto}
-[data-theme='dark'] .monitor-segmented {background: color-mix(in srgb, var(--surface) 44%, transparent); border-color: color-mix(in srgb, var(--border) 72%, transparent); box-shadow: none}
-[data-theme='dark'] .monitor-segmented::before {background: color-mix(in srgb, #8a8a8f 34%, var(--surface))}
+[data-theme='dark'] .monitor-segmented {background: #ffffff10; border-color: #ffffff18; box-shadow: none}
+[data-theme='dark'] .monitor-segmented::before {background: #ffffff24}
 [data-theme='dark'] .monitor-segmented button[aria-selected='true'] {background: transparent; color: #f2f2f7; box-shadow: none}
 .monitor-panel .log-content {font-size: 12px; line-height: 1.8}
 .monitor-panel .log-content {
@@ -159,9 +159,14 @@ main:focus {outline: none}
   border: 0;
   border-radius: inherit;
 }
-.statistics-tabs {border: 0; border-radius: 22px; background: var(--surface-muted); padding: 5px; gap: 4px; width: fit-content; max-width: 100%}
-.statistics-tabs button {border: 0; border-radius: 18px; background: transparent; font-size: 13px; min-height: 40px}
-.statistics-tabs button.active {background: var(--surface); color: var(--accent); box-shadow: none}
+.statistics-tabs {position: relative; display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 2px; padding: 3px; margin-bottom: 20px; width: fit-content; max-width: 100%; overflow-x: auto; border: 1px solid #ffffff8c; border-radius: 999px; background: #ffffff52; backdrop-filter: blur(18px) saturate(125%); -webkit-backdrop-filter: blur(18px) saturate(125%); box-shadow: none}
+.statistics-tabs-indicator {position: absolute; left: 0; top: 0; z-index: 0; border-radius: 999px; background: #ffffff9e; pointer-events: none; transition: transform .24s cubic-bezier(.22,.61,.36,1), width .24s cubic-bezier(.22,.61,.36,1), height .24s cubic-bezier(.22,.61,.36,1), opacity .12s ease}
+.statistics-tabs button {position: relative; z-index: 1; flex: 0 0 auto; min-height: 40px; padding: 0 16px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 550; transition: color .18s}
+.statistics-tabs button:hover {color: var(--text)}
+.statistics-tabs button.active {background: transparent; color: var(--text); box-shadow: none}
+[data-theme='dark'] .statistics-tabs {background: #ffffff14; border-color: #ffffff20; backdrop-filter: blur(18px) saturate(125%); -webkit-backdrop-filter: blur(18px) saturate(125%)}
+[data-theme='dark'] .statistics-tabs-indicator {background: #ffffff28}
+[data-theme='dark'] .statistics-tabs button.active {background: transparent; color: #f2f2f7}
 .statistics-note {border-left-color: var(--accent); border-radius: 12px}
 .group-nav {border: 0; padding: 6px; gap: 3px; border-radius: 16px; background: var(--surface-muted)}
 .group-nav a {border-radius: 10px}
@@ -253,8 +258,8 @@ input, select, textarea {border-radius: 10px; min-height: 40px; background: var(
   .task-group-button, .task-submenu-item {min-height: 44px}
   .sidebar-label .icon-button {width: 36px; height: 36px}
   .mobile-close {top: 6px}
-  .statistics-tabs {width: 100%}
-  .statistics-tabs button {flex: 1 0 auto; min-height: 44px}
+  .statistics-tabs {width: 100%; max-width: 100%; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; padding: 3px; overflow: hidden}
+  .statistics-tabs button {width: 100%; min-width: 0; min-height: 40px; padding: 0 6px; font-size: clamp(10.5px, 2.45vw, 12px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis}
   .monitor-tabs {height: 66px; padding: 8px 12px}
   .monitor-segmented button {width: 92px; height: 40px; min-height: 40px; padding: 0 12px}
   .monitor-segmented::before {height: 40px}

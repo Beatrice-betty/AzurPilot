@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Download, RefreshCw } from 'lucide-react'
 import { api } from '../api/client'
@@ -23,7 +23,27 @@ export function Statistics() {
   const [data, setData] = useState<StatisticsReport>()
   const [error, setError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
+  const tabsRef = useRef<HTMLElement>(null)
+  const [tabIndicator, setTabIndicator] = useState({x: 3, y: 3, width: 0, height: 0})
   const connection = useConnection()
+  useLayoutEffect(() => {
+    const nav = tabsRef.current
+    if (!nav) return
+    const update = () => {
+      const active = nav.querySelector<HTMLButtonElement>('button.active')
+      if (!active) return
+      setTabIndicator({x: active.offsetLeft, y: active.offsetTop, width: active.offsetWidth, height: active.offsetHeight})
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(nav)
+    nav.querySelectorAll('button').forEach(button => observer.observe(button))
+    window.addEventListener('resize', update)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', update)
+    }
+  }, [category])
   useEffect(() => {
     if (connection !== 'ready') return
     let active = true
@@ -48,7 +68,7 @@ export function Statistics() {
     ])
   }
   return <><PageTitle title="资源统计" actions={<><button className="button secondary" disabled={connection !== 'ready' || refreshing} onClick={refresh}><RefreshCw size={15}/>{refreshing ? '正在刷新…' : '刷新统计'}</button><button className="button secondary" disabled={!data} onClick={download}><Download size={15}/>导出本类数据</button></>}/>
-    <nav className="statistics-tabs" aria-label="统计分类">{Object.entries(categories).map(([key, label]) => <button aria-current={category === key ? 'page' : undefined} className={category === key ? 'active' : ''} key={key} onClick={() => setCategory(key as Category)}>{label}</button>)}</nav>
+    <nav ref={tabsRef} className="statistics-tabs" aria-label="统计分类"><span className="statistics-tabs-indicator" aria-hidden="true" style={{transform: `translate3d(${tabIndicator.x}px, ${tabIndicator.y}px, 0)`, width: tabIndicator.width, height: tabIndicator.height, opacity: tabIndicator.width ? 1 : 0}}/>{Object.entries(categories).map(([key, label]) => <button aria-current={category === key ? 'page' : undefined} className={category === key ? 'active' : ''} key={key} onClick={() => setCategory(key as Category)}>{label}</button>)}</nav>
     <div className="statistics-controls period-controls"><strong>{categories[category!]}</strong>{category === 'resources' ? <label>时间范围<select aria-label="统计天数" value={days} onChange={event => setDays(Number(event.target.value))}>{[1, 7, 30, 90, 365].map(value => <option value={value} key={value}>最近 {value} 天</option>)}</select></label> : ['action', 'opsi', 'commission'].includes(category!) && <label>统计月份<input aria-label="统计月份" type="month" min="2020-01" max="9998-12" value={month} disabled={category === 'commission' && period !== 'month'} onChange={event => {if (event.target.value) setMonth(event.target.value)}}/></label>}{category === 'commission' && <label>汇总周期<select aria-label="委托汇总周期" value={period} onChange={event => setPeriod(event.target.value as typeof period)}><option value="day">今日</option><option value="week">本周</option><option value="month">选定月份</option></select></label>}{category === 'ships' && <span>最新检测与历史日记录</span>}{category === 'loot' && <span>本设备全部历史 · 跨实例累计</span>}</div>
     {error ? <ErrorBox message={error} retry={() => setRevision(value => value + 1)}/> : !data ? <Loading/> : <div className="statistics-sections">{!!data.metrics.length && <div className="stat-metrics summary-metrics">{data.metrics.map(item => <section key={item.label}><span>{item.label}</span><strong>{item.value == null ? '—' : item.value.toLocaleString(undefined, {maximumFractionDigits: 2})}<small>{item.unit}</small></strong></section>)}</div>}{!!data.series.length && <Suspense fallback={<Loading/>}><StatisticsChart key={category} series={data.series}/></Suspense>}{data.tables.map(table => <section className="panel" key={table.title}><StatisticsTable data={table}/></section>)}</div>}
   </>
