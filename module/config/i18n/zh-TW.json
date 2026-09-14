@@ -1,7 +1,7 @@
 {
   "Menu": {
     "Alas": {
-      "name": "智慧港區Plus",
+      "name": "系統",
       "help": ""
     },
     "Farm": {
@@ -43,7 +43,7 @@
   },
   "Task": {
     "Alas": {
-      "name": "智慧港區設定",
+      "name": "系統設定",
       "help": ""
     },
     "General": {

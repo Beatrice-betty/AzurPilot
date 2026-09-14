@@ -333,6 +333,15 @@ input, select, textarea {border-radius: 10px; min-height: 40px; background: var(
   input, select, textarea {font-size: 16px; min-height: 44px}
   .field-control > input, .field-control > select, .field-control > textarea {font-size: 16px}
 }
+@media (max-width: 480px) {
+  .monitor-tabs {height: 60px; padding: 8px 10px}
+  .monitor-segmented button {width: 70px; height: 36px; min-height: 36px; padding: 0 8px; gap: 5px}
+  .monitor-segmented::before {width: 70px; height: 36px}
+  .monitor-segmented.preview::before {transform: translateX(72px)}
+  .monitor-panel .log-toolbar {top: 12px; right: 10px; height: 36px; gap: 1px}
+  .monitor-panel .log-toolbar .icon-button {width: 32px; height: 32px}
+  .monitor-panel .log-toolbar .text-button {width: 32px; min-height: 32px; padding: 0; gap: 0; justify-content: center; font-size: 0}
+}
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
   .wallpaper {display: none}
   .glass-material, .sidebar, .instance-menu, .task-submenu-flyout {background: var(--surface); backdrop-filter: none; -webkit-backdrop-filter: none}

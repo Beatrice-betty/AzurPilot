@@ -18,6 +18,11 @@ const taskGroups = [
   {state: 'waiting', label: '等待中', empty: '当前没有等待中的任务', icon: Hourglass},
 ] as const
 
+function formatExecutionTime(nextRun: string) {
+  const value = nextRun.replace('T', ' ').trim()
+  return value ? `执行时间：${value}` : '执行时间未设置'
+}
+
 export function RightRail({instance, onMobileClose}: {instance: string; onMobileClose: () => void}) {
   const connection = useConnection()
   const {notify} = useApp()
@@ -107,7 +112,7 @@ export function RightRail({instance, onMobileClose}: {instance: string; onMobile
               {tasks.length ? tasks.map(task => <Link key={task.name} className="rail-task-item" to={`/i/${instance}/task/${task.name}`} onClick={onMobileClose}>
                 <div>
                   <strong>{task.label}</strong>
-                  <small>{task.state === 'running' ? '正在执行' : task.state === 'pending' ? '等待运行' : task.nextRun.slice(5, 16)}</small>
+                  <small>{task.state === 'running' ? '正在执行' : formatExecutionTime(task.nextRun)}</small>
                 </div>
                 <span className={`task-state ${task.state}`}><GroupIcon size={12}/>{taskStateLabel[task.state]}</span>
                 <ChevronRight size={13}/>

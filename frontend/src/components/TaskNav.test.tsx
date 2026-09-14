@@ -23,9 +23,9 @@ const mockSchema: Schema = {
 }
 
 const mockTranslations: Record<string, string> = {
-  'Menu.Alas.name': '智慧港区Plus',
+  'Menu.Alas.name': '系统',
   'Menu.Farm.name': '出击Plus',
-  'Task.Alas.name': '基础设置',
+  'Task.Alas.name': '系统设置',
   'Task.General.name': '通用设置',
   'Task.Restart.name': '游戏重启',
   'Task.Main.name': '主线常规出击',
@@ -72,7 +72,7 @@ describe('TaskNav 导航组件', () => {
 
     // 检查向右箭头图标和菜单文本
     expect(html).toContain('task-group-arrow')
-    expect(html).toContain('智慧港区Plus')
+    expect(html).toContain('系统')
     expect(html).toContain('出击Plus')
 
     // 检查任务数量徽标
