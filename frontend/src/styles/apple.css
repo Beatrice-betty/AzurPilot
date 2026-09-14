@@ -183,6 +183,10 @@ main:focus {outline: none}
 .task-row-name strong {font-size: 13px; font-weight: 550}
 .schedule-summary {font-size: 12px}
 .monitor-tabs {height: 64px; padding: 10px 16px; gap: 10px; display: flex; align-items: center; border-bottom: 1px solid color-mix(in srgb, var(--glass-edge) 54%, var(--border))}
+.monitor-panel {position: relative}
+.monitor-panel .log-toolbar {position: absolute; top: 10px; right: 16px; z-index: 3; height: 44px; display: flex; align-items: center; gap: 4px}
+.monitor-panel .log-toolbar .icon-button {width: 36px; height: 36px}
+.monitor-panel .log-toolbar .text-button {min-height: 36px; white-space: nowrap}
 .monitor-segmented {position: relative; display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 999px; background: #0000000d; border: 1px solid #00000012; box-shadow: none; overflow: hidden; transform: translateX(-2px)}
 .monitor-segmented::before {content: ''; position: absolute; top: 3px; left: 3px; width: 92px; height: 34px; border-radius: 999px; background: #ffffffa6; transform: translateX(0); transition: transform .24s cubic-bezier(.22,.61,.36,1); pointer-events: none}
 .monitor-segmented.preview::before {transform: translateX(94px)}
@@ -199,8 +203,7 @@ main:focus {outline: none}
 .monitor-panel .log-content {
   background: color-mix(in srgb, var(--surface) 30%, transparent);
 }
-.monitor-panel .log-filters,
-.monitor-panel .log-panel .panel-heading {
+.monitor-panel .log-filters {
   background: color-mix(in srgb, var(--surface) 18%, transparent);
   border-color: color-mix(in srgb, var(--glass-edge) 54%, var(--border));
 }
@@ -320,10 +323,9 @@ input, select, textarea {border-radius: 10px; min-height: 40px; background: var(
   .monitor-segmented::before {height: 40px}
   .monitor-tabs .text-button {font-size: 11px}
   .monitor-tabs > span {font-size: 10px}
-  .log-panel .panel-heading {flex-wrap: wrap; gap: 4px}
-  .log-panel .panel-heading > div:first-child {flex: 1 0 100%; white-space: nowrap}
-  .log-panel .panel-heading > div:last-child {margin-left: auto}
-  .log-panel .text-button {white-space: nowrap; min-height: 44px}
+  .monitor-panel .log-toolbar {top: 13px; right: 12px; height: 40px; gap: 2px}
+  .monitor-panel .log-toolbar .icon-button {width: 36px; height: 36px}
+  .monitor-panel .log-toolbar .text-button {min-height: 36px; padding: 6px 8px}
   .schedule-panel, .monitor-panel {height: 520px}
   .home-summary {gap: 16px 22px}
   .home-summary > div {gap: 7px; font-size: 12px}
