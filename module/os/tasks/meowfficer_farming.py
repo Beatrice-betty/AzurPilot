@@ -127,6 +127,30 @@ class MeowfficerTargetZoneMixin:
 
 
 class OpsiMeowfficerFarming(MeowfficerTargetZoneMixin, CoinTaskMixin, OSMap):
+    def _clear_question_primary(self):
+        """只清主舰队周围问号。"""
+        self.fleet_set(self.config.OpsiFleet_Fleet)
+        self.device.screenshot()
+        return self.clear_question()
+
+    def _clear_question_other_fleets(self):
+        """依次切换到其他舰队清理问号。"""
+        primary = self.config.OpsiFleet_Fleet
+        cleared = False
+        for fleet in [1, 2, 3, 4]:
+            if fleet == primary:
+                continue
+            self.fleet_set(fleet)
+            self.device.screenshot()
+            if self.clear_question():
+                logger.info(f"[大世界-耄耋相接] 使用舰队 {fleet} 清理到问号")
+                cleared = True
+                break
+            logger.info(f"[大世界-耄耋相接] 舰队 {fleet} 附近无问号")
+        # 恢复主舰队，避免后续步骤在非主舰队状态下执行
+        self.fleet_set(primary)
+        return cleared
+
     def _meow_ap_check(self, preserve, ap_checked):
         """
         行动力检查。
@@ -219,11 +243,17 @@ class OpsiMeowfficerFarming(MeowfficerTargetZoneMixin, CoinTaskMixin, OSMap):
                 if search_completed:
                     self._solved_map_event = set()
                     self._solved_fleet_mechanism = False
-                    self.clear_question()
-                    self.map_rescan()
+                    # 先清主舰队周围问号
+                    if not self._clear_question_primary():
+                        # 主舰队没清到事件，重扫地图
+                        self.map_rescan()
+                        # 重扫也没发现事件，再切换其他舰队依次清问号
+                        if not self._solved_map_event:
+                            self._clear_question_other_fleets()
                 self.handle_after_auto_search()
         finally:
             self.meow_search_metrics_end()
+        self._meow_record_akashi_if_solved()
         self.config.check_task_switch()
 
     def _meow_handle_stay_in_zone(self, zone):
@@ -250,8 +280,13 @@ class OpsiMeowfficerFarming(MeowfficerTargetZoneMixin, CoinTaskMixin, OSMap):
                 if search_completed:
                     self._solved_map_event = set()
                     self._solved_fleet_mechanism = False
-                    self.clear_question()
-                    self.map_rescan()
+                    # 先清主舰队周围问号
+                    if not self._clear_question_primary():
+                        # 主舰队没清到事件，重扫地图
+                        self.map_rescan()
+                        # 重扫也没发现事件，再切换其他舰队依次清问号
+                        if not self._solved_map_event:
+                            self._clear_question_other_fleets()
                     self._meow_fixed_patrol_scan()
 
                 try:
@@ -263,6 +298,7 @@ class OpsiMeowfficerFarming(MeowfficerTargetZoneMixin, CoinTaskMixin, OSMap):
         finally:
             self.meow_search_metrics_end()
 
+        self._meow_record_akashi_if_solved()
         self.config.check_task_switch()
 
     def _meow_handle_target_zone_search(self, zone):
@@ -282,7 +318,25 @@ class OpsiMeowfficerFarming(MeowfficerTargetZoneMixin, CoinTaskMixin, OSMap):
         finally:
             self.meow_search_metrics_end()
 
+        self._meow_record_akashi_if_solved()
         self.config.check_task_switch()
+
+    def _meow_record_akashi_if_solved(self):
+        """本轮耄耋相接搜索结束后，记录明石事件（按侵蚀等级）。
+
+        明石事件由共享的地图事件机制写入 _solved_map_event，
+        这里消费掉该标记防止跨轮次重复计数。
+        """
+        solved_events = getattr(self, '_solved_map_event', set())
+        if 'is_akashi' not in solved_events:
+            return
+        solved_events.discard('is_akashi')
+        try:
+            from module.statistics.opsi_runtime import record_meow_akashi_encounter
+
+            record_meow_akashi_encounter(self)
+        except Exception:
+            logger.exception('[大世界-耄耋相接] 记录明石事件失败')
 
     def _meow_handle_normal_search(self):
         hazard_level = self.config.OpsiMeowfficerFarming_HazardLevel
@@ -318,6 +372,7 @@ class OpsiMeowfficerFarming(MeowfficerTargetZoneMixin, CoinTaskMixin, OSMap):
         finally:
             self.meow_search_metrics_end()
 
+        self._meow_record_akashi_if_solved()
         self.config.check_task_switch()
 
     def os_meowfficer_farming(self):

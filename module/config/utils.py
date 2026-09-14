@@ -193,7 +193,9 @@ def alas_template():
     for file in os.listdir('./config'):
         name, extension = os.path.splitext(file)
         if name == 'template' and extension == '.json':
-            out.append(f'{name}-alas')
+            # 主模块（template.json）在前端以 template-ap 展示，
+            # 实际模块名仍为 alas，由 get_config_mod() 负责映射回去。
+            out.append(f'{name}-{DEFAULT_CONFIG_NAME}')
 
     out.extend(list_mod_template())
 
@@ -358,8 +360,8 @@ def server_time_offset() -> timedelta:
     """
     计算本地时间与服务器时间的偏移量。
 
-    本地时间转服务器时间：server_time = local_time + server_time_offset()
-    服务器时间转本地时间：local_time = server_time - server_time_offset()
+    本地时间转服务器时间：server_time = local_time - server_time_offset()
+    服务器时间转本地时间：local_time = server_time + server_time_offset()
     """
     return current_time(timezone.utc).astimezone().utcoffset() - server_timezone()
 

@@ -430,7 +430,7 @@
     },
     "Enable": {
       "name": "启用此功能喵",
-      "help": "把任务加入调度列表，委托、科研、收获强制开启喵~ (´・ω・`)",
+      "help": "把任务加入调度列表喵~ (´・ω・`)",
       "True": "开启中",
       "False": "关闭中"
     },
@@ -626,12 +626,13 @@
     },
     "ControlMethod": {
       "name": "模拟器控制手势",
-      "help": "速度 minitouch > Hermit > uiautomator2 ~= ADB 推荐 minitouch，VMOS下用 Hermit 喵~",
+      "help": "点击/滑动的注入方式喵。速度: minitouch ≈ MaaTouch > ADB >>> uiautomator2，推荐 MaaTouch 喵（minitouch 在部分新安卓设备上不稳定喵）。\n⚠️ nemu_ipc 要和截图方式配套使用喵（截图选 nemu_ipc 时启动会自动联动喵）：触控走模拟器内部 RPC，低性能电脑上滑动易丢步、拖拽易变形喵，偶发挂死会丢点击喵；滑动异常请改回 minitouch / MaaTouch 喵。",
       "ADB": "ADB喵",
       "uiautomator2": "uiautomator2喵",
       "minitouch": "minitouch喵",
       "Hermit": "Hermit喵",
-      "MaaTouch": "MaaTouch喵"
+      "MaaTouch": "MaaTouch喵",
+      "nemu_ipc": "nemu_ipc"
     },
     "GameSettings": {
       "name": "自动应用推荐游戏设置",
@@ -1399,8 +1400,8 @@
       "help": "油不够就先别跑，等油攒够了再来喵~ (￣ω￣)"
     },
     "ConsumeAllBookRecord": {
-      "name": "开烧记录喵",
-      "help": "脚本自己记的，不用管喵~"
+      "name": "上次烧书是啥时候喵",
+      "help": "上一次把委托书烧光的时刻喵~\n在本周内就说明这周已经烧过了，不会再烧；\n清空或者改到上周以前，这周就能再烧一次喵 (๑•̀ㅂ•́)و✧"
     },
     "CommissionEnd": {
       "name": "委托啥时候结束喵",
@@ -1415,6 +1416,10 @@
     "OilLimit": {
       "name": "石油低于 X 后推迟",
       "help": "石油不足时歇一歇，等回复再出喵~ (=^･ω･^=)"
+    },
+    "OilLimitHardFloor": {
+      "name": "石油停止下限喵",
+      "help": "实际停止阈值为 max(下限, 石油上限)。500 是历史遗留的安全网，低耗监工希望把油打到更低时可以调小，设为 0 则石油上限直接生效喵"
     },
     "CoinLimit": {
       "name": "物资大于 X 后停止喵",
@@ -1599,7 +1604,7 @@
     },
     "AutoSearchMode": {
       "name": "潜艇自律方案",
-      "help": "自律寻敌下生效",
+      "help": "自律寻敌下按此设置潜艇喵；手动寻敌时若为待机，进图前也会同步关闭游戏内的自动召唤（仅限已通关地图，开荒图无此设置页）喵",
       "sub_standby": "待机喵",
       "sub_auto_call": "自动召唤潜艇喵"
     },
@@ -2138,6 +2143,12 @@
       "name": "推送含统计信息喵~",
       "help": "通知里会显示今日/本周/本月累计钻石数量喵！"
     },
+    "DetectShipDrop": {
+      "name": "检测舰船掉落喵",
+      "help": "领取委托奖励后检测「获得舰船」画面并关闭喵。若不做会掉落舰船的委托，可关闭以避免识别错误喵。",
+      "True": "True",
+      "False": "False"
+    },
     "GemNotify": {
       "name": "钻石委托执行通知喵",
       "help": "开始新的钻石委托后，把当前所有正在执行中的钻石委托列表推给主人喵~"
@@ -2274,6 +2285,7 @@
       "series_8_blueprint_305": "八期 蓝图+305喵",
       "series_8_blueprint_only": "八期 仅蓝图喵",
       "series_8_305_only": "八期 仅305喵",
+      "series_8_305_e_first": "八期 305彩装优先喵",
       "series_7_blueprint_la9": "七期 蓝图+La9喵",
       "series_7_blueprint_only": "七期 仅蓝图喵",
       "series_7_la9_only": "七期 仅La9喵",
@@ -6405,7 +6417,19 @@
       "Pending": "队列中",
       "Waiting": "等待中",
       "NoTask": "无任务喵",
-      "Stat": "统计喵"
+      "Stat": "统计喵",
+      "BackgroundCurrentDefault": "**当前使用**：网页（默认）喵",
+      "BackgroundCurrentLocal": "**当前使用**：本地喵",
+      "BackgroundCurrentMixed": "**当前使用**：混合喵",
+      "BackgroundCurrentUrl": "**当前使用**：网页喵",
+      "BackgroundCustomUrls": "**自定义网址喵**",
+      "BackgroundDirectLink": "当前图片直链喵：",
+      "BackgroundExtractToLocal": "提取到本地喵",
+      "BackgroundLocalCount": "本地：{n} 张喵",
+      "BackgroundOpenFolder": "打开文件夹喵",
+      "BackgroundOpenInNewWindow": "在新窗口打开这张图喵",
+      "BackgroundTitle": "### 背景图喵",
+      "BackgroundUrlCount": "已解析链接：{n} 个喵"
     },
     "Dashboard": {
       "TimeError": "时间错误喵",
@@ -6629,7 +6653,10 @@
       "WebuiSSLKey": "SSL 密钥文件",
       "WebuiSSLKeyHelp": "WebUI HTTPS 使用的 SSL 密钥路径，需和证书同时设置喵。",
       "WebuiSSLCert": "SSL 证书文件",
-      "WebuiSSLCertHelp": "WebUI HTTPS 使用的 SSL 证书路径，需和密钥同时设置喵。"
+      "WebuiSSLCertHelp": "WebUI HTTPS 使用的 SSL 证书路径，需和密钥同时设置喵。",
+      "DisableBranchWatermark": "关闭未经验证版本的水印喵",
+      "DisableBranchWatermarkHelp": "【不勾选的时候正常显示水印喵】\n⚠ 不了解 AzurPilot、或者搞不清 master / dev 等分支作用的人，禁止开启本项喵。\n⚠ 需要截图反馈问题、或者请别人帮忙定位问题的人，禁止开启本项喵：水印里的分支名、版本哈希和提交信息是判断你跑了哪一份代码的唯一线索喵，藏起来之后就定位不了问题喵。\n改完要重启 AzurPilot 才生效喵。",
+      "WatermarkHiddenNow": "水印已经藏起来啦喵；想再打开水印要刷新页面或者重启 AzurPilot 喵。"
     },
     "StartupRun": {
       "Title": "启动时自动运行喵",
@@ -6645,6 +6672,9 @@
       "InvalidFeedBack": "格式错误喵。示例：{0}",
       "Clear": "清除喵",
       "RunNow": "立即运行喵",
+      "RunNowSchedulerStopped": "调度器未启动喵，请先通过上方开关或总览页启动",
+      "RunNowTaskDisabled": "该任务未启用喵，请先勾选\"启用调度\"再立即运行",
+      "SchedulerQuickBar": "调度器喵",
       "EnterPassword": "输入密码喵",
       "ChooseFile": "选择文件喵"
     },
@@ -6754,7 +6784,54 @@
       "ResourceChartTitle": "全资源变化趋势喵",
       "LoadResourceDataFailed": "加载资源数据失败喵: {e}",
       "NoResourceData": "暂无资源变化数据喵，运行脚本后将自动记录喵",
-      "NoValidResourceData": "暂无有效资源数据喵"
+      "NoValidResourceData": "暂无有效资源数据喵",
+      "BackgroundBtn": "背景喵",
+      "ChartAp": "体力喵: ",
+      "ChartApLabel": "行动力喵",
+      "ChartAsset": "资产喵: ",
+      "ChartChange": "涨跌喵: ",
+      "ChartChangeLabel": "变化喵",
+      "ChartClose": "收盘喵: ",
+      "ChartDelta": "单次变化喵: ",
+      "ChartDensity": "数据点密度喵: ",
+      "ChartDistance": "海里数喵: ",
+      "ChartHigh": "最高喵: ",
+      "ChartLow": "最低喵: ",
+      "ChartMa10": "  MA10(10期平均)喵: ",
+      "ChartMa5": "  MA5(5期平均)喵: ",
+      "ChartMaxLabel": "最高喵",
+      "ChartMean": "均值喵:",
+      "ChartMeanLabel": "均值喵",
+      "ChartMinLabel": "最低喵",
+      "ChartOpen": "开盘喵: ",
+      "ChartPanelTitle": "体力变化喵 - {view}",
+      "ChartPurple": "紫币喵: ",
+      "ChartResetBtn": "重置喵",
+      "ChartSeriesAp": "体力喵",
+      "ChartSeriesAsset": "资产喵",
+      "ChartSeriesDistance": "海里数喵",
+      "ChartSeriesPurple": "紫币喵",
+      "ChartSeriesYellow": "黄币喵",
+      "ChartSource": "来源喵: ",
+      "ChartYellow": "黄币喵: ",
+      "ExtractAlreadyLocal": "当前背景已经是本地图片，无需提取喵。",
+      "ExtractDone": "已提取到 bg/{sub}/{name} 喵",
+      "ExtractFailed": "提取失败喵：{error}",
+      "ExtractHint": "提取只是存放，不会自动当背景喵；想用请移到 bg/。",
+      "ExtractNoImage": "当前没有可提取的背景图喵。",
+      "ExtractNoImageData": "没有可提取的图片喵",
+      "ExtractRunning": "正在提取喵…",
+      "ExtractSkipped": "这张图之前已经提取过了喵：{name}",
+      "ExtractUnknownError": "未知错误喵",
+      "MaterialAdvancedOnly": "仅高级材质生效喵",
+      "MaterialBlur": "磨砂喵",
+      "MaterialCards": "卡片喵",
+      "MaterialReset": "重置喵",
+      "MaterialTiles": "贴片喵",
+      "MaterialTitle": "界面材质喵",
+      "MaterialTransparency": "透明喵",
+      "Readme": "把图片放进这个文件夹即可作为 WebUI 背景喵。\n支持：{{exts}}\n放多张会随机选取一张喵。\n\n子文件夹「{{sub}}」存放界面上点【提取】下载的图片喵，\n和你手动放进来的图片分开，页面上会标明每张图的来源。\n本文件可删除，不影响功能喵。\n",
+      "ScreenshotPreviewBtn": "截图预览喵"
     },
     "Tactical": {
       "SkillAutoSwitch": "技能自动切换喵"

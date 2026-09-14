@@ -122,7 +122,8 @@ Emulator:
       ]
   ControlMethod:
     value: MaaTouch
-    option: [ADB, uiautomator2, minitouch, Hermit, MaaTouch]
+    option: [ADB, uiautomator2, minitouch, Hermit, MaaTouch, nemu_ipc]
+    help: nemu_ipc 需与截图方式配套使用（截图选 nemu_ipc 时启动会自动联动）。注意：nemu_ipc 触控走模拟器内部 RPC，低性能电脑上滑动易丢步、拖拽易变形，调用偶发挂死会丢失点击；滑动或拖拽异常时请改回 minitouch / MaaTouch。
   GameSettings:
     type: checkbox
     value: false
@@ -420,16 +421,19 @@ OperationHandover:
   OilLimit:
     value: 1000
     validate: [0, 999999]
-  ConsumeAllBookRecord:
-    type: stored
-    value: ""
-    display: hide
+  # 一键消耗上一次实际执行的时间。落在本周内就表示本周不用再触发，
+  # 清空或改成上周及更早会让本周的一键消耗重新生效。用可见的 datetime
+  # 而不是隐藏的 stored，就是为了能手动改这个状态
+  ConsumeAllBookRecord: 2020-01-01 00:00:00
   CommissionEnd:
     type: stored
     value: "2020-01-01 00:00:00"
     display: hide
 StopCondition:
   OilLimit: 1000
+  # 石油停止下限：实际停止阈值为 max(下限, OilLimit)，历史遗留的 500 安全网。
+  # 低耗监工希望把油打到更低时可以调小（#444）
+  OilLimitHardFloor: 500
   CoinLimit: 0
   RunCount: 0
   MapAchievement:
@@ -776,6 +780,10 @@ Commission:
   CommissionNotifyRewardStatistics:
     type: checkbox
     value: true
+  DetectShipDrop:
+    type: checkbox
+    value: false
+    option: [true, false]
   GemNotify:
     type: checkbox
     value: true
@@ -833,6 +841,7 @@ Research:
       - series_8_blueprint_305
       - series_8_blueprint_only
       - series_8_305_only
+      - series_8_305_e_first
       - series_7_blueprint_la9
       - series_7_blueprint_only
       - series_7_la9_only

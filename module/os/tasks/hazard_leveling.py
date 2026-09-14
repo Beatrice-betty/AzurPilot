@@ -70,7 +70,7 @@ class OpsiHazard1Leveling(CoinTaskMixin, OSMap):
         self.config.OpsiHazard1_PreviousApInsufficient = _previous_ap_insufficient
 
     def _cl1_run_battle(self):
-        """执行侵蚀 1 战后的战略搜索与扫荡逻辑"""
+        """执行侵蚀 1 战后的战略搜索与事件检索逻辑"""
         search_completed = self.run_strategic_search()
 
         if not search_completed and search_completed is not None:
@@ -187,8 +187,11 @@ class OpsiHazard1Leveling(CoinTaskMixin, OSMap):
             raise
 
         # 侵蚀 1 练级时，行动力优先用于此任务，而非耄耋相接。
+        # 防溢出：当前行动力 100-119 时直接开工不开启行动力箱；
+        # 低于 100 时开箱后达到或超过 200 满值的箱子不开启。
         self.action_point_set(
-            cost=120, keep_current_ap=True, check_rest_ap=True
+            cost=120, keep_current_ap=True, check_rest_ap=True,
+            avoid_ap_overflow=True,
         )
 
         yellow_coins = self.get_yellow_coins()
@@ -773,7 +776,8 @@ class OpsiHazard1Leveling(CoinTaskMixin, OSMap):
                 record_ap_snapshot(
                     config=self.config,
                     ap_current=self._action_point_current,
-                    ap_total=self._action_point_total,
+                    # 统计口径使用始终含体力箱的总行动力，避免防溢出上下文关闭开箱后丢箱
+                    ap_total=getattr(self, '_action_point_total_with_box', self._action_point_total),
                     source='hazard1',
                     distance=sea_miles,
                 )

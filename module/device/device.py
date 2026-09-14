@@ -227,11 +227,9 @@ class Device(Screenshot, Control, AppControl, Input):
         from module.daemon.benchmark import Benchmark
         bench = Benchmark(config=self.config, device=self)
         method = bench.run_simple_screenshot_benchmark()
-        # 写入配置
+        # 写入配置（控制方式不做联动改写，尊重用户手动选择）
         with self.config.multi_set():
             self.config.Emulator_ScreenshotMethod = method
-            # if method == 'nemu_ipc':
-            #     self.config.Emulator_ControlMethod = 'nemu_ipc'
 
     def run_simple_ocr_benchmark(self):
         """
@@ -256,13 +254,6 @@ class Device(Screenshot, Control, AppControl, Input):
         """
         检查截图方式和控制方式的组合是否合法。
         """
-        # nemu_ipc 截图和控制必须配套使用
-        # if self.config.Emulator_ScreenshotMethod == 'nemu_ipc' and self.config.Emulator_ControlMethod != 'nemu_ipc':
-        #     logger.warning('When using nemu_ipc, both screenshot and control should use nemu_ipc')
-        #     self.config.Emulator_ControlMethod = 'nemu_ipc'
-        # if self.config.Emulator_ScreenshotMethod != 'nemu_ipc' and self.config.Emulator_ControlMethod == 'nemu_ipc':
-        #     logger.warning('When not using nemu_ipc, both screenshot and control should not use nemu_ipc')
-        #     self.config.Emulator_ControlMethod = 'minitouch'
         # Hermit 仅允许在 VMOS 上使用
         if self.config.Emulator_ControlMethod == 'Hermit' and not self.is_vmos:
             logger.warning('[设备-方法] 控制方式Hermit仅允许在VMOS上使用')
@@ -275,7 +266,7 @@ class Device(Screenshot, Control, AppControl, Input):
         # nemu_ipc 和 ldopengl 在非对应模拟器上回退到 auto
         if self.config.Emulator_ScreenshotMethod == 'nemu_ipc':
             if not (self.is_emulator and self.is_mumu_family):
-                logger.warning('[设备-方法] 截图方式nemu_ipc仅支持MuMu模拟器12，回退到auto')
+                logger.warning('[设备-方法] 截图方式nemu_ipc仅支持MuMu模拟器，回退到auto')
                 self.config.Emulator_ScreenshotMethod = 'auto'
         if self.config.Emulator_ScreenshotMethod == 'ldopengl':
             if not (self.is_emulator and self.is_ldplayer_bluestacks_family):
@@ -292,6 +283,15 @@ class Device(Screenshot, Control, AppControl, Input):
             logger.warning(f'[设备-方法] 截图方式{self.config.Emulator_ScreenshotMethod}仅支持Windows，'
                            f'回退到auto')
             self.config.Emulator_ScreenshotMethod = 'auto'
+
+        # nemu_ipc 控制不做强制配套，截图与控制通路相互独立，混搭（nemu_ipc 截图 +
+        # MaaTouch/minitouch 控制）完全可用且为推荐形态。
+        # 历史说明：上游 2024-04 曾加入强制配套（2a74c338a），三天后因「慢 PC 上
+        # nemu_ipc 滑动丢步（bad swipes on slow PC，76da1ce13）」注释弃用。本仓库
+        # 短暂恢复过强制联动，实测会静默覆盖用户手动选择的 MaaTouch，故再次取消。
+        # nemu_ipc 控制保留为 ControlMethod 可选项（帮助文本含警告）：其触控走模拟器
+        # 内部 RPC，低性能电脑上滑动易丢步、拖拽易变形，调用偶发挂死会丢失点击；
+        # 是否使用由用户自行决定，出现滑动/拖拽异常时换回 minitouch/MaaTouch 即可。
 
     def handle_night_commission(self, daily_trigger='21:00', threshold=30):
         """
