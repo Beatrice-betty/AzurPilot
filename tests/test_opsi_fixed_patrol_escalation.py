@@ -233,5 +233,164 @@ class TestAnyFleetFleetOrder(unittest.TestCase):
         self.assertEqual(stub.fleet_sets, [1, 2, 3])
 
 
+class RecoveryStub:
+    """只提供 `_recover_unreachable_akashi` 需要的属性。"""
+
+    # 标记逻辑是真实实现（类属性默认 set 是实例共享的，注释里写明了要重新赋值）
+    _mark_event_unreachable = OSMap._mark_event_unreachable
+
+    def __init__(self, other_fleet_succeeds=False, unreachable_nodes=None):
+        self.other_fleet_succeeds = other_fleet_succeeds
+        self._unreachable_event_nodes = set(unreachable_nodes or ())
+        self._solved_map_event = set()
+        self.force_move_calls = 0
+
+    def _goto_akashi_with_other_fleets(self, drop=None):
+        if self.other_fleet_succeeds:
+            self._solved_map_event.add('is_akashi')
+        return self.other_fleet_succeeds
+
+    def _execute_fixed_patrol_scan(self, ExecuteFixedPatrolScan=False, **kwargs):
+        self.force_move_calls += 1
+
+
+class TestRecoverUnreachableAkashi(unittest.TestCase):
+    def test_other_fleet_succeeds_skips_force_move(self):
+        """换队就买到了 -> 不再触发强制移动。"""
+        stub = RecoveryStub(other_fleet_succeeds=True)
+        self.assertTrue(OSMap._recover_unreachable_akashi(stub, None, 'B7'))
+        self.assertEqual(stub.force_move_calls, 0)
+
+    def test_all_fleets_fail_triggers_force_move_and_marks(self):
+        """全队都到不了 -> 触发强制移动，并记下这一格避免重复重跑。"""
+        stub = RecoveryStub(other_fleet_succeeds=False)
+        self.assertFalse(OSMap._recover_unreachable_akashi(stub, None, 'B7'))
+        self.assertEqual(stub.force_move_calls, 1)
+        self.assertIn('B7', stub._unreachable_event_nodes)
+
+    def test_second_call_on_same_node_is_skipped(self):
+        """整图重扫的另一个摄像机视野再遇到同一格 -> 直接跳过。"""
+        stub = RecoveryStub(other_fleet_succeeds=False)
+        OSMap._recover_unreachable_akashi(stub, None, 'B7')
+        self.assertFalse(OSMap._recover_unreachable_akashi(stub, None, 'B7'))
+        self.assertEqual(stub.force_move_calls, 1)
+
+    def test_other_node_is_still_tried(self):
+        """同一轮里另一个格子的事件照常处理。"""
+        stub = RecoveryStub(other_fleet_succeeds=False, unreachable_nodes=['B7'])
+        self.assertFalse(OSMap._recover_unreachable_akashi(stub, None, 'C3'))
+        self.assertEqual(stub.force_move_calls, 1)
+
+
+class RescanOnceStub:
+    """只提供 `map_rescan_once` 需要的属性。"""
+
+    def __init__(self):
+        self._unreachable_event_nodes = {'B7'}
+
+    def map_data_init(self, map_=None):
+        pass
+
+    def handle_info_bar(self):
+        pass
+
+    def update(self):
+        pass
+
+    def map_rescan_current(self, drop=None):
+        return True
+
+
+class TestUnreachableNodesReset(unittest.TestCase):
+    def test_new_rescan_pass_gives_every_event_another_chance(self):
+        """新一轮重扫要清空“到不了”记录，否则上一轮判定会一直挡着。"""
+        stub = RescanOnceStub()
+        OSMap.map_rescan_once(stub, rescan_mode='full')
+        self.assertEqual(stub._unreachable_event_nodes, set())
+
+
+class DeviceStub:
+    """只提供 `_goto_scanning_device_with_other_fleets` 需要的属性。"""
+
+    def __init__(self, view_finds_device, radar_finds_device, confirm_on_fleet=None):
+        self.current = 1
+        self.view_finds_device = view_finds_device
+        self.radar_finds_device = radar_finds_device
+        # 指定“切到第几支舰队时装置对话被触发”；None 表示全都触发不了
+        self.confirm_on_fleet = confirm_on_fleet
+        self.last_fleet = None
+        self.config = SimpleNamespace(temporary=lambda **kwargs: nullcontext())
+        self.fleet_selector = SimpleNamespace(get=lambda: self.current)
+        self.device = SimpleNamespace(screenshot=lambda: None, click=lambda grid: None)
+        self.is_siren_device_confirmed = False
+        self.fleet_sets = []
+
+    def fleet_set(self, index=1):
+        self.fleet_sets.append(index)
+        self.last_fleet = index
+        return True
+
+    def update_os(self):
+        pass
+
+    @property
+    def view(self):
+        return SimpleNamespace(
+            predict=lambda: None,
+            select=lambda **kwargs: (
+                SelectedStub([make_device_grid()]) if self.view_finds_device else SelectedStub([])
+            ),
+        )
+
+    def _radar_question_to_local(self):
+        return make_device_grid() if self.radar_finds_device else None
+
+    def wait_until_walk_stable(self, **kwargs):
+        if self.confirm_on_fleet is not None and self.last_fleet == self.confirm_on_fleet:
+            self.is_siren_device_confirmed = True
+        return ''
+
+
+class SelectedStub(list):
+    @property
+    def count(self):
+        return len(self)
+
+
+def make_device_grid():
+    return SimpleNamespace(is_scanning_device=True)
+
+
+class TestDeviceOtherFleets(unittest.TestCase):
+    def run_goto(self, stub):
+        result = OSMap._goto_scanning_device_with_other_fleets(stub)
+        return stub, result
+
+    def test_view_detection_confirms_device(self):
+        """视野里看得到装置 -> 直接用视野定位。"""
+        stub = DeviceStub(True, False, confirm_on_fleet=2)
+        self.run_goto(stub)
+        self.assertTrue(stub.is_siren_device_confirmed)
+
+    def test_radar_fallback_when_view_misses_device(self):
+        """视野识别不到装置（图标被舰队模型挡住）-> 回退用雷达问号，仍然点到。"""
+        stub = DeviceStub(False, True, confirm_on_fleet=2)
+        _, result = self.run_goto(stub)
+        self.assertTrue(result)
+        self.assertTrue(stub.is_siren_device_confirmed)
+
+    def test_gives_up_when_neither_view_nor_radar_finds_it(self):
+        """视野和雷达都没有装置 -> 全部跳过，返回 False。"""
+        stub = DeviceStub(False, False)
+        _, result = self.run_goto(stub)
+        self.assertFalse(result)
+
+    def test_restores_original_fleet(self):
+        """无论成败都恢复原舰队。"""
+        stub = DeviceStub(False, False)
+        self.run_goto(stub)
+        self.assertEqual(stub.fleet_sets[-1], 1)
+
+
 if __name__ == '__main__':
     unittest.main()
