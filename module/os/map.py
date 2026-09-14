@@ -1243,7 +1243,8 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
             bool: 是否清理了问号。
         """
         logger.hr("清除问号", level=2)
-        for _ in range(3):
+        attempts = 3
+        for _ in range(attempts):
             grid = self.radar.predict_question(
                 self.device.image, in_port=self.zone.is_port
             )
@@ -1377,8 +1378,12 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
 
                 return True
 
+        # 连续 attempts 次都在雷达上看到问号却没清掉：舰队根本到不了
+        #（视频实测游戏提示“目标点超出移动范围”）。记下来交给上层换其他
+        # 舰队去点，全部点不到时再由强制移动升级为保守模式。
+        self._question_unreachable = True
         logger.warning(
-            "[大世界-地图] 前往问号5次尝试失败, "
+            f"[大世界-地图] 前往问号{attempts}次尝试失败, "
             "可能是相邻双舰队机关, 已停止"
         )
         return False
@@ -1394,6 +1399,10 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
         若只是清掉普通问号，则先做一次全图扫描把清问号后才显现的事件捞出来，
         仍无所获才切换下一支舰队，直到找到目标或扫完所有舰队。
 
+        整轮结束后 `self._question_unreachable` 表示「有舰队看到了问号却清不掉」：
+        换舰队点是为了解决这种情况，但它解决不了所有情况（比如目标本来就超出
+        所有舰队的移动范围），调用方据此升级到保守模式。
+
         Args:
             drop: 掉落记录对象。
 
@@ -1403,6 +1412,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
         logger.hr("[大世界] 遍历舰队查找问号", level=2)
         primary = self.config.OpsiFleet_Fleet
         fleets = [primary] + [f for f in [1, 2, 3, 4] if f != primary]
+        self._question_unreachable = False
         for fleet in fleets:
             try:
                 self.fleet_set(fleet)
@@ -1513,6 +1523,11 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
 
     _solved_map_event = set()
     _solved_fleet_mechanism = 0
+    # 是否有舰队在雷达上看到了问号却怎么也到不了（多为“目标点超出移动范围”，
+    # 即被其他舰队挡住/海域移动次数耗尽）。由 clear_question 置位，
+    # clear_question_any_fleet 复位，_execute_fixed_patrol_scan 据此决定
+    # 效率模式要不要升级为保守模式。
+    _question_unreachable = False
 
     def run_strategic_search(self):
         """
@@ -1629,7 +1644,15 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
                             self._execute_fixed_patrol_scan(ExecuteFixedPatrolScan=True)
                             return False
                     else:
-                        logger.info("[大世界-事件] 无地图事件")
+                        # 明石在视图里“消失”了：刚才明明点过它却没能触发商店，
+                        # 说明当前舰队到不了。明石图标会被舰队模型遮住，视图检测
+                        # 本来就会闪断，不能因为没有重新识别到就当没事发生，否则
+                        # 这一次点击白费、这只猫直接漏掉。照旧换舰队再试。
+                        logger.info("[大世界] 明石未被重新识别，尝试换舰队前往")
+                        if self._goto_akashi_with_other_fleets(drop=drop):
+                            return True
+                        logger.info("[大世界] 所有舰队均无法到达明石，执行强制移动")
+                        self._execute_fixed_patrol_scan(ExecuteFixedPatrolScan=True)
                         return False
             else:
                 logger.info(f"[大世界-搜索] 明石 ({grid}) 靠近当前舰队 ({fleet})")
@@ -2077,7 +2100,9 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
         按“强制移动等级”执行：
         等级 0：关闭，不做任何强制移动；
         等级 1（效率模式）：只切换舰队看雷达找问号，一支舰队都不挪动，速度最快；
-                 找到明石/记录塔/装置就处理，找不到就罢手（图快省事）。
+                 找到明石/记录塔/装置就处理，找不到就罢手（图快省事）；
+                 但如果所有舰队都在雷达上看到了问号却谁都快不到，会升级为
+                 保守模式（不挪舰队解决不了这种“漏猫”）。
         等级 2（保守模式）：先只扫雷达不挪动，扫不到就逐个挪动舰队再整图重扫；
                  找到就停，更稳更全，但会挪动舰队、慢一些（分 L1/L2/L3 三段）：
                  L1 仅主队（CL 舰队）清问号后全图扫，命中即回；
@@ -2119,10 +2144,17 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
             if level == 1:
                 # 效率模式：只切换舰队看雷达找问号（零移动，一支都不挪动）
                 # 命中即处理，未命中即止，不做任何强制移动。
+                # 唯一例外：确实有舰队在雷达上看到了问号却怎么都到不了，
+                # 换舰队也点不到——这种局面不挪舰队解决不了（明石图标压在了
+                # 别的舰队底下），此时升级为保守模式把舰队挪开再扫。
                 logger.hr("[大世界] 效率模式（仅切换舰队看雷达，不移动）")
                 self._solved_map_event = set()
                 self._solved_fleet_mechanism = False
-                self.clear_question_any_fleet()
+                if not self.clear_question_any_fleet() and self._question_unreachable:
+                    logger.info(
+                        "[大世界] 所有舰队都看到了问号却无法到达，升级为保守模式"
+                    )
+                    self._execute_akashi_recovery()
             elif level == 2:
                 self._execute_akashi_recovery()
         finally:
@@ -2347,14 +2379,44 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
             except Exception as e:
                 logger.warning(f"[大世界] 自律寻敌过程出现异常: {e}")
 
+    def _radar_question_to_local(self):
+        """把当前舰队雷达上的问号换算成本地视野里可点击的格子。
+
+        明石/记录塔/装置刷新在舰队模型附近时图标会被挡住，视图的模板匹配
+        会闪断，雷达小地图上的白色问号是纯颜色检测，稳定得多。视图里找不到
+        目标事件时用本方法兜底定位（`clear_question` 一直就是这么找问号的）。
+
+        Returns:
+            OSGrid: 本地视野中的格子；雷达上没有问号，或问号越界到地图外时
+                返回 None。
+        """
+        try:
+            radar_grid = self.radar.predict_question(
+                self.device.image, in_port=self.zone.is_port
+            )
+        except Exception as e:
+            logger.warning(f"[大世界-搜索] 雷达问号检测异常: {e}")
+            return None
+        if radar_grid is None:
+            return None
+        try:
+            return self.convert_radar_to_local(radar_grid)
+        except KeyError:
+            logger.warning(f"[大世界-搜索] 雷达问号 {radar_grid} 越界到地图外，忽略")
+            return None
+
     def _goto_akashi_with_other_fleets(self, drop=None):
         """当前舰队无法到达明石时，逐队切换其他舰队尝试点击明石。
 
-        明石可见但行军失败（提示步数不足）通常是路径被其他闲置舰队挡住。
-        任意舰队都可以购买明石商店，因此依次切换其余舰队：若某队恰好在
-        明石旁边则直接购买，否则由该队点击明石尝试行军。任一队成功即止，
-        避免直接触发逐队定点的大规模强制移动。全部失败时恢复原舰队，
-        交回上层走强制移动兜底。
+        明石可见但行军失败（游戏提示“目标点超出移动范围”）通常是路径被其他
+        闲置舰队挡住/海域移动次数耗尽。任意舰队都可以购买明石商店，因此依次
+        切换其余舰队：若某队恰好在明石旁边则直接购买，否则由该队点击明石尝试
+        行军。任一队成功即止，避免直接触发逐队定点的大规模强制移动。全部失败
+        时恢复原舰队，交回上层走强制移动兜底。
+
+        明石图标常被舰队模型遮挡，视图检测会闪断，因此某队视野里找不到明石时
+        回退用该队雷达上的白色问号定位——这正是 `clear_question` 一直在用的
+        检测方式，比模板匹配稳。
 
         Args:
             drop: 掉落记录对象。
@@ -2371,12 +2433,20 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
                 self.update_os()
                 self.view.predict()
                 grids = self.view.select(is_akashi=True)
-                if not grids or not grids[0].is_akashi:
-                    logger.info(f"[大世界] 舰队 {fleet} 视野内没有明石，切换下一队")
-                    continue
-                grid = grids[0]
+                if grids and grids[0].is_akashi:
+                    grid = grids[0]
+                else:
+                    grid = self._radar_question_to_local()
+                    if grid is None:
+                        logger.info(f"[大世界] 舰队 {fleet} 视野内没有明石，切换下一队")
+                        continue
+                    logger.info(
+                        f"[大世界] 舰队 {fleet} 视野内未识别到明石，回退用雷达问号定位"
+                    )
                 fleet_loc = self.convert_radar_to_local((0, 0))
-                if fleet_loc.distance_to(grid) <= 1:
+                # “紧贴明石就直接购买”只在视图确认是明石时使用：雷达问号也可能是
+                # 记录塔/装置等其他事件，那些要点击行军才能触发，不能当商店点开。
+                if grid.is_akashi and fleet_loc.distance_to(grid) <= 1:
                     logger.info(f"[大世界] 明石 ({grid}) 靠近舰队 {fleet} ({fleet_loc})，直接购买")
                     self.handle_akashi_supply_buy(grid)
                     self._solved_map_event.add("is_akashi")
