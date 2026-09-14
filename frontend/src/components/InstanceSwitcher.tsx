@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Check, ChevronDown, Plus, Ship } from 'lucide-react'
 import { useApp, useConnection } from '../app/context'
 
@@ -34,9 +34,14 @@ export function InstanceSwitcher({onCreate}: {onCreate: () => void}) {
     const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (current + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length
     items[next]?.focus()
   }}>
-    <button ref={trigger} className="instance-switcher" aria-label="切换实例" aria-haspopup="menu" aria-expanded={open} aria-controls="instance-menu" onClick={() => setOpen(!open)}>
-      <span className="instance-caption"><strong>{instance}</strong></span><ChevronDown size={12}/>
-    </button>
+    <div className="instance-switcher">
+      <Link className="instance-caption" to={`/i/${instance}/overview`} title="返回运行总览">
+        <strong>{instance}</strong>
+      </Link>
+      <button ref={trigger} type="button" className="instance-toggle" aria-label="切换实例" title="切换实例" aria-haspopup="menu" aria-expanded={open} aria-controls="instance-menu" onClick={() => setOpen(!open)}>
+        <ChevronDown size={12}/>
+      </button>
+    </div>
     {open && <div className="instance-menu" id="instance-menu" role="menu" aria-label="配置实例">
       <div className="instance-options">{instances.map(item => <button key={item.name} role="menuitemradio" aria-checked={item.name === instance} onClick={() => {
         setOpen(false); trigger.current?.focus()

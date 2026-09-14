@@ -24,6 +24,13 @@ test('总览、配置实时更新与刷新持久化', async ({page}) => {
   await page.locator('.primary-nav').getByRole('link', {name: '资源统计', exact: true}).click()
   await expect(page.getByRole('heading', {name: '资源统计', exact: true})).toBeVisible()
   await expect(page.getByText('这段时间没有有效记录')).toBeVisible()
+  await page.locator('.breadcrumb .instance-caption').click()
+  await expect(page).toHaveURL(/testpilot\/overview/)
+  await expect(page.locator('#instance-menu')).toHaveCount(0)
+  await page.getByRole('button', {name: '切换实例', exact: true}).click()
+  await expect(page.locator('#instance-menu')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('#instance-menu')).toHaveCount(0)
   expect(errors).toEqual([])
 })
 
