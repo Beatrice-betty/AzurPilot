@@ -19,18 +19,51 @@
 body {background: radial-gradient(ellipse at 12% 0%, #bcdcff40, transparent 48%), radial-gradient(ellipse at 90% 5%, #dbcfff30, transparent 42%), var(--bg); background-attachment: fixed}
 #root {isolation: isolate}
 .wallpaper {position: fixed; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(140deg, #aacfff24, #e4d5f624 60%, transparent)}
-.wallpaper img {width: 100%; height: 100%; object-fit: cover; opacity: .22}
-.wallpaper::after {content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent, var(--bg) 95%)}
-[data-theme='dark'] .wallpaper img {opacity: .16}
+.wallpaper img {width: 100%; height: 100%; object-fit: cover; opacity: .58}
+.wallpaper::after {content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 30%, color-mix(in srgb, var(--bg) 36%, transparent) 100%)}
+[data-theme='dark'] .wallpaper img {opacity: .42}
 .lucide {stroke-width: 1.75}
-.sidebar {background: var(--glass-tint); backdrop-filter: blur(24px) saturate(130%); -webkit-backdrop-filter: blur(24px) saturate(130%); border-right-color: var(--glass-edge); padding: 0 14px}
-.sidebar-brand {height: 88px; margin-bottom: 10px; padding: 0 10px}
+
+/* 桌面端三列采用悬浮圆角矩形，而不是贴边侧栏。 */
+.app-shell {padding: 14px; gap: 14px; align-items: start}
+.app-shell.with-rail {grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--right-rail-width)}
+.sidebar {
+  top: 14px;
+  height: calc(var(--viewport-height) - 28px);
+  background: var(--glass-tint);
+  backdrop-filter: blur(24px) saturate(130%);
+  -webkit-backdrop-filter: blur(24px) saturate(130%);
+  border: 1px solid var(--glass-edge);
+  border-radius: 26px;
+  box-shadow: var(--glass-shadow);
+  padding: 0 14px 14px;
+  overflow: visible;
+}
+.right-rail {
+  top: 14px;
+  height: calc(var(--viewport-height) - 28px);
+  background: var(--glass-tint);
+  backdrop-filter: blur(24px) saturate(130%);
+  -webkit-backdrop-filter: blur(24px) saturate(130%);
+  border: 1px solid var(--glass-edge);
+  border-radius: 26px;
+  box-shadow: var(--glass-shadow);
+  overflow: hidden;
+}
+.right-rail-header {border-bottom-color: color-mix(in srgb, var(--border) 64%, transparent)}
+.scheduler-widget {border-radius: 18px; background: color-mix(in srgb, var(--surface) 72%, transparent); border-color: color-mix(in srgb, var(--border) 70%, transparent); box-shadow: inset 0 1px 0 color-mix(in srgb, white 46%, transparent)}
+.scheduler-stats > div {border-radius: 14px}
+.rail-schedule {margin: 0 10px 10px; padding: 14px 4px 4px; border-top: 1px solid color-mix(in srgb, var(--border) 68%, transparent)}
+.rail-task-item {margin: 3px 0; padding: 9px 8px; border-bottom: 0; border-radius: 13px}
+.rail-task-item:hover {background: color-mix(in srgb, var(--surface) 72%, transparent)}
+.main-shell {min-width: 0; min-height: calc(var(--viewport-height) - 28px)}
+.sidebar-brand {height: 56px; margin-bottom: 10px; padding: 0 10px}
 .brand-title {font-size: 23px; letter-spacing: -.7px; gap: 10px}
 .brand-logo {width: 32px; height: 32px; border-radius: 9px}
 .primary-nav {gap: 5px; margin-bottom: 28px}
 .primary-nav a {min-height: 44px; border-radius: 12px; font-size: 14px; color: var(--text); gap: 12px}
 .primary-nav a svg {color: var(--accent); width: 20px; height: 20px}
-.primary-nav a.active {background: #0071e3; color: #fff; box-shadow: 0 3px 10px #0071e322}
+.primary-nav a.active {background: #0071e3; color: #fff; box-shadow: none}
 .primary-nav a.active svg {color: inherit}
 .sidebar-label {font-size: 12px; letter-spacing: 0; color: var(--muted); font-weight: 600}
 .task-group-button {min-height: 43px; font-size: 13px; border-radius: 11px; color: var(--text)}
@@ -41,7 +74,7 @@ body {background: radial-gradient(ellipse at 12% 0%, #bcdcff40, transparent 48%)
 .task-submenu-item.active .task-submenu-dot {box-shadow: none}
 .nav-search {border-radius: 10px; background: var(--surface-muted); color: var(--muted)}
 .nav-search input {font-size: 13px; min-height: 38px}
-.topbar {margin: 12px 24px 0; top: 12px; height: 56px; padding: 0 18px; border: 1px solid var(--glass-edge); border-radius: 22px; background: transparent; box-shadow: var(--glass-shadow); isolation: isolate}
+.topbar {margin: 0 24px; top: 14px; height: 56px; padding: 0 18px; border: 1px solid var(--glass-edge); border-radius: 26px; background: transparent; box-shadow: var(--glass-shadow); isolation: isolate}
 .topbar > :not(.glass-material), .title-actions > :not(.glass-material) {position: relative; z-index: 1}
 .breadcrumb {font-size: 13px; gap: 10px}
 .breadcrumb .instance-caption strong {font-size: 13px}
@@ -61,8 +94,8 @@ main:focus {outline: none}
 .glass-material-lens > .glass {width: 100%; height: 100%; border-radius: inherit !important; box-shadow: inset 0 1px 0 var(--glass-edge) !important}
 .glass-material-lens .glass__warp {border-radius: inherit}
 .glass-material-lens > svg {inset: 0; max-width: 100%; max-height: 100%}
-.button {height: 40px; padding: 0 17px; border-radius: 20px; font-size: 13px; font-weight: 600; transition: background .18s, box-shadow .18s}
-.button.primary, [data-theme='dark'] .button.primary {background: #0071e3; color: white; box-shadow: 0 2px 8px #0071e31a}
+.button {height: 40px; padding: 0 17px; border-radius: 20px; font-size: 13px; font-weight: 600; transition: background .18s, color .18s; box-shadow: none}
+.button.primary, [data-theme='dark'] .button.primary {background: #0071e3; color: white; box-shadow: none}
 .button.primary:hover:not(:disabled) {background: #0062c4; transform: none}
 .button.secondary {background: var(--surface); color: var(--text); border-color: var(--border)}
 .button.danger {background: #c9342c}
@@ -70,7 +103,15 @@ main:focus {outline: none}
 .button:active:not(:disabled) {filter: brightness(.94)}
 .icon-button {width: 36px; height: 36px; border-radius: 50%; color: var(--muted)}
 .text-button {font-size: 12px; min-height: 36px; padding: 6px 8px}
-.panel, .resource-card, .summary-metrics section {border-radius: 20px; border-color: color-mix(in srgb, var(--border) 65%, transparent); box-shadow: var(--shadow)}
+.panel, .resource-card, .summary-metrics section {
+  background: var(--glass-tint);
+  backdrop-filter: blur(24px) saturate(130%);
+  -webkit-backdrop-filter: blur(24px) saturate(130%);
+  border: 1px solid var(--glass-edge);
+  border-radius: 26px;
+  box-shadow: var(--glass-shadow);
+}
+
 .panel-heading {min-height: 62px; padding: 18px 22px}
 .panel-heading h2 {font-size: 15px; font-weight: 650}
 .panel-heading > div > svg {color: var(--accent)}
@@ -90,14 +131,37 @@ main:focus {outline: none}
 .task-row time {font-size: 11px; color: var(--muted)}
 .task-row-name strong {font-size: 13px; font-weight: 550}
 .schedule-summary {font-size: 12px}
-.monitor-tabs {height: 64px; padding: 10px 16px; gap: 4px}
-.monitor-tabs button {height: 36px; padding: 0 16px; border: 0; border-radius: 18px; color: var(--muted); font-size: 13px}
-.monitor-tabs button[aria-selected='true'] {background: var(--accent-soft); color: var(--accent); border: 0; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent)}
-.monitor-tabs > span {font-size: 11px}
+.monitor-tabs {height: 64px; padding: 10px 16px; gap: 10px; display: flex; align-items: center; border-bottom: 1px solid color-mix(in srgb, var(--glass-edge) 54%, var(--border))}
+.monitor-segmented {position: relative; display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 999px; background: #e6e6e6; border: 1px solid #d2d2d2; box-shadow: none; overflow: hidden; transform: translateX(-2px)}
+.monitor-segmented::before {content: ''; position: absolute; top: 3px; left: 3px; width: 92px; height: 34px; border-radius: 999px; background: #f3f3f3; transform: translateX(0); transition: transform .24s cubic-bezier(.22,.61,.36,1); pointer-events: none}
+.monitor-segmented.preview::before {transform: translateX(94px)}
+.monitor-segmented button {position: relative; z-index: 1; width: 92px; height: 34px; padding: 0 15px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 550; box-sizing: border-box; cursor: pointer; transition: color .18s}
+.monitor-segmented button:hover {color: var(--text)}
+.monitor-segmented button[aria-selected='true'] {background: transparent; color: var(--text); box-shadow: none}
+.monitor-segmented button:active {filter: brightness(.94)}
+.monitor-segmented svg {stroke-width: 1.7}
+.monitor-tabs > a.text-button {margin-left: auto}
+[data-theme='dark'] .monitor-segmented {background: color-mix(in srgb, var(--surface) 44%, transparent); border-color: color-mix(in srgb, var(--border) 72%, transparent); box-shadow: none}
+[data-theme='dark'] .monitor-segmented::before {background: color-mix(in srgb, #8a8a8f 34%, var(--surface))}
+[data-theme='dark'] .monitor-segmented button[aria-selected='true'] {background: transparent; color: #f2f2f7; box-shadow: none}
 .monitor-panel .log-content {font-size: 12px; line-height: 1.8}
+.monitor-panel .log-content {
+  background: color-mix(in srgb, var(--surface) 30%, transparent);
+}
+.monitor-panel .log-filters,
+.monitor-panel .log-panel .panel-heading {
+  background: color-mix(in srgb, var(--surface) 18%, transparent);
+  border-color: color-mix(in srgb, var(--glass-edge) 54%, var(--border));
+}
+.monitor-panel .log-panel {
+  background: transparent;
+  box-shadow: none;
+  border: 0;
+  border-radius: inherit;
+}
 .statistics-tabs {border: 0; border-radius: 22px; background: var(--surface-muted); padding: 5px; gap: 4px; width: fit-content; max-width: 100%}
 .statistics-tabs button {border: 0; border-radius: 18px; background: transparent; font-size: 13px; min-height: 40px}
-.statistics-tabs button.active {background: var(--surface); color: var(--accent); box-shadow: 0 2px 7px #0000000d}
+.statistics-tabs button.active {background: var(--surface); color: var(--accent); box-shadow: none}
 .statistics-note {border-left-color: var(--accent); border-radius: 12px}
 .group-nav {border: 0; padding: 6px; gap: 3px; border-radius: 16px; background: var(--surface-muted)}
 .group-nav a {border-radius: 10px}
@@ -142,10 +206,44 @@ input, select, textarea {border-radius: 10px; min-height: 40px; background: var(
 .login-card .brand-mark {background: transparent; margin-bottom: 4px}
 .skip-link {position: fixed; top: -100px; left: 16px; z-index: 200; background: var(--surface); color: var(--accent); padding: 14px; border-radius: 12px}
 .skip-link:focus {top: 12px}
+
+/* 右侧任务计划：用中性材质深度表达队列层级，不使用状态色。 */
+.rail-section-heading {font-size: 12px}
+.rail-section-heading > div {font-size: 13px}
+.rail-section-heading > span {font-size: 10px}
+.rail-task-list {display: flex; flex-direction: column; gap: 12px; padding: 2px 2px 8px}
+.rail-queue-group {flex: 0 0 auto; overflow: hidden; border-radius: 18px; transition: background .18s, border-color .18s, box-shadow .18s}
+.rail-queue-group.running {background: color-mix(in srgb, var(--surface) 94%, transparent); border: 1px solid color-mix(in srgb, var(--glass-edge) 90%, var(--border)); box-shadow: 0 8px 24px #1d1d1f0a, inset 0 1px 0 color-mix(in srgb, #fff 72%, transparent)}
+.rail-queue-group.pending {background: color-mix(in srgb, var(--surface) 72%, transparent); border: 1px solid color-mix(in srgb, var(--border) 64%, transparent); box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 44%, transparent)}
+.rail-queue-group.waiting {background: color-mix(in srgb, var(--surface) 46%, transparent); border: 1px solid color-mix(in srgb, var(--border) 42%, transparent); box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 24%, transparent)}
+.rail-queue-heading {min-height: 42px; padding: 9px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent)}
+.rail-queue-heading > div {display: flex; align-items: center; gap: 8px; min-width: 0}
+.rail-queue-heading strong {font-size: 12px; font-weight: 650}
+.rail-queue-group.pending .rail-queue-heading strong {font-weight: 600}
+.rail-queue-group.waiting .rail-queue-heading strong {font-weight: 550; color: color-mix(in srgb, var(--text) 72%, var(--muted))}
+.rail-queue-heading > span {min-width: 25px; height: 22px; display: grid; place-items: center; padding: 0 7px; border-radius: 999px; background: color-mix(in srgb, var(--surface) 74%, transparent); color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; border: 1px solid color-mix(in srgb, var(--border) 46%, transparent)}
+.rail-queue-heading svg {color: color-mix(in srgb, var(--text) 72%, var(--muted)); stroke-width: 1.7}
+.rail-queue-group.pending .rail-queue-heading svg {color: color-mix(in srgb, var(--text) 58%, var(--muted))}
+.rail-queue-group.waiting .rail-queue-heading svg {color: var(--muted)}
+.rail-queue-body {padding: 5px}
+.rail-task-item {grid-template-columns: minmax(0, 1fr) auto 13px; min-height: 58px; margin: 2px 0; padding: 10px 10px 10px 12px; border-radius: 13px}
+.rail-task-item:hover {background: color-mix(in srgb, var(--surface) 86%, transparent)}
+.rail-task-item strong {font-size: 13px; line-height: 1.35}
+.rail-task-item small {margin-top: 3px; font-size: 11px; line-height: 1.35}
+.rail-task-item .task-state {display: inline-flex; align-items: center; gap: 5px; font-size: 10px; padding: 4px 7px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--border) 46%, transparent); background: color-mix(in srgb, var(--surface) 72%, transparent); color: var(--muted); font-weight: 550}
+.rail-task-item .task-state svg {stroke-width: 1.7}
+.rail-queue-group.running .task-state.running {background: color-mix(in srgb, var(--surface) 98%, transparent); color: var(--text); border-color: color-mix(in srgb, var(--border) 72%, transparent)}
+.rail-queue-group.pending .task-state.pending {background: color-mix(in srgb, var(--surface) 66%, transparent); color: color-mix(in srgb, var(--text) 72%, var(--muted))}
+.rail-queue-group.waiting .task-state.waiting {background: color-mix(in srgb, var(--surface) 38%, transparent); color: var(--muted)}
+.rail-queue-empty {padding: 16px 12px; color: var(--muted); font-size: 11px; text-align: center}
+[data-theme='dark'] .rail-queue-group.running {box-shadow: 0 8px 24px #0003, inset 0 1px 0 #ffffff12}
+[data-theme='dark'] .rail-queue-group.pending {box-shadow: inset 0 1px 0 #ffffff0b}
+[data-theme='dark'] .rail-queue-group.waiting {box-shadow: inset 0 1px 0 #ffffff06}
 @media (max-width: 950px) {
   :root {--topbar-height: 76px}
-  .sidebar {width: 232px; left: -250px}
-  .topbar {margin: 10px 12px 0; top: 10px; padding: 0 10px; height: 56px; gap: 6px}
+  .sidebar {width: 232px; left: -250px; top: 10px; height: calc(var(--viewport-height) - 20px)}
+  .sidebar-brand {height: 56px; min-height: 56px}
+  .topbar {margin: 10px 12px 0; top: 10px; padding: 0 10px; height: 56px; min-height: 56px; gap: 6px}
   main {padding: 28px 18px}
   .breadcrumb {font-size: 12px; gap: 6px}
   .page-title {gap: 18px}
@@ -154,11 +252,12 @@ input, select, textarea {border-radius: 10px; min-height: 40px; background: var(
   .icon-button {width: 44px; height: 44px}
   .task-group-button, .task-submenu-item {min-height: 44px}
   .sidebar-label .icon-button {width: 36px; height: 36px}
-  .mobile-close {top: 22px}
+  .mobile-close {top: 6px}
   .statistics-tabs {width: 100%}
   .statistics-tabs button {flex: 1 0 auto; min-height: 44px}
-  .monitor-tabs button {min-height: 44px; padding: 0 12px}
   .monitor-tabs {height: 66px; padding: 8px 12px}
+  .monitor-segmented button {width: 92px; height: 40px; min-height: 40px; padding: 0 12px}
+  .monitor-segmented::before {height: 40px}
   .monitor-tabs .text-button {font-size: 11px}
   .monitor-tabs > span {font-size: 10px}
   .log-panel .panel-heading {flex-wrap: wrap; gap: 4px}
@@ -181,3 +280,4 @@ input, select, textarea {border-radius: 10px; min-height: 40px; background: var(
 @media (prefers-reduced-motion: reduce) {
   .glass-material-lens {display: none}
 }
+
