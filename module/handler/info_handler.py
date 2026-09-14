@@ -23,7 +23,7 @@ from module.base.button import Button
 from module.base.timer import Timer
 from module.base.utils import *
 from module.combat.assets import BATTLE_PREPARATION
-from module.exception import CampaignEnd, GameNotRunningError, ScriptEnd
+from module.exception import CampaignEnd, GameNotRunningError, GameTooManyClickError, ScriptEnd
 from module.handler.assets import *
 from module.logger import logger
 from module.os_handler.assets import CLICK_SAFE_AREA as OS_CLICK_SAFE_AREA
@@ -409,6 +409,10 @@ class InfoHandler(ModuleBase):
     _story_option_timer = Timer(2)
     _story_option_record = 0
     _story_option_confirm = Timer(0.3, count=0)
+    # 剧情选项连续点击数。选项点击不计入点击记录（见 story_skip），
+    # 由这个计数兜底检测剧情卡在选项画面不动的情况。
+    _story_option_click = 0
+    _story_option_click_limit = 12
 
     def _story_option_buttons(self):
         """
@@ -512,6 +516,10 @@ class InfoHandler(ModuleBase):
         - 塞壬探测装置：5 个选项（探测敌人/探测资源/离开），按 Siren_Mode 选择；
         - 塞壬信息收集装置 / 探测装置产物柱子：3 个选项，点中间选项即完成。
 
+        3 选项剧情并不都是塞壬装置：深渊 / 隐秘 / 要塞 / 跨月 用 STORY_OPTION=0
+        指定点第一项（解除封锁的强制确认，中间项是「查阅作战说明」），
+        因此显式指定了 STORY_OPTION 时按配置选择，只有自动选择（-2）才按柱子处理。
+
         Args:
             options: 检测到的剧情选项按钮列表。
 
@@ -548,7 +556,16 @@ class InfoHandler(ModuleBase):
                 return options[3]
 
         elif len(options) == 3:
-            # 塞壬信息收集装置 / 探测装置产物柱子：点中间选项完成
+            # 3 选项剧情的正确选项随海域而变，不能一律点中间项：
+            # - 深渊 / 隐秘 / 要塞 / 跨月 用 STORY_OPTION=0 指定点第一项，
+            #   例如深渊解除封锁的强制确认，中间项是「查阅作战说明」；
+            # - 大世界其余任务为 STORY_OPTION=-2（自动选择），3 选项时
+            #   即塞壬信息收集装置 / 探测装置产物柱子的「提交物品」。
+            story_option = self.config.STORY_OPTION
+            if 0 <= story_option < len(options):
+                logger.info(f'[Handler] [Story] 3 选项剧情，按 STORY_OPTION 选择第 {story_option + 1} 项')
+                return options[story_option]
+            # 未显式指定选项，按塞壬信息收集装置 / 柱子处理
             logger.info('[Handler] [Story] 塞壬信息收集装置/柱子，点中间选项完成')
             self.siren_device_mode = 'collected'
             return options[1]
@@ -561,15 +578,25 @@ class InfoHandler(ModuleBase):
 
         2023.09.14 剧情选项变更为中间大白色选项样式，
         通过 STORY_SKIP_3 检测但点击原始 STORY_SKIP。
+
+        剧情选项按钮名按「第几个/共几个」生成（如 STORY_OPTION_2_OF_3），
+        不同剧情段会共用同一个名字，连续处理多个装置时会被防连点机制
+        （两个按钮各 ≥6 次）误判为卡死，因此剧情点击后清空点击记录，
+        改由 _story_option_click 计数检测剧情停在选项画面不动的情况。
         """
         if self.story_popup_timeout.started() and not self.story_popup_timeout.reached():
             if self.handle_popup_confirm('STORY_SKIP'):
+                # 提交确认弹窗的按钮名（POPUP_CONFIRM_STORY_SKIP）同样在不同剧情段
+                # 复用，与选项一起清掉点击记录，避免被防连点机制误判为卡死
+                self.device.click_record_clear()
+                self._story_option_click = 0
                 self.story_popup_timeout = Timer(10)
                 self.interval_reset(STORY_SKIP_3)
                 self.interval_reset(STORY_LETTERS_ONLY)
                 return True
         if self._is_story_black():
             if self.appear_then_click(STORY_LETTERS_ONLY, offset=(20, 20), interval=2):
+                self._story_option_click = 0
                 self.story_popup_timeout.reset()
                 return True
         if self._story_option_timer.reached() and self.appear(STORY_SKIP_3, offset=(20, 20), interval=0):
@@ -597,6 +624,16 @@ class InfoHandler(ModuleBase):
                             select = options[0]
                     
                     self.device.click(select)
+                    # 选项按钮名按「第几个/共几个」生成，不同剧情段共用同一个名字，
+                    # 装置 / 柱子较多的海域会被防连点机制误判为「两个按钮交替点击」
+                    # 而报 GameTooManyClickError。因此剧情点击后清空点击记录，
+                    # 卡死检测改由连续点击数兜底：剧情一直停在选项画面才会报错。
+                    self.device.click_record_clear()
+                    self._story_option_click += 1
+                    if self._story_option_click >= self._story_option_click_limit:
+                        self._story_option_click = 0
+                        raise GameTooManyClickError(
+                            f'[处理器-剧情] 连续点击剧情选项 {self._story_option_click_limit} 次仍未推进，剧情可能卡住')
                     self._story_option_timer.reset()
                     self.story_popup_timeout.reset()
                     self.interval_reset(STORY_SKIP_3)
@@ -627,8 +664,11 @@ class InfoHandler(ModuleBase):
             else:
                 self.interval_clear(STORY_SKIP_3)
         else:
+            # 剧情选项画面消失，重置连续点击数
+            self._story_option_click = 0
             self._story_confirm.reset()
         if self.appear_then_click(STORY_CLOSE, offset=(10, 10), interval=2):
+            self._story_option_click = 0
             self.story_popup_timeout.reset()
             return True
 
