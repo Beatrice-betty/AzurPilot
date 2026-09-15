@@ -91,7 +91,6 @@ export function TaskConfig() {
           <Search size={17} />
           <input placeholder="搜索此任务的配置项…" aria-label="搜索配置项" value={search} onChange={event => setSearch(event.target.value)} />
         </div>
-        <span><Settings2 size={14} />{t(`Task.${task}.name`)}</span>
       </div>
       {task === 'FleetInfo' ? (
         <FleetInfo value={config.values.FleetInfo?.FleetInfo?.Result} />

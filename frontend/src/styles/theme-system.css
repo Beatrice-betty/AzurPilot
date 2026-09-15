@@ -302,12 +302,34 @@ button:focus-visible, a:focus-visible, summary:focus-visible {outline-color: var
 .yaml-editor:focus-within {border-color: var(--theme-accent)}
 
 /* Secondary surfaces and queue hierarchy inherit theme colors instead of literals. */
-.scheduler-widget, .schedule-summary, .group-nav, .nav-search, .input-icon, .count-badge {background: var(--theme-surface-muted); border-color: var(--theme-border)}
+.scheduler-widget, .schedule-summary, .nav-search, .input-icon, .count-badge {background: var(--theme-surface-muted); border-color: var(--theme-border)}
+.group-nav {
+  background: var(--theme-glass);
+  border: 1px solid var(--theme-glass-edge);
+  box-shadow: var(--theme-shadow-panel);
+  -webkit-backdrop-filter: blur(var(--theme-glass-blur)) saturate(var(--theme-glass-saturation));
+  backdrop-filter: blur(var(--theme-glass-blur)) saturate(var(--theme-glass-saturation));
+}
+.group-nav a {
+  color: var(--theme-nav-text);
+  font-weight: 500;
+  transition: color .16s ease, background-color .16s ease, box-shadow .16s ease;
+}
+.group-nav a:hover,
+.group-nav a:focus-visible {
+  color: var(--theme-text);
+  background: var(--theme-nav-hover-bg);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 28%, transparent);
+}
+.group-nav a:active {
+  color: var(--theme-nav-active-text);
+  background: var(--theme-nav-active-bg);
+}
 .rail-queue-group.running {background: color-mix(in srgb, var(--theme-surface) 94%, transparent); border-color: color-mix(in srgb, var(--theme-glass-edge) 90%, var(--theme-border))}
 .rail-queue-group.pending {background: color-mix(in srgb, var(--theme-surface) 72%, transparent); border-color: color-mix(in srgb, var(--theme-border) 64%, transparent)}
 .rail-queue-group.waiting {background: color-mix(in srgb, var(--theme-surface) 46%, transparent); border-color: color-mix(in srgb, var(--theme-border) 42%, transparent)}
 .rail-task-item:hover {background: color-mix(in srgb, var(--theme-surface) 86%, transparent)}
 
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
-  .glass-material, .sidebar, .right-rail, .instance-menu, .task-submenu-flyout, .panel, .resource-card {background: var(--theme-surface); -webkit-backdrop-filter: none; backdrop-filter: none}
+  .glass-material, .sidebar, .right-rail, .instance-menu, .task-submenu-flyout, .group-nav, .panel, .resource-card {background: var(--theme-surface); -webkit-backdrop-filter: none; backdrop-filter: none}
 }
