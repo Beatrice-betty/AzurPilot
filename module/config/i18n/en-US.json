@@ -374,13 +374,13 @@
       "name": "Weekly Pearl Trade",
       "help": "Only supports minitouch. Process pearls every Tuesday at 01:00."
     },
-    "FleetScan": {
-      "name": "Fleet Scan",
-      "help": "Scan ships assigned to fleets"
-    },
     "FleetInfo": {
       "name": "Fleet Information",
       "help": "View the latest fleet scan result"
+    },
+    "FleetScan": {
+      "name": "Fleet Scan",
+      "help": "Scan ships assigned to fleets"
     },
     "Daemon": {
       "name": "Semi-Auto Click",

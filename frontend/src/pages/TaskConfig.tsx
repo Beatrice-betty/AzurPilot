@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { Play, Search, Settings2, Ship } from 'lucide-react'
+import { useParams } from 'react-router-dom'
+import { Play, Search, Settings2, Ship, Terminal } from 'lucide-react'
 import { api } from '../api/client'
 import type { Config } from '../api/types'
 import { useApp, useConnection } from '../app/context'
 import { Empty, ErrorBox, Loading, Modal, PageTitle } from '../components/ui'
+import { LogPanel } from '../components/LogPanel'
 import { FieldInput } from '../components/FieldInput'
 import { RestrictedLuaEditor } from '../components/RestrictedLuaEditor'
 import { ShopStrategyHelp } from '../components/ShopStrategyHelp'
@@ -17,7 +18,6 @@ export function TaskConfig() {
   const {instance = '', task = ''} = useParams()
   const {schema, t, ui, notify, language} = useApp()
   const connection = useConnection()
-  const navigate = useNavigate()
   const [config, setConfig] = useState<Config>()
   const [search, setSearch] = useState('')
   const [error, setError] = useState('')
@@ -54,7 +54,6 @@ export function TaskConfig() {
     try {
       await queue.settled()
       await api.request('tasks.run', {instance, task})
-      navigate(`/i/${instance}/overview`)
       notify(ui('task.started'))
     } catch (error) {
       setError((error as Error).message)
@@ -74,7 +73,8 @@ export function TaskConfig() {
     return {group, visible}
   }).filter(({visible}) => visible.length)
 
-  const tool = Object.values(schema?.menu ?? {}).some(group => group.page === 'tool' && group.tasks.includes(task)) || task === 'FleetScan'
+  const tool = Object.values(schema?.menu ?? {}).some(group => group.page === 'tool' && group.tasks.includes(task))
+  const showConfigToolbar = task !== 'FleetInfo' && Boolean(groups) && (visibleGroups.length > 0 || Boolean(search))
 
   if (!config) return error ? <ErrorBox message={error} retry={reload} /> : <Loading />
 
@@ -82,25 +82,20 @@ export function TaskConfig() {
     <>
       <PageTitle
         title={t(`Task.${task}.name`)}
-        actions={tool ? (
-          <button className="button secondary" onClick={() => setConfirmRun(true)} disabled={busy || connection !== 'ready'}>
-            <Play size={16} />{ui('task.runTool')}
-          </button>
-        ) : undefined}
       />
       {error && <ErrorBox message={error} retry={reload} />}
       {storageError && <ErrorBox message={storageError} />}
-      <div className="config-toolbar">
+      {showConfigToolbar && <div className="config-toolbar">
         <div className="input-icon">
           <Search size={17} />
           <input placeholder={ui('task.searchConfigPlaceholder')} aria-label={ui('task.searchConfig')} value={search} onChange={event => setSearch(event.target.value)} />
         </div>
-      </div>
+      </div>}
       {task === 'FleetInfo' ? (
         <FleetInfo value={config.values.FleetInfo?.FleetInfo?.Result} />
-      ) : !groups ? (
-        <Empty icon={<Settings2 size={30} />} title={ui('task.noConfig')}>
-          {tool ? ui('task.toolCanRun') : ui('task.viewRelated')}
+      ) : !groups || !visibleGroups.length ? (
+        (search || !tool) && <Empty icon={<Settings2 size={30} />} title={ui('task.noConfig')}>
+          {search ? ui('task.tryOtherKeyword') : ui('task.viewRelated')}
         </Empty>
       ) : (
         <div className="config-layout">
@@ -206,6 +201,15 @@ export function TaskConfig() {
           </div>
         </div>
       )}
+      {tool && <section className="panel tool-log-panel" aria-label={ui('monitor.logs')}>
+        <div className="panel-heading">
+          <div><Terminal size={18}/><h2>{ui('monitor.logs')}</h2></div>
+          <button className="button primary" onClick={() => setConfirmRun(true)} disabled={busy || connection !== 'ready'}>
+            <Play size={16}/>{ui('task.runTool')}
+          </button>
+        </div>
+        <LogPanel />
+      </section>}
       {confirmRun && (
         <Modal title={ui('task.runTitle', {task: t(`Task.${task}.name`)})} onClose={() => setConfirmRun(false)}>
           <p>{ui('task.runWarning')}</p>

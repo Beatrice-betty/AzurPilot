@@ -18286,16 +18286,6 @@
       }
     }
   },
-  "FleetScan": {
-    "Storage": {
-      "Storage": {
-        "type": "storage",
-        "value": {},
-        "valuetype": "ignore",
-        "display": "disabled"
-      }
-    }
-  },
   "FleetInfo": {
     "FleetInfo": {
       "Result": {
@@ -18310,6 +18300,16 @@
         "display": "hide"
       }
     },
+    "Storage": {
+      "Storage": {
+        "type": "storage",
+        "value": {},
+        "valuetype": "ignore",
+        "display": "disabled"
+      }
+    }
+  },
+  "FleetScan": {
     "Storage": {
       "Storage": {
         "type": "storage",

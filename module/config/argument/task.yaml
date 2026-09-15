@@ -463,7 +463,6 @@ FleetManagement:
   menu: collapse
   page: setting
   tasks:
-    FleetScan: []
     FleetInfo:
       - FleetInfo
 
@@ -473,6 +472,7 @@ Tool:
   menu: collapse
   page: tool
   tasks:
+    FleetScan: []
     Daemon:
       - Daemon
     OpsiDaemon:

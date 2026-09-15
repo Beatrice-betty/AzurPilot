@@ -60,6 +60,42 @@ test('总览三态、资源搭配记忆、日志与被动截图切换', async ({
   await expect(page.locator('[id="Main.Emotion.Fleet1Record"]')).toHaveAttribute('readonly', '')
 })
 
+test('舰队扫描和半自动工具在当前页面显示运行日志', async ({page}) => {
+  for (const {instance, task, title} of [
+    {instance: 'demo-main', task: 'FleetScan', title: '舰队扫描'},
+    {instance: 'demo-alt', task: 'Daemon', title: '半自动点击'},
+  ]) {
+    const path = `/#/i/${instance}/task/${task}`
+    await page.goto(path)
+
+    const heading = page.locator('.page-title h1')
+    const logs = page.getByLabel('日志内容')
+    await expect(heading).toHaveAccessibleName(title)
+    await expect(logs).toBeVisible()
+    expect((await logs.boundingBox())!.y).toBeGreaterThan((await heading.boundingBox())!.y)
+
+    await page.getByRole('button', {name: '运行工具', exact: true}).click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+
+    let running = false
+    try {
+      await dialog.getByRole('button', {name: '确认运行', exact: true}).click()
+      running = true
+      await expect(page).toHaveURL(new RegExp(`/i/${instance}/task/${task}$`))
+      await expect(logs).toContainText('模拟调度器已启动')
+      if (task === 'FleetScan') await page.screenshot({path: 'test-results/tool-run-log.png', fullPage: true})
+    } finally {
+      if (running) {
+        const stop = page.getByRole('button', {name: '停止运行', exact: true})
+        await expect(stop).toBeVisible()
+        await stop.click()
+        await expect(page.getByRole('button', {name: '启动调度器', exact: true})).toBeVisible()
+      }
+    }
+  }
+})
+
 test('分段滑块首屏静止，交互后平移并尊重减少动态效果', async ({page}) => {
   await page.addInitScript(() => {
     document.addEventListener('transitionrun', event => {

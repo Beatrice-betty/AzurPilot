@@ -124,6 +124,8 @@
 .config-toolbar .input-icon {flex: 1; max-width: 440px}
 .config-toolbar > span {display: flex; align-items: center; gap: 7px}
 .config-toolbar > button {margin-left: auto}
+.tool-log-panel {margin-top: 22px}
+.tool-log-panel .panel-heading {padding-bottom: 13px}
 .config-layout {display: grid; grid-template-columns: 145px minmax(0, 1fr); gap: 22px; align-items: start}
 .group-nav {position: sticky; top: calc(var(--topbar-height, 69px) + 16px); display: flex; flex-direction: column; border-left: 1px solid var(--border); padding-left: 8px; font-size: 11px; max-height: calc(var(--viewport-height) - var(--topbar-height, 69px) - 32px); overflow-y: auto}
 .group-nav a {padding: 10px; color: var(--muted); border-radius: 5px; line-height: 1.7}
