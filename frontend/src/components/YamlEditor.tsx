@@ -5,6 +5,7 @@ import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { HighlightStyle, syntaxHighlighting, bracketMatching } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 import { yaml } from '@codemirror/lang-yaml'
+import { useApp } from '../app/context'
 
 const colors = HighlightStyle.define([
   {tag: [tags.propertyName, tags.definition(tags.propertyName)], color: 'var(--syntax-key)'},
@@ -18,6 +19,7 @@ const externalChange = Annotation.define<boolean>()
 export function YamlEditor({id, value, onChange, disabled = false, label, invalid}: {
   id: string; value: string; onChange: (value: string) => void; disabled?: boolean; label: string; invalid?: boolean
 }) {
+  const {ui} = useApp()
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView>(undefined)
   const change = useRef(onChange)
@@ -53,5 +55,5 @@ export function YamlEditor({id, value, onChange, disabled = false, label, invali
       EditorView.contentAttributes.of({'aria-disabled': String(disabled), 'aria-invalid': String(!!invalid), ...(invalid ? {'aria-describedby': `${id}-status`} : {})}),
     ])})
   }, [disabled, invalid, id, label])
-  return <div aria-invalid={invalid || undefined} className={`yaml-editor ${disabled ? 'is-disabled' : ''}`}><div className="editor-heading">YAML</div><div ref={host}/></div>
+  return <div aria-invalid={invalid || undefined} className={`yaml-editor ${disabled ? 'is-disabled' : ''}`}><div className="editor-heading">{ui('field.yaml')}</div><div ref={host}/></div>
 }

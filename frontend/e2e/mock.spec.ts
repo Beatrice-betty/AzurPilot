@@ -428,7 +428,7 @@ test('Logo 旁更新提示、完整提交分页、获取和应用更新', async 
   await expect(page.locator('.topbar-right').getByText('新版本可用')).toHaveCount(0)
   const updateNotice = page.locator('.sidebar-brand').getByRole('link', {name: '新版本可用'})
   await expect(updateNotice).toBeVisible()
-  await expect(updateNotice).toHaveText('New')
+  await expect(updateNotice).toHaveText('新')
   await updateNotice.click()
   await expect(page.getByRole('heading', {name: /^更新器/})).toBeVisible()
   await expect(page.locator('.head-card')).toHaveCount(2)
