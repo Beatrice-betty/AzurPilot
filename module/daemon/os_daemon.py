@@ -44,7 +44,13 @@ class AzurLaneDaemon(DaemonBase, OSFleet, PortHandler):
                 self.combat_preparation()
             try:
                 if self.handle_battle_status():
-                    self.combat_status(expected_end='no_searching')
+                    # 大世界必须走 _os_combat_expected_end：
+                    # 它每轮调用 handle_map_event（点击 GET_ITEMS_1/2/3 掉落页），
+                    # 并用 handle_os_in_map 正确判断回到大世界地图。
+                    # 传 'no_searching' 会用普通地图检测，在大世界永不成立，
+                    # 且循环内 handle_get_items 被 _disable_handle_get_items 禁用，
+                    # 导致卡死在奖励界面。
+                    self.combat_status()
                     continue
             except (CampaignEnd, ContinuousCombat):
                 continue
