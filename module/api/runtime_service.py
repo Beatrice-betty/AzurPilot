@@ -44,8 +44,7 @@ class RuntimeService:
             scheduler = groups.get('Scheduler', {})
             if scheduler.get('Enable') or task == running:
                 next_run = str(scheduler.get('NextRun', ''))
-                tasks.append({'name': task, 'label': self.configs.translate(f'Task.{task}.name'),
-                              'nextRun': next_run, 'pending': next_run.replace('T', ' ') <= now,
+                tasks.append({'name': task, 'nextRun': next_run, 'pending': next_run.replace('T', ' ') <= now,
                               'state': 'running' if task == running else 'pending' if next_run.replace('T', ' ') <= now else 'waiting'})
         from module.config.task_priority import parse_task_priority
         priority = parse_task_priority(data.get('General', {}).get('YukikazeTaskManager', {}).get('TaskPriorityAdjustment'))

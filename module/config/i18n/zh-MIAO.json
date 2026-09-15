@@ -2084,6 +2084,22 @@
       "help": "需将过滤器设为自定义。阅读文档，乱设出问题别叫喵→ https://github.com/LmeSzinc/AzurLaneAutoScript/wiki/filter_string_cn"
     }
   },
+  "ShopAdvanced": {
+    "_info": {
+      "name": "高级商店策略",
+      "help": "使用受限 Lua 风格规则生成商店购买计划。"
+    },
+    "Mode": {
+      "name": "策略模式",
+      "help": "简单模式继续使用现有过滤器；高级模式使用下方策略脚本。",
+      "legacy": "简单模式",
+      "advanced": "高级模式"
+    },
+    "Script": {
+      "name": "策略脚本",
+      "help": "仅支持受限 Lua 规则语法。校验失败时本轮不会购买任何物品。"
+    }
+  },
   "Commission": {
     "_info": {
       "name": "委托派遣策略",

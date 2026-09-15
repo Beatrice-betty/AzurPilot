@@ -150,9 +150,12 @@ wheels = [
 
 [[package]]
 name = "antlr4-python3-runtime"
-version = "4.9.3"
+version = "4.13.2"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/3e/38/7859ff46355f76f8d19459005ca000b6e7012f2f1ca597746cbcd1fbfe5e/antlr4-python3-runtime-4.9.3.tar.gz", hash = "sha256:f224469b4168294902bb1efa80a8bf7855f24c99aef99cbefc1bcd3cce77881b" }
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/33/5f/2cdf6f7aca3b20d3f316e9f505292e1f256a32089bd702034c29ebde6242/antlr4_python3_runtime-4.13.2.tar.gz", hash = "sha256:909b647e1d2fc2b70180ac586df3933e38919c85f98ccc656a96cd3f25ef3916" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/89/03/a851e84fcbb85214dc637b6378121ef9a0dd61b4c65264675d8a5c9b1ae7/antlr4_python3_runtime-4.13.2-py3-none-any.whl", hash = "sha256:fe3835eb8d33daece0e799090eda89719dbccee7aa39ef94eed3818cafa5a7e8" },
+]
 
 [[package]]
 name = "anyio"
@@ -227,6 +230,7 @@ dependencies = [
     { name = "imageio-ffmpeg" },
     { name = "inflection" },
     { name = "jellyfish" },
+    { name = "luaparser" },
     { name = "lz4" },
     { name = "matplotlib" },
     { name = "mcp" },
@@ -273,6 +277,7 @@ requires-dist = [
     { name = "imageio-ffmpeg", specifier = "==0.6.0" },
     { name = "inflection", specifier = "==0.5.1" },
     { name = "jellyfish", specifier = "==1.2.1" },
+    { name = "luaparser", specifier = "==4.2.0" },
     { name = "lz4", specifier = "==4.4.5" },
     { name = "matplotlib", specifier = "==3.11.0" },
     { name = "mcp", specifier = "==1.23.0" },
@@ -1014,6 +1019,19 @@ wheels = [
 ]
 
 [[package]]
+name = "luaparser"
+version = "4.2.0"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
+dependencies = [
+    { name = "antlr4-python3-runtime" },
+    { name = "multimethod" },
+]
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/24/64/574e8dadf7dcc08b5c8435756b6a44ea382d14b4d3c19669dbbab112532f/luaparser-4.2.0.tar.gz", hash = "sha256:315e1588b23500befaf824604c2d0ea75daf894b5507126636a8cfa9dc3d7636" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/5f/49/6d585ffffd47732c497ca3a4137f20b817fdf41598668619652d8b11d7e2/luaparser-4.2.0-py3-none-any.whl", hash = "sha256:f73b1a66ff51351d28f067348ebbb4533401fc761926654d0448e34531ce3a34" },
+]
+
+[[package]]
 name = "lxml"
 version = "6.1.1"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
@@ -1207,6 +1225,15 @@ wheels = [
 ]
 
 [[package]]
+name = "multimethod"
+version = "2.1"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/cb/5c/556c53f25a75c7ec1b467a5871a22461615139dab72578166df7f8ad1104/multimethod-2.1.tar.gz", hash = "sha256:c59e75fbe51516ed632d3df4b56df0876747be001c068d3ee1e83e9f65c2846f" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/a7/9e/3538af4267d2e29d871e7a1ae390e8ff32122b3c560fe718569c4cd7624a/multimethod-2.1-py3-none-any.whl", hash = "sha256:54b5256562351762a275dd65571b5d6db750848f1eb6bb21c61cb5ff2748b663" },
+]
+
+[[package]]
 name = "ncnn"
 version = "1.0.20260526"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
@@ -1287,15 +1314,15 @@ wheels = [
 
 [[package]]
 name = "omegaconf"
-version = "2.3.1"
+version = "2.0.6"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
 dependencies = [
-    { name = "antlr4-python3-runtime" },
     { name = "pyyaml" },
+    { name = "typing-extensions" },
 ]
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/ce/3d/e4b57b8d9008c6ebe0d5eff901f91d5700cf7bdb8c8863df817463a7fd5e/omegaconf-2.3.1.tar.gz", hash = "sha256:e5e7de64aeebeddaf8e6d3f7a783b32ac2a01c0fbd9c878012caecb891a1f42a" }
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/87/d4/ef79d003e6c471ba95fdcddd58f67532d9c39b5fcf420aea199f3cc164e1/omegaconf-2.0.6.tar.gz", hash = "sha256:92ca535a788d21651bf4c2eaf5c1ca4c7a8003b2dab4a87cbb09109784268806" }
 wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/a4/0e/152509871bf30df6fc38569f52a2db9b55dd41aae957adae50a053ac7778/omegaconf-2.3.1-py3-none-any.whl", hash = "sha256:3d701d14e9a8828f1edd28bb70b725908b34277cdd72cf7d6a83f94dadc6b6a0" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/d0/eb/9d63ce09dd8aa85767c65668d5414958ea29648a0eec80a4a7d311ec2684/omegaconf-2.0.6-py3-none-any.whl", hash = "sha256:9e349fd76819b95b47aa628edea1ff83fed5b25108608abdd6c7fdca188e302a" },
 ]
 
 [[package]]

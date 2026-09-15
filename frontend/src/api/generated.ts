@@ -7,6 +7,7 @@ export interface Parameters {
   "instances.delete": { instance: string; revision: string }
   "config.get": { instance: string }
   "config.patch": { instance: string; revision?: string | null; changes: Array<{ path: string; value: unknown }> }
+  "shop_strategy.validate": { instance: string; task: "EventShop" | "ShopFrequent" | "ShopOnce" | "PrivateQuarters" | "OpsiShop" | "OpsiVoucher"; script: string }
   "overview.get": { instance: string }
   "scheduler.start": { instance: string }
   "scheduler.stop": { instance: string }

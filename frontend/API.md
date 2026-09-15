@@ -56,6 +56,7 @@
 | `instances.delete` | instance、revision | 停止状态下将配置移至备份 |
 | `config.get` | instance | 当前值及 revision |
 | `config.patch` | instance、changes、可选 revision | 锁内合并指定字段，校验后原子保存 |
+| `shop_strategy.validate` | instance、task、script | 只读校验高级商店策略，返回可定位的诊断，不执行脚本也不写入配置 |
 | `overview.get` | instance | 资源、任务计划、连接配置与状态 |
 | `scheduler.start` | instance | 启动调度器，返回当前总览 |
 | `scheduler.stop` | instance | 停止调度器并执行配置的收尾动作 |
@@ -84,6 +85,22 @@
 
 `schema.get.language` 支持 `zh-CN`、`zh-TW`、`en-US`、`ja-JP`、`zh-MIAO`，只影响本次返回的翻译，不修改运行器或其他浏览器的语言。参数定义保留 `mode: yaml`，供前端选择多行 YAML 编辑器。
 
+## 高级商店策略校验
+
+`shop_strategy.validate` 仅解析并校验受限 Lua 风格策略的语法和白名单；它不会启动 Lua VM、不会访问商品或设备，也不会保存用户输入。`task` 必须是 `EventShop`、`ShopFrequent`、`ShopOnce`、`PrivateQuarters`、`OpsiShop` 或 `OpsiVoucher` 之一，`script` 最长 20,000 个字符。
+
+```json
+{"v":1,"type":"request","id":"check-shop-script-1","method":"shop_strategy.validate","params":{"instance":"alas","task":"ShopFrequent","script":"return shop.plan { candidates = candidates:take(0) }"}}
+```
+
+无论脚本是否通过，参数本身合法时响应都在 `result` 中返回：
+
+```json
+{"valid":false,"diagnostics":[{"code":"missing_return","message":"必须返回 shop.plan {...}","line":1,"column":1}]}
+```
+
+`diagnostics` 是按源码顺序返回的错误列表；每项包含稳定的机器可读 `code`、可直接展示的 `message`，以及从 1 开始计数的 `line`、`column`（无法定位时为 `null`）。客户端应使用这些位置标记编辑器，不应执行、转换或自行放宽脚本。空脚本代表尚未启用高级策略，校验结果可为 `valid: true`；切换到高级模式前仍必须保存非空且有效的脚本。
+
 ## 配置事务
 
 revision 是磁盘 JSON 内容的 SHA-256，仅用于读取快照和删除保护；配置保存接受旧版客户端传入 revision，但不再据此拒绝写入。`config.patch` 仅接受 `Task.Group.Argument` 形式的叶子路径，最多 200 项修改。完整校验成功后一次性原子替换；失败不保存任何字段。
@@ -98,7 +115,7 @@ API 和核心运行器共用跨进程事务锁。API 只合并请求指定的字
 
 每个字段显示保存中、已保存或错误状态。格式错误只阻止该字段写入，原文保留用于修正；其他字段照常保存。连接和临时服务错误自动重试；页面切换不停止队列。未确认的输入保存在当前标签页的 sessionStorage，刷新并重新认证后恢复所有作用域的待提交项，已确认项不再重放。浏览器禁用或耗尽存储时明确提示，并继续在内存中保留输入。关闭标签页前应确认已保存；离线期间无法使服务端立即生效。游戏任务在下一次读取或绑定配置时使用新值，部署设置仍按各项既有规则在重启服务后生效。直接绕开配置服务的外部脚本不受事务锁约束。
 
-隐藏、固定和只读字段由服务端强制拒绝修改；`storage` 的唯一例外是通过 `config.patch` 将值清空为 `{}`，用于恢复旧版清除内部任务状态的按钮，其他状态内容仍禁止写入。布尔值必须是真正的 JSON boolean；数值范围来自参数定义；日期格式为 `YYYY-MM-DD HH:mm:ss`；多选值必须来自声明的候选项。YAML 字段使用安全解析器校验语法和顶层映射结构，并返回可定位的行列错误；保留原始文本存储。
+隐藏、固定和只读字段由服务端强制拒绝修改；`storage` 的唯一例外是通过 `config.patch` 将值清空为 `{}`，用于恢复旧版清除内部任务状态的按钮，其他状态内容仍禁止写入。布尔值必须是真正的 JSON boolean；数值范围来自参数定义；日期格式为 `YYYY-MM-DD HH:mm:ss`；多选值必须来自声明的候选项。YAML 字段使用安全解析器校验语法和顶层映射结构，并返回可定位的行列错误；保留原始文本存储。受限 Lua 字段在写入时会再次静态校验，不能通过只调用前端检查接口来绕过；同一事务合并后的 `ShopAdvanced.Mode=advanced` 必须配套非空且有效的 `ShopAdvanced.Script`。简单模式允许清空脚本。
 
 ## 订阅与恢复
 

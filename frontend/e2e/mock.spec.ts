@@ -221,6 +221,35 @@ test('配置字体、多行输入与 YAML 编辑实时保存及主题颜色', as
   expect(errors).toEqual([])
 })
 
+test('受限 Lua 策略保留本地草稿，检查通过后才可应用', async ({page}) => {
+  await page.goto('/#/i/demo-main/task/EventShop')
+  const script = page.locator('[id="EventShop.ShopAdvanced.Script"]')
+  const check = page.getByRole('button', {name: '检查', exact: true})
+  const apply = page.getByRole('button', {name: '应用', exact: true})
+  await expect(page.getByText('高级商店策略说明', {exact: true})).toBeVisible()
+  await expect(page.getByText('context.domain', {exact: true})).toHaveCount(1)
+  await page.screenshot({path: 'test-results/restricted-lua-help.png', fullPage: true})
+  await expect(apply).toBeDisabled()
+
+  await script.fill('os.execute("bad")')
+  await check.click()
+  await expect(page.getByText('不允许调用 os.execute', {exact: true})).toBeVisible()
+  await expect(page.getByText('位置 1:1', {exact: true})).toBeVisible()
+  await expect(apply).toBeDisabled()
+
+  const valid = 'return shop.plan { candidates = candidates:take(0) }'
+  await script.fill(valid)
+  await expect(apply).toBeDisabled()
+  await check.click()
+  await expect(apply).toBeEnabled()
+  await apply.click()
+  await page.reload()
+  await expect(script).toHaveText(valid)
+  await page.setViewportSize({width: 390, height: 844})
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.screenshot({path: 'test-results/restricted-lua-mobile.png', fullPage: true})
+})
+
 test('输入框随内容和宽度变化增高，删除后缩回单行', async ({page}) => {
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
@@ -280,6 +309,15 @@ test('存储空间为空时隐藏，有状态时显示完整 JSON 并可清除',
   await page.reload()
   await expect(page.locator('textarea').first()).toBeVisible()
   await expect(page.locator('#group-Storage')).toHaveCount(0)
+})
+
+test('侧栏任务计划随界面语言切换', async ({page}) => {
+  await page.goto('/#/i/demo-main/settings')
+  await page.locator('#ui-language').click()
+  await page.getByRole('option', {name: 'English', exact: true}).click()
+  await page.goto('/#/i/demo-main/overview')
+  await expect(page.locator('.rail-task-item[href$="/task/Commission"]')).toContainText('Commission')
+  await expect(page.locator('.rail-task-item[href$="/task/Research"]')).toContainText('Research Lab Plus')
 })
 
 test('语言偏好持久化，模拟启停、预览、统计和部署设置', async ({page}) => {

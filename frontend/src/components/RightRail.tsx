@@ -26,7 +26,7 @@ function formatExecutionTime(nextRun: string, ui: UiTranslator) {
 
 export function RightRail({instance, onMobileClose}: {instance: string; onMobileClose: () => void}) {
   const connection = useConnection()
-  const {notify, ui} = useApp()
+  const {notify, t, ui} = useApp()
   const [data, setData] = useState<Overview>()
   const [busy, setBusy] = useState(false)
 
@@ -112,7 +112,7 @@ export function RightRail({instance, onMobileClose}: {instance: string; onMobile
             <div className="rail-queue-body">
               {tasks.length ? tasks.map(task => <Link key={task.name} className="rail-task-item" to={`/i/${instance}/task/${task.name}`} onClick={onMobileClose}>
                 <div>
-                  <strong>{task.label}</strong>
+                  <strong>{t(`Task.${task.name}.name`)}</strong>
                   <small>{task.state === 'running' ? ui('scheduler.executing') : formatExecutionTime(task.nextRun, ui)}</small>
                 </div>
                 <span className={`task-state ${task.state}`}><GroupIcon size={12}/>{ui(taskStateLabel[task.state])}</span>

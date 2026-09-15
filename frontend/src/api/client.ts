@@ -3,7 +3,7 @@ import type { ApiEvent, ApiResponse, Results } from './types'
 import { translateCurrentUi } from '../i18n'
 
 export class ApiError extends Error {
-  constructor(public code: string, message: string) { super(message) }
+  constructor(public code: string, message: string, public details?: unknown) { super(message) }
 }
 export type Connection = 'connecting' | 'ready' | 'auth' | 'offline'
 type Pending = { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }
@@ -47,7 +47,7 @@ export class ApiClient {
         clearTimeout(pending.timer)
         this.pending.delete(message.id)
         if (message.ok) pending.resolve(message.result)
-        else pending.reject(new ApiError(message.error?.code ?? 'UNKNOWN', message.error?.message ?? translateCurrentUi('api.requestFailed')))
+        else pending.reject(new ApiError(message.error?.code ?? 'UNKNOWN', message.error?.message ?? translateCurrentUi('api.requestFailed'), message.error?.details))
       } else if (message.type === 'event') {
         if (message.topic === 'session') {
           const data = message.data as {authRequired: boolean}

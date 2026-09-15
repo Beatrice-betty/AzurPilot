@@ -725,6 +725,16 @@ EventShop:
     > CatT2 > CatT1 > PlateGeneralT3 > PlateT3 > BoxT4
     > ShipSSR
 
+ShopAdvanced:
+  Mode:
+    value: legacy
+    option: [legacy, advanced]
+  Script:
+    type: textarea
+    mode: restricted_lua
+    preserve_empty: true
+    value: ""
+
 # ==================== Reward ====================
 
 Commission:

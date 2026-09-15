@@ -47,6 +47,13 @@ class TaskParams(InstanceParams):
     task: StrictStr = Field(min_length=1, max_length=80)
 
 
+class ShopStrategyValidateParams(InstanceParams):
+    """高级商店策略的只读语法校验请求。"""
+
+    task: Literal['EventShop', 'ShopFrequent', 'ShopOnce', 'PrivateQuarters', 'OpsiShop', 'OpsiVoucher']
+    script: StrictStr = Field(max_length=20000)
+
+
 class ConfigChange(Params):
     path: StrictStr = Field(min_length=1, max_length=180)
     value: Any

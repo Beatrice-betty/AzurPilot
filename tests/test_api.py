@@ -127,6 +127,52 @@ class ConfigApiTests(unittest.TestCase):
             self.assertEqual(original, self.configs.get('testpilot'))
         self.configs.patch('testpilot', None, [ConfigChange(path='Alas.Error.OnePushConfig', value='provider: null')])
 
+    def test_restricted_lua_script_is_validated_before_config_write(self):
+        """高级策略语法错误不能写入实例配置，空脚本仍可作为默认值保存。"""
+        original = self.configs.get('testpilot')
+        path = 'EventShop.ShopAdvanced.Script'
+        valid = 'return shop.plan { candidates = candidates:take(1) }'
+
+        updated = self.configs.patch('testpilot', None, [ConfigChange(path=path, value=valid)])
+        self.assertEqual(valid, updated['values']['EventShop']['ShopAdvanced']['Script'])
+        with self.assertRaises(ApiError) as caught:
+            self.configs.patch('testpilot', None, [ConfigChange(path=path, value='return os.execute("bad")')])
+        self.assertEqual('INVALID_PARAMS', caught.exception.code)
+        self.assertIsInstance(caught.exception.details, list)
+        self.assertEqual(valid, self.configs.get('testpilot')['values']['EventShop']['ShopAdvanced']['Script'])
+        cleared = self.configs.patch('testpilot', None, [ConfigChange(path=path, value='')])
+        self.assertEqual('', cleared['values']['EventShop']['ShopAdvanced']['Script'])
+        # 空脚本是默认值；清空后内容可以回到初始快照及其内容哈希。
+        self.assertEqual(original['revision'], cleared['revision'])
+
+    def test_advanced_shop_mode_requires_final_nonempty_valid_script(self):
+        """模式和脚本按最终事务快照校验，禁止保存不可执行高级模式。"""
+        mode_path = 'EventShop.ShopAdvanced.Mode'
+        script_path = 'EventShop.ShopAdvanced.Script'
+        original = self.configs.get('testpilot')
+
+        with self.assertRaises(ApiError) as caught:
+            self.configs.patch('testpilot', None, [ConfigChange(path=mode_path, value='advanced')])
+        self.assertEqual('INVALID_PARAMS', caught.exception.code)
+        self.assertEqual(original, self.configs.get('testpilot'))
+
+        script = 'return shop.plan { candidates = candidates:take(1) }'
+        enabled = self.configs.patch('testpilot', None, [
+            ConfigChange(path=mode_path, value='advanced'),
+            ConfigChange(path=script_path, value=script),
+        ])
+        self.assertEqual('advanced', enabled['values']['EventShop']['ShopAdvanced']['Mode'])
+        self.assertEqual(script, enabled['values']['EventShop']['ShopAdvanced']['Script'])
+
+        with self.assertRaises(ApiError):
+            self.configs.patch('testpilot', None, [ConfigChange(path=script_path, value='')])
+        disabled = self.configs.patch('testpilot', None, [
+            ConfigChange(path=mode_path, value='legacy'),
+            ConfigChange(path=script_path, value=''),
+        ])
+        self.assertEqual('legacy', disabled['values']['EventShop']['ShopAdvanced']['Mode'])
+        self.assertEqual('', disabled['values']['EventShop']['ShopAdvanced']['Script'])
+
     def test_duplicate_creation_and_recoverable_deletion(self):
         created = self.configs.create('second', 'testpilot')
         with self.assertRaises(ApiError):
@@ -217,6 +263,22 @@ class SocketApiTests(unittest.TestCase):
             merged = self.call(ws, 'config.patch', params)
             self.assertTrue(merged['ok'])
             self.assertEqual('5555', merged['result']['values']['Alas']['Emulator']['Serial'])
+
+    def test_shop_strategy_validation_returns_diagnostics_without_writing(self):
+        with self.client.websocket_connect('/api/v1/ws') as ws:
+            self.login(ws)
+            params = {
+                'instance': 'testpilot',
+                'task': 'EventShop',
+                'script': 'return shop.plan { candidates = candidates:where(function(item) return item.hidden end):take(1) }',
+            }
+            response = self.call(ws, 'shop_strategy.validate', params)
+            self.assertTrue(response['ok'])
+            self.assertFalse(response['result']['valid'])
+            diagnostic = response['result']['diagnostics'][0]
+            self.assertEqual('unknown_candidate_field', diagnostic['code'])
+            self.assertEqual(1, diagnostic['line'])
+            self.assertIsInstance(diagnostic['column'], int)
 
     def test_subscribe_sends_scoped_snapshot(self):
         with self.client.websocket_connect('/api/v1/ws') as ws:

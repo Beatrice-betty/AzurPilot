@@ -6,6 +6,8 @@ import type { Config } from '../api/types'
 import { useApp, useConnection } from '../app/context'
 import { Empty, ErrorBox, Loading, Modal, PageTitle } from '../components/ui'
 import { FieldInput } from '../components/FieldInput'
+import { RestrictedLuaEditor } from '../components/RestrictedLuaEditor'
+import { ShopStrategyHelp } from '../components/ShopStrategyHelp'
 import { StorageField } from '../components/StorageField'
 import { editor, prepareValue } from '../config/editors'
 import { EditStatus } from '../components/EditStatus'
@@ -13,7 +15,7 @@ import { isFieldVisible } from './configVisibility'
 
 export function TaskConfig() {
   const {instance = '', task = ''} = useParams()
-  const {schema, t, ui, notify} = useApp()
+  const {schema, t, ui, notify, language} = useApp()
   const connection = useConnection()
   const navigate = useNavigate()
   const [config, setConfig] = useState<Config>()
@@ -21,6 +23,7 @@ export function TaskConfig() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [confirmRun, setConfirmRun] = useState(false)
+  const [shopModeError, setShopModeError] = useState('')
 
   const queue = editor(`config:${instance}`)
   const {edits, storageError} = useSyncExternalStore(queue.subscribe, queue.getSnapshot)
@@ -44,6 +47,7 @@ export function TaskConfig() {
     }).catch(error => { if (active) setError(error.message) })
     return () => { active = false }
   }, [connection, instance, task, queue])
+  useEffect(() => { setShopModeError('') }, [instance, task])
 
   async function run() {
     setBusy(true)
@@ -123,6 +127,9 @@ export function TaskConfig() {
                     <h2 data-text={t(`${group}._info.name`)}>{t(`${group}._info.name`)}</h2>
                   </div>
                 </div>
+                {group === 'ShopAdvanced' && (
+                  <ShopStrategyHelp task={task} language={language}/>
+                )}
                 {visible.map(([arg, field]) => {
                   const path = `${task}.${group}.${arg}`
                   const edit = edits[path]
@@ -130,7 +137,9 @@ export function TaskConfig() {
                   const label = t(`${group}.${arg}.name`)
                   const help = t(`${group}.${arg}.help`)
                   const readonly = ['disabled', 'readonly', 'display'].includes(field.display ?? '') || ['storage', 'stored', 'state', 'lock'].includes(field.type)
-                  const isMultiline = ['textarea', 'task_priority', 'yaml', 'storage'].includes(field.type) || field.mode === 'yaml'
+                  const restrictedLua = field.mode === 'restricted_lua'
+                  const shopMode = group === 'ShopAdvanced' && arg === 'Mode'
+                  const isMultiline = ['textarea', 'task_priority', 'yaml', 'storage'].includes(field.type) || field.mode === 'yaml' || restrictedLua
 
                   return (
                     <div className={`field-row ${isMultiline ? 'field-row-multiline' : ''}`} key={arg}>
@@ -144,6 +153,20 @@ export function TaskConfig() {
                       <div className="field-control">
                         {field.type === 'storage' ? (
                           <StorageField value={value} disabled={false} onClear={() => queue.change(path, {})} />
+                        ) : restrictedLua ? (
+                          <RestrictedLuaEditor
+                            id={path}
+                            value={String(value ?? '')}
+                            draftKey={`${instance}.${path}`}
+                            label={label}
+                            disabled={readonly}
+                            offline={connection !== 'ready'}
+                            onCheck={script => api.request('shop_strategy.validate', {instance, task: task as 'EventShop' | 'ShopFrequent' | 'ShopOnce' | 'PrivateQuarters' | 'OpsiShop' | 'OpsiVoucher', script})}
+                            onApply={async script => {
+                              setConfig(await api.request('config.patch', {instance, changes: [{path, value: script}]}))
+                              setShopModeError('')
+                            }}
+                          />
                         ) : (
                           <FieldInput
                             id={path}
@@ -153,16 +176,26 @@ export function TaskConfig() {
                             options={field.option}
                             disabled={readonly}
                             preserveText
-                            invalid={edit?.status === 'error'}
+                            invalid={edit?.status === 'error' || (shopMode && !!shopModeError)}
                             label={label}
                             translateOption={option => t(`${group}.${arg}.${option}`)}
                             onChange={next => {
+                              if (shopMode && next === 'advanced') {
+                                const script = String(config.values[task]?.ShopAdvanced?.Script ?? '')
+                                if (!script.trim()) {
+                                  setShopModeError(ui('script.modeRequiresScript'))
+                                  return
+                                }
+                              }
+                              if (shopMode) setShopModeError('')
                               const {payload, error} = prepareValue(next, field)
                               queue.change(path, next, payload, error)
                             }}
                           />
                         )}
-                        <EditStatus id={path} edit={edit} retry={queue.retry} />
+                        {shopMode && shopModeError && !edit ? (
+                          <div id={`${path}-status`} className="edit-status edit-error" role="alert">{shopModeError}</div>
+                        ) : <EditStatus id={path} edit={edit} retry={queue.retry} />}
                       </div>
                     </div>
                   )

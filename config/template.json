@@ -1334,6 +1334,10 @@
       "PresetFilter": "all",
       "CustomFilter": "EquipUR > EquipSSR > Cube > GachaTicket\n> Array > Chip > CatT3 \n> Meta > SkinBox\n> Oil > Coin > Medal > ExpBookT1 > FoodT1\n> DR > PR\n> AugmentCore > AugmentEnhanceT2 > AugmentChangeT2 > AugmentChangeT1\n> CatT2 > CatT1 > PlateGeneralT3 > PlateT3 > BoxT4\n> ShipSSR"
     },
+    "ShopAdvanced": {
+      "Mode": "legacy",
+      "Script": ""
+    },
     "Storage": {
       "Storage": {}
     }
@@ -2349,6 +2353,10 @@
       "OverflowCoins": 0,
       "Filter": "BookRedT3 > BookYellowT3 > BookBlueT3 > BookRedT2\n> Cube\n> FoodT6 > FoodT5"
     },
+    "ShopAdvanced": {
+      "Mode": "legacy",
+      "Script": ""
+    },
     "Storage": {
       "Storage": {}
     }
@@ -2400,6 +2408,10 @@
     "CoreShop": {
       "Enable": true,
       "Filter": "Array"
+    },
+    "ShopAdvanced": {
+      "Mode": "legacy",
+      "Script": ""
     },
     "Storage": {
       "Storage": {}
@@ -2517,6 +2529,10 @@
       "TargetInteract": true,
       "TargetShip": "anchorage"
     },
+    "ShopAdvanced": {
+      "Mode": "legacy",
+      "Script": ""
+    },
     "Storage": {
       "Storage": {}
     }
@@ -2626,6 +2642,10 @@
       "CustomFilter": "LoggerAbyssalT6 > LoggerAbyssalT5 > LoggerAbyssalT4 > LoggerObscureT6 > LoggerObscureT5 > LoggerObscureT4 > LoggerObscureT3 > ActionPoint > PurpleCoins\n> GearDesignPlanT3 > PlateRandomT4 > DevelopmentMaterialT3 > GearDesignPlanT2 > GearPart\n> OrdnanceTestingReportT3 > OrdnanceTestingReportT2 > DevelopmentMaterialT2 > OrdnanceTestingReportT1\n> METARedBook > CrystallizedHeatResistantSteel > NanoceramicAlloy > NeuroplasticProstheticArm > SupercavitationGenerator",
       "DisableBeforeDate": 0
     },
+    "ShopAdvanced": {
+      "Mode": "legacy",
+      "Script": ""
+    },
     "Storage": {
       "Storage": {}
     }
@@ -2643,6 +2663,10 @@
     },
     "OpsiVoucher": {
       "Filter": "LoggerAbyssal > LoggerObscure > Book > Coin > Fragment"
+    },
+    "ShopAdvanced": {
+      "Mode": "legacy",
+      "Script": ""
     },
     "Storage": {
       "Storage": {}

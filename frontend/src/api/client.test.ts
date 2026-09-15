@@ -50,6 +50,17 @@ describe('WebSocket 客户端', () => {
     await expect(client.request('instances.list', {})).rejects.toMatchObject({code: 'DISCONNECTED'})
     expect(FakeSocket.latest.sent).toHaveLength(0)
   })
+  it('保留校验失败的诊断详情供脚本编辑器定位行列', async () => {
+    const request = client.request('system.ping', {})
+    const rejection = expect(request).rejects.toMatchObject({
+      code: 'INVALID_PARAMS', details: [{message: '不允许调用 os.execute', line: 4, column: 12}],
+    })
+    const sent = FakeSocket.latest.sent.at(-1)!
+    FakeSocket.latest.emit({v: 1, type: 'response', id: sent.id, ok: false, error: {
+      code: 'INVALID_PARAMS', message: '策略校验失败', details: [{message: '不允许调用 os.execute', line: 4, column: 12}],
+    }})
+    await rejection
+  })
   it('刷新后用已保存的密码登录，密码失效时清除旧值', async () => {
     const values = new Map<string, string>()
     Object.assign(window, {localStorage: {getItem: (key: string) => values.get(key), setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key)}})

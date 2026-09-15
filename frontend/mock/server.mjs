@@ -49,7 +49,7 @@ export function createMockServer({password = '', empty = false} = {}) {
         send({v: 1, type: 'response', id: request.id, ok: true, result})
         publish()
       } catch (error) {
-        send({v: 1, type: 'response', id: request?.id ?? '', ok: false, error: {code: error.code ?? 'INVALID_REQUEST', message: error.code ? error.message : '请求格式无效', details: null}})
+        send({v: 1, type: 'response', id: request?.id ?? '', ok: false, error: {code: error.code ?? 'INVALID_REQUEST', message: error.code ? error.message : '请求格式无效', details: error.details ?? null}})
       }
     })
     socket.on('close', () => sessions.delete(session))

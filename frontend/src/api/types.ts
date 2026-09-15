@@ -16,7 +16,7 @@ export interface Schema {
   translations: Record<string, unknown>
 }
 export interface Config { instance: string; revision: string; values: Values }
-export interface ScheduledTask { name: string; label: string; nextRun: string; pending: boolean; state: 'running' | 'pending' | 'waiting' }
+export interface ScheduledTask { name: string; nextRun: string; pending: boolean; state: 'running' | 'pending' | 'waiting' }
 export interface Resource { name: string; label: string; value: number | null; limit?: number; record?: string }
 export interface Overview {
   instance: string; revision: string; status: Status; tasks: ScheduledTask[]
@@ -37,7 +37,10 @@ export interface StatisticsReport {
 export interface DeployField { key: string; type: string; label: string; help: string; value: Value; options: Value[] }
 export interface Settings { groups: {key: string; label: string; fields: DeployField[]}[]; notice: string; demo: boolean }
 export interface ApiEvent { v: 1; type: 'event'; topic: string; seq: number; data: unknown }
-export interface ApiResponse { v: 1; type: 'response'; id: string; ok: boolean; result?: unknown; error?: {code: string; message: string} }
+export interface ApiResponse { v: 1; type: 'response'; id: string; ok: boolean; result?: unknown; error?: {code: string; message: string; details?: unknown} }
+export interface ScriptDiagnostic { code?: string; message: string; line?: number | null; column?: number | null; severity?: 'error' | 'warning' }
+export interface ShopStrategyValidation { valid: boolean; diagnostics: ScriptDiagnostic[]; summary?: string }
+export type ShopStrategyTask = 'EventShop' | 'ShopFrequent' | 'ShopOnce' | 'PrivateQuarters' | 'OpsiShop' | 'OpsiVoucher'
 export interface Results {
   'updater.status': UpdateStatus
   'updater.commits': CommitHistory
@@ -53,6 +56,7 @@ export interface Results {
   'instances.delete': {deleted: string}
   'config.get': Config
   'config.patch': Config
+  'shop_strategy.validate': ShopStrategyValidation
   'overview.get': Overview
   'scheduler.start': Overview
   'scheduler.stop': Overview

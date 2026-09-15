@@ -25,6 +25,7 @@ class Router:
             'instances.delete': Method(p.RevisionParams, self.delete, True),
             'config.get': Method(p.InstanceParams, lambda x: configs.get(x.instance)),
             'config.patch': Method(p.PatchParams, lambda x: configs.patch(x.instance, x.revision, x.changes), True),
+            'shop_strategy.validate': Method(p.ShopStrategyValidateParams, self.validate_shop_strategy),
             'overview.get': Method(p.InstanceParams, lambda x: runtime.overview(x.instance)),
             'scheduler.start': Method(p.InstanceParams, lambda x: runtime.start(x.instance), True),
             'scheduler.stop': Method(p.InstanceParams, lambda x: runtime.stop(x.instance), True),
@@ -53,6 +54,16 @@ class Router:
     def refresh_loot(self, params):
         from module.api.statistics_service import refresh_loot
         return refresh_loot(self.configs, params.instance)
+
+    def validate_shop_strategy(self, params):
+        """校验高级商店策略，禁止客户端指定任意执行上下文。"""
+        self.configs.path(params.instance)
+        if 'ShopAdvanced' not in self.configs.args.get(params.task, {}):
+            raise p.ApiError('INVALID_PARAMS', '不支持的商店任务')
+        from module.shop_strategy import validate_strategy
+
+        # 显式检查返回诊断而不是抛出参数错误，编辑器才能标出行列位置。
+        return validate_strategy(params.script)
 
     def statistics_report(self, params):
         from module.api.statistics_service import report

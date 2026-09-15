@@ -2084,6 +2084,22 @@
       "help": "To use a custom filter, set \"Event Shop Filter\" to \"Custom\" and read https://github.com/LmeSzinc/AzurLaneAutoScript/wiki/filter_string_cn"
     }
   },
+  "ShopAdvanced": {
+    "_info": {
+      "name": "Advanced shop strategy",
+      "help": "Generate a shop purchase plan with restricted Lua-style rules."
+    },
+    "Mode": {
+      "name": "Strategy mode",
+      "help": "Simple mode keeps the existing filter. Advanced mode uses the strategy script below.",
+      "legacy": "Simple",
+      "advanced": "Advanced"
+    },
+    "Script": {
+      "name": "Strategy script",
+      "help": "Only restricted Lua-style rules are supported. A validation error skips purchases for this run."
+    }
+  },
   "Commission": {
     "_info": {
       "name": "Commission",

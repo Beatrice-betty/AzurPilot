@@ -54,7 +54,7 @@ class RuntimeTests(unittest.TestCase):
                 'Main': {'Scheduler': {'Enable': True, 'NextRun': '2020-01-01 00:00:00'}},
                 'Commission': {'Scheduler': {'Enable': True, 'NextRun': '2099-01-01 00:00:00'}},
                 'Research': {'Scheduler': {'Enable': True, 'NextRun': '2099-01-01 00:00:00'}}}
-        configs = SimpleNamespace(read=lambda _: (data, 'revision'), translate=lambda key: key)
+        configs = SimpleNamespace(read=lambda _: (data, 'revision'), translate=Mock())
         manager = SimpleNamespace(state=1, current_task='Commission')
         with patch('module.api.runtime_service.ProcessManager._processes', {'pilot': manager}), \
                 patch('module.config.time_source.now', return_value=datetime(2026, 9, 13)):
@@ -62,6 +62,8 @@ class RuntimeTests(unittest.TestCase):
             tasks = runtime.overview('pilot')['tasks']
             self.assertEqual('Commission', tasks[0]['name'])
             self.assertEqual({'running', 'waiting', 'pending'}, {task['state'] for task in tasks})
+            self.assertTrue(all('label' not in task for task in tasks))
+            configs.translate.assert_not_called()
             manager.state = 2
             self.assertNotIn('running', {task['state'] for task in runtime.overview('pilot')['tasks']})
 
