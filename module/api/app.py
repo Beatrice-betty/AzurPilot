@@ -13,6 +13,7 @@ from module.api.config_service import ConfigService, ROOT
 from module.api.router import Router
 from module.api.runtime_service import RuntimeService
 from module.api.socket import Gateway
+from module.api.static import FrontendFiles
 from module.runtime.password_utils import ensure_password_for_host, is_demo_mode
 from module.runtime.setting import State
 
@@ -64,13 +65,14 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
     routes = [Route('/healthz', health), WebSocketRoute('/api/v1/ws', gateway.endpoint)]
     if (dist / 'assets').is_dir():
         routes.append(Mount('/assets', StaticFiles(directory=dist / 'assets')))
-    if (dist / 'azurpilot.svg').is_file():
-        routes.append(Route('/azurpilot.svg', lambda request: FileResponse(dist / 'azurpilot.svg')))
     if mount_mcp:
         from mcp_server_sse import app as mcp_app, configure_auth
         configure_auth(password, public_bind=bool(password))
         routes.append(Mount('/mcp', mcp_app))
-    routes.append(Route('/{path:path}', index))
+    if (dist / 'index.html').is_file():
+        routes.append(Mount('/', FrontendFiles(directory=dist)))
+    else:
+        routes.append(Route('/{path:path}', index))
     application = Starlette(routes=routes, lifespan=lifespan)
     application.state.gateway = gateway
     return application

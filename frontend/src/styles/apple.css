@@ -22,6 +22,7 @@ body {background: var(--bg); background-attachment: fixed}
 .wallpaper img {width: 100%; height: 100%; object-fit: cover; opacity: 1}
 .lucide {stroke-width: 1.75}
 
+/* 兼容前缀必须先于标准属性，避免生产压缩后只保留 WebKit 的模糊声明。 */
 /* 左侧栏贴住视口边缘；PC 保留右栏占位，顶栏跨过右栏一直贯穿到屏幕右缘。 */
 .app-shell {padding: 0; gap: 14px; align-items: start}
 .app-shell.with-rail {grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--right-rail-width)}
@@ -29,8 +30,8 @@ body {background: var(--bg); background-attachment: fixed}
   top: 0;
   height: var(--viewport-height);
   background: var(--glass-tint);
-  backdrop-filter: blur(24px) saturate(130%);
   -webkit-backdrop-filter: blur(24px) saturate(130%);
+  backdrop-filter: blur(24px) saturate(130%);
   border: 1px solid var(--glass-edge);
   border-left: 0;
   border-radius: 0 26px 26px 0;
@@ -43,8 +44,8 @@ body {background: var(--bg); background-attachment: fixed}
   top: 56px;
   height: calc(var(--viewport-height) - 56px);
   background: var(--glass-tint);
-  backdrop-filter: blur(24px) saturate(130%);
   -webkit-backdrop-filter: blur(24px) saturate(130%);
+  backdrop-filter: blur(24px) saturate(130%);
   border: 1px solid var(--glass-edge);
   border-top: 0;
   border-right: 0;
@@ -72,7 +73,7 @@ body {background: var(--bg); background-attachment: fixed}
 .task-group-button {min-height: 43px; font-size: 13px; border-radius: 11px; color: var(--text)}
 .task-group-icon {color: var(--accent)}
 .task-group-button.expanded, [data-theme='dark'] .task-group-button.expanded {border-color: transparent; background: var(--accent-soft)}
-.task-submenu-flyout, .instance-menu {background: var(--glass-tint); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); border-color: var(--glass-edge); border-radius: 16px; box-shadow: 0 12px 40px #0002; padding: 7px}
+.task-submenu-flyout, .instance-menu {background: var(--glass-tint); -webkit-backdrop-filter: blur(28px); backdrop-filter: blur(28px); border-color: var(--glass-edge); border-radius: 16px; box-shadow: 0 12px 40px #0002; padding: 7px}
 .task-submenu-item {font-size: 13px; min-height: 38px; border-radius: 9px; color: var(--text)}
 .task-submenu-item.active .task-submenu-dot {box-shadow: none}
 .nav-search {border-radius: 10px; background: var(--surface-muted); color: var(--muted)}
@@ -111,8 +112,8 @@ main:focus {outline: none}
   inset: 0;
   z-index: -1;
   background: rgb(235 247 255 / .2);
-  backdrop-filter: blur(9px) saturate(140%) brightness(1.12);
   -webkit-backdrop-filter: blur(9px) saturate(140%) brightness(1.12);
+  backdrop-filter: blur(9px) saturate(140%) brightness(1.12);
   mask-image: var(--page-title-mask);
   -webkit-mask-image: var(--page-title-mask);
   mask-position: center;
@@ -139,7 +140,7 @@ main:focus {outline: none}
 .title-actions {position: relative; isolation: isolate; border-radius: 22px; padding: 5px; gap: 6px; box-shadow: var(--glass-shadow); max-width: 100%}
 
 /* 库默认使用居中定位和 Tailwind 工具类；在此限定为不参与布局的背景。 */
-.glass-material {position: absolute; inset: 0; border-radius: inherit; pointer-events: none; overflow: hidden; z-index: 0; background: var(--glass-tint); backdrop-filter: blur(18px) saturate(125%); -webkit-backdrop-filter: blur(18px) saturate(125%)}
+.glass-material {position: absolute; inset: 0; border-radius: inherit; pointer-events: none; overflow: hidden; z-index: 0; background: var(--glass-tint); -webkit-backdrop-filter: blur(18px) saturate(125%); backdrop-filter: blur(18px) saturate(125%)}
 .glass-material > :not(.glass-material-lens) {display: none}
 .glass-material-lens {transform: none !important; pointer-events: none; border-radius: inherit; opacity: .28}
 .glass-material-lens > .glass {width: 100%; height: 100%; border-radius: inherit !important; box-shadow: inset 0 1px 0 var(--glass-edge) !important}
@@ -156,8 +157,8 @@ main:focus {outline: none}
 .text-button {font-size: 12px; min-height: 36px; padding: 6px 8px}
 .panel, .resource-card, .summary-metrics section {
   background: var(--glass-tint);
-  backdrop-filter: blur(24px) saturate(130%);
   -webkit-backdrop-filter: blur(24px) saturate(130%);
+  backdrop-filter: blur(24px) saturate(130%);
   border: 1px solid var(--glass-edge);
   border-radius: 26px;
   box-shadow: var(--glass-shadow);
@@ -213,12 +214,12 @@ main:focus {outline: none}
   border: 0;
   border-radius: inherit;
 }
-.statistics-tabs {position: relative; display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 2px; padding: 3px; margin-bottom: 20px; width: fit-content; max-width: 100%; overflow-x: auto; border: 1px solid #ffffff8c; border-radius: 999px; background: #ffffff52; backdrop-filter: blur(18px) saturate(125%); -webkit-backdrop-filter: blur(18px) saturate(125%); box-shadow: none}
+.statistics-tabs {position: relative; display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 2px; padding: 3px; margin-bottom: 20px; width: fit-content; max-width: 100%; overflow-x: auto; border: 1px solid #ffffff8c; border-radius: 999px; background: #ffffff52; -webkit-backdrop-filter: blur(18px) saturate(125%); backdrop-filter: blur(18px) saturate(125%); box-shadow: none}
 .statistics-tabs-indicator {position: absolute; left: 0; top: 0; z-index: 0; border-radius: 999px; background: #ffffff9e; pointer-events: none; transition: transform .24s cubic-bezier(.22,.61,.36,1), width .24s cubic-bezier(.22,.61,.36,1), height .24s cubic-bezier(.22,.61,.36,1), opacity .12s ease}
 .statistics-tabs button {position: relative; z-index: 1; flex: 0 0 auto; min-height: 40px; padding: 0 16px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 550; transition: color .18s}
 .statistics-tabs button:hover {color: var(--text)}
 .statistics-tabs button.active {background: transparent; color: var(--text); box-shadow: none}
-[data-theme='dark'] .statistics-tabs {background: #ffffff14; border-color: #ffffff20; backdrop-filter: blur(18px) saturate(125%); -webkit-backdrop-filter: blur(18px) saturate(125%)}
+[data-theme='dark'] .statistics-tabs {background: #ffffff14; border-color: #ffffff20; -webkit-backdrop-filter: blur(18px) saturate(125%); backdrop-filter: blur(18px) saturate(125%)}
 [data-theme='dark'] .statistics-tabs-indicator {background: #ffffff28}
 [data-theme='dark'] .statistics-tabs button.active {background: transparent; color: #f2f2f7}
 .statistics-note {border-left-color: var(--accent); border-radius: 12px}
@@ -344,7 +345,7 @@ input, select, textarea {border-radius: 10px; min-height: 40px; background: var(
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
   .wallpaper {display: none}
-  .glass-material, .sidebar, .instance-menu, .task-submenu-flyout {background: var(--surface); backdrop-filter: none; -webkit-backdrop-filter: none}
+  .glass-material, .sidebar, .instance-menu, .task-submenu-flyout {background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none}
   .glass-material-lens {display: none}
   .page-title h1 {color:var(--text); background:none; -webkit-text-fill-color:var(--text); -webkit-text-stroke:0; text-shadow:none; filter:none}
   .page-title h1::before, .page-title h1::after {content:none}
