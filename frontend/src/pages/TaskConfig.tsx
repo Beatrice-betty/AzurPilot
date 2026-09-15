@@ -122,7 +122,6 @@ export function TaskConfig() {
                     <span className="group-indicator" />
                     <h2 data-text={t(`${group}._info.name`)}>{t(`${group}._info.name`)}</h2>
                   </div>
-                  <span className="small-label">{visible.length} 项设置</span>
                 </div>
                 {visible.map(([arg, field]) => {
                   const path = `${task}.${group}.${arg}`
