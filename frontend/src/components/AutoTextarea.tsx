@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from 'react'
 
-export function AutoTextarea({id, value, disabled, onChange}: {
-  id: string; value: string; disabled?: boolean; onChange: (value: string) => void
+export function AutoTextarea({id, value, disabled, onChange, label, invalid}: {
+  id: string; value: string; label?: string; invalid?: boolean; disabled?: boolean; onChange: (value: string) => void
 }) {
   const ref = useRef<HTMLTextAreaElement>(null)
   useLayoutEffect(() => {
@@ -26,5 +26,5 @@ export function AutoTextarea({id, value, disabled, onChange}: {
     observer.observe(input)
     return () => {observer.disconnect(); cancelAnimationFrame(frame)}
   }, [value])
-  return <textarea ref={ref} id={id} value={value} rows={1} disabled={disabled} spellCheck={false} onChange={event => onChange(event.target.value)}/>
+  return <textarea aria-label={label} aria-invalid={invalid || undefined} aria-describedby={invalid ? `${id}-status` : undefined} ref={ref} id={id} value={value} rows={1} disabled={disabled} spellCheck={false} onChange={event => onChange(event.target.value)}/>
 }

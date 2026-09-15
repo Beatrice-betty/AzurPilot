@@ -1,3 +1,4 @@
+import { PasswordInput, Select } from '../components/FormControls'
 import { useEffect, useState, type FormEvent, type MouseEvent } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArrowRight, CalendarClock, ChartNoAxesCombined, Code2, Compass, LayoutDashboard, House, Download, Menu, Settings2, WifiOff, X } from 'lucide-react'
@@ -29,7 +30,7 @@ export function CreateInstance({onClose}: {onClose: () => void}) {
   return <Modal title="创建配置实例" onClose={onClose}><form onSubmit={submit} className="form-stack">
     <p className="muted">每个实例独立保存任务计划与模拟器连接。</p>
     <label>实例名称<input autoFocus required pattern="[A-Za-z][A-Za-z0-9_-]{0,63}" value={name} onChange={event => setName(event.target.value)} placeholder="例如：alas-main" maxLength={64}/></label>
-    <label>初始配置<select value={source} onChange={event => setSource(event.target.value)}><option value="">使用默认配置</option>{instances.map(item => <option key={item.name}>{item.name}</option>)}</select></label>
+    <label>初始配置<Select value={source} onChange={event => setSource(event.target.value)}><option value="">使用默认配置</option>{instances.map(item => <option key={item.name}>{item.name}</option>)}</Select></label>
     {error && <ErrorBox message={error}/>}
     <button className="button primary" disabled={busy}>{busy ? '正在创建…' : '创建实例'}<ArrowRight size={16}/></button>
   </form></Modal>
@@ -45,7 +46,7 @@ function Login() {
   }
   return <div className="login-page"><div className="login-art"><Compass size={200} strokeWidth={0.5}/><span>让每一次出航，都井然有序。</span></div>
     <form onSubmit={submit} className="login-card"><div className="brand-mark"><NavigationMark/></div><h1>欢迎回到指挥室</h1>
-      <label htmlFor="password">访问密码</label><input id="password" type="password" autoComplete="current-password" autoFocus required value={password} onChange={event => setPassword(event.target.value)}/>
+      <label htmlFor="password">访问密码</label><PasswordInput id="password" autoComplete="current-password" autoFocus required value={password} onChange={event => setPassword(event.target.value)}/>
       {error && <ErrorBox message={error}/>}
       <button className="button primary" disabled={busy}>{busy ? '正在验证…' : '进入控制台'}<ArrowRight size={16}/></button>
       <small>自动生成的密码保存在服务端 password.txt 中。</small>

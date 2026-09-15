@@ -1,3 +1,4 @@
+import { Select } from '../components/FormControls'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Palette } from 'lucide-react'
 import { api } from '../api/client'
@@ -52,10 +53,10 @@ export function Settings() {
             <label htmlFor="ui-theme">界面主题</label>
           </div>
           <div className="field-control">
-            <select id="ui-theme" value={theme} onChange={event => setTheme(event.target.value as typeof theme)}>
+            <Select id="ui-theme" value={theme} onChange={event => setTheme(event.target.value as typeof theme)}>
               <option value="light">浅色</option>
               <option value="dark">深色</option>
-            </select>
+            </Select>
           </div>
         </div>
         <div className="field-row">
@@ -63,11 +64,11 @@ export function Settings() {
             <label htmlFor="ui-language">界面语言</label>
           </div>
           <div className="field-control">
-            <select id="ui-language" value={language} disabled={connection !== 'ready'} onChange={event => setLanguage(event.target.value as typeof language)}>
+            <Select id="ui-language" value={language} disabled={connection !== 'ready'} onChange={event => setLanguage(event.target.value as typeof language)}>
               {Object.entries(languages).map(([key, label]) => (
                 <option key={key} value={key}>{label}</option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
       </section>

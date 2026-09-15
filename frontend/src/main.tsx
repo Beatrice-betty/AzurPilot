@@ -19,6 +19,7 @@ import './styles/home.css'
 import './styles/apple.css'
 import './styles/dev.css'
 import './styles/theme-system.css'
+import './styles/forms.css'
 
 function mountUserTheme() {
   if (document.querySelector('link[data-azurpilot-theme]')) return

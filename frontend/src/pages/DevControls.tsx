@@ -181,6 +181,7 @@ export function DevControls() {
       </DevField>
       <DevField id="dev-invalid" label="错误输入框" help="用于调整 aria-invalid 对应的错误状态。">
         <FieldInput id="dev-invalid" label="错误输入框" value="invalid-value" invalid onChange={() => undefined}/>
+        <div id="dev-invalid-status" className="edit-status edit-error" role="alert"><CircleAlert size={14} aria-hidden="true"/>请输入有效值，当前输入已保留。</div>
       </DevField>
       <DevField id="dev-search" label="带图标输入框">
         <div className="input-icon"><Search size={15}/><input id="dev-search" placeholder="搜索任务、配置或实例…"/></div>

@@ -1,3 +1,4 @@
+import { Checkbox, PasswordInput, Select } from './FormControls'
 import type { Value } from '../api/types'
 import { lazy, Suspense } from 'react'
 import { AutoTextarea } from './AutoTextarea'
@@ -10,27 +11,29 @@ interface Props {
   preserveText?: boolean; invalid?: boolean
 }
 export function FieldInput({id, value, onChange, type, options, disabled, label, mode, translateOption, preserveText, invalid}: Props) {
+  const accessibility = {'aria-label': label, 'aria-invalid': invalid || undefined, 'aria-describedby': invalid ? `${id}-status` : undefined}
   // 只读时间沿用旧界面的原始文本，保留秒、小数秒和历史格式。
   if (type === 'datetime' && disabled) return <input id={id} aria-label={label} readOnly value={String(value ?? '').replace('T', ' ')} />
-  if (mode === 'yaml' || type === 'yaml') return <Suspense fallback={<div role="status">正在加载编辑器…</div>}><YamlEditor id={id} value={String(value ?? '')} onChange={onChange} disabled={disabled} label={label}/></Suspense>
-  if (type === 'multiselect') return <div className="multi-options" id={id} role="group" aria-label={label}>{options?.map(option => {
+  if (mode === 'yaml' || type === 'yaml') return <Suspense fallback={<div role="status">正在加载编辑器…</div>}><YamlEditor id={id} value={String(value ?? '')} onChange={onChange} disabled={disabled} label={label} invalid={invalid}/></Suspense>
+  if (type === 'multiselect') return <div className="multi-options" id={id} role="group" {...accessibility}>{options?.map(option => {
     const selected = Array.isArray(value) ? value : []
     const checked = selected.includes(option as never)
-    return <label key={JSON.stringify(option)}><input type="checkbox" checked={checked} disabled={disabled} onChange={() => onChange(checked ? selected.filter(item => item !== option) : [...selected, option] as Value)}/>{translateOption?.(option) ?? String(option)}</label>
+    return <Checkbox key={JSON.stringify(option)} checked={checked} disabled={disabled} onChange={() => onChange(checked ? selected.filter(item => item !== option) : [...selected, option] as Value)}>{translateOption?.(option) ?? String(option)}</Checkbox>
   })}</div>
   if (type === 'checkbox' || type === 'bool' || typeof value === 'boolean') {
-    return <button id={id} type="button" role="switch" aria-label={label} aria-checked={!!value} disabled={disabled}
+    return <button id={id} type="button" role="switch" {...accessibility} aria-checked={!!value} disabled={disabled}
       className={`toggle ${value ? 'on' : ''}`} onClick={() => onChange(!value)}><span /></button>
   }
   if (options?.length) {
-    return <select id={id} value={JSON.stringify(value)} disabled={disabled} onChange={event => onChange(JSON.parse(event.target.value))}>
+    return <Select {...accessibility} id={id} value={JSON.stringify(value)} disabled={disabled} onChange={event => onChange(JSON.parse(event.target.value))}>
       {!options.some(option => option === value) && <option value={JSON.stringify(value)}>{String(value ?? '未设置')}</option>}
       {options.map(option => <option value={JSON.stringify(option)} key={JSON.stringify(option)}>{translateOption?.(option) ?? String(option)}</option>)}
-    </select>
+    </Select>
   }
-  if (type === 'textarea' || type === 'task_priority') return <AutoTextarea id={id} value={String(value ?? '')} disabled={disabled} onChange={onChange}/>
+  if (type === 'textarea' || type === 'task_priority') return <AutoTextarea id={id} value={String(value ?? '')} disabled={disabled} label={label} invalid={invalid} onChange={onChange}/>
   const isNumber = typeof value === 'number' || ['int', 'number', 'float'].includes(type ?? '')
-  return <input id={id} disabled={disabled} aria-invalid={invalid || undefined} aria-describedby={`${id}-status`}
+  const Input = type === 'password' ? PasswordInput : 'input'
+  return <Input {...accessibility} id={id} disabled={disabled}
     inputMode={isNumber ? 'decimal' : undefined}
     type={type === 'password' ? 'password' : type === 'datetime' && !preserveText ? 'datetime-local' : isNumber && !preserveText ? 'number' : 'text'}
     step={type === 'datetime' ? 1 : 'any'} autoComplete={type === 'password' ? 'new-password' : 'off'}

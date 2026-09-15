@@ -15,8 +15,8 @@ const colors = HighlightStyle.define([
 ])
 const externalChange = Annotation.define<boolean>()
 
-export function YamlEditor({id, value, onChange, disabled = false, label}: {
-  id: string; value: string; onChange: (value: string) => void; disabled?: boolean; label: string
+export function YamlEditor({id, value, onChange, disabled = false, label, invalid}: {
+  id: string; value: string; onChange: (value: string) => void; disabled?: boolean; label: string; invalid?: boolean
 }) {
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView>(undefined)
@@ -50,8 +50,8 @@ export function YamlEditor({id, value, onChange, disabled = false, label}: {
   useEffect(() => {
     view.current?.dispatch({effects: editable.current.reconfigure([
       EditorState.readOnly.of(disabled), EditorView.editable.of(!disabled),
-      EditorView.contentAttributes.of({'aria-disabled': String(disabled)}),
+      EditorView.contentAttributes.of({'aria-disabled': String(disabled), 'aria-invalid': String(!!invalid), ...(invalid ? {'aria-describedby': `${id}-status`} : {})}),
     ])})
-  }, [disabled, id, label])
-  return <div className={`yaml-editor ${disabled ? 'is-disabled' : ''}`}><div className="editor-heading">YAML</div><div ref={host}/></div>
+  }, [disabled, invalid, id, label])
+  return <div aria-invalid={invalid || undefined} className={`yaml-editor ${disabled ? 'is-disabled' : ''}`}><div className="editor-heading">YAML</div><div ref={host}/></div>
 }

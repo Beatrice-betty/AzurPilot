@@ -1,3 +1,4 @@
+import { Select } from './FormControls'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { Download, Pause, Play, Search, SlidersHorizontal, Terminal, Trash2 } from 'lucide-react'
@@ -235,11 +236,11 @@ export function LogPanel({active = true}: {active?: boolean}) {
           <Search size={15} />
           <input aria-label="搜索日志" placeholder="搜索日志内容…" value={search} onChange={event => setSearch(event.target.value)} />
         </div>
-        <select aria-label="日志级别" value={level} onChange={event => setLevel(event.target.value)}>
+        <Select aria-label="日志级别" value={level} onChange={event => setLevel(event.target.value)}>
           {['ALL', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'].map(item => (
             <option key={item} value={item}>{item === 'ALL' ? '所有级别' : item}</option>
           ))}
-        </select>
+        </Select>
         <span>最近 {entries.length} 条</span>
       </div>}
       <div className="log-content" ref={scroll} aria-label="日志内容">
