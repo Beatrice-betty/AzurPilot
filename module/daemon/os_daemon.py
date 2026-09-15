@@ -17,6 +17,10 @@ from module.os_handler.port import PORT_ENTER, PortHandler
 
 
 class AzurLaneDaemon(DaemonBase, OSFleet, PortHandler):
+    # 半自动模式没有自动搜索在跑，S 评价页面不会自行推进，
+    # 无需为防抢点保留 os_combat.Combat 默认的 20 秒兜底延迟
+    battle_status_s_autoclick_delay = 3
+
     def _os_combat_expected_end(self):
         """大世界战斗预期结束判断，优先处理搜索奖励弹窗。"""
         if self.appear_then_click(AUTO_SEARCH_REWARD, offset=(50, 50), interval=2):
