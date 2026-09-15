@@ -81,9 +81,9 @@
   --theme-toggle-shadow: 0 2px 4px #0003;
 
   /* Segmented controls / tabs */
-  --theme-segment-bg: #0000000d;
-  --theme-segment-border: #00000012;
-  --theme-segment-indicator: #ffffffa6;
+  --theme-segment-bg: #e9eaedb8;
+  --theme-segment-border: #18181b0a;
+  --theme-segment-indicator: #fffffff2;
   --theme-tabs-bg: #ffffff52;
   --theme-tabs-border: #ffffff8c;
   --theme-tabs-indicator: #ffffff9e;
@@ -186,9 +186,9 @@
   --glass-shadow: 0 8px 32px #0002, inset 0 1px 0 #ffffff0d;
 
   --theme-toggle-off: #515154;
-  --theme-segment-bg: #ffffff10;
-  --theme-segment-border: #ffffff18;
-  --theme-segment-indicator: #ffffff24;
+  --theme-segment-bg: #252529c7;
+  --theme-segment-border: #ffffff0d;
+  --theme-segment-indicator: #62626be6;
   --theme-tabs-bg: #ffffff14;
   --theme-tabs-border: #ffffff20;
   --theme-tabs-indicator: #ffffff28;

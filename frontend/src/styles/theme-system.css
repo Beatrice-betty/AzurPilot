@@ -80,12 +80,9 @@
   --theme-toggle-shadow: 0 2px 4px #0003;
 
   /* Segmented controls */
-  --theme-segment-bg: #0000000d;
-  --theme-segment-border: #00000012;
-  --theme-segment-indicator: #ffffffa6;
-  --theme-tabs-bg: #ffffff52;
-  --theme-tabs-border: #ffffff8c;
-  --theme-tabs-indicator: #ffffff9e;
+  --theme-segment-bg: #e9eaedb8;
+  --theme-segment-border: #18181b0a;
+  --theme-segment-indicator: #fffffff2;
 
   /* Feedback */
   --theme-toast-bg: var(--text);
@@ -143,12 +140,9 @@
 :root[data-theme='dark'] {
   --theme-on-accent: #fff;
   --theme-toggle-off: #515154;
-  --theme-segment-bg: #ffffff10;
-  --theme-segment-border: #ffffff18;
-  --theme-segment-indicator: #ffffff24;
-  --theme-tabs-bg: #ffffff14;
-  --theme-tabs-border: #ffffff20;
-  --theme-tabs-indicator: #ffffff28;
+  --theme-segment-bg: #252529c7;
+  --theme-segment-border: #ffffff0d;
+  --theme-segment-indicator: #62626be6;
   --theme-resource-0-bg: #ffffff08;
   --theme-resource-1-bg: #ffffff08;
   --theme-resource-2-bg: #ffffff08;
@@ -225,17 +219,13 @@ button:focus-visible, a:focus-visible, summary:focus-visible {outline-color: var
 .toggle.on {background: var(--theme-toggle-on)}
 
 .monitor-segmented {background: var(--theme-segment-bg); border-color: var(--theme-segment-border)}
-.monitor-segmented::before {background: var(--theme-segment-indicator)}
+.monitor-segmented .segmented-indicator {background: var(--theme-segment-indicator)}
 .monitor-segmented button {color: var(--theme-muted)}
 .monitor-segmented button:hover, .monitor-segmented button[aria-selected='true'], [data-theme='dark'] .monitor-segmented button[aria-selected='true'] {color: var(--theme-text)}
-.statistics-tabs {background: var(--theme-tabs-bg); border-color: var(--theme-tabs-border)}
-.statistics-tabs-indicator, [data-theme='dark'] .statistics-tabs-indicator {background: var(--theme-tabs-indicator)}
-.statistics-tabs button {color: var(--theme-muted)}
-.statistics-tabs button:hover, .statistics-tabs button.active, [data-theme='dark'] .statistics-tabs button.active {color: var(--theme-text)}
 
 .page-title h1 {
   color: var(--theme-title-color);
-  background: var(--theme-title-fill);
+  background-image: var(--theme-title-fill);
   -webkit-text-stroke-color: var(--theme-title-stroke);
   text-shadow: var(--theme-title-shadow);
 }

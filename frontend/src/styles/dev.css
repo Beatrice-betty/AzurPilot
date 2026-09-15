@@ -68,8 +68,6 @@
 .dev-type-grid code {justify-self:start;padding:7px 9px;border-radius:8px;background:var(--surface-muted);font-size:12px}
 .dev-numeric {font-size:22px;font-variant-numeric:tabular-nums}
 .dev-ellipsis {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;font-size:13px}
-.dev-stat-tabs {margin:0;flex-shrink:0}
-.dev-stat-tabs button {width:76px;padding:0 10px}
 .dev-layout-grid {display:grid;grid-template-columns:minmax(220px,.8fr) minmax(260px,1fr) minmax(280px,1.2fr);gap:18px;padding:22px 24px}
 .dev-layout-grid > div {min-width:0;display:grid;gap:10px;align-content:start}
 .dev-nav-preview {padding:16px;border:1px solid var(--border);border-radius:20px;background:color-mix(in srgb,var(--surface) 76%,transparent)}

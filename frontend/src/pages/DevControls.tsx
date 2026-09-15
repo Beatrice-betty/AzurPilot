@@ -4,6 +4,7 @@ import { ArrowRight, Bell, ChevronRight, CircleAlert, Code2, Database, Image, La
 import type { Value } from '../api/types'
 import { useApp } from '../app/context'
 import { FieldInput } from '../components/FieldInput'
+import { SegmentedControl } from '../components/SegmentedControl'
 import { GlassMaterial } from '../components/GlassMaterial'
 import { Empty, ErrorBox, Loading, Modal, PageTitle, StatusBadge } from '../components/ui'
 
@@ -196,10 +197,10 @@ export function DevControls() {
       <div className="panel-heading"><h2 data-text="选择器与状态">选择器与状态</h2></div>
       <div className="dev-control-block">
         <div className="dev-control-label"><strong>分段控制器</strong><span>复用运行监控页的 segmented control。</span></div>
-        <div className={`monitor-segmented ${segment}`} role="tablist" aria-label="开发者分段控制器">
-          <button role="tab" aria-selected={segment === 'logs'} onClick={() => setSegment('logs')}><Terminal size={15}/>日志</button>
-          <button role="tab" aria-selected={segment === 'preview'} onClick={() => setSegment('preview')}><Image size={15}/>截图</button>
-        </div>
+        <SegmentedControl label="开发者分段控制器" value={segment} onChange={setSegment} options={[
+          {value: 'logs', label: <><Terminal size={15}/>日志</>},
+          {value: 'preview', label: <><Image size={15}/>截图</>},
+        ]}/>
       </div>
       <div className="dev-control-block">
         <div className="dev-control-label"><strong>状态徽标</strong><span>运行、待命、错误、更新。</span></div>
@@ -210,10 +211,7 @@ export function DevControls() {
       </div>
       <div className="dev-control-block">
         <div className="dev-control-label"><strong>统计页 Tabs</strong><span>检查胶囊滑块、长文本和选中态。</span></div>
-        <nav className="statistics-tabs dev-stat-tabs" aria-label="开发者统计分类">
-          <span className="statistics-tabs-indicator" aria-hidden="true" style={{width: 76, height: 40, transform: `translateX(${['资源','掉落','行动','委托'].indexOf(demoTab) * 78}px)`}}/>
-          {['资源','掉落','行动','委托'].map(tab => <button key={tab} className={demoTab === tab ? 'active' : ''} onClick={() => setDemoTab(tab)}>{tab}</button>)}
-        </nav>
+        <SegmentedControl label="开发者统计分类" value={demoTab} onChange={setDemoTab} options={['资源','掉落','行动','委托'].map(value => ({value, label: value}))}/>
       </div>
     </section>
 

@@ -5,6 +5,7 @@ import type { Preview } from '../api/types'
 import { useApp } from '../app/context'
 import { Empty } from './ui'
 import { LogPanel } from './LogPanel'
+import { SegmentedControl } from './SegmentedControl'
 
 export function MonitorPanel({instance}: {instance: string}) {
   const [view, setView] = useState('logs')
@@ -18,10 +19,10 @@ export function MonitorPanel({instance}: {instance: string}) {
     if (event.topic === 'preview' && (event.data as Preview).instance === instance) setFrame(event.data as Preview)
   }), [instance])
   return <section className="panel monitor-panel"><div className="monitor-tabs" aria-label="运行监控">
-    <div className={`monitor-segmented ${view}`} role="tablist" aria-label="监控视图">
-      <button role="tab" aria-selected={view === 'logs'} onClick={() => setView('logs')}><Terminal size={15}/>日志</button>
-      <button role="tab" aria-selected={view === 'preview'} onClick={() => setView('preview')}><Image size={15}/>截图</button>
-    </div>
+    <SegmentedControl label="监控视图" value={view} onChange={setView} options={[
+      {value: 'logs', label: <><Terminal size={15}/>日志</>},
+      {value: 'preview', label: <><Image size={15}/>截图</>},
+    ]}/>
     {view === 'preview' && frame?.image && <a className="text-button" href={frame.image} download={`${instance}-screenshot.jpg`}><Download size={14}/>保存截图</a>}
   </div>
     <div className="monitor-view" hidden={view !== 'logs'}><LogPanel active={view === 'logs'}/></div>

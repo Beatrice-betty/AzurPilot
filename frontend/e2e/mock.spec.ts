@@ -60,6 +60,61 @@ test('总览三态、资源搭配记忆、日志与被动截图切换', async ({
   await expect(page.locator('[id="Main.Emotion.Fleet1Record"]')).toHaveAttribute('readonly', '')
 })
 
+test('分段滑块首屏静止，交互后平移并尊重减少动态效果', async ({page}) => {
+  await page.addInitScript(() => {
+    document.addEventListener('transitionrun', event => {
+      if (event.target instanceof Element && event.target.matches('.segmented-indicator')) {
+        const root = document.documentElement
+        root.dataset.segmentTransitions = String(Number(root.dataset.segmentTransitions ?? 0) + 1)
+      }
+    })
+  })
+  await page.goto('/#/i/demo-main/statistics')
+  await expect(page.getByRole('img', {name: '石油交互趋势图'})).toBeVisible()
+  const tabs = page.getByRole('tablist', {name: '统计分类'})
+  const transitions = () => page.evaluate(() => Number(document.documentElement.dataset.segmentTransitions ?? 0))
+  expect(await transitions()).toBe(0)
+  await tabs.screenshot({path: 'test-results/segmented-statistics-light.png'})
+  await tabs.getByRole('tab', {name: '委托收益', exact: true}).click()
+  await expect.poll(transitions).toBeGreaterThan(0)
+  await expect(page.locator('.period-controls strong')).toHaveText('委托收益')
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'))
+  await expect(tabs).toHaveCSS('background-color', 'rgba(37, 37, 41, 0.78)')
+  await expect(tabs.getByRole('tab', {name: '委托收益', exact: true})).toHaveCSS('color', 'rgb(245, 245, 247)')
+  await tabs.screenshot({path: 'test-results/segmented-statistics-dark.png'})
+  await page.emulateMedia({reducedMotion: 'reduce'})
+  const before = await transitions()
+  await tabs.getByRole('tab', {name: '大世界总结', exact: true}).click()
+  await expect(page.locator('.period-controls strong')).toHaveText('大世界总结')
+  expect(await transitions()).toBe(before)
+  await expect(tabs.locator('.segmented-indicator')).toHaveCSS('transition-duration', '0s')
+})
+
+test('统计与监控复用分段控件的样式及键盘切换', async ({page}) => {
+  await page.goto('/#/i/demo-main/overview')
+  const monitor = page.getByRole('tablist', {name: '监控视图'})
+  await expect(monitor).toBeVisible()
+  await monitor.screenshot({path: 'test-results/segmented-monitor-light.png'})
+  const appearance = await monitor.evaluate(control => {
+    const style = getComputedStyle(control)
+    return [style.backgroundColor, style.borderColor, style.borderRadius, control.querySelector('button')!.getBoundingClientRect().height]
+  })
+  await monitor.getByRole('tab', {name: '日志', exact: true}).focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(monitor.getByRole('tab', {name: '截图', exact: true})).toHaveAttribute('aria-selected', 'true')
+  await expect(page.locator('.preview-screen')).toBeVisible()
+  await page.keyboard.press('ArrowLeft')
+  await expect(monitor.getByRole('tab', {name: '日志', exact: true})).toHaveAttribute('aria-selected', 'true')
+  await expect(page.locator('.preview-screen')).toBeHidden()
+  await page.goto('/#/i/demo-main/statistics')
+  const statistics = page.getByRole('tablist', {name: '统计分类'})
+  await expect(statistics).toBeVisible()
+  expect(await statistics.evaluate(control => {
+    const style = getComputedStyle(control)
+    return [style.backgroundColor, style.borderColor, style.borderRadius, control.querySelector('button')!.getBoundingClientRect().height]
+  })).toEqual(appearance)
+})
+
 test('统计分类、K 线、时间过滤、表格导出与移动端布局', async ({page}) => {
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
@@ -72,16 +127,30 @@ test('统计分类、K 线、时间过滤、表格导出与移动端布局', asy
   await page.getByRole('button', {name: '导出本类数据'}).click()
   expect((await download).suggestedFilename()).toMatch(/\.csv$/)
   for (const label of ['大世界趋势', '大世界总结', '委托收益', '舰船经验', '短猫掉落']) {
-    await page.getByRole('navigation', {name: '统计分类'}).getByRole('button', {name: label, exact: true}).click()
+    await page.getByRole('tablist', {name: '统计分类'}).getByRole('tab', {name: label, exact: true}).click()
     await expect(page.locator('.period-controls strong')).toHaveText(label)
   }
-  await page.getByRole('button', {name: '资源趋势', exact: true}).click()
+  await page.getByRole('tab', {name: '资源趋势', exact: true}).click()
   await page.getByLabel('图表起始时间').fill('2099-01-01T00:00')
   await expect(page.getByText('这段时间没有有效记录')).toBeVisible()
   await page.getByRole('button', {name: '全部时间', exact: true}).click()
   await page.getByLabel('图表类型').selectOption('candlestick')
   await page.screenshot({path: 'test-results/statistics-resources-new.png', fullPage: true})
   await page.setViewportSize({width: 390, height: 844})
+  const tabs = page.getByRole('tablist', {name: '统计分类'})
+  await tabs.getByRole('tab', {name: '资源趋势', exact: true}).focus()
+  await page.keyboard.press('End')
+  await expect(tabs.getByRole('tab', {name: '短猫掉落', exact: true})).toBeFocused()
+  await expect(tabs.getByRole('tab', {name: '短猫掉落', exact: true})).toHaveAttribute('aria-selected', 'true')
+  await expect(page.locator('.period-controls strong')).toHaveText('短猫掉落')
+  await expect.poll(() => tabs.evaluate(control => {
+    const active = control.querySelector('[aria-selected="true"]')!.getBoundingClientRect()
+    const indicator = control.querySelector('.segmented-indicator')!.getBoundingClientRect()
+    return Math.abs(active.x - indicator.x) + Math.abs(active.width - indicator.width)
+  })).toBeLessThan(1)
+  await page.keyboard.press('ArrowRight')
+  await expect(tabs.getByRole('tab', {name: '资源趋势', exact: true})).toBeFocused()
+  await expect(page.getByRole('img', {name: '石油交互趋势图'})).toBeVisible()
   await page.screenshot({path: 'test-results/statistics-mobile-new.png', fullPage: true})
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   expect(errors).toEqual([])
