@@ -1,10 +1,7 @@
 import { useState, type ComponentProps } from 'react'
-import { Check, ChevronsUpDown, Eye, EyeOff } from 'lucide-react'
+import { Check, Eye, EyeOff } from 'lucide-react'
 
-/** 保留原生选择菜单、键盘查找和移动端系统选择器。 */
-export function Select({children, ...props}: ComponentProps<'select'>) {
-  return <span className="select-control"><select {...props}>{children}</select><ChevronsUpDown size={15} aria-hidden="true"/></span>
-}
+export { Select } from './Select'
 
 /** 使用真实复选框承载焦点和表单语义，图标只负责呈现。 */
 export function Checkbox({children, ...props}: ComponentProps<'input'>) {

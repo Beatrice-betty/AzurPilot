@@ -36,11 +36,11 @@ input[aria-invalid='true']:focus, select[aria-invalid='true']:focus, textarea[ar
   box-shadow: 0 0 0 3px var(--theme-danger-soft);
 }
 
-/* 图标放在真实控件上方且不拦截点击，不重新实现浏览器的选择行为。 */
+/* 下拉框的触发器和展开列表共用主题，浏览器 select 只桥接变更事件。 */
 .select-control, .password-control {position: relative; display: inline-flex; min-width: 0; max-width: 100%; vertical-align: middle}
-.select-control > select {appearance: none; width: 100%; padding-right: 36px; cursor: pointer; text-overflow: ellipsis}
-.select-control > svg {position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--theme-muted); pointer-events: none}
-.select-control:has(select:disabled) > svg {opacity: .45}
+.select-control > select {display: none}
+
+
 .field-control > .select-control, .field-control > .password-control {width: 100%; font-size: 13px}
 .password-control > input {width: 100%; padding-right: 44px !important}
 .password-reveal {position: absolute; right: 0; top: 0; bottom: 0; width: 42px; display: grid; place-items: center; color: var(--theme-muted); border-radius: var(--theme-radius-control)}
@@ -109,19 +109,42 @@ input[type='range']:focus-visible {outline: 2px solid var(--theme-focus); outlin
 }
 @media (max-width: 768px), (pointer: coarse) {
   :root {--form-height: 44px}
-  .field-control > .select-control, .field-control > .password-control, .select-control select, .password-control input {font-size: 16px}
+  .field-control > .select-control, .field-control > .password-control, .select-trigger, .password-control input {font-size: 16px}
   .multi-options .checkbox-control {min-height: 44px}
   .password-reveal {width: 44px}
   .monitor-segmented button {min-height: 44px}
 }
 @media (forced-colors: active) {
   input, select, textarea, .button {border-color: ButtonText}
-  .select-control > select {appearance: auto}
-  .select-control > svg {display: none}
+  .select-trigger, .select-menu {border-color: ButtonText}
+  .select-option.is-active {background: Highlight; color: HighlightText}
   .checkbox-mark input[type='checkbox'] {appearance: auto}
   .checkbox-mark > svg {display: none}
   .toggle::before {background: Canvas; border: 1px solid ButtonText}
   .toggle.on::before {background: Highlight}
   .toggle > span {background: ButtonText}
   input[type='range'] {appearance: auto}
+}
+
+.select-trigger {display: flex; align-items: center; justify-content: space-between; gap: 14px; min-width: 0; width: 100%; min-height: var(--form-height); padding: 9px 12px; border: 1px solid var(--form-edge); border-radius: var(--theme-radius-control); background: var(--theme-input-bg); color: var(--theme-input-text); line-height: 1.5; text-align: left; box-shadow: var(--form-shadow); transition: border-color .16s, box-shadow .16s}
+.select-trigger > span {overflow: hidden; text-overflow: ellipsis; white-space: nowrap}
+.select-trigger > svg {color: var(--theme-muted)}
+.select-trigger:focus-visible, .select-trigger[aria-expanded='true'] {outline: none; border-color: var(--theme-focus); box-shadow: 0 0 0 3px var(--theme-focus-ring)}
+.select-trigger[aria-invalid='true'] {border-color: var(--theme-danger); background: var(--theme-danger-soft)}
+.select-trigger:disabled {cursor: not-allowed; opacity: .55}
+.select-menu {position: fixed; inset: auto; margin: 0; padding: 5px; box-sizing: border-box; border: 1px solid var(--theme-border); border-radius: 13px; background: var(--theme-surface); color: var(--theme-text); box-shadow: 0 12px 36px #0003, 0 2px 8px #0001; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; font: 13px/1.5 var(--theme-font-sans); text-align: left; z-index: 1000; zoom: 1}
+.select-menu::backdrop {background: transparent; pointer-events: none}
+.select-option {display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 7px 9px; border-radius: 8px; cursor: pointer; overflow-wrap: anywhere}
+.select-option > span {min-width: 0}
+.select-option > svg {color: var(--theme-accent); flex-shrink: 0}
+.select-option.is-active {background: var(--theme-accent-soft)}
+.select-option[aria-disabled='true'] {opacity: .45; cursor: not-allowed}
+@media (max-width: 768px), (pointer: coarse) {
+  .select-trigger, .select-menu {font-size: 16px}
+  .select-option {min-height: 44px}
+}
+@media (forced-colors: active) {
+  .select-trigger, .select-menu {border-color: ButtonText}
+  .select-option.is-active {background: Highlight; color: HighlightText}
+  .select-option > svg {color: currentColor}
 }
