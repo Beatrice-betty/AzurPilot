@@ -18,6 +18,18 @@ import './styles/insights.css'
 import './styles/home.css'
 import './styles/apple.css'
 import './styles/dev.css'
+import './styles/theme-system.css'
+
+function mountUserTheme() {
+  if (document.querySelector('link[data-azurpilot-theme]')) return
+  const link = document.createElement('link')
+  link.rel = 'stylesheet'
+  link.href = `${import.meta.env.BASE_URL}theme.css`
+  link.dataset.azurpilotTheme = 'user'
+  document.head.appendChild(link)
+}
+
+mountUserTheme()
 
 class ErrorBoundary extends Component<{children: ReactNode}, {failed: boolean}> {
   state = {failed: false}
