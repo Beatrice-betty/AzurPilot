@@ -10,12 +10,14 @@ import { Statistics } from './pages/Statistics'
 import { Home } from './pages/Home'
 import { Updater } from './pages/Updater'
 import { Settings } from './pages/Settings'
+import { DevControls } from './pages/DevControls'
 import './styles/tokens.css'
 import './styles/layout.css'
 import './styles/components.css'
 import './styles/insights.css'
 import './styles/home.css'
 import './styles/apple.css'
+import './styles/dev.css'
 
 class ErrorBoundary extends Component<{children: ReactNode}, {failed: boolean}> {
   state = {failed: false}
@@ -26,7 +28,7 @@ class ErrorBoundary extends Component<{children: ReactNode}, {failed: boolean}> 
   }
 }
 const router = createHashRouter([
-  {path: '/', element: <App/>, children: [{index: true, element: <Home/>}, {path: 'settings', element: <Settings/>}, {path: 'updater', element: <Updater/>}]},
+  {path: '/', element: <App/>, children: [{index: true, element: <Home/>}, {path: 'settings', element: <Settings/>}, {path: 'updater', element: <Updater/>}, {path: 'dev', element: <DevControls/>}]},
   {path: '/i/:instance', element: <App/>, children: [
     {index: true, element: <Navigate to="overview" replace/>},
     {path: 'overview', element: <Overview/>}, {path: 'task/:task', element: <TaskConfig/>},

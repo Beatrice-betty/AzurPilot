@@ -1,6 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent, type MouseEvent } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowRight, CalendarClock, ChartNoAxesCombined, Compass, LayoutDashboard, House, Download, Menu, Settings2, Wifi, WifiOff, X } from 'lucide-react'
+import { ArrowRight, CalendarClock, ChartNoAxesCombined, Code2, Compass, LayoutDashboard, House, Download, Menu, Settings2, Wifi, WifiOff, X } from 'lucide-react'
 import { api } from '../api/client'
 import { useApp, useConnection } from './context'
 import { ErrorBox, Loading, Modal } from '../components/ui'
@@ -9,6 +9,7 @@ import { InstanceSwitcher } from '../components/InstanceSwitcher'
 import { RightRail } from '../components/RightRail'
 import { TaskNav } from '../components/TaskNav'
 import { useUpdater } from './updater'
+import { recordDevLogoClick } from './devMode'
 
 export function CreateInstance({onClose}: {onClose: () => void}) {
   const [name, setName] = useState('')
@@ -57,7 +58,7 @@ export function NavigationMark() {
 
 export function App() {
   const connection = useConnection()
-  const {instancesLoaded, instances, schema, t, notify, previewEnabled} = useApp()
+  const {instancesLoaded, instances, schema, t, notify, previewEnabled, devMode, setDevMode} = useApp()
   const {instance} = useParams()
   const navigate = useNavigate()
   const location = useLocation()
@@ -69,7 +70,14 @@ export function App() {
   const base = instance ? `/i/${instance}` : ''
   const taskMatch = location.pathname.match(/\/task\/([^/]+)/)
   const currentTask = taskMatch ? taskMatch[1] : null
-  const activeSection = location.pathname.includes('/task/') ? '任务配置' : location.pathname.endsWith('/statistics') ? '资源统计' : location.pathname.endsWith('/settings') ? '系统设置' : location.pathname.endsWith('/updater') ? '更新器' : instance ? instance : '主页'
+  const activeSection = location.pathname.includes('/task/') ? '任务配置' : location.pathname.endsWith('/statistics') ? '资源统计' : location.pathname.endsWith('/settings') ? '系统设置' : location.pathname.endsWith('/updater') ? '更新器' : location.pathname.endsWith('/dev') ? '开发者' : instance ? instance : '主页'
+  function handleBrandLogoClick(event: MouseEvent<HTMLImageElement>) {
+    if (devMode || !recordDevLogoClick()) return
+    event.preventDefault()
+    setDevMode(true)
+    notify('开发者模式已开启')
+    navigate('/dev')
+  }
   useEffect(() => {
     if (connection === 'ready' && instancesLoaded && instance && !instances.some(item => item.name === instance)) {
       navigate('/', {replace: true})
@@ -82,9 +90,9 @@ export function App() {
   }, [instance, connection, notify, previewEnabled])
   if (connection === 'auth') return <Login/>
   return <div className={`app-shell ${instance ? 'with-rail' : ''} ${mobileOpen ? 'mobile-open' : ''} ${railOpen ? 'rail-open' : ''}`}>
-    <a className="skip-link" href="#main-content" onClick={event => {event.preventDefault(); document.getElementById('main-content')?.focus()}}>跳转到内容</a><aside className="sidebar"><div className="sidebar-brand"><Link to="/" className="brand-title" aria-label="AzurPilot 主页"><img src="/azurpilot.svg" alt="" className="brand-logo"/><span>AzurPilot</span></Link><button className="mobile-close icon-button" aria-label="关闭导航" onClick={() => setMobileOpen(false)}><X size={18}/></button></div>
+    <a className="skip-link" href="#main-content" onClick={event => {event.preventDefault(); document.getElementById('main-content')?.focus()}}>跳转到内容</a><aside className="sidebar"><div className="sidebar-brand"><Link to="/" className="brand-title" aria-label="AzurPilot 主页"><img src="/azurpilot.svg" alt="" className="brand-logo" onClick={handleBrandLogoClick}/><span>AzurPilot</span></Link><button className="mobile-close icon-button" aria-label="关闭导航" onClick={() => setMobileOpen(false)}><X size={18}/></button></div>
       <nav className="primary-nav" aria-label="主导航">
-        {instance ? <><NavLink to={`${base}/overview`}><LayoutDashboard size={17}/>运行总览</NavLink><NavLink to={`${base}/statistics`}><ChartNoAxesCombined size={17}/>资源统计</NavLink></> : <><NavLink to="/" end><House size={17}/>主页</NavLink><NavLink to="/updater"><Download size={17}/>更新器{update.data?.available && <span className="tiny-dot teal"/>}</NavLink><NavLink to="/settings"><Settings2 size={17}/>系统设置</NavLink></>}
+        {instance ? <><NavLink to={`${base}/overview`}><LayoutDashboard size={17}/>运行总览</NavLink><NavLink to={`${base}/statistics`}><ChartNoAxesCombined size={17}/>资源统计</NavLink></> : <><NavLink to="/" end><House size={17}/>主页</NavLink><NavLink to="/updater"><Download size={17}/>更新器{update.data?.available && <span className="tiny-dot teal"/>}</NavLink><NavLink to="/settings"><Settings2 size={17}/>系统设置</NavLink>{devMode && <NavLink to="/dev"><Code2 size={17}/>开发者</NavLink>}</>}
       </nav>
       {instance && <TaskNav/>}
     </aside>

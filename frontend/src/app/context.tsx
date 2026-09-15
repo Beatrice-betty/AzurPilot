@@ -3,6 +3,7 @@ import { api } from '../api/client'
 import type { Instance, Schema } from '../api/types'
 import type { Parameters } from '../api/generated'
 import { resumeEditors } from '../config/editors'
+import { readDevMode, writeDevMode } from './devMode'
 
 export const languages = {'zh-CN': '简体中文', 'zh-TW': '繁体中文', 'en-US': 'English', 'ja-JP': '日本語', 'zh-MIAO': '喵语'}
 type Language = NonNullable<Parameters['schema.get']['language']>
@@ -11,6 +12,7 @@ export interface AppContextValue {
   instancesLoaded: boolean; instances: Instance[]; schema?: Schema; refresh: () => Promise<void>; t: (key: string) => string
   notify: (message: string, error?: boolean) => void
   previewEnabled: boolean; setPreviewEnabled: (enabled: boolean) => void
+  devMode: boolean; setDevMode: (enabled: boolean) => void
   theme: 'light' | 'dark'; setTheme: (theme: 'light' | 'dark') => void
   language: Language; setLanguage: (language: Language) => void
 }
@@ -25,6 +27,7 @@ export function AppProvider({children}: {children: ReactNode}) {
   const [instancesLoaded, setInstancesLoaded] = useState(false)
   const [schema, setSchema] = useState<Schema>()
   const [previewEnabled, setPreviewEnabled] = useState(false)
+  const [devMode, setDevMode] = useState(readDevMode)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => localStorage.getItem('azurpilot.theme') === 'dark' ? 'dark' : 'light')
   const [language, setLanguage] = useState<Language>(() => {
     const saved = localStorage.getItem('azurpilot.language')
@@ -35,6 +38,7 @@ export function AppProvider({children}: {children: ReactNode}) {
     document.documentElement.dataset.theme = theme
     localStorage.setItem('azurpilot.theme', theme)
   }, [theme])
+  useEffect(() => { writeDevMode(devMode) }, [devMode])
   useEffect(() => { api.connect(); return () => api.disconnect() }, [])
   useEffect(() => { if (connection === 'ready') resumeEditors() }, [connection])
   const notify = useCallback((message: string, error = false) => setToast({message, error}), [])
@@ -72,7 +76,7 @@ export function AppProvider({children}: {children: ReactNode}) {
     for (const part of key.split('.')) value = value && typeof value === 'object' ? (value as Record<string, unknown>)[part] : undefined
     return typeof value === 'string' && value !== key ? value : key.split('.').filter(item => item !== 'name' && item !== '_info').at(-1) ?? key
   }, [schema])
-  return <Context.Provider value={{instancesLoaded, instances, schema, refresh, t, notify, previewEnabled, setPreviewEnabled, theme, setTheme, language, setLanguage}}>
+  return <Context.Provider value={{instancesLoaded, instances, schema, refresh, t, notify, previewEnabled, setPreviewEnabled, devMode, setDevMode, theme, setTheme, language, setLanguage}}>
     {children}
     {toast && <div role={toast.error ? 'alert' : 'status'} className={`toast ${toast.error ? 'error' : ''}`} onClick={() => setToast(undefined)}>{toast.message}</div>}
   </Context.Provider>

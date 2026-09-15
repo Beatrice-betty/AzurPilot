@@ -42,6 +42,8 @@ const mockContext: AppContextValue = {
   notify: () => {},
   previewEnabled: false,
   setPreviewEnabled: () => {},
+  devMode: false,
+  setDevMode: () => {},
   theme: 'light',
   setTheme: () => {},
   language: 'zh-CN',
