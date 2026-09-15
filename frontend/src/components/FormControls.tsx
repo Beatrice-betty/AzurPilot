@@ -1,5 +1,6 @@
 import { useState, type ComponentProps } from 'react'
 import { Check, Eye, EyeOff } from 'lucide-react'
+import { useApp } from '../app/context'
 
 export { Select } from './Select'
 
@@ -10,5 +11,6 @@ export function Checkbox({children, ...props}: ComponentProps<'input'>) {
 
 export function PasswordInput(props: ComponentProps<'input'>) {
   const [visible, setVisible] = useState(false)
-  return <span className="password-control"><input {...props} type={visible ? 'text' : 'password'}/><button type="button" className="password-reveal" disabled={props.disabled} aria-label={visible ? '隐藏密码' : '显示密码'} aria-pressed={visible} onClick={() => setVisible(!visible)}>{visible ? <EyeOff size={18} aria-hidden="true"/> : <Eye size={18} aria-hidden="true"/>}</button></span>
+  const {ui} = useApp()
+  return <span className="password-control"><input {...props} type={visible ? 'text' : 'password'}/><button type="button" className="password-reveal" disabled={props.disabled} aria-label={visible ? ui('common.hidePassword') : ui('common.showPassword')} aria-pressed={visible} onClick={() => setVisible(!visible)}>{visible ? <EyeOff size={18} aria-hidden="true"/> : <Eye size={18} aria-hidden="true"/>}</button></span>
 }

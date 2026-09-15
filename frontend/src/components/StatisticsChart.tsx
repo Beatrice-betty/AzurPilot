@@ -8,10 +8,12 @@ import type { StatSeries } from '../api/types'
 import { Empty } from './ui'
 import { StatisticsTable } from './StatisticsTable'
 import { aggregatePoints } from './statisticsData'
+import { useApp } from '../app/context'
 
 echarts.use([LineChart, CandlestickChart, GridComponent, TooltipComponent, DataZoomComponent, ToolboxComponent, CanvasRenderer])
 
 export function StatisticsChart({series}: {series: StatSeries[]}) {
+  const {ui, language} = useApp()
   const [key, setKey] = useState(series.find(item => item.points.length)?.key ?? series[0]?.key ?? '')
   const [mode, setMode] = useState('line')
   const [bucket, setBucket] = useState(0)
@@ -33,7 +35,7 @@ export function StatisticsChart({series}: {series: StatSeries[]}) {
   const maximum = values.length ? Math.max(...values) : 0
   useEffect(() => {
     if (!element.current || !points.length) return
-    const chart = echarts.init(element.current, undefined, {locale: 'ZH'})
+    const chart = echarts.init(element.current, undefined, {locale: language.startsWith('zh') ? 'ZH' : 'EN'})
     function render() {
       const colors = getComputedStyle(document.documentElement)
       const text = colors.getPropertyValue('--text').trim() || '#82929f'
@@ -41,7 +43,7 @@ export function StatisticsChart({series}: {series: StatSeries[]}) {
         animation: false, textStyle: {color: text, fontFamily: 'Microsoft YaHei, sans-serif'},
         grid: {left: 65, right: 30, top: 65, bottom: 85},
         tooltip: {trigger: 'axis', confine: true, renderMode: 'richText', axisPointer: {type: 'cross'}},
-        toolbox: {right: 20, feature: {dataZoom: {yAxisIndex: 'none', title: {zoom: '框选放大', back: '撤销缩放'}}, restore: {title: '重置视图'}, saveAsImage: {title: '保存图表', name: current.label, pixelRatio: 2}}},
+        toolbox: {right: 20, feature: {dataZoom: {yAxisIndex: 'none', title: {zoom: ui('stats.toolboxZoom'), back: ui('stats.toolboxBack')}}, restore: {title: ui('stats.toolboxRestore')}, saveAsImage: {title: ui('stats.toolboxSave'), name: current.label, pixelRatio: 2}}},
         xAxis: mode === 'candlestick' ? {type: 'category', data: buckets.map(item => item.time), axisLabel: {hideOverlap: true}} : {type: 'time', axisLabel: {hideOverlap: true}},
         yAxis: {type: 'value', scale: true, splitLine: {lineStyle: {color: colors.getPropertyValue('--border').trim()}}},
         dataZoom: [{type: 'inside', zoomOnMouseWheel: 'ctrl'}, {type: 'slider', bottom: 16, height: 26}],
@@ -58,14 +60,14 @@ export function StatisticsChart({series}: {series: StatSeries[]}) {
     const theme = new MutationObserver(render)
     theme.observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme']})
     return () => {observer.disconnect(); theme.disconnect(); chart.dispose()}
-  }, [points, buckets, mode, current.label])
+  }, [points, buckets, mode, current.label, language, ui])
   return <section className={`panel statistics-chart ${expanded ? 'chart-expanded' : ''}`}>
-    <div className="panel-heading"><h2>趋势与细节</h2><button className="text-button" onClick={() => setExpanded(!expanded)}>{expanded ? '收起图表' : '放大查看'}</button></div>
-    <div className="statistics-controls"><label>指标<Select aria-label="统计资源" value={current.key} onChange={event => setKey(event.target.value)}>{series.map(item => <option value={item.key} key={item.key}>{item.label}{item.points.length ? '' : '（暂无记录）'}</option>)}</Select></label>
-      <label>图表<Select aria-label="图表类型" value={mode} onChange={event => setMode(event.target.value)}><option value="line">折线</option><option value="candlestick">K 线（开高低收）</option></Select></label>
-      <label>采样粒度<Select aria-label="采样粒度" value={bucket} onChange={event => setBucket(Number(event.target.value))}><option value={0}>{mode === 'candlestick' ? '每小时' : '每次记录'}</option><option value={5}>5 分钟</option><option value={60}>每小时</option><option value={1440}>每天</option></Select></label>
-      <label>起始时间<div className="date-input-wrap"><input type="datetime-local" aria-label="图表起始时间" value={from} className={from ? '' : 'date-empty'} onChange={event => setFrom(event.target.value)}/>{!from && <span className="date-input-placeholder" aria-hidden="true">---- / -- / --</span>}</div></label><label>结束时间<div className="date-input-wrap"><input type="datetime-local" aria-label="图表结束时间" value={to} className={to ? '' : 'date-empty'} onChange={event => setTo(event.target.value)}/>{!to && <span className="date-input-placeholder" aria-hidden="true">---- / -- / --</span>}</div></label><button className="text-button" onClick={() => {setFrom(''); setTo('')}}>全部时间</button></div>
-    {from && to && from > to && <p className="preview-error" role="alert">起始时间不能晚于结束时间。</p>}
-    {points.length ? <><div className="stat-metrics">{[['最新值', values.at(-1)], ['区间变化', values.at(-1)! - values[0]], ['最高值', maximum], ['最低值', minimum], ['原始记录', points.length]].map(([label, value]) => <div key={label}><span>{label}</span><strong>{Number(value).toLocaleString(undefined, {maximumFractionDigits: 2})}</strong></div>)}</div><div ref={element} className="chart-canvas" role="img" aria-label={`${current.label}交互趋势图`}/><p className="panel-note">拖动底部滑块或框选缩放，Ctrl + 滚轮缩放；游标查看精确值。聚合曲线取每桶末值，K 线展示开、高、低、收；摘要基于原始记录。</p><StatisticsTable data={{title: `${current.label}原始记录`, columns: ['时间', '数值', '来源'], rows: points.map(point => [point.time, point.value, point.source || '—'])}}/></> : <Empty title="这段时间没有有效记录">选择其他指标或调整时间范围，任务运行后可刷新查看。</Empty>}
+    <div className="panel-heading"><h2>{ui('stats.trendDetails')}</h2><button className="text-button" onClick={() => setExpanded(!expanded)}>{expanded ? ui('stats.collapseChart') : ui('stats.expandChart')}</button></div>
+    <div className="statistics-controls"><label>{ui('stats.metric')}<Select aria-label={ui('stats.metric')} value={current.key} onChange={event => setKey(event.target.value)}>{series.map(item => <option value={item.key} key={item.key}>{item.label}{item.points.length ? '' : ui('stats.noSeriesRecord')}</option>)}</Select></label>
+      <label>{ui('stats.chart')}<Select aria-label={ui('stats.chartType')} value={mode} onChange={event => setMode(event.target.value)}><option value="line">{ui('stats.line')}</option><option value="candlestick">{ui('stats.candlestick')}</option></Select></label>
+      <label>{ui('stats.bucket')}<Select aria-label={ui('stats.bucket')} value={bucket} onChange={event => setBucket(Number(event.target.value))}><option value={0}>{mode === 'candlestick' ? ui('stats.hourly') : ui('stats.eachRecord')}</option><option value={5}>{ui('stats.fiveMinutes')}</option><option value={60}>{ui('stats.hourly')}</option><option value={1440}>{ui('stats.daily')}</option></Select></label>
+      <label>{ui('stats.startTime')}<div className="date-input-wrap"><input type="datetime-local" aria-label={ui('stats.startTime')} value={from} className={from ? '' : 'date-empty'} onChange={event => setFrom(event.target.value)}/>{!from && <span className="date-input-placeholder" aria-hidden="true">---- / -- / --</span>}</div></label><label>{ui('stats.endTime')}<div className="date-input-wrap"><input type="datetime-local" aria-label={ui('stats.endTime')} value={to} className={to ? '' : 'date-empty'} onChange={event => setTo(event.target.value)}/>{!to && <span className="date-input-placeholder" aria-hidden="true">---- / -- / --</span>}</div></label><button className="text-button" onClick={() => {setFrom(''); setTo('')}}>{ui('stats.allTime')}</button></div>
+    {from && to && from > to && <p className="preview-error" role="alert">{ui('stats.invalidRange')}</p>}
+    {points.length ? <><div className="stat-metrics">{[[ui('stats.latest'), values.at(-1)], [ui('stats.change'), values.at(-1)! - values[0]], [ui('stats.maximum'), maximum], [ui('stats.minimum'), minimum], [ui('stats.rawCount'), points.length]].map(([label, value]) => <div key={String(label)}><span>{label}</span><strong>{Number(value).toLocaleString(undefined, {maximumFractionDigits: 2})}</strong></div>)}</div><div ref={element} className="chart-canvas" role="img" aria-label={ui('stats.chartAria', {label: current.label})}/><p className="panel-note">{ui('stats.chartHint')}</p><StatisticsTable data={{title: ui('stats.rawTitle', {label: current.label}), columns: [ui('stats.time'), ui('stats.value'), ui('stats.source')], rows: points.map(point => [point.time, point.value, point.source || '—'])}}/></> : <Empty title={ui('stats.noValidTitle')}>{ui('stats.noValidHint')}</Empty>}
   </section>
 }

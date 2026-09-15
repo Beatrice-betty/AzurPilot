@@ -5,27 +5,28 @@ import { api } from '../api/client'
 import type { Overview } from '../api/types'
 import { useApp, useConnection } from '../app/context'
 import { editor } from '../config/editors'
+import type { UiKey, UiTranslator } from '../i18n'
 
 const taskStateLabel = {
-  running: '正在运行',
-  pending: '待运行',
-  waiting: '等待中',
+  running: 'scheduler.running',
+  pending: 'scheduler.pending',
+  waiting: 'scheduler.waiting',
 } as const
 
 const taskGroups = [
-  {state: 'running', label: '正在运行', empty: '当前没有正在运行的任务', icon: CirclePlay},
-  {state: 'pending', label: '待运行', empty: '当前没有待运行任务', icon: ListTodo},
-  {state: 'waiting', label: '等待中', empty: '当前没有等待中的任务', icon: Hourglass},
+  {state: 'running', label: 'scheduler.running', empty: 'scheduler.noRunning', icon: CirclePlay},
+  {state: 'pending', label: 'scheduler.pending', empty: 'scheduler.noPending', icon: ListTodo},
+  {state: 'waiting', label: 'scheduler.waiting', empty: 'scheduler.noWaiting', icon: Hourglass},
 ] as const
 
-function formatExecutionTime(nextRun: string) {
+function formatExecutionTime(nextRun: string, ui: UiTranslator) {
   const value = nextRun.replace('T', ' ').trim()
-  return value ? `执行时间：${value}` : '执行时间未设置'
+  return value ? ui('scheduler.executionTime', {time: value}) : ui('scheduler.executionUnset')
 }
 
 export function RightRail({instance, onMobileClose}: {instance: string; onMobileClose: () => void}) {
   const connection = useConnection()
-  const {notify} = useApp()
+  const {notify, ui} = useApp()
   const [data, setData] = useState<Overview>()
   const [busy, setBusy] = useState(false)
 
@@ -51,7 +52,7 @@ export function RightRail({instance, onMobileClose}: {instance: string; onMobile
       if (data.status !== 'running') await editor(`config:${instance}`).settled()
       const next = await api.request(data.status === 'running' ? 'scheduler.stop' : 'scheduler.start', {instance})
       setData(next)
-      notify(data.status === 'running' ? '调度器已停止' : '调度器已启动')
+      notify(data.status === 'running' ? ui('scheduler.stoppedNotice') : ui('scheduler.started'))
     } catch (error) {
       notify((error as Error).message, true)
     } finally {
@@ -63,63 +64,63 @@ export function RightRail({instance, onMobileClose}: {instance: string; onMobile
   const pending = data?.tasks.filter(task => task.state === 'pending').length ?? 0
   const waiting = data?.tasks.filter(task => task.state === 'waiting').length ?? 0
 
-  return <aside className="right-rail" id="right-rail-menu" aria-label="调度与任务">
+  return <aside className="right-rail" id="right-rail-menu" aria-label={ui('scheduler.rail')}>
     <div className="right-rail-header">
       <div>
-        <span className="right-rail-eyebrow">实例工作区</span>
+        <span className="right-rail-eyebrow">{ui('scheduler.workspace')}</span>
         <strong>{instance}</strong>
       </div>
-      <button className="mobile-rail-close icon-button" aria-label="关闭调度与任务" onClick={onMobileClose}><X size={18}/></button>
+      <button className="mobile-rail-close icon-button" aria-label={ui('nav.closeRail')} onClick={onMobileClose}><X size={18}/></button>
     </div>
 
-    <section className="scheduler-widget" aria-label="调度器">
+    <section className="scheduler-widget" aria-label={ui('scheduler.title')}>
       <div className="scheduler-widget-heading">
-        <div><CalendarClock size={17}/><span>调度器</span></div>
+        <div><CalendarClock size={17}/><span>{ui('scheduler.title')}</span></div>
         <span className={`scheduler-status ${data?.status === 'running' ? 'running' : ''}`}>
           {data?.status === 'running' ? <CirclePlay size={13}/> : data?.status === 'error' ? <TriangleAlert size={13}/> : <Square size={12}/>} 
-          {data?.status === 'running' ? '运行中' : data?.status === 'error' ? '异常' : '已停止'}
+          {data?.status === 'running' ? ui('status.running') : data?.status === 'error' ? ui('scheduler.abnormal') : ui('scheduler.stopped')}
         </span>
       </div>
       <div className="scheduler-stats">
-        <div><span>正在运行</span><strong>{running}</strong></div>
-        <div><span>待运行</span><strong>{pending}</strong></div>
-        <div><span>等待中</span><strong>{waiting}</strong></div>
+        <div><span>{ui('scheduler.running')}</span><strong>{running}</strong></div>
+        <div><span>{ui('scheduler.pending')}</span><strong>{pending}</strong></div>
+        <div><span>{ui('scheduler.waiting')}</span><strong>{waiting}</strong></div>
       </div>
       <button
         className={`button scheduler-toggle ${data?.status === 'running' ? 'danger' : 'primary'}`}
         onClick={toggleScheduler}
         disabled={!data || busy || connection !== 'ready'}
       >
-        {data?.status === 'running' ? <Square size={14}/> : <Play size={14}/>} {busy ? '正在处理…' : data?.status === 'running' ? '停止运行' : '启动调度器'}
+        {data?.status === 'running' ? <Square size={14}/> : <Play size={14}/>} {busy ? ui('scheduler.processing') : data?.status === 'running' ? ui('scheduler.stop') : ui('scheduler.start')}
       </button>
     </section>
 
-    <section className="rail-schedule" aria-label="任务计划">
+    <section className="rail-schedule" aria-label={ui('scheduler.plan')}>
       <div className="rail-section-heading">
-        <div><Clock3 size={15}/><span>任务计划</span></div>
+        <div><Clock3 size={15}/><span>{ui('scheduler.plan')}</span></div>
         <span>{data?.tasks.length ?? 0}</span>
       </div>
       <div className="rail-task-list">
         {data?.tasks.length ? taskGroups.map(group => {
           const tasks = data.tasks.filter(task => task.state === group.state)
           const GroupIcon = group.icon
-          return <section className={`rail-queue-group ${group.state}`} key={group.state} aria-label={group.label}>
+          return <section className={`rail-queue-group ${group.state}`} key={group.state} aria-label={ui(group.label as UiKey)}>
             <div className="rail-queue-heading">
-              <div><GroupIcon size={16}/><strong>{group.label}</strong></div>
+              <div><GroupIcon size={16}/><strong>{ui(group.label as UiKey)}</strong></div>
               <span>{tasks.length}</span>
             </div>
             <div className="rail-queue-body">
               {tasks.length ? tasks.map(task => <Link key={task.name} className="rail-task-item" to={`/i/${instance}/task/${task.name}`} onClick={onMobileClose}>
                 <div>
                   <strong>{task.label}</strong>
-                  <small>{task.state === 'running' ? '正在执行' : formatExecutionTime(task.nextRun)}</small>
+                  <small>{task.state === 'running' ? ui('scheduler.executing') : formatExecutionTime(task.nextRun, ui)}</small>
                 </div>
-                <span className={`task-state ${task.state}`}><GroupIcon size={12}/>{taskStateLabel[task.state]}</span>
+                <span className={`task-state ${task.state}`}><GroupIcon size={12}/>{ui(taskStateLabel[task.state])}</span>
                 <ChevronRight size={13}/>
-              </Link>) : <div className="rail-queue-empty">{group.empty}</div>}
+              </Link>) : <div className="rail-queue-empty">{ui(group.empty as UiKey)}</div>}
             </div>
           </section>
-        }) : <div className="rail-empty">暂无已启用任务</div>}
+        }) : <div className="rail-empty">{ui('scheduler.noEnabled')}</div>}
       </div>
     </section>
   </aside>

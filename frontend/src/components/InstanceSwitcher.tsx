@@ -4,7 +4,7 @@ import { Check, ChevronDown, Plus, Ship } from 'lucide-react'
 import { useApp, useConnection } from '../app/context'
 
 export function InstanceSwitcher({onCreate}: {onCreate: () => void}) {
-  const {instances} = useApp()
+  const {instances, ui} = useApp()
   const {instance} = useParams()
   const location = useLocation()
   const navigate = useNavigate()
@@ -35,19 +35,19 @@ export function InstanceSwitcher({onCreate}: {onCreate: () => void}) {
     items[next]?.focus()
   }}>
     <div className="instance-switcher">
-      <Link className="instance-caption" to={`/i/${instance}/overview`} title="返回运行总览">
+      <Link className="instance-caption" to={`/i/${instance}/overview`} title={ui('instance.backOverview')}>
         <strong>{instance}</strong>
       </Link>
-      <button ref={trigger} type="button" className="instance-toggle" aria-label="切换实例" title="切换实例" aria-haspopup="menu" aria-expanded={open} aria-controls="instance-menu" onClick={() => setOpen(!open)}>
+      <button ref={trigger} type="button" className="instance-toggle" aria-label={ui('instance.switch')} title={ui('instance.switch')} aria-haspopup="menu" aria-expanded={open} aria-controls="instance-menu" onClick={() => setOpen(!open)}>
         <ChevronDown size={12}/>
       </button>
     </div>
-    {open && <div className="instance-menu" id="instance-menu" role="menu" aria-label="配置实例">
+    {open && <div className="instance-menu" id="instance-menu" role="menu" aria-label={ui('instance.configInstances')}>
       <div className="instance-options">{instances.map(item => <button key={item.name} role="menuitemradio" aria-checked={item.name === instance} onClick={() => {
         setOpen(false); trigger.current?.focus()
         if (item.name !== instance) navigate(`/i/${item.name}/${location.pathname.split('/').slice(3).join('/') || 'overview'}`)
       }}><Ship size={16}/><span>{item.name}</span>{item.name === instance && <Check size={16}/>}</button>)}</div>
-      <button className="instance-create" role="menuitem" aria-label="创建实例" title="创建实例" disabled={connection !== 'ready'} onClick={() => {setOpen(false); onCreate()}}><Plus size={20}/></button>
+      <button className="instance-create" role="menuitem" aria-label={ui('instance.create')} title={ui('instance.create')} disabled={connection !== 'ready'} onClick={() => {setOpen(false); onCreate()}}><Plus size={20}/></button>
     </div>}
   </div>
 }

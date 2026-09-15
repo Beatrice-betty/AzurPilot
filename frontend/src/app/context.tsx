@@ -3,13 +3,19 @@ import { api } from '../api/client'
 import type { Instance, Schema } from '../api/types'
 import type { Parameters } from '../api/generated'
 import { resumeEditors } from '../config/editors'
+import { detectLanguage, isLanguage, languages, localeForLanguage, translateUi, type Language, type UiTranslator } from '../i18n'
 import { readDevMode, writeDevMode } from './devMode'
 
-export const languages = {'zh-CN': '简体中文', 'zh-TW': '繁体中文', 'en-US': 'English', 'ja-JP': '日本語', 'zh-MIAO': '喵语'}
-type Language = NonNullable<Parameters['schema.get']['language']>
+export { languages }
+
+type SchemaLanguage = NonNullable<Parameters['schema.get']['language']>
+const _languageCompatibility: Record<Language, SchemaLanguage> = {
+  'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW', 'en-US': 'en-US', 'ja-JP': 'ja-JP', 'zh-MIAO': 'zh-MIAO',
+}
+void _languageCompatibility
 
 export interface AppContextValue {
-  instancesLoaded: boolean; instances: Instance[]; schema?: Schema; refresh: () => Promise<void>; t: (key: string) => string
+  instancesLoaded: boolean; instances: Instance[]; schema?: Schema; refresh: () => Promise<void>; t: (key: string) => string; ui: UiTranslator
   notify: (message: string, error?: boolean) => void
   previewEnabled: boolean; setPreviewEnabled: (enabled: boolean) => void
   devMode: boolean; setDevMode: (enabled: boolean) => void
@@ -21,6 +27,14 @@ const Context = AppContext
 export const useConnection = () => useSyncExternalStore(api.subscribe, api.getSnapshot)
 export const useApp = () => useContext(AppContext)!
 
+function initialLanguage(): Language {
+  try {
+    const saved = localStorage.getItem('azurpilot.language')
+    if (isLanguage(saved)) return saved
+  } catch { /* 浏览器禁用存储时使用浏览器语言。 */ }
+  return detectLanguage()
+}
+
 export function AppProvider({children}: {children: ReactNode}) {
   const connection = useConnection()
   const [instances, setInstances] = useState<Instance[]>([])
@@ -29,16 +43,17 @@ export function AppProvider({children}: {children: ReactNode}) {
   const [previewEnabled, setPreviewEnabled] = useState(false)
   const [devMode, setDevMode] = useState(readDevMode)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => localStorage.getItem('azurpilot.theme') === 'dark' ? 'dark' : 'light')
-  const [language, setLanguage] = useState<Language>(() => {
-    const saved = localStorage.getItem('azurpilot.language')
-    return saved && Object.hasOwn(languages, saved) ? saved as Language : 'zh-CN'
-  })
+  const [language, setLanguage] = useState<Language>(initialLanguage)
   const [toast, setToast] = useState<{message: string; error: boolean}>()
   useEffect(() => {
     document.documentElement.dataset.theme = theme
     localStorage.setItem('azurpilot.theme', theme)
   }, [theme])
   useEffect(() => { writeDevMode(devMode) }, [devMode])
+  useEffect(() => {
+    document.documentElement.lang = localeForLanguage(language)
+    try { localStorage.setItem('azurpilot.language', language) } catch { /* 存储不可用时仅当前会话生效。 */ }
+  }, [language])
   useEffect(() => { api.connect(); return () => api.disconnect() }, [])
   useEffect(() => { if (connection === 'ready') resumeEditors() }, [connection])
   const notify = useCallback((message: string, error = false) => setToast({message, error}), [])
@@ -57,8 +72,6 @@ export function AppProvider({children}: {children: ReactNode}) {
     void api.request('schema.get', {language}).then(schema => {
       if (active) {
         setSchema(schema)
-        document.documentElement.lang = language === 'zh-MIAO' ? 'zh-CN' : language
-        localStorage.setItem('azurpilot.language', language)
       }
     }).catch(error => {if (active) notify(error.message, true)})
     return () => {active = false}
@@ -76,7 +89,8 @@ export function AppProvider({children}: {children: ReactNode}) {
     for (const part of key.split('.')) value = value && typeof value === 'object' ? (value as Record<string, unknown>)[part] : undefined
     return typeof value === 'string' && value !== key ? value : key.split('.').filter(item => item !== 'name' && item !== '_info').at(-1) ?? key
   }, [schema])
-  return <Context.Provider value={{instancesLoaded, instances, schema, refresh, t, notify, previewEnabled, setPreviewEnabled, devMode, setDevMode, theme, setTheme, language, setLanguage}}>
+  const ui = useCallback<UiTranslator>((key, params) => translateUi(language, key, params), [language])
+  return <Context.Provider value={{instancesLoaded, instances, schema, refresh, t, ui, notify, previewEnabled, setPreviewEnabled, devMode, setDevMode, theme, setTheme, language, setLanguage}}>
     {children}
     {toast && <div role={toast.error ? 'alert' : 'status'} className={`toast ${toast.error ? 'error' : ''}`} onClick={() => setToast(undefined)}>{toast.message}</div>}
   </Context.Provider>

@@ -13,7 +13,7 @@ import { isFieldVisible } from './configVisibility'
 
 export function TaskConfig() {
   const {instance = '', task = ''} = useParams()
-  const {schema, t, notify} = useApp()
+  const {schema, t, ui, notify} = useApp()
   const connection = useConnection()
   const navigate = useNavigate()
   const [config, setConfig] = useState<Config>()
@@ -51,7 +51,7 @@ export function TaskConfig() {
       await queue.settled()
       await api.request('tasks.run', {instance, task})
       navigate(`/i/${instance}/overview`)
-      notify('任务已启动')
+      notify(ui('task.started'))
     } catch (error) {
       setError((error as Error).message)
     } finally {
@@ -80,7 +80,7 @@ export function TaskConfig() {
         title={t(`Task.${task}.name`)}
         actions={tool ? (
           <button className="button secondary" onClick={() => setConfirmRun(true)} disabled={busy || connection !== 'ready'}>
-            <Play size={16} />运行工具
+            <Play size={16} />{ui('task.runTool')}
           </button>
         ) : undefined}
       />
@@ -89,14 +89,14 @@ export function TaskConfig() {
       <div className="config-toolbar">
         <div className="input-icon">
           <Search size={17} />
-          <input placeholder="搜索此任务的配置项…" aria-label="搜索配置项" value={search} onChange={event => setSearch(event.target.value)} />
+          <input placeholder={ui('task.searchConfigPlaceholder')} aria-label={ui('task.searchConfig')} value={search} onChange={event => setSearch(event.target.value)} />
         </div>
       </div>
       {task === 'FleetInfo' ? (
         <FleetInfo value={config.values.FleetInfo?.FleetInfo?.Result} />
       ) : !groups ? (
-        <Empty icon={<Settings2 size={30} />} title="此任务没有独立配置">
-          {tool ? '可使用上方按钮运行工具。' : '请在相关任务中查看配置。'}
+        <Empty icon={<Settings2 size={30} />} title={ui('task.noConfig')}>
+          {tool ? ui('task.toolCanRun') : ui('task.viewRelated')}
         </Empty>
       ) : (
         <div className="config-layout">
@@ -137,7 +137,7 @@ export function TaskConfig() {
                       <div className="field-label">
                         <label htmlFor={path}>
                           {label}
-                          {readonly && <span className="small-label">只读</span>}
+                          {readonly && <span className="small-label">{ui('task.readonly')}</span>}
                         </label>
                         {help && help !== 'help' && help !== arg && <p>{help.replace(/<[^>]*>/g, '')}</p>}
                       </div>
@@ -169,15 +169,15 @@ export function TaskConfig() {
                 })}
               </section>
             ))}
-            {search && !visibleGroups.length && <Empty icon={<Search size={26} />} title="没有找到配置项">试试其他关键词。</Empty>}
+            {search && !visibleGroups.length && <Empty icon={<Search size={26} />} title={ui('task.noConfigFound')}>{ui('task.tryOtherKeyword')}</Empty>}
           </div>
         </div>
       )}
       {confirmRun && (
-        <Modal title={`运行${t(`Task.${task}.name`)}`} onClose={() => setConfirmRun(false)}>
-          <p>此操作将连接模拟器并执行该工具。请确认当前实例没有正在运行的任务。</p>
+        <Modal title={ui('task.runTitle', {task: t(`Task.${task}.name`)})} onClose={() => setConfirmRun(false)}>
+          <p>{ui('task.runWarning')}</p>
           <button className="button primary" disabled={busy} onClick={run}>
-            <Play size={15} />确认运行
+            <Play size={15} />{ui('task.confirmRun')}
           </button>
         </Modal>
       )}
@@ -186,8 +186,10 @@ export function TaskConfig() {
 }
 
 function FleetInfo({value}: {value: unknown}) {
-  if (!value || (typeof value === 'object' && !Object.keys(value).length)) return <Empty icon={<Ship size={32}/>} title="还没有舰队扫描记录">在左侧选择舰队扫描，完成扫描后在这里查看。</Empty>
+  const {ui} = useApp()
+  if (!value || (typeof value === 'object' && !Object.keys(value).length)) return <Empty icon={<Ship size={32}/>} title={ui('fleet.emptyTitle')}>{ui('fleet.emptyHint')}</Empty>
   let fleets: Record<string, Record<string, Array<{name: string; level?: number} | string>>>
-  try {fleets = typeof value === 'string' ? JSON.parse(value) : value} catch {return <ErrorBox message="舰队记录格式不正确，请重新扫描"/>}
-  return <div className="fleet-grid">{[1, 2, 3, 4, 5, 6].map(fleet => <section className="panel" key={fleet}><div className="panel-heading"><h2>第 {fleet} 舰队</h2><Ship size={18}/></div>{Object.entries({vanguard: '先锋舰队', main: '主力舰队', submarine: '潜艇舰队'}).map(([key, label]) => <div className="fleet-column" key={key}><h3>{label}</h3>{fleets[key]?.[fleet]?.length ? fleets[key][fleet].map((ship, index) => <div key={index}><span>{typeof ship === 'string' ? ship : ship.name}</span><small>{typeof ship !== 'string' && ship.level ? `Lv.${ship.level}` : ''}</small></div>) : <p>暂无记录</p>}</div>)}</section>)}</div>
+  try {fleets = typeof value === 'string' ? JSON.parse(value) : value} catch {return <ErrorBox message={ui('fleet.invalid')}/>}
+  const columns = {vanguard: ui('fleet.vanguard'), main: ui('fleet.main'), submarine: ui('fleet.submarine')}
+  return <div className="fleet-grid">{[1, 2, 3, 4, 5, 6].map(fleet => <section className="panel" key={fleet}><div className="panel-heading"><h2>{ui('fleet.title', {number: fleet})}</h2><Ship size={18}/></div>{Object.entries(columns).map(([key, label]) => <div className="fleet-column" key={key}><h3>{label}</h3>{fleets[key]?.[fleet]?.length ? fleets[key][fleet].map((ship, index) => <div key={index}><span>{typeof ship === 'string' ? ship : ship.name}</span><small>{typeof ship !== 'string' && ship.level ? `Lv.${ship.level}` : ''}</small></div>) : <p>{ui('fleet.noRecord')}</p>}</div>)}</section>)}</div>
 }

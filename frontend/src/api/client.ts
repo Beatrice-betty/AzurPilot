@@ -1,5 +1,6 @@
 import type { Parameters } from './generated'
 import type { ApiEvent, ApiResponse, Results } from './types'
+import { translateCurrentUi } from '../i18n'
 
 export class ApiError extends Error {
   constructor(public code: string, message: string) { super(message) }
@@ -46,7 +47,7 @@ export class ApiClient {
         clearTimeout(pending.timer)
         this.pending.delete(message.id)
         if (message.ok) pending.resolve(message.result)
-        else pending.reject(new ApiError(message.error?.code ?? 'UNKNOWN', message.error?.message ?? '请求失败'))
+        else pending.reject(new ApiError(message.error?.code ?? 'UNKNOWN', message.error?.message ?? translateCurrentUi('api.requestFailed')))
       } else if (message.type === 'event') {
         if (message.topic === 'session') {
           const data = message.data as {authRequired: boolean}
@@ -62,7 +63,7 @@ export class ApiClient {
       clearInterval(this.heartbeat)
       this.pending.forEach(pending => {
         clearTimeout(pending.timer)
-        pending.reject(new ApiError('DISCONNECTED', '连接已断开；操作结果未确认，请重连后检查状态'))
+        pending.reject(new ApiError('DISCONNECTED', translateCurrentUi('api.disconnected')))
       })
       this.pending.clear()
       this.setState('offline')
@@ -96,13 +97,13 @@ export class ApiClient {
 
   request<M extends keyof Results & keyof Parameters>(method: M, params: Parameters[M]): Promise<Results[M]> {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN || (this.state !== 'ready' && method !== 'auth.login')) {
-      return Promise.reject(new ApiError('DISCONNECTED', '尚未连接到服务，请稍后重试'))
+      return Promise.reject(new ApiError('DISCONNECTED', translateCurrentUi('api.notConnected')))
     }
     const id = `${Date.now()}-${++this.counter}`
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id)
-        reject(new ApiError('TIMEOUT', '请求超时；操作可能仍在执行，请刷新状态后确认'))
+        reject(new ApiError('TIMEOUT', translateCurrentUi('api.timeout')))
       }, 45000)
       this.pending.set(id, {resolve: value => resolve(value as Results[M]), reject, timer})
       this.socket!.send(JSON.stringify({v: 1, type: 'request', id, method, params}))

@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { AppContext, type AppContextValue } from '../app/context'
 import { TaskNav } from './TaskNav'
 import type { Schema } from '../api/types'
+import { translateUi } from '../i18n'
 
 const mockSchema: Schema = {
   menu: {
@@ -39,6 +40,7 @@ const mockContext: AppContextValue = {
   schema: mockSchema,
   refresh: async () => {},
   t: (key: string) => mockTranslations[key] ?? key,
+  ui: (key, params) => translateUi('zh-CN', key, params),
   notify: () => {},
   previewEnabled: false,
   setPreviewEnabled: () => {},

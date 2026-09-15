@@ -165,7 +165,7 @@ export function LogPanel({active = true}: {active?: boolean}) {
   const [follow, setFollow] = useState(true)
   const [floor, setFloor] = useState(0)
   const connection = useConnection()
-  const {notify} = useApp()
+  const {notify, ui} = useApp()
   const scroll = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -219,31 +219,31 @@ export function LogPanel({active = true}: {active?: boolean}) {
 
   return (
     <section className="log-panel">
-      <div className="log-toolbar" aria-label="日志工具">
-        <button className={`icon-button ${search || level !== 'ALL' ? 'filter-active' : ''}`} aria-label={filtersOpen ? '收起日志筛选' : '展开日志筛选'} title={filtersOpen ? '收起搜索和筛选' : '搜索和筛选'} aria-expanded={filtersOpen} aria-controls="log-filters" onClick={() => setFiltersOpen(!filtersOpen)}><SlidersHorizontal size={15}/></button>
-        <button className="icon-button" onClick={() => setFollow(!follow)} aria-label={follow ? '暂停自动滚动' : '恢复自动滚动'}>
+      <div className="log-toolbar" aria-label={ui('log.tools')}>
+        <button className={`icon-button ${search || level !== 'ALL' ? 'filter-active' : ''}`} aria-label={filtersOpen ? ui('log.filtersCollapse') : ui('log.filtersExpand')} title={ui('log.searchAndFilter')} aria-expanded={filtersOpen} aria-controls="log-filters" onClick={() => setFiltersOpen(!filtersOpen)}><SlidersHorizontal size={15}/></button>
+        <button className="icon-button" onClick={() => setFollow(!follow)} aria-label={follow ? ui('log.pauseFollow') : ui('log.resumeFollow')}>
           {follow ? <Pause size={15} /> : <Play size={15} />}
         </button>
-        <button className="icon-button" onClick={() => setFloor(entries.at(-1)?.id ?? 0)} aria-label="清空当前日志视图">
+        <button className="icon-button" onClick={() => setFloor(entries.at(-1)?.id ?? 0)} aria-label={ui('log.clearView')}>
           <Trash2 size={15} />
         </button>
-        <button className="text-button" onClick={download} aria-label="导出日志">
-          <Download size={15} />导出
+        <button className="text-button" onClick={download} aria-label={ui('log.export')}>
+          <Download size={15} />{ui('log.exportShort')}
         </button>
       </div>
       {filtersOpen && <div className="log-filters" id="log-filters">
         <div className="input-icon">
           <Search size={15} />
-          <input aria-label="搜索日志" placeholder="搜索日志内容…" value={search} onChange={event => setSearch(event.target.value)} />
+          <input aria-label={ui('log.search')} placeholder={ui('log.searchPlaceholder')} value={search} onChange={event => setSearch(event.target.value)} />
         </div>
-        <Select aria-label="日志级别" value={level} onChange={event => setLevel(event.target.value)}>
+        <Select aria-label={ui('log.level')} value={level} onChange={event => setLevel(event.target.value)}>
           {['ALL', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'].map(item => (
-            <option key={item} value={item}>{item === 'ALL' ? '所有级别' : item}</option>
+            <option key={item} value={item}>{item === 'ALL' ? ui('log.allLevels') : item}</option>
           ))}
         </Select>
-        <span>最近 {entries.length} 条</span>
+        <span>{ui('log.recent', {count: entries.length})}</span>
       </div>}
-      <div className="log-content" ref={scroll} aria-label="日志内容">
+      <div className="log-content" ref={scroll} aria-label={ui('log.content')}>
         {visible.length ? (
           visible.map((entry, index) => {
             const prev = visible[index - 1]
@@ -265,8 +265,8 @@ export function LogPanel({active = true}: {active?: boolean}) {
             )
           })
         ) : (
-          <Empty icon={<Terminal size={26} />} title={entries.length ? '没有匹配的日志' : '日志通道已就绪'}>
-            {entries.length ? '尝试调整筛选条件。' : '启动任务后，日志将在这里显示。'}
+          <Empty icon={<Terminal size={26} />} title={entries.length ? ui('log.noMatch') : ui('log.ready')}>
+            {entries.length ? ui('log.adjustFilter') : ui('log.waiting')}
           </Empty>
         )}
       </div>

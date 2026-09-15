@@ -11,6 +11,7 @@ import { Home } from './pages/Home'
 import { Updater } from './pages/Updater'
 import { Settings } from './pages/Settings'
 import { DevControls } from './pages/DevControls'
+import { translateCurrentUi } from './i18n'
 import './styles/tokens.css'
 import './styles/layout.css'
 import './styles/components.css'
@@ -36,7 +37,7 @@ class ErrorBoundary extends Component<{children: ReactNode}, {failed: boolean}> 
   state = {failed: false}
   static getDerivedStateFromError() { return {failed: true} }
   render() {
-    if (this.state.failed) return <div className="welcome"><h1>页面遇到了问题</h1><p>任务仍在后台运行，请刷新页面恢复控制台。</p><button className="button primary" onClick={() => location.reload()}>刷新页面</button></div>
+    if (this.state.failed) return <div className="welcome"><h1>{translateCurrentUi('error.pageTitle')}</h1><p>{translateCurrentUi('error.pageHint')}</p><button className="button primary" onClick={() => location.reload()}>{translateCurrentUi('error.reload')}</button></div>
     return this.props.children
   }
 }

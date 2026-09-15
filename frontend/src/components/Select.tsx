@@ -1,10 +1,12 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ComponentProps, type KeyboardEvent } from 'react'
 import { Check, ChevronsUpDown } from 'lucide-react'
+import { useApp } from '../app/context'
 
 type Option = {value: string; label: string; disabled: boolean}
 
 /** 自绘列表通过顶层弹出层避开卡片裁切；原生节点仅用于值与变更事件桥接。 */
 export function Select({children, id, className, style, disabled, autoFocus, ...props}: ComponentProps<'select'>) {
+  const {ui} = useApp()
   const generatedId = useId()
   const controlId = id ?? generatedId
   const listId = `${controlId}-options`
@@ -142,7 +144,7 @@ export function Select({children, id, className, style, disabled, autoFocus, ...
       aria-invalid={props['aria-invalid']} aria-required={props.required} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? listId : undefined}
       aria-activedescendant={open && active >= 0 ? `${listId}-${active}` : undefined}
       onClick={() => open ? setOpen(false) : show()} onKeyDown={keyDown} onBlur={() => setOpen(false)}>
-      <span>{options[selected]?.label ?? '请选择'}</span><ChevronsUpDown size={15} aria-hidden="true"/>
+      <span>{options[selected]?.label ?? ui('common.select')}</span><ChevronsUpDown size={15} aria-hidden="true"/>
     </button>
     <select {...props} ref={native} disabled={disabled} hidden aria-label={undefined} aria-labelledby={undefined} aria-hidden="true" tabIndex={-1}>{children}</select>
     {open && <div ref={popup} id={listId} className="select-menu" role="listbox" aria-labelledby={controlId} popover="manual" onPointerDown={event => event.preventDefault()}>

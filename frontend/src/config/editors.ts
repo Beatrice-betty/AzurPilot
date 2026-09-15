@@ -1,6 +1,7 @@
 import { api } from '../api/client'
 import type { Field, Value } from '../api/types'
 import { EditQueue } from './EditQueue'
+import { translateCurrentUi } from '../i18n'
 
 const prefix = 'azurpilot.edits.'
 const queues = new Map<string, EditQueue>()
@@ -42,12 +43,12 @@ export function prepareValue(value: Value, field: Pick<Field, 'type' | 'value' |
   // JSON 无法区分默认值 1 与 1.0；任务字段的精确整数类型交给后端校验。
   const integer = field.type === 'int'
   if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(text) || !Number.isFinite(number)) {
-    return {payload: value, error: '请输入完整、有效的数字；输入内容已保留。'}
+    return {payload: value, error: translateCurrentUi('edit.invalidNumber')}
   }
-  if (integer && !Number.isSafeInteger(number)) return {payload: value, error: '请输入有效整数；输入内容已保留。'}
-  if (Number.isInteger(number) && !Number.isSafeInteger(number)) return {payload: value, error: '数字超出可精确表示的范围。'}
+  if (integer && !Number.isSafeInteger(number)) return {payload: value, error: translateCurrentUi('edit.invalidInteger')}
+  if (Number.isInteger(number) && !Number.isSafeInteger(number)) return {payload: value, error: translateCurrentUi('edit.numberOutOfRange')}
   if (Array.isArray(field.validate) && (number < field.validate[0] || number > field.validate[1])) {
-    return {payload: value, error: `请输入 ${field.validate[0]} 到 ${field.validate[1]} 之间的数值。`}
+    return {payload: value, error: translateCurrentUi('edit.validateRange', {min: field.validate[0], max: field.validate[1]})}
   }
   return {payload: number}
 }

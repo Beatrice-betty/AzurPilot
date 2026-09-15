@@ -10,7 +10,7 @@ import { SegmentedControl } from './SegmentedControl'
 export function MonitorPanel({instance}: {instance: string}) {
   const [view, setView] = useState('logs')
   const [frame, setFrame] = useState<Preview>()
-  const {setPreviewEnabled} = useApp()
+  const {setPreviewEnabled, ui} = useApp()
   useEffect(() => {
     setPreviewEnabled(view === 'preview')
     return () => setPreviewEnabled(false)
@@ -18,14 +18,14 @@ export function MonitorPanel({instance}: {instance: string}) {
   useEffect(() => api.onEvent(event => {
     if (event.topic === 'preview' && (event.data as Preview).instance === instance) setFrame(event.data as Preview)
   }), [instance])
-  return <section className="panel monitor-panel"><div className="monitor-tabs" aria-label="运行监控">
-    <SegmentedControl label="监控视图" value={view} onChange={setView} options={[
-      {value: 'logs', label: <><Terminal size={15}/>日志</>},
-      {value: 'preview', label: <><Image size={15}/>截图</>},
+  return <section className="panel monitor-panel"><div className="monitor-tabs" aria-label={ui('monitor.title')}>
+    <SegmentedControl label={ui('monitor.view')} value={view} onChange={setView} options={[
+      {value: 'logs', label: <><Terminal size={15}/>{ui('monitor.logs')}</>},
+      {value: 'preview', label: <><Image size={15}/>{ui('monitor.preview')}</>},
     ]}/>
-    {view === 'preview' && frame?.image && <a className="text-button" href={frame.image} download={`${instance}-screenshot.jpg`}><Download size={14}/>保存截图</a>}
+    {view === 'preview' && frame?.image && <a className="text-button" href={frame.image} download={`${instance}-screenshot.jpg`}><Download size={14}/>{ui('monitor.saveScreenshot')}</a>}
   </div>
     <div className="monitor-view" hidden={view !== 'logs'}><LogPanel active={view === 'logs'}/></div>
-    <div className="monitor-view" hidden={view !== 'preview'}><div className="preview-screen">{frame?.image ? <img src={frame.image} alt="任务最近一次截图"/> : <Empty icon={<Image size={42}/>} title="等待任务截图">任务截图后自动更新；空闲时保留最后画面。</Empty>}</div></div>
+    <div className="monitor-view" hidden={view !== 'preview'}><div className="preview-screen">{frame?.image ? <img src={frame.image} alt={ui('monitor.screenshotAlt')}/> : <Empty icon={<Image size={42}/>} title={ui('monitor.waitingScreenshot')}>{ui('monitor.screenshotHint')}</Empty>}</div></div>
   </section>
 }

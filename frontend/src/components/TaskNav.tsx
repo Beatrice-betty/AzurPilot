@@ -10,7 +10,7 @@ const groupIcons: Record<string, LucideIcon> = {
 }
 
 export function TaskNav({ defaultOpenKey }: { defaultOpenKey?: string } = {}) {
-  const { schema, t } = useApp()
+  const { schema, t, ui } = useApp()
   const { instance } = useParams()
   const location = useLocation()
   const base = instance ? `/i/${instance}` : ''
@@ -112,15 +112,15 @@ export function TaskNav({ defaultOpenKey }: { defaultOpenKey?: string } = {}) {
 
   return (
     <div className="task-nav-container" ref={navContainerRef}>
-      <div className="sidebar-label task-nav-heading">任务配置<button className="icon-button" aria-label={searchOpen ? '收起任务搜索' : '展开任务搜索'} aria-expanded={searchOpen} aria-controls="task-search" onClick={() => {setSearchOpen(!searchOpen); setSearch(''); setOpenMenuKey(null)}}><Search size={15}/></button></div>
+      <div className="sidebar-label task-nav-heading">{ui('nav.taskConfig')}<button className="icon-button" aria-label={searchOpen ? ui('nav.taskSearchCollapse') : ui('nav.taskSearchExpand')} aria-expanded={searchOpen} aria-controls="task-search" onClick={() => {setSearchOpen(!searchOpen); setSearch(''); setOpenMenuKey(null)}}><Search size={15}/></button></div>
       {searchOpen && <div className="nav-search" id="task-search">
         <Search size={14} />
         <input
           autoFocus
-          aria-label="搜索任务"
+          aria-label={ui('nav.searchTask')}
           value={search}
           onChange={event => setSearch(event.target.value)}
-          placeholder="搜索任务…"
+          placeholder={ui('nav.searchTaskPlaceholder')}
         />
       </div>}
 

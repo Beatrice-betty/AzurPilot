@@ -1,5 +1,6 @@
 import { ApiError } from '../api/client'
 import type { Value } from '../api/types'
+import { translateCurrentUi } from '../i18n'
 
 export interface Edit {
   value: Value
@@ -32,7 +33,7 @@ export class EditQueue {
         this.sequence = Math.max(this.sequence, edit.sequence)
         this.state.edits[path] = {...edit, status: edit.status === 'error' && !edit.retryable ? 'error' : 'queued'}
       }
-    } catch { this.state.storageError = '浏览器草稿无法读取，请保持页面打开直到保存完成。' }
+    } catch { this.state.storageError = translateCurrentUi('edit.draftReadError') }
   }
 
   getSnapshot = () => this.state
@@ -64,7 +65,7 @@ export class EditQueue {
       if (Object.keys(pending).length) this.storage.setItem(this.key, JSON.stringify(pending))
       else this.storage.removeItem(this.key)
       this.state = {...this.state, storageError: ''}
-    } catch { this.state = {...this.state, storageError: '浏览器无法保留草稿，请保持页面打开直到保存完成。'} }
+    } catch { this.state = {...this.state, storageError: translateCurrentUi('edit.draftPersistError')} }
     this.listeners.forEach(listener => listener())
   }
 
@@ -91,7 +92,7 @@ export class EditQueue {
   async settled() {
     await this.flush()
     if (Object.values(this.state.edits).some(edit => edit.status !== 'saved')) {
-      throw new Error('配置尚未全部保存，请先修正错误或等待连接恢复。')
+      throw new Error(translateCurrentUi('edit.unsaved'))
     }
   }
 
