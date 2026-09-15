@@ -415,10 +415,14 @@ test('实例设置保留自动运行和删除，删除后返回主页', async ({
   await expect(page.locator('.instance-card').filter({hasText: name})).toHaveCount(0)
 })
 
-test('导航更新提示、完整提交分页、获取和应用更新', async ({page}) => {
+test('Logo 旁更新提示、完整提交分页、获取和应用更新', async ({page}) => {
   await page.goto('/')
-  await page.getByRole('link', {name: '新版本可用'}).click()
-  await expect(page.getByRole('heading', {name: '更新器', exact: true})).toBeVisible()
+  await expect(page.locator('.topbar-right').getByText('新版本可用')).toHaveCount(0)
+  const updateNotice = page.locator('.sidebar-brand').getByRole('link', {name: '新版本可用'})
+  await expect(updateNotice).toBeVisible()
+  await expect(updateNotice).toHaveText('New')
+  await updateNotice.click()
+  await expect(page.getByRole('heading', {name: /^更新器/})).toBeVisible()
   await expect(page.locator('.head-card')).toHaveCount(2)
   await expect(page.locator('.commit-row')).toHaveCount(50)
   await expect(page.locator('.commit-ref')).toHaveCount(2)
@@ -432,7 +436,7 @@ test('导航更新提示、完整提交分页、获取和应用更新', async ({
   await expect(page.getByRole('button', {name: '下一页'})).toBeDisabled()
   await page.getByRole('button', {name: '获取更新', exact: true}).click()
   await page.getByRole('button', {name: '更新', exact: true}).click()
-  await expect(page.getByRole('link', {name: '新版本可用'})).toHaveCount(0)
+  await expect(page.locator('.primary-nav .tiny-dot')).toHaveCount(0)
   await expect(page.locator('.update-summary')).toContainText('已是最新')
   await expect(page.locator('.commit-pagination')).toContainText('1–50 / 123')
   await page.setViewportSize({width: 390, height: 844})
