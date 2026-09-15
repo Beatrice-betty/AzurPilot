@@ -225,7 +225,7 @@ export function DevControls() {
             <a href="#dev-nav" className="active" onClick={event => event.preventDefault()}><Database size={18}/>当前页面<span className="nav-pill">DEV</span></a>
             <a href="#dev-nav" onClick={event => event.preventDefault()}><Settings2 size={18}/>悬停查看</a>
           </nav>
-          <div className="task-group-button expanded"><Layers3 size={18} className="task-group-icon"/><span className="task-group-title">一级任务菜单</span><span className="task-group-badge">8</span><ChevronRight size={13} className="task-group-arrow"/></div>
+          <div className="task-group-button expanded"><Layers3 size={18} className="task-group-icon"/><span className="task-group-title">一级任务菜单</span><ChevronRight size={13} className="task-group-arrow"/></div>
           <div className="task-submenu-list dev-submenu-list">
             <a className="task-submenu-item active" href="#dev-sub" onClick={event => event.preventDefault()}><span className="task-submenu-dot"/><span className="task-submenu-item-text">当前子菜单</span></a>
             <a className="task-submenu-item" href="#dev-sub" onClick={event => event.preventDefault()}><span className="task-submenu-dot"/><span className="task-submenu-item-text">普通子菜单</span></a>

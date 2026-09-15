@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { NavLink, useLocation, useParams } from 'react-router-dom'
 import { Anchor, CalendarDays, ChevronRight, Compass, Gift, Palmtree, Search, Settings2, Ship, Sparkles, Swords, Wrench, type LucideIcon } from 'lucide-react'
 import { useApp } from '../app/context'
@@ -17,11 +18,14 @@ export function TaskNav({ defaultOpenKey }: { defaultOpenKey?: string } = {}) {
   const [search, setSearch] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [openMenuKey, setOpenMenuKey] = useState<string | null>(defaultOpenKey ?? null)
-  const [flyoutTop, setFlyoutTop] = useState(0)
+  const [flyoutPosition, setFlyoutPosition] = useState({ left: 0, top: 0 })
+  const [portalReady, setPortalReady] = useState(false)
 
   const navContainerRef = useRef<HTMLDivElement>(null)
   const flyoutRef = useRef<HTMLDivElement>(null)
   const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+
+  useEffect(() => setPortalReady(true), [])
 
   // 路由跳转时收起二级菜单
   useEffect(() => {
@@ -56,35 +60,30 @@ export function TaskNav({ defaultOpenKey }: { defaultOpenKey?: string } = {}) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [openMenuKey])
 
-  // 让弹出的子菜单窗口中心与“父菜单的那一项”的中心严格水平对齐
+  // 浮层挂到 body，避免主侧栏的 backdrop 上下文阻断二次模糊。
   const updateFlyoutPosition = useCallback(() => {
-    if (!openMenuKey || !flyoutRef.current || !navContainerRef.current) return
+    if (!openMenuKey || !flyoutRef.current) return
     const btn = buttonRefs.current[openMenuKey]
     const flyout = flyoutRef.current
-    const container = navContainerRef.current
     if (!btn) return
 
     const btnRect = btn.getBoundingClientRect()
     const flyoutRect = flyout.getBoundingClientRect()
-    const containerRect = container.getBoundingClientRect()
-
-    // 父菜单项本身的垂直中心线（视口坐标）
     const itemCenterInViewport = btnRect.top + btnRect.height / 2
-    // 子菜单窗口的理想顶部位置（使其垂直中心与该父菜单项中心处于同一水平高度）
     const idealTopInViewport = itemCenterInViewport - flyoutRect.height / 2
-
-    // 视口边界保护：距视口顶部/底部至少留 8px
     const minViewportTop = 8
     const maxViewportTop = Math.max(minViewportTop, window.innerHeight - flyoutRect.height - 8)
     const clampedViewportTop = Math.max(minViewportTop, Math.min(idealTopInViewport, maxViewportTop))
 
-    // 转换为定位父容器 (.task-nav-container) 内的 top 偏移
-    setFlyoutTop(clampedViewportTop - containerRect.top)
+    setFlyoutPosition({
+      left: window.innerWidth <= 480 ? 8 : btnRect.right + (window.innerWidth <= 950 ? 4 : 19),
+      top: clampedViewportTop,
+    })
   }, [openMenuKey])
 
   useLayoutEffect(() => {
     updateFlyoutPosition()
-  }, [openMenuKey, updateFlyoutPosition])
+  }, [openMenuKey, portalReady, updateFlyoutPosition])
 
   useEffect(() => {
     if (!openMenuKey) return
@@ -161,18 +160,18 @@ export function TaskNav({ defaultOpenKey }: { defaultOpenKey?: string } = {}) {
               >
                 <GroupIcon size={18} className="task-group-icon" />
                 <span className="task-group-title">{t(`Menu.${key}.name`)}</span>
-                <span className="task-group-badge">{filteredTasks.length}</span>
                 <ChevronRight size={13} className="task-group-arrow" />
               </button>
             )
           })}
       </nav>
 
-      {openMenuKey && activeGroup && (
+      {openMenuKey && activeGroup && (() => {
+        const flyout = (
         <div
           ref={flyoutRef}
           className="task-submenu-flyout"
-          style={{ top: `${flyoutTop}px` }}
+          style={{ left: `${flyoutPosition.left}px`, top: `${flyoutPosition.top}px` }}
           role="menu"
           aria-label={t(`Menu.${openMenuKey}.name`)}
         >
@@ -193,7 +192,9 @@ export function TaskNav({ defaultOpenKey }: { defaultOpenKey?: string } = {}) {
             ))}
           </div>
         </div>
-      )}
+        )
+        return portalReady ? createPortal(flyout, document.body) : flyout
+      })()}
     </div>
   )
 }

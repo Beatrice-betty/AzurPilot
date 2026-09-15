@@ -77,9 +77,8 @@ describe('TaskNav 导航组件', () => {
     expect(html).toContain('系统')
     expect(html).toContain('出击Plus')
 
-    // 检查任务数量徽标
-    expect(html).toContain('task-group-badge')
-    expect(html).toContain('>3<') // Alas 组有 3 个任务
+    // 一级菜单不展示任务数量，避免与展开箭头争夺视觉焦点
+    expect(html).not.toContain('task-group-badge')
   })
 
   it('当处于某任务页面时，对应的一级菜单具备 active 高亮状态', () => {
@@ -121,7 +120,7 @@ describe('TaskNav 导航组件', () => {
     // 子菜单列表检查：应动态渲染出 Alas 下的所有子任务
     expect(html).toContain('task-submenu-list')
     expect(html).toContain('task-submenu-item')
-    expect(html).toContain('基础设置')
+    expect(html).toContain('系统设置')
     expect(html).toContain('通用设置')
     expect(html).toContain('游戏重启')
     expect(html).toContain('href="/i/default/task/Alas"')

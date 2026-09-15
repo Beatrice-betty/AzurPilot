@@ -61,9 +61,13 @@
   /* Navigation */
   --theme-nav-text: var(--text);
   --theme-nav-icon: var(--accent);
-  --theme-nav-active-bg: #0071e3;
-  --theme-nav-active-text: #ffffff;
-  --theme-nav-hover-bg: var(--surface-muted);
+  --theme-nav-active-bg: color-mix(in srgb, var(--accent) 14%, transparent);
+  --theme-nav-active-text: var(--accent);
+  --theme-nav-expanded-bg: color-mix(in srgb, var(--accent) 20%, transparent);
+  --theme-nav-hover-bg: color-mix(in srgb, var(--accent) 8%, transparent);
+  --theme-nav-popover-bg: color-mix(in srgb, var(--surface) 66%, transparent);
+  --theme-nav-popover-edge: color-mix(in srgb, #fff 62%, var(--border));
+  --theme-nav-popover-shadow: 0 18px 48px #1d1d1f24, 0 2px 10px #1d1d1f0d, inset 0 1px 0 color-mix(in srgb, #fff 78%, transparent);
 
   /* Buttons */
   --theme-primary-bg: #0071e3;
@@ -196,6 +200,10 @@
   --theme-resource-1-bg: #ffffff08;
   --theme-resource-2-bg: #ffffff08;
   --theme-resource-3-bg: #ffffff08;
+  --theme-nav-expanded-bg: color-mix(in srgb, var(--accent) 20%, transparent);
+  --theme-nav-popover-bg: color-mix(in srgb, var(--surface) 72%, transparent);
+  --theme-nav-popover-edge: color-mix(in srgb, #fff 14%, var(--border));
+  --theme-nav-popover-shadow: 0 20px 56px #0006, 0 2px 10px #0004, inset 0 1px 0 #ffffff12;
 
   --syntax-key: #7ec9ee;
   --syntax-string: #a6d99e;

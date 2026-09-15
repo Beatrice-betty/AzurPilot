@@ -60,9 +60,13 @@
   /* Navigation */
   --theme-nav-text: var(--text);
   --theme-nav-icon: var(--accent);
-  --theme-nav-active-bg: #0071e3;
-  --theme-nav-active-text: var(--theme-on-accent);
-  --theme-nav-hover-bg: var(--surface-muted);
+  --theme-nav-active-bg: color-mix(in srgb, var(--accent) 14%, transparent);
+  --theme-nav-active-text: var(--accent);
+  --theme-nav-expanded-bg: color-mix(in srgb, var(--accent) 20%, transparent);
+  --theme-nav-hover-bg: color-mix(in srgb, var(--accent) 8%, transparent);
+  --theme-nav-popover-bg: color-mix(in srgb, var(--surface) 66%, transparent);
+  --theme-nav-popover-edge: color-mix(in srgb, #fff 62%, var(--border));
+  --theme-nav-popover-shadow: 0 18px 48px #1d1d1f24, 0 2px 10px #1d1d1f0d, inset 0 1px 0 color-mix(in srgb, #fff 78%, transparent);
 
   /* Buttons */
   --theme-primary-bg: #0071e3;
@@ -147,6 +151,10 @@
   --theme-resource-1-bg: #ffffff08;
   --theme-resource-2-bg: #ffffff08;
   --theme-resource-3-bg: #ffffff08;
+  --theme-nav-expanded-bg: color-mix(in srgb, var(--accent) 20%, transparent);
+  --theme-nav-popover-bg: color-mix(in srgb, var(--surface) 72%, transparent);
+  --theme-nav-popover-edge: color-mix(in srgb, #fff 14%, var(--border));
+  --theme-nav-popover-shadow: 0 20px 56px #0006, 0 2px 10px #0004, inset 0 1px 0 #ffffff12;
 }
 
 html, body {font-family: var(--theme-font-sans); color: var(--theme-text); background: var(--theme-bg)}
@@ -181,23 +189,35 @@ button:focus-visible, a:focus-visible, summary:focus-visible {outline-color: var
 .primary-nav a {color: var(--theme-nav-text)}
 .primary-nav a svg, .task-group-icon {color: var(--theme-nav-icon)}
 .primary-nav a:hover {background: var(--theme-nav-hover-bg)}
-.primary-nav a.active {background: var(--theme-nav-active-bg); color: var(--theme-nav-active-text)}
+.primary-nav a.active {background: var(--theme-nav-active-bg); color: var(--theme-nav-active-text); box-shadow: none}
 .primary-nav a.active svg {color: inherit}
 .sidebar-label, .sidebar-label button, .breadcrumb, .breadcrumb span {color: var(--theme-muted)}
 .task-submenu-item, .task-group-button {color: var(--theme-nav-text)}
 .task-group-button:hover, .task-submenu-item:hover {color: var(--theme-text); background: var(--theme-nav-hover-bg)}
-.task-group-button.active, .task-group-button.expanded, .task-submenu-item.active {color: var(--theme-accent); background: var(--theme-accent-soft)}
+.task-group-button {position: relative}
+.task-group-button.active, .task-submenu-item.active {color: var(--theme-accent); background: var(--theme-nav-active-bg); box-shadow: none}
+.task-group-button.expanded {color: var(--theme-accent); background: var(--theme-nav-expanded-bg); border-color: transparent; box-shadow: none}
+.task-group-button.active.expanded {background: var(--theme-nav-expanded-bg); box-shadow: none}
 .task-submenu-dot {background: var(--theme-muted)}
 .task-submenu-item:hover .task-submenu-dot, .task-submenu-item.active .task-submenu-dot {background: var(--theme-accent)}
 
 .task-submenu-flyout, .instance-menu {
-  background: var(--theme-glass);
-  border-color: var(--theme-glass-edge);
+  background: var(--theme-nav-popover-bg);
+  border-color: var(--theme-nav-popover-edge);
   border-radius: var(--theme-radius-popover);
-  box-shadow: var(--theme-shadow-popover);
-  -webkit-backdrop-filter: blur(var(--theme-popover-blur));
-  backdrop-filter: blur(var(--theme-popover-blur));
+  box-shadow: var(--theme-nav-popover-shadow);
+  -webkit-backdrop-filter: blur(var(--theme-popover-blur)) saturate(145%) brightness(1.04);
+  backdrop-filter: blur(var(--theme-popover-blur)) saturate(145%) brightness(1.04);
 }
+.task-submenu-flyout {
+  isolation: isolate;
+  background: var(--theme-sidebar);
+  -webkit-backdrop-filter: blur(var(--theme-glass-blur)) saturate(var(--theme-glass-saturation));
+  backdrop-filter: blur(var(--theme-glass-blur)) saturate(var(--theme-glass-saturation));
+}
+.task-submenu-item {border: 1px solid transparent}
+.task-submenu-item.active {border-color: transparent}
+.task-submenu-item.active .task-submenu-dot {box-shadow: none}
 .instance-menu button:hover, .instance-menu button:focus-visible, .instance-menu button[aria-checked='true'] {background: var(--theme-accent-soft); color: var(--theme-accent)}
 
 .topbar {border-color: var(--theme-glass-edge); box-shadow: var(--theme-glass-shadow)}
