@@ -47,11 +47,11 @@ export function Overview() {
   if (error) return <ErrorBox message={error}/>
   if (!data) return <Loading/>
 
-  return <>
+  return <div className="overview-page">
     <PageTitle className="instance-page-title" title={instance} actions={<InstanceActions instance={instance} status={data.status} resources={data.resources} selectedResources={selectedResources} onResourcesChange={updateResourceSelection}/>}/>
     <ResourceCards resources={data.resources} selected={selectedResources}/>
     <div className="overview-main">
       <MonitorPanel instance={instance}/>
     </div>
-  </>
+  </div>
 }
