@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { AppContext, type AppContextValue } from '../app/context'
-import { TaskNav } from './TaskNav'
+import { TaskNav, isDesktopDevice } from './TaskNav'
 import type { Schema } from '../api/types'
 import { translateUi } from '../i18n'
 
@@ -128,5 +128,42 @@ describe('TaskNav 导航组件', () => {
     expect(html).toContain('href="/i/default/task/Alas"')
     expect(html).toContain('href="/i/default/task/General"')
     expect(html).toContain('href="/i/default/task/Restart"')
+  })
+
+  it('isDesktopDevice 正确区分电脑端与移动端环境', () => {
+    // node/SSR 环境下无 window，应安全回退为 false
+    expect(isDesktopDevice()).toBe(false)
+
+    const originalWindow = globalThis.window
+
+    try {
+      const mockWindow = {
+        innerWidth: 1280,
+        matchMedia: (query: string) => ({
+          matches: query.includes('(hover: none)') ? false : true,
+        }),
+      }
+      globalThis.window = mockWindow as unknown as Window & typeof globalThis
+
+      // 电脑端：宽度 > 950 且支持 hover
+      expect(isDesktopDevice()).toBe(true)
+
+      // 移动端：宽度 <= 950
+      mockWindow.innerWidth = 768
+      expect(isDesktopDevice()).toBe(false)
+
+      // 移动端触屏：宽度 > 950 但为 touch-only (hover: none)
+      mockWindow.innerWidth = 1024
+      mockWindow.matchMedia = (query: string) => ({
+        matches: query.includes('(hover: none)') ? true : false,
+      })
+      expect(isDesktopDevice()).toBe(false)
+    } finally {
+      if (originalWindow === undefined) {
+        delete (globalThis as { window?: unknown }).window
+      } else {
+        globalThis.window = originalWindow
+      }
+    }
   })
 })

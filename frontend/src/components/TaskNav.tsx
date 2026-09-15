@@ -9,6 +9,15 @@ const groupIcons: Record<string, LucideIcon> = {
   Reward: Gift, DailyMission: CalendarDays, Opsi: Compass, Island: Palmtree, FleetManagement: Ship, Tool: Wrench,
 }
 
+export function isDesktopDevice(): boolean {
+  if (typeof window === 'undefined') return false
+  const isWide = window.innerWidth > 950
+  const hasFinePointer = typeof window.matchMedia === 'function'
+    ? !window.matchMedia('(hover: none)').matches
+    : true
+  return isWide && hasFinePointer
+}
+
 export function TaskNav({ defaultOpenKey }: { defaultOpenKey?: string } = {}) {
   const { schema, t, ui } = useApp()
   const { instance } = useParams()
@@ -24,13 +33,33 @@ export function TaskNav({ defaultOpenKey }: { defaultOpenKey?: string } = {}) {
   const navContainerRef = useRef<HTMLDivElement>(null)
   const flyoutRef = useRef<HTMLDivElement>(null)
   const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const clearCloseTimer = useCallback(() => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current)
+      closeTimerRef.current = null
+    }
+  }, [])
+
+  const scheduleClose = useCallback(() => {
+    clearCloseTimer()
+    closeTimerRef.current = setTimeout(() => {
+      setOpenMenuKey(null)
+    }, 150)
+  }, [clearCloseTimer])
+
+  useEffect(() => {
+    return () => clearCloseTimer()
+  }, [clearCloseTimer])
 
   useEffect(() => setPortalReady(true), [])
 
   // 路由跳转时收起二级菜单
   useEffect(() => {
+    clearCloseTimer()
     setOpenMenuKey(null)
-  }, [location.pathname])
+  }, [location.pathname, clearCloseTimer])
 
   // 点击外部收起
   useEffect(() => {
@@ -40,11 +69,12 @@ export function TaskNav({ defaultOpenKey }: { defaultOpenKey?: string } = {}) {
       if (flyoutRef.current?.contains(target)) return
       const currentBtn = buttonRefs.current[openMenuKey]
       if (currentBtn?.contains(target)) return
+      clearCloseTimer()
       setOpenMenuKey(null)
     }
     document.addEventListener('pointerdown', handleOutsidePointer)
     return () => document.removeEventListener('pointerdown', handleOutsidePointer)
-  }, [openMenuKey])
+  }, [openMenuKey, clearCloseTimer])
 
   // 按 Escape 收起
   useEffect(() => {
@@ -52,13 +82,14 @@ export function TaskNav({ defaultOpenKey }: { defaultOpenKey?: string } = {}) {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         const keyToFocus = openMenuKey
+        clearCloseTimer()
         setOpenMenuKey(null)
         buttonRefs.current[keyToFocus]?.focus()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [openMenuKey])
+  }, [openMenuKey, clearCloseTimer])
 
   // 浮层挂到 body，避免主侧栏的 backdrop 上下文阻断二次模糊。
   const updateFlyoutPosition = useCallback(() => {
@@ -69,8 +100,18 @@ export function TaskNav({ defaultOpenKey }: { defaultOpenKey?: string } = {}) {
 
     const btnRect = btn.getBoundingClientRect()
     const flyoutRect = flyout.getBoundingClientRect()
-    const itemCenterInViewport = btnRect.top + btnRect.height / 2
-    const idealTopInViewport = itemCenterInViewport - flyoutRect.height / 2
+    const isDesktop = isDesktopDevice()
+
+    let idealTopInViewport: number
+    if (isDesktop) {
+      // 电脑端：上边缘对齐
+      idealTopInViewport = btnRect.top
+    } else {
+      // 手机端：原来的中线和点击的那一项中线对齐
+      const itemCenterInViewport = btnRect.top + btnRect.height / 2
+      idealTopInViewport = itemCenterInViewport - flyoutRect.height / 2
+    }
+
     const minViewportTop = 8
     const maxViewportTop = Math.max(minViewportTop, window.innerHeight - flyoutRect.height - 8)
     const clampedViewportTop = Math.max(minViewportTop, Math.min(idealTopInViewport, maxViewportTop))
@@ -96,9 +137,49 @@ export function TaskNav({ defaultOpenKey }: { defaultOpenKey?: string } = {}) {
     }
   }, [openMenuKey, updateFlyoutPosition])
 
+  // 鼠标悬停一级菜单：仅电脑端有效
+  const handleGroupMouseEnter = (key: string) => {
+    if (!isDesktopDevice()) return
+    clearCloseTimer()
+    const btn = buttonRefs.current[key]
+    if (btn) {
+      const btnRect = btn.getBoundingClientRect()
+      setFlyoutPosition({
+        left: btnRect.right + (window.innerWidth <= 950 ? 4 : 19),
+        top: Math.max(8, btnRect.top),
+      })
+    }
+    setOpenMenuKey(key)
+  }
+
+  // 鼠标离开一级菜单：仅电脑端有效
+  const handleGroupMouseLeave = () => {
+    if (!isDesktopDevice()) return
+    scheduleClose()
+  }
+
   // 点击一级菜单处理
   const handleGroupClick = (key: string) => {
-    setOpenMenuKey(prev => (prev === key ? null : key))
+    clearCloseTimer()
+    if (isDesktopDevice()) {
+      // 电脑端：鼠标悬停已弹出，点击保持展开
+      setOpenMenuKey(key)
+    } else {
+      // 手机端行为不变：点击切换展开/收起
+      setOpenMenuKey(prev => (prev === key ? null : key))
+    }
+  }
+
+  // 鼠标进入二级菜单浮层
+  const handleFlyoutMouseEnter = () => {
+    if (!isDesktopDevice()) return
+    clearCloseTimer()
+  }
+
+  // 鼠标离开二级菜单浮层
+  const handleFlyoutMouseLeave = () => {
+    if (!isDesktopDevice()) return
+    scheduleClose()
   }
 
   const activeGroup = schema && openMenuKey ? schema.menu[openMenuKey] : null
@@ -155,6 +236,8 @@ export function TaskNav({ defaultOpenKey }: { defaultOpenKey?: string } = {}) {
                   .filter(Boolean)
                   .join(' ')}
                 onClick={() => handleGroupClick(key)}
+                onMouseEnter={() => handleGroupMouseEnter(key)}
+                onMouseLeave={handleGroupMouseLeave}
                 aria-haspopup="menu"
                 aria-expanded={isExpanded}
               >
@@ -174,6 +257,8 @@ export function TaskNav({ defaultOpenKey }: { defaultOpenKey?: string } = {}) {
           style={{ left: `${flyoutPosition.left}px`, top: `${flyoutPosition.top}px` }}
           role="menu"
           aria-label={t(`Menu.${openMenuKey}.name`)}
+          onMouseEnter={handleFlyoutMouseEnter}
+          onMouseLeave={handleFlyoutMouseLeave}
         >
           <div className="task-submenu-list">
             {activeTasks.map(task => (
@@ -183,7 +268,10 @@ export function TaskNav({ defaultOpenKey }: { defaultOpenKey?: string } = {}) {
                 className={({ isActive }) =>
                   ['task-submenu-item', isActive && 'active'].filter(Boolean).join(' ')
                 }
-                onClick={() => setOpenMenuKey(null)}
+                onClick={() => {
+                  clearCloseTimer()
+                  setOpenMenuKey(null)
+                }}
                 role="menuitem"
               >
                 <span className="task-submenu-dot" />
