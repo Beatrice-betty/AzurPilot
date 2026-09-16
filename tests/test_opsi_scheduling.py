@@ -6,9 +6,12 @@ from unittest.mock import Mock, patch
 
 from module.campaign.os_run import OSCampaignRun
 from module.config.config import Function, TaskEnd
+from module.config.deep import deep_get, deep_set
+from module.config.time_source import now as current_time
 from module.os.operation_siren import OperationSiren
 from module.os.tasks.prevent_action_point_overflow import OpsiPreventActionPointOverflow
 from module.os.tasks.scheduling import OpsiScheduling
+from module.os.tasks.stronghold import OpsiStronghold
 from module.os_handler.action_point import ActionPointLimit
 from module.os_handler.os_status import OSStatus
 
@@ -332,3 +335,165 @@ class TestSmartSchedulingExploreDelay(unittest.TestCase):
                 )
             ],
         )
+
+
+class StrongholdPostponeConfig(SmartSchedulingConfig):
+    """仅提供塞壬要塞推迟检查所需的配置读写接口。"""
+
+    def __init__(self, state=None):
+        super().__init__()
+        self.data = {'OpsiScheduling': {'Storage': {'Storage': dict(state or {})}}}
+        self.modified = {}
+        self.OpsiStronghold_SubmarineEveryCombat = False
+
+    def cross_get(self, keys, default=None):
+        if keys == 'OpsiScheduling.Storage.Storage':
+            return dict(deep_get(self.data, keys=keys, default={}) or {})
+        return super().cross_get(keys, default=default)
+
+    def save(self):
+        for path, value in self.modified.items():
+            deep_set(self.data, keys=path, value=value)
+        self.modified.clear()
+
+    @staticmethod
+    def multi_set():
+        return nullcontext()
+
+
+class TestStrongholdCheckPostpone(unittest.TestCase):
+    """塞壬要塞全部清除后推迟检查，避免每轮补黄币都重扫全球地图。"""
+
+    NEXT_CHECK_KEY = OpsiScheduling.STATE_KEY_STRONGHOLD_NEXT_CHECK
+
+    def make_scheduling(self, state=None, cls=OpsiScheduling):
+        scheduling = cls.__new__(cls)
+        scheduling.config = StrongholdPostponeConfig(state=state)
+        return scheduling
+
+    @staticmethod
+    def state_of(scheduling):
+        return scheduling.config.cross_get('OpsiScheduling.Storage.Storage')
+
+    def dispatch(self, scheduling, coin_tasks=('OpsiStronghold', 'OpsiObscure')):
+        """派发一轮补黄币，返回真正被代理执行的任务名。"""
+        executed = []
+
+        def run_once(task_name, ap_preserve):
+            executed.append(task_name)
+            return True
+
+        with (
+            patch.object(scheduling, '_get_enabled_coin_tasks', return_value=list(coin_tasks)),
+            patch.object(scheduling, '_run_scheduled_coin_task_once', side_effect=run_once),
+            patch.object(scheduling, '_notify_coin_task_proxy'),
+        ):
+            scheduling._dispatch_coin_task(
+                yellow_coins=1000,
+                total_ap=5000,
+                coin_target=2000,
+                meow_ap_preserve=1000,
+            )
+        return executed
+
+    def test_skips_stronghold_while_check_is_postponed(self):
+        future = current_time() + timedelta(days=3)
+        scheduling = self.make_scheduling({self.NEXT_CHECK_KEY: future.isoformat()})
+
+        executed = self.dispatch(scheduling)
+
+        self.assertEqual(executed, ['OpsiObscure'])
+        self.assertEqual(self.state_of(scheduling)[self.NEXT_CHECK_KEY], future.isoformat())
+
+    def test_searches_stronghold_again_when_postpone_time_has_passed(self):
+        scheduling = self.make_scheduling({
+            self.NEXT_CHECK_KEY: (current_time() - timedelta(hours=1)).isoformat(),
+        })
+
+        executed = self.dispatch(scheduling)
+
+        self.assertEqual(executed, ['OpsiStronghold'])
+        self.assertNotIn(self.NEXT_CHECK_KEY, self.state_of(scheduling))
+
+    def test_ends_round_without_scanning_when_only_postponed_stronghold_is_enabled(self):
+        scheduling = self.make_scheduling({
+            self.NEXT_CHECK_KEY: (current_time() + timedelta(days=3)).isoformat(),
+        })
+
+        with self.assertRaises(TaskEnd):
+            self.dispatch(scheduling, coin_tasks=('OpsiStronghold',))
+
+        self.assertEqual(
+            scheduling.config.task_delay_calls,
+            [((), {'server_update': '00:00', 'task': 'OpsiScheduling'})],
+        )
+
+    def test_ignores_broken_state_and_checks_stronghold_again(self):
+        scheduling = self.make_scheduling({self.NEXT_CHECK_KEY: 'not-a-time'})
+
+        executed = self.dispatch(scheduling)
+
+        self.assertEqual(executed, ['OpsiStronghold'])
+        self.assertNotIn(self.NEXT_CHECK_KEY, self.state_of(scheduling))
+
+    def test_check_time_uses_earlier_of_weekly_and_monthly_refresh(self):
+        # 无论要塞来自每周刷新还是每月重置，都取更早的那个时间点
+        earlier = datetime(2026, 9, 21, 0, 0)
+        later = datetime(2026, 10, 1, 0, 0)
+        scheduling = self.make_scheduling()
+
+        for name, weekly_value, monthly_value in (
+            ('每周刷新在前', earlier, later),
+            ('每月重置在前', later, earlier),
+        ):
+            with self.subTest(name):
+                with (
+                    patch(
+                        'module.os.tasks.scheduling.get_nearest_weekday_date',
+                        return_value=weekly_value,
+                    ),
+                    patch(
+                        'module.os.tasks.scheduling.get_os_next_reset',
+                        return_value=monthly_value,
+                    ),
+                ):
+                    self.assertEqual(
+                        scheduling._get_next_stronghold_check_time(),
+                        earlier + OpsiScheduling.STRONGHOLD_CHECK_GRACE,
+                    )
+
+    def assert_postponed_by_clear_stronghold(self, zones):
+        """运行一次要塞清理，确认写入了下次检查时间。"""
+        stronghold = self.make_scheduling(cls=OpsiStronghold)
+        weekly = current_time() + timedelta(days=2)
+        monthly = current_time() + timedelta(days=20)
+
+        with (
+            patch.object(stronghold, 'cl1_ap_preserve'),
+            patch.object(stronghold, 'os_map_goto_globe'),
+            patch.object(stronghold, 'globe_update'),
+            patch.object(stronghold, 'find_siren_stronghold', side_effect=zones),
+            patch.object(stronghold, 'os_globe_goto_map'),
+            patch.object(stronghold, 'globe_enter'),
+            patch.object(stronghold, 'zone_init'),
+            patch.object(stronghold, 'os_order_execute'),
+            patch.object(stronghold, 'run_stronghold'),
+            patch.object(stronghold, 'handle_fleet_repair_by_config'),
+            patch.object(stronghold, 'handle_fleet_resolve'),
+            patch.object(stronghold, '_handle_coin_task_no_content', return_value=True),
+            patch(
+                'module.os.tasks.scheduling.get_nearest_weekday_date',
+                return_value=weekly,
+            ),
+            patch('module.os.tasks.scheduling.get_os_next_reset', return_value=monthly),
+        ):
+            stronghold.clear_stronghold()
+
+        expected = (min(weekly, monthly) + OpsiScheduling.STRONGHOLD_CHECK_GRACE).isoformat()
+        self.assertEqual(self.state_of(stronghold)[self.NEXT_CHECK_KEY], expected)
+
+    def test_records_postpone_when_no_stronghold_is_found(self):
+        self.assert_postponed_by_clear_stronghold(zones=[None])
+
+    def test_records_postpone_after_clearing_the_last_stronghold(self):
+        self.assert_postponed_by_clear_stronghold(zones=[Mock(), None])
