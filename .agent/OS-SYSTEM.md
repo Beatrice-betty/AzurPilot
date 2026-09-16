@@ -892,7 +892,7 @@ graph LR
 | `OpsiHazard1Leveling.OperationCoinsPreserve` | int | 黄币保留阈值 |
 | `OpsiHazard1Leveling.MinimumActionPointReserve` | int | 最低行动力保留 |
 | `OpsiHazard1Leveling.TargetZone` | int | 目标海域 ID |
-| `OpsiHazard1Leveling.ExecuteFixedPatrolScan` | bool | 战后强制移动开关（默认 false）。开启后零移动遍历 1~4 队雷达找问号；仍找不到且**界面上的当前行动力**（不含药剂箱，`_read_current_action_point()`）大于 7 时，再逐队挪动舰队做一遍整图重扫。旧版等级 1/2/3 一并视为开启 |
+| `OpsiHazard1Leveling.ExecuteFixedPatrolScan` | bool | 战后强制移动开关（默认 false）。开启后零移动遍历 1~4 队雷达找问号；仍找不到且**界面上的当前行动力**（不含药剂箱，`_read_current_action_point()`）大于 7 时，再逐队挪动舰队做一遍整图重扫。**短猫相接**跑这条兜底（重扫时看到明石却走不过去）不看行动力，直接挪。旧版等级 1/2/3 一并视为开启 |
 | `OpsiMeowfficerFarming.HazardLevel` | int | 短猫侵蚀等级 |
 | `OpsiMeowfficerFarming.TargetZone` | int | 短猫目标海域 |
 | `OpsiMeowfficerFarming.StayInZone` | bool | 指定海域计划作战 |

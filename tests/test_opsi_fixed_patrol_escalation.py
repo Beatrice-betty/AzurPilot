@@ -74,8 +74,17 @@ class FixedPatrolStub:
     # 阈值取真实实现，避免测试和代码各写一份
     _FIXED_PATROL_L2_AP = OSMap._FIXED_PATROL_L2_AP
 
-    def __init__(self, enabled=True, any_fleet_result=False, current_ap=0):
-        self.config = SimpleNamespace(OpsiFleet_Fleet=1)
+    def __init__(
+        self,
+        enabled=True,
+        any_fleet_result=False,
+        current_ap=0,
+        task='OpsiHazard1Leveling',
+    ):
+        self.config = SimpleNamespace(
+            OpsiFleet_Fleet=1,
+            task=SimpleNamespace(command=task),
+        )
         self.map = SimpleNamespace(grids=[object()])
         self.enabled = enabled
         self.any_fleet_result = any_fleet_result
@@ -167,6 +176,22 @@ class TestFixedPatrolScan(unittest.TestCase):
         """阈值就是 7：大于 7 才挪，等于 7 不挪。"""
         self.assertEqual(OSMap._FIXED_PATROL_L2_AP, 7)
         stub = self.run_scan(any_fleet_result=False, current_ap=7)
+        self.assertEqual(stub.move_calls, 0)
+
+    def test_meowfficer_task_skips_action_point_gate(self):
+        """短猫相接不设行动力门槛：找猫就是它的任务，行动力不去查也照样挪。"""
+        stub = self.run_scan(
+            any_fleet_result=False, current_ap=0, task='OpsiMeowfficerFarming'
+        )
+        self.assertEqual(stub.ap_reads, 0)
+        self.assertEqual(stub.move_calls, 1)
+
+    def test_meowfficer_task_still_skips_l2_when_solved(self):
+        """短猫只是不看行动力，零移动检索找到事件时照样不挪舰队。"""
+        stub = self.run_scan(
+            any_fleet_result=True, current_ap=0, task='OpsiMeowfficerFarming'
+        )
+        self.assertEqual(stub.ap_reads, 0)
         self.assertEqual(stub.move_calls, 0)
 
 

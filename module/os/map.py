@@ -2107,9 +2107,10 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
         L0/L1（零移动）：遍历 1~4 号舰队的雷达清剩余问号，只切换舰队看雷达、
                 一支舰队都不挪动，速度最快；找到明石/记录塔/装置就处理，命中即止。
         L2（挪舰队）：L0/L1 什么都没找到时，逐个挪动舰队再整图重扫，把挡路的
-                舰队让开。前提是界面上的当前行动力大于 `_FIXED_PATROL_L2_AP`
-                （不含药剂箱）——这一轮是为找事件额外多开的，当前行动力不够就
-                宁可留给下一轮正常练级。
+                舰队让开。侵蚀1 练级的前提是界面上的当前行动力大于
+                `_FIXED_PATROL_L2_AP`（不含药剂箱）——这一轮是为找事件额外多开
+                的，当前行动力不够就宁可留给下一轮正常练级；短猫相接不设这道
+                门槛，找猫本来就是它的任务，行动力该花就花。
 
         Args:
             ExecuteFixedPatrolScan (bool, optional): 是否启用强制移动。
@@ -2147,17 +2148,22 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
                 return
 
             # ---- L2：挪舰队之前先确认当前行动力够不够 ----
-            current_ap = self._read_current_action_point()
-            if current_ap <= self._FIXED_PATROL_L2_AP:
+            # 短猫相接不设这道门槛：找猫本来就是它的任务，行动力该花就花；
+            # 侵蚀1 练级才要为下一轮留行动力，不够就不挪。
+            if self.config.task.command == "OpsiMeowfficerFarming":
+                logger.info("[大世界] 短猫相接不做行动力门控，直接执行 L2 挪舰队")
+            else:
+                current_ap = self._read_current_action_point()
+                if current_ap <= self._FIXED_PATROL_L2_AP:
+                    logger.info(
+                        f"[大世界] 当前行动力 {current_ap} 不超过 "
+                        f"{self._FIXED_PATROL_L2_AP}，跳过 L2 挪舰队，留给下一轮练级"
+                    )
+                    return
                 logger.info(
-                    f"[大世界] 当前行动力 {current_ap} 不超过 "
-                    f"{self._FIXED_PATROL_L2_AP}，跳过 L2 挪舰队，留给下一轮练级"
+                    f"[大世界] 当前行动力 {current_ap} 大于 {self._FIXED_PATROL_L2_AP}，"
+                    "执行 L2 挪舰队"
                 )
-                return
-            logger.info(
-                f"[大世界] 当前行动力 {current_ap} 大于 {self._FIXED_PATROL_L2_AP}，"
-                "执行 L2 挪舰队"
-            )
             logger.hr("[大世界] 强制移动 L2：逐队挪动舰队后整图重扫")
             self._move_fleets_and_rescan()
         finally:
