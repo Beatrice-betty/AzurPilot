@@ -1,90 +1,225 @@
-"""验证强制移动的“漏猫”兜底：效率模式何时升级为保守模式。
+"""验证战后强制移动的“漏猫”兜底。
 
 背景：明石刷新在舰队模型旁边时图标会被挡住，或目标点超出舰队移动范围
 （游戏提示“目标点超出移动范围”，即 `handle_walk_out_of_step` 抓的
-`TEMPLATE_MAP_WALK_OUT_OF_STEP`），此时效率模式「只换队看雷达、一支都不挪动」
-永远点不到猫——只有把挡路的舰队挪开才能解决。
+`TEMPLATE_MAP_WALK_OUT_OF_STEP`）。这时「只换队看雷达、一支都不挪动」的
+零移动检索永远点不到猫——只有把挡路的舰队挪开才能解决。
 
-因此 `clear_question` 连续看到问号却清不掉时置位 `_question_unreachable`，
-`_execute_fixed_patrol_scan` 在效率模式且没人点到时据此升级为保守模式；
-反过来，雷达上压根没有问号时绝不能升级，否则效率模式就退化成保守模式。
+所以侵蚀一的强制移动是一个开关：开启后先零移动遍历 1~4 队雷达（L0/L1），再决定
+要不要逐队挪动舰队做整图重扫（L2）。要不要挪分两种：看到了问号却点不到的必须挪
+（和行动力无关）；全队雷达都没线索时才看当前行动力（大于 7 才挪，否则留给下一轮
+练级）。**短猫相接不吃这一套**：它的强制移动只有换队扫雷达（等价于 L0/L1），
+不挪舰队、也不走共享兜底——L2 的落点是照侵蚀1 那张图定的。这里的用例锁定这些边界。
 """
 
 import unittest
 from contextlib import nullcontext
 from types import SimpleNamespace
 
+from module.config.redirect_utils.utils import execute_fixed_patrol_scan_redirect
 from module.os.map import ALREADY_SOLVED_MAP_EVENTS, OSMap
+from module.os.tasks.meowfficer_farming import OpsiMeowfficerFarming
+
+
+class TestForcedMoveRedirect(unittest.TestCase):
+    def test_stored_levels_are_cleaned_into_switch(self):
+        """存量配置里的等级数字要被清洗成布尔，别在复选框里留个 2。"""
+        self.assertIs(execute_fixed_patrol_scan_redirect(0), False)
+        for level in (1, 2, 3):
+            with self.subTest(level=level):
+                self.assertIs(execute_fixed_patrol_scan_redirect(level), True)
+
+    def test_bool_values_pass_through(self):
+        self.assertIs(execute_fixed_patrol_scan_redirect(True), True)
+        self.assertIs(execute_fixed_patrol_scan_redirect(False), False)
+
+
+class SwitchStub:
+    """只提供 `_forced_move_enabled` 需要的属性。"""
+
+    def __init__(self, value):
+        self.config = SimpleNamespace(
+            OpsiHazard1Leveling_ExecuteFixedPatrolScan=value
+        )
+
+
+class TestForcedMoveSwitch(unittest.TestCase):
+    def enabled(self, value):
+        return OSMap._forced_move_enabled(SwitchStub(value))
+
+    def test_bool_values(self):
+        """新配置是复选框，直接读布尔值。"""
+        self.assertTrue(self.enabled(True))
+        self.assertFalse(self.enabled(False))
+        self.assertFalse(self.enabled(None))
+
+    def test_legacy_level_values(self):
+        """旧版等级配置：0=关闭，1=效率模式，2=保守模式（已并入 -> 同样视为开启）。"""
+        self.assertFalse(self.enabled(0))
+        for level in (1, 2, 3):
+            with self.subTest(level=level):
+                self.assertTrue(self.enabled(level))
+
+    def test_string_values(self):
+        """配置文件里读出来的字符串也要认。"""
+        for value in ('true', 'TRUE', '1', '2'):
+            with self.subTest(value=value):
+                self.assertTrue(self.enabled(value))
+        for value in ('false', 'False', '0', ''):
+            with self.subTest(value=value):
+                self.assertFalse(self.enabled(value))
 
 
 class FixedPatrolStub:
     """只提供 `_execute_fixed_patrol_scan` 需要的属性。"""
 
-    def __init__(self, level, any_fleet_result, unreachable):
-        self.config = SimpleNamespace(OpsiFleet_Fleet=1)
+    # 阈值取真实实现，避免测试和代码各写一份
+    _FIXED_PATROL_L2_AP = OSMap._FIXED_PATROL_L2_AP
+
+    def __init__(
+        self,
+        enabled=True,
+        any_fleet_result=False,
+        current_ap=0,
+        task='OpsiHazard1Leveling',
+        unreachable=False,
+    ):
+        self.config = SimpleNamespace(
+            OpsiFleet_Fleet=1,
+            task=SimpleNamespace(command=task),
+        )
         self.map = SimpleNamespace(grids=[object()])
-        self.level = level
+        self.enabled = enabled
         self.any_fleet_result = any_fleet_result
-        self._question_unreachable = unreachable
-        self.recovery_calls = 0
+        self.current_ap = current_ap
+        self.unreachable = unreachable
+        self.ap_reads = 0
+        self.move_calls = 0
+        self.scan_calls = 0
         self.fleet_sets = []
 
     def map_init(self, map_=None):
         pass
 
-    def _forced_move_level(self):
-        return self.level
+    def _forced_move_enabled(self):
+        return self.enabled
 
     def clear_question_any_fleet(self, drop=None):
+        # 真实实现会复位并在清不掉时置位 _question_unreachable，这里直接给定
+        self.scan_calls += 1
+        self._question_unreachable = self.unreachable
         return self.any_fleet_result
 
-    def _execute_akashi_recovery(self):
-        self.recovery_calls += 1
+    def _read_current_action_point(self):
+        self.ap_reads += 1
+        return self.current_ap
+
+    def _move_fleets_and_rescan(self):
+        self.move_calls += 1
+        return False
 
     def fleet_set(self, index=1):
         self.fleet_sets.append(index)
         return True
 
 
-class TestFixedPatrolEscalation(unittest.TestCase):
-    def run_scan(self, level, any_fleet_result, unreachable):
-        stub = FixedPatrolStub(level, any_fleet_result, unreachable)
+class TestFixedPatrolScan(unittest.TestCase):
+    def run_scan(self, **kwargs):
+        stub = FixedPatrolStub(**kwargs)
         OSMap._execute_fixed_patrol_scan(stub, ExecuteFixedPatrolScan=True)
         return stub
 
-    def test_efficiency_mode_escalates_when_question_unreachable(self):
-        """有舰队看到了问号却谁都到不了 -> 升级保守模式挪开舰队。"""
-        stub = self.run_scan(level=1, any_fleet_result=False, unreachable=True)
-        self.assertEqual(stub.recovery_calls, 1)
+    def test_skips_when_not_requested(self):
+        """调用方没要求强制移动 -> 什么都不做。"""
+        stub = FixedPatrolStub()
+        OSMap._execute_fixed_patrol_scan(stub, ExecuteFixedPatrolScan=False)
+        self.assertEqual(stub.move_calls, 0)
+        self.assertEqual(stub.fleet_sets, [])
 
-    def test_efficiency_mode_keeps_when_nothing_found(self):
-        """雷达上压根没有问号 -> 保持效率模式，不升级。"""
-        stub = self.run_scan(level=1, any_fleet_result=False, unreachable=False)
-        self.assertEqual(stub.recovery_calls, 0)
+    def test_skips_when_switch_is_off(self):
+        """开关关闭 -> 什么都不做，连行动力都不去查。"""
+        stub = self.run_scan(enabled=False)
+        self.assertEqual(stub.move_calls, 0)
+        self.assertEqual(stub.ap_reads, 0)
+        self.assertEqual(stub.scan_calls, 0)
+        self.assertEqual(stub.fleet_sets, [])
 
-    def test_efficiency_mode_keeps_when_already_solved(self):
-        """换舰队已经点到了 -> 不升级。"""
-        stub = self.run_scan(level=1, any_fleet_result=True, unreachable=True)
-        self.assertEqual(stub.recovery_calls, 0)
+    def test_solved_during_zero_move_scan_skips_l2(self):
+        """零移动检索就找到了事件 -> 直接结束，不查行动力也不挪舰队。"""
+        stub = self.run_scan(any_fleet_result=True)
+        self.assertEqual(stub.scan_calls, 1)
+        self.assertEqual(stub.move_calls, 0)
+        self.assertEqual(stub.ap_reads, 0)
 
-    def test_conservative_mode_is_unaffected(self):
-        """等级 2 直接走保守模式，与问号标志无关。"""
-        for unreachable in (True, False):
-            with self.subTest(unreachable=unreachable):
-                stub = self.run_scan(level=2, any_fleet_result=False, unreachable=unreachable)
-                self.assertEqual(stub.recovery_calls, 1)
+    def test_moves_fleets_when_action_point_enough(self):
+        """什么都没找到但当前行动力大于 7 -> 走一遍 L2 挪舰队。"""
+        stub = self.run_scan(any_fleet_result=False, current_ap=8)
+        self.assertEqual(stub.ap_reads, 1)
+        self.assertEqual(stub.move_calls, 1)
 
-    def test_closed_level_does_nothing(self):
-        """等级 0 关闭强制移动。"""
-        stub = self.run_scan(level=0, any_fleet_result=False, unreachable=True)
-        self.assertEqual(stub.recovery_calls, 0)
+    def test_keeps_farming_when_action_point_low(self):
+        """当前行动力不够 -> 不挪舰队，留给下一轮正常练级。"""
+        for current_ap in (0, 5, 7):
+            with self.subTest(current_ap=current_ap):
+                stub = self.run_scan(any_fleet_result=False, current_ap=current_ap)
+                self.assertEqual(stub.ap_reads, 1)
+                self.assertEqual(stub.move_calls, 0)
 
     def test_main_fleet_restored_after_scan(self):
         """无论走哪条分支，结束后都要复位主队。"""
-        for level, unreachable in ((1, True), (1, False), (2, False)):
-            with self.subTest(level=level, unreachable=unreachable):
-                stub = self.run_scan(level=level, any_fleet_result=False, unreachable=unreachable)
+        for any_fleet_result, current_ap in ((True, 0), (False, 30), (False, 0)):
+            with self.subTest(any_fleet_result=any_fleet_result, current_ap=current_ap):
+                stub = self.run_scan(
+                    any_fleet_result=any_fleet_result, current_ap=current_ap
+                )
                 self.assertEqual(stub.fleet_sets, [1])
+
+    def test_nested_call_is_skipped(self):
+        """已经在强制移动流程里 -> 跳过嵌套调用，避免重复挪舰队。"""
+        stub = FixedPatrolStub(current_ap=30)
+        stub._in_akashi_recovery = True
+        OSMap._execute_fixed_patrol_scan(stub, ExecuteFixedPatrolScan=True)
+        self.assertEqual(stub.move_calls, 0)
+        self.assertEqual(stub.fleet_sets, [])
+
+    def test_action_point_threshold_is_seven(self):
+        """阈值就是 7：大于 7 才挪，等于 7 不挪。"""
+        self.assertEqual(OSMap._FIXED_PATROL_L2_AP, 7)
+        stub = self.run_scan(any_fleet_result=False, current_ap=7)
+        self.assertEqual(stub.move_calls, 0)
+
+    def test_seen_but_unreachable_moves_regardless_of_action_point(self):
+        """看到问号却点不到 -> 不看行动力，直接挪舰队：已看见的事件不能放跑。"""
+        for current_ap in (0, 3, 7):
+            with self.subTest(current_ap=current_ap):
+                stub = self.run_scan(
+                    any_fleet_result=False, current_ap=current_ap, unreachable=True
+                )
+                self.assertEqual(stub.ap_reads, 0)
+                self.assertEqual(stub.move_calls, 1)
+
+    def test_meowfficer_task_never_uses_shared_forced_move(self):
+        """短猫不走共享强制移动：L2 的落点是照侵蚀1 那张图定的，短猫地图不一样。
+
+        短猫的强制移动只有换队扫雷达（meowfficer_farming 的 _meow_fixed_patrol_scan），
+        所以哪怕雷达上什么都没看到、行动力也够，这里也不能挪舰队。
+        """
+        for unreachable in (True, False):
+            with self.subTest(unreachable=unreachable):
+                stub = self.run_scan(
+                    any_fleet_result=False,
+                    current_ap=99,
+                    task='OpsiMeowfficerFarming',
+                    unreachable=unreachable,
+                )
+                self.assertEqual(stub.ap_reads, 0)
+                self.assertEqual(stub.move_calls, 0)
+                self.assertEqual(stub.fleet_sets, [])
+                self.assertEqual(stub.scan_calls, 0)
+
+
+def make_question_grid(is_logging_tower=False):
+    return SimpleNamespace(is_logging_tower=is_logging_tower)
 
 
 class ClearQuestionStub:
@@ -95,7 +230,8 @@ class ClearQuestionStub:
         self.walk_result = walk_result
         self.config = SimpleNamespace(temporary=lambda **kwargs: nullcontext())
         self.zone = SimpleNamespace(is_port=False)
-        self.device = SimpleNamespace(image=object(), click=lambda grid: None)
+        self.clicked = []
+        self.device = SimpleNamespace(image=object(), click=self.clicked.append)
         self.view = SimpleNamespace(
             select=lambda **kwargs: SimpleNamespace(count=1),
             predict=lambda: None,
@@ -125,40 +261,46 @@ class ClearQuestionStub:
         return self.walk_result
 
 
-def make_question_grid(is_logging_tower=False):
-    return SimpleNamespace(is_logging_tower=is_logging_tower)
-
-
-class TestClearQuestionUnreachableFlag(unittest.TestCase):
+class TestClearQuestion(unittest.TestCase):
     def run_clear_question(self, predictions, walk_result=''):
         stub = ClearQuestionStub(predictions, walk_result)
         result = OSMap.clear_question(stub)
         return stub, result
 
+    def test_retries_every_attempt_before_giving_up(self):
+        """三次点不掉 -> 返回 False；不可达的问号由上层换队/挪舰队处理。"""
+        grid = make_question_grid()
+        stub, result = self.run_clear_question([grid, grid, grid])
+        self.assertFalse(result)
+        self.assertEqual(len(stub.clicked), 3)
+
+    def test_returns_false_when_radar_has_no_question(self):
+        """雷达上没有问号 -> 不点，直接返回。"""
+        stub, result = self.run_clear_question([None])
+        self.assertFalse(result)
+        self.assertEqual(stub.clicked, [])
+
+    def test_returns_true_when_akashi_reached(self):
+        """点到明石 -> True。"""
+        stub, result = self.run_clear_question([make_question_grid()], walk_result='akashi')
+        self.assertTrue(result)
+
     def test_marks_unreachable_after_all_attempts_failed(self):
-        """三次都在雷达上看到问号却清不掉 -> 置位不可达。"""
+        """三次都在雷达上看到问号却清不掉 -> 置位“看到了却到不了”。"""
         grid = make_question_grid()
         stub, result = self.run_clear_question([grid, grid, grid])
         self.assertFalse(result)
         self.assertTrue(stub._question_unreachable)
 
     def test_does_not_mark_when_radar_has_no_question(self):
-        """雷达上没有问号 -> 只是没得清，不算“看到了却到不了”。"""
-        stub, result = self.run_clear_question([None])
-        self.assertFalse(result)
+        """雷达上没有问号 -> 只是没线索，不算“看到了却到不了”。"""
+        stub, _ = self.run_clear_question([None])
         self.assertFalse(stub._question_unreachable)
 
     def test_does_not_mark_when_akashi_reached(self):
         """点到明石 -> 不置位。"""
         grid = make_question_grid()
         stub, result = self.run_clear_question([grid], walk_result='akashi')
-        self.assertTrue(result)
-        self.assertFalse(stub._question_unreachable)
-
-    def test_does_not_mark_when_logging_tower_triggered(self):
-        """移动触发了记录塔剧情 -> 视为问号已解决，不置位。"""
-        grid = make_question_grid(is_logging_tower=True)
-        stub, result = self.run_clear_question([grid], walk_result='event')
         self.assertTrue(result)
         self.assertFalse(stub._question_unreachable)
 
@@ -187,11 +329,12 @@ class AnyFleetStub:
         return True
 
     def clear_question(self, drop=None):
-        # 真实实现只有雷达上看到问号时才会被调用；看到了却清不掉就置位不可达
-        self._question_unreachable = True
+        # 真实实现只有雷达上看到问号时才会被调用
         if self.solve_on_fleet is not None and self.fleet_sets[-1] == self.solve_on_fleet:
             self._solved_map_event.add('is_akashi')
             return True
+        # 看到了却清不掉：真实实现会置位“看到了却到不了”
+        self._question_unreachable = True
         return False
 
     def map_rescan_once(self, rescan_mode='full', drop=None):
@@ -200,8 +343,7 @@ class AnyFleetStub:
 
 class TestAnyFleetFleetOrder(unittest.TestCase):
     def run_any_fleet(self, stub):
-        result = OSMap.clear_question_any_fleet(stub)
-        return stub, result
+        return OSMap.clear_question_any_fleet(stub)
 
     def test_starts_from_primary_then_others(self):
         """先主队，再按编号补上其余舰队，且全程不切回主队。"""
@@ -209,18 +351,10 @@ class TestAnyFleetFleetOrder(unittest.TestCase):
         self.run_any_fleet(stub)
         self.assertEqual(stub.fleet_sets, [1, 2, 3, 4])
 
-    def test_resets_unreachable_flag_when_nothing_seen(self):
-        """本轮雷达上什么都没有 -> 清掉上一轮的不可达标记。"""
+    def test_returns_false_when_nothing_seen(self):
+        """雷达上什么都没有 -> 返回 False，交给上层决定要不要挪舰队。"""
         stub = AnyFleetStub([None, None, None, None])
-        stub._question_unreachable = True
-        self.run_any_fleet(stub)
-        self.assertFalse(stub._question_unreachable)
-
-    def test_keeps_unreachable_flag_when_fleet_saw_question(self):
-        """某舰队看到问号却清不掉 -> 标记保留给调用方升级保守模式。"""
-        stub = AnyFleetStub([make_question_grid(), None, None, None])
-        self.run_any_fleet(stub)
-        self.assertTrue(stub._question_unreachable)
+        self.assertFalse(self.run_any_fleet(stub))
 
     def test_other_fleet_can_solve_the_question(self):
         """主队清不掉、第 3 舰队清掉了 -> 立即结束并标记已解决。"""
@@ -228,20 +362,45 @@ class TestAnyFleetFleetOrder(unittest.TestCase):
             [make_question_grid(), make_question_grid(), make_question_grid(), None],
             solve_on_fleet=3,
         )
-        result = OSMap.clear_question_any_fleet(stub)
+        result = self.run_any_fleet(stub)
         self.assertTrue(result)
         self.assertEqual(stub.fleet_sets, [1, 2, 3])
 
+    def test_unreachable_flag_starts_clean_each_round(self):
+        """每轮从干净状态开始：上一轮的“看到却到不了”不能留给这一轮。"""
+        stub = AnyFleetStub([None, None, None, None])
+        stub._question_unreachable = True
+        self.run_any_fleet(stub)
+        self.assertFalse(stub._question_unreachable)
 
-class RecoveryStub:
-    """只提供 `_recover_unreachable_akashi` 需要的属性。"""
+    def test_keeps_flag_when_a_fleet_saw_but_could_not_clear(self):
+        """有舰队看到问号却点不到 -> 标记留给调用方，且不受行动力限制。"""
+        stub = AnyFleetStub([make_question_grid(), None, None, None])
+        self.run_any_fleet(stub)
+        self.assertTrue(stub._question_unreachable)
 
-    # 标记逻辑是真实实现（类属性默认 set 是实例共享的，注释里写明了要重新赋值）
+
+class MarkStub:
+    """只提供 `_mark_event_unreachable` 需要的属性。"""
+
     _mark_event_unreachable = OSMap._mark_event_unreachable
 
-    def __init__(self, other_fleet_succeeds=False, unreachable_nodes=None):
+    def __init__(self, nodes=None):
+        self._unreachable_event_nodes = set(nodes or ())
+
+
+class RecoveryStub(MarkStub):
+    """只提供 `_recover_unreachable_akashi` 需要的属性。"""
+
+    def __init__(
+        self,
+        other_fleet_succeeds=False,
+        unreachable_nodes=None,
+        task='OpsiHazard1Leveling',
+    ):
+        super().__init__(unreachable_nodes)
         self.other_fleet_succeeds = other_fleet_succeeds
-        self._unreachable_event_nodes = set(unreachable_nodes or ())
+        self.config = SimpleNamespace(task=SimpleNamespace(command=task))
         self._solved_map_event = set()
         self.force_move_calls = 0
 
@@ -281,12 +440,30 @@ class TestRecoverUnreachableAkashi(unittest.TestCase):
         self.assertFalse(OSMap._recover_unreachable_akashi(stub, None, 'C3'))
         self.assertEqual(stub.force_move_calls, 1)
 
+    def test_meowfficer_task_skips_the_shared_recovery(self):
+        """短猫不走共享兜底：不换队点明石、也不挪舰队，交给换队扫雷达。"""
+        stub = RecoveryStub(other_fleet_succeeds=True, task='OpsiMeowfficerFarming')
+        self.assertFalse(OSMap._recover_unreachable_akashi(stub, None, 'B7'))
+        self.assertEqual(stub.force_move_calls, 0)
+        self.assertNotIn('is_akashi', stub._solved_map_event)
+        # 也没记“到不了”，免得挡住短猫自己的后续尝试（它是按格记的）
+        self.assertNotIn('B7', stub._unreachable_event_nodes)
 
-class RescanOnceStub:
+    def test_marking_does_not_touch_shared_default(self):
+        """标记不能写进类属性上的默认 set（那是所有实例共享的）。"""
+        first = MarkStub()
+        second = MarkStub()
+        OSMap._mark_event_unreachable(first, 'B7')
+        self.assertEqual(first._unreachable_event_nodes, {'B7'})
+        self.assertEqual(second._unreachable_event_nodes, set())
+        self.assertEqual(OSMap._unreachable_event_nodes, set())
+
+
+class RescanOnceStub(MarkStub):
     """只提供 `map_rescan_once` 需要的属性。"""
 
     def __init__(self):
-        self._unreachable_event_nodes = {'B7'}
+        super().__init__({'B7'})
 
     def map_data_init(self, map_=None):
         pass
@@ -307,6 +484,16 @@ class TestUnreachableNodesReset(unittest.TestCase):
         stub = RescanOnceStub()
         OSMap.map_rescan_once(stub, rescan_mode='full')
         self.assertEqual(stub._unreachable_event_nodes, set())
+
+
+def make_device_grid():
+    return SimpleNamespace(is_scanning_device=True)
+
+
+class SelectedStub(list):
+    @property
+    def count(self):
+        return len(self)
 
 
 class DeviceStub:
@@ -338,7 +525,9 @@ class DeviceStub:
         return SimpleNamespace(
             predict=lambda: None,
             select=lambda **kwargs: (
-                SelectedStub([make_device_grid()]) if self.view_finds_device else SelectedStub([])
+                SelectedStub([make_device_grid()])
+                if self.view_finds_device
+                else SelectedStub([])
             ),
         )
 
@@ -349,16 +538,6 @@ class DeviceStub:
         if self.confirm_on_fleet is not None and self.last_fleet == self.confirm_on_fleet:
             self.is_siren_device_confirmed = True
         return ''
-
-
-class SelectedStub(list):
-    @property
-    def count(self):
-        return len(self)
-
-
-def make_device_grid():
-    return SimpleNamespace(is_scanning_device=True)
 
 
 class TestDeviceOtherFleets(unittest.TestCase):
@@ -390,6 +569,24 @@ class TestDeviceOtherFleets(unittest.TestCase):
         stub = DeviceStub(False, False)
         self.run_goto(stub)
         self.assertEqual(stub.fleet_sets[-1], 1)
+
+
+class TestMeowNoStepByStepChain(unittest.TestCase):
+    """分步检索链整个删掉：扫雷达只归强制移动，避免同一轮把 1~4 队雷达扫两遍。
+
+    链和强制移动扫的是同一批雷达，中间没有任何舰队移动，先后跑一遍就是白扫
+    第二遍（日志里每支舰队都会先出现「舰队 N 附近无问号」、再出现一次
+    「舰队 N 雷达上无问号」）。这几个方法别再捡回来。
+    """
+
+    def test_chain_methods_are_gone(self):
+        for name in (
+            '_clear_question_primary',
+            '_clear_question_other_fleets',
+            '_meow_retrieve_events',
+        ):
+            with self.subTest(name=name):
+                self.assertFalse(hasattr(OpsiMeowfficerFarming, name))
 
 
 if __name__ == '__main__':

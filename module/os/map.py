@@ -1380,8 +1380,8 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
                 return True
 
         # 连续 attempts 次都在雷达上看到问号却没清掉：舰队根本到不了
-        #（视频实测游戏提示“目标点超出移动范围”）。记下来交给上层换其他
-        # 舰队去点，全部点不到时再由强制移动升级为保守模式。
+        #（视频实测游戏提示“目标点超出移动范围”）。记下来——这种“看到了却点不到”
+        # 只能靠挪舰队解决，和行动力无关，上层必须为它挪一次。
         self._question_unreachable = True
         logger.warning(
             f"[大世界-地图] 前往问号{attempts}次尝试失败, "
@@ -1401,8 +1401,8 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
         仍无所获才切换下一支舰队，直到找到目标或扫完所有舰队。
 
         整轮结束后 `self._question_unreachable` 表示「有舰队看到了问号却清不掉」：
-        换舰队点是为了解决这种情况，但它解决不了所有情况（比如目标本来就超出
-        所有舰队的移动范围），调用方据此升级到保守模式。
+        换舰队点解决不了所有情况（目标本来就超出所有舰队的移动范围），
+        调用方要为它挪一次舰队，且不受行动力门控限制。
 
         Args:
             drop: 掉落记录对象。
@@ -1524,10 +1524,10 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
 
     _solved_map_event = set()
     _solved_fleet_mechanism = 0
-    # 是否有舰队在雷达上看到了问号却怎么也到不了（多为“目标点超出移动范围”，
-    # 即被其他舰队挡住/海域移动次数耗尽）。由 clear_question 置位，
-    # clear_question_any_fleet 复位，_execute_fixed_patrol_scan 据此决定
-    # 效率模式要不要升级为保守模式。
+    # 是否有舰队在雷达上看到了问号却怎么也到不了（游戏提示“目标点超出移动范围”，
+    # 即被其他舰队挡住/海域移动次数耗尽）。由 clear_question 置位、
+    # clear_question_any_fleet 复位，_execute_fixed_patrol_scan 据此判断：
+    # “看到了却点不到”必须挪舰队，不受行动力门控限制。
     _question_unreachable = False
     # 本轮重扫中已判定“到不了”的事件格子（node 字符串，如 'B7'）。
     # 整图重扫时同一格会出现在多个摄像机视野里，不记下来的话每个视野都会把
@@ -2110,22 +2110,22 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
     def _execute_fixed_patrol_scan(
         self, ExecuteFixedPatrolScan: bool = False, **kwargs
     ):
-        """执行强制移动并触发全图重扫（按配置等级分发）。
+        """执行强制移动并触发全图重扫。
 
         侵蚀1战后常规重扫一无所获（疑似明石被舰队遮挡/刷新在雷达范围外）时，
-        按“强制移动等级”执行：
-        等级 0：关闭，不做任何强制移动；
-        等级 1（效率模式）：只切换舰队看雷达找问号，一支舰队都不挪动，速度最快；
-                 找到明石/记录塔/装置就处理，找不到就罢手（图快省事）；
-                 但如果所有舰队都在雷达上看到了问号却谁都快不到，会升级为
-                 保守模式（不挪舰队解决不了这种“漏猫”）。
-        等级 2（保守模式）：先只扫雷达不挪动，扫不到就逐个挪动舰队再整图重扫；
-                 找到就停，更稳更全，但会挪动舰队、慢一些（分 L1/L2/L3 三段）：
-                 L1 仅主队（CL 舰队）清问号后全图扫，命中即回；
-                 L2 未中则按“主队先行、其余按编号升序”逐队：换队后先雷达预检，
-                 附近有事件直接用当前舰队处理（命中即停），扫不到才挪到对应列，
-                 每挪一队整图重扫一次、命中事件即停，不再挪剩余舰队；
-                 L3 只要挪过就补一次自律寻敌清理残留装置（顺路复查事件）。
+        开启强制移动会分两段找：
+
+        L0/L1（零移动）：遍历 1~4 号舰队的雷达清剩余问号，只切换舰队看雷达、
+                一支舰队都不挪动，速度最快；找到明石/记录塔/装置就处理，命中即止。
+        L2（挪舰队）：逐个挪动舰队再整图重扫，把挡路的舰队让开。要不要挪分两种：
+                ① 有舰队看到了问号却点不到（被别的舰队挡住/超出移动范围）：
+                   必须挪，和行动力无关——已经看见的事件不能因为行动力不够放跑；
+                ② 全队雷达都没线索：看界面上的当前行动力（不含药剂箱），
+                   大于 `_FIXED_PATROL_L2_AP` 才挪，否则留给下一轮正常练级。
+
+        短猫相接（OpsiMeowfficerFarming）不走这里：L2 把舰队挪到的 C1/D1/E1/F1
+        是照侵蚀1 那张图定的，短猫跑的海域地图各不相同，挪了没意义。短猫的
+        强制移动只有“换队扫雷达清问号”（`_meow_fixed_patrol_scan`）。
 
         Args:
             ExecuteFixedPatrolScan (bool, optional): 是否启用强制移动。
@@ -2137,14 +2137,19 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
         """
         logger.hr("[大世界] 执行强制移动")
 
-        level = self._forced_move_level()
         if not ExecuteFixedPatrolScan:
             logger.info("[大世界] ExecuteFixedPatrolScan 未启用，跳过强制移动。")
             return
-        if level == 0:
+        if self.config.task.command == "OpsiMeowfficerFarming":
+            # 短猫相接不走这套共享强制移动：它的 L2 把舰队挪到固定的
+            # C1/D1/E1/F1，那是照侵蚀1 那张图定的；短猫跑的海域地图各不相同，
+            # 挪了没意义还可能把舰队挪到不该去的地方。短猫的强制移动只有
+            # “换队扫雷达清问号”（_meow_fixed_patrol_scan）。
+            logger.info("[大世界] 短猫相接不走共享强制移动，只换队扫雷达")
+            return
+        if not self._forced_move_enabled():
             logger.info("[大世界] 强制移动已关闭，跳过。")
             return
-        logger.attr("执行固定巡逻扫描", f"等级 {level}")
 
         self.map_init(map_=None)
         if not hasattr(self, "map") or not self.map.grids:
@@ -2157,47 +2162,139 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
 
         self._in_akashi_recovery = True
         try:
-            if level == 1:
-                # 效率模式：只切换舰队看雷达找问号（零移动，一支都不挪动）
-                # 命中即处理，未命中即止，不做任何强制移动。
-                # 唯一例外：确实有舰队在雷达上看到了问号却怎么都到不了，
-                # 换舰队也点不到——这种局面不挪舰队解决不了（明石图标压在了
-                # 别的舰队底下），此时升级为保守模式把舰队挪开再扫。
-                logger.hr("[大世界] 效率模式（仅切换舰队看雷达，不移动）")
-                self._solved_map_event = set()
-                self._solved_fleet_mechanism = False
-                if not self.clear_question_any_fleet() and self._question_unreachable:
+            # ---- L0/L1：只切换舰队看雷达找问号（零移动，一支都不挪动） ----
+            logger.hr("[大世界] 效率模式（仅切换舰队看雷达，不移动）")
+            self._solved_map_event = set()
+            self._solved_fleet_mechanism = False
+            if self.clear_question_any_fleet():
+                return
+
+            # ---- L2：挪舰队 ----
+            # “看到了问号却点不到”只能靠挪舰队解决，和行动力无关：
+            # 已经看见的猫不能因为行动力不够就放跑，先挪了再说。
+            # 只有“全队雷达上什么都没有”这种没线索的情况才看行动力——
+            # 这一轮是为找事件额外多开的，当前行动力不够就留给下一轮练级。
+            if self._question_unreachable:
+                logger.info("[大世界] 有舰队看到问号却无法到达，直接执行 L2 挪舰队")
+            else:
+                current_ap = self._read_current_action_point()
+                if current_ap <= self._FIXED_PATROL_L2_AP:
                     logger.info(
-                        "[大世界] 所有舰队都看到了问号却无法到达，升级为保守模式"
+                        f"[大世界] 没看到事件、当前行动力 {current_ap} 不超过 "
+                        f"{self._FIXED_PATROL_L2_AP}，跳过 L2 挪舰队，留给下一轮练级"
                     )
-                    self._execute_akashi_recovery()
-            elif level == 2:
-                self._execute_akashi_recovery()
+                    return
+                logger.info(
+                    f"[大世界] 没看到事件、当前行动力 {current_ap} 大于 "
+                    f"{self._FIXED_PATROL_L2_AP}，执行 L2 挪舰队"
+                )
+            logger.hr("[大世界] 强制移动 L2：逐队挪动舰队后整图重扫")
+            self._move_fleets_and_rescan()
         finally:
             self._in_akashi_recovery = False
             # 复位主队，避免后续流程作用在错误的舰队上
             self.fleet_set(self.config.OpsiFleet_Fleet)
 
-    def _forced_move_level(self):
-        """读取强制移动等级并兼容旧布尔配置。
+    # L2（挪舰队）要求的当前行动力下限：不超过该值就不挪，留给下一轮练级。
+    # 侵蚀1 一次出击消耗 5 点行动力，当前行动力要大于 7 才有余量多开这一轮。
+    _FIXED_PATROL_L2_AP = 7
+
+    def _read_current_action_point(self):
+        """读界面上的当前行动力（不含行动力药剂箱）。
+
+        不能用 `action_point_check()`：那个比的是含箱总行动力，只要背包里还有
+        药剂箱就恒为真，挡不住「当前行动力已经不够下一轮练级」。L2 挪舰队是为
+        找事件额外多开的一轮，可能顺路开打，所以按当前行动力判断，并开一次
+        弹窗读即时值（上一轮战斗消耗后的缓存值已经过期）。
 
         Returns:
-            int: 0（关闭）/ 1（效率模式，只换队看雷达、不挪动）/
-                2（保守模式，先扫雷达、扫不到再逐队挪动）。
+            int: 当前行动力。
+        """
+        self.action_point_enter()
+        self.action_point_safe_get()
+        current = getattr(self, "_action_point_current", 0)
+        self.action_point_quit()
+        return current
+
+    def _forced_move_enabled(self):
+        """读取强制移动开关，并兼容旧版的等级配置。
+
+        Returns:
+            bool: 是否开启强制移动。
         """
         value = self.config.OpsiHazard1Leveling_ExecuteFixedPatrolScan
+        if isinstance(value, str):
+            value = value.strip().lower()
+            if value in ("true", "1", "2", "3"):
+                return True
+            if value in ("false", "0", ""):
+                return False
+            return bool(value)
         if isinstance(value, bool):
-            # 旧版布尔配置兼容：True 视为开启（沿用最高档“保守模式”的等级 2），
-            # False 视为关闭（等级 0）。不能按 Python 的 True==1 直接当作 1，
-            # bool 需在此时先显式归一，否则 GUI 显示“1”而行为却被误判。
-            value = 2 if value else 0
+            return value
+        # 旧版等级配置：0=关闭，1=效率模式，2=保守模式
+        #（保守模式已并入效率模式，统一视为开启）
         try:
-            level = int(value)
+            return int(value) > 0
         except (TypeError, ValueError):
-            level = 2
-        if level not in (0, 1, 2):
-            level = 2
-        return level
+            return bool(value)
+
+    def _move_fleets_and_rescan(self):
+        """L2：逐队挪动舰队 + 整图重扫，把挡路的舰队让开再找事件。
+
+        按“主队先行、其余按编号升序”逐队：换队后先扫当前舰队的雷达，附近
+        有事件（问号；明石/装置在雷达上同样显示为问号）就直接用当前舰队处理、
+        命中即停；未扫到才移动到各自编号对应的列（1→C1、2→D1、3→E1、4→F1），
+        每挪一队整图重扫一次，命中事件即停，不再挪剩余舰队。
+
+        Returns:
+            bool: 是否找到并解决了目标事件。
+        """
+        primary = self.config.OpsiFleet_Fleet
+        location = {1: (2, 0), 2: (3, 0), 3: (4, 0), 4: (5, 0)}  # C1, D1, E1, F1
+        order = [primary] + [f for f in [1, 2, 3, 4] if f != primary]
+        backup = self.config.temporary(
+            OpsiGeneral_RepairThreshold=-1, Campaign_UseAutoSearch=False
+        )
+        try:
+            for fleet in order:
+                # ---- 移动前雷达预检：换队后先扫当前舰队的雷达，附近有事件
+                #（问号；明石/装置在雷达上同样显示为问号）则直接用当前舰队
+                # 处理，省去一次无意义的强制移动。未扫到则照常移动该队。----
+                self.fleet_set(fleet)
+                self._solved_map_event = set()
+                self._solved_fleet_mechanism = False
+                self.clear_question(drop=None)
+                if self._solved_map_event & ALREADY_SOLVED_MAP_EVENTS:
+                    logger.info("[大世界] 强制移动 L2：移动前雷达预检解决事件，停止")
+                    return True
+
+                if not self._move_fleet_to_patrol(fleet, location[fleet]):
+                    continue
+
+                # 移开遮挡后整图重扫，看能否发现事件
+                self._solved_map_event = set()
+                self._solved_fleet_mechanism = False
+                try:
+                    self.map_rescan(rescan_mode="full")
+                except (
+                    TaskEnd,
+                    GameStuckError,
+                    GameTooManyClickError,
+                    RequestHumanTakeover,
+                ):
+                    raise
+                except Exception as e:
+                    logger.debug(
+                        f"[大世界] 单队移动后的重扫异常，继续: {e}", exc_info=True
+                    )
+
+                if self._solved_map_event & ALREADY_SOLVED_MAP_EVENTS:
+                    logger.info("[大世界] 强制移动 L2：扫描命中事件，停止继续强制移动")
+                    return True
+        finally:
+            backup.recover()
+        return False
 
     def _move_fleet_to_patrol(self, fleet_index, target_loc):
         """将指定舰队强制移动到目标巡逻落点。
@@ -2294,108 +2391,6 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
 
         return moved
 
-    def _execute_akashi_recovery(self):
-        """侵蚀1漏检事件的保守模式主流程（L1 → L2 → L3）。
-
-        L1: 仅主队（CL 舰队）清问号后做一次全图扫描，命中事件（明石/记录塔/
-            信息探测装置）即结束（零移动），否则进入 L2。
-        L2: 按“主队先行、其余按编号升序”逐队：换队后先雷达预检，当前舰队
-            附近有事件（问号，含明石/装置）则直接处理、命中即停；未扫到才
-            移动到各自编号对应的列（1→C1、2→D1、3→E1、4→F1），每移一队
-            整图重扫一次，命中事件即停。
-        L3: 移动过舰队时，补一次自律寻敌清理残留装置，顺路复查事件。
-        """
-        primary = self.config.OpsiFleet_Fleet
-        location = {1: (2, 0), 2: (3, 0), 3: (4, 0), 4: (5, 0)}  # C1, D1, E1, F1
-
-        # ---- L1：仅主队（CL 舰队）清问号后全图扫一遍，命中事件即停 ----
-        logger.hr("[大世界] 保守模式 L1：主队清问号后全图扫描")
-        self._solved_map_event = set()
-        self._solved_fleet_mechanism = False
-        self.fleet_set(primary)
-        self.clear_question(drop=None)
-        # 侵蚀一地图每次只刷新一个事件：clear_question 已解决目标事件
-        # （明石/记录塔/装置）时无需再全图扫描找下一个
-        if self._solved_map_event & ALREADY_SOLVED_MAP_EVENTS:
-            logger.info("[大世界] 保守模式 L1：清问号已解决目标事件，无需全图扫描")
-            return
-        # 清完问号后直接全图扫一遍
-        try:
-            self.map_rescan_once(rescan_mode="full", drop=None)
-        except (
-            TaskEnd,
-            GameStuckError,
-            GameTooManyClickError,
-            RequestHumanTakeover,
-        ):
-            raise
-        except Exception as e:
-            logger.debug(f"[大世界] L1 全图扫描异常，继续: {e}", exc_info=True)
-        if self._solved_map_event & ALREADY_SOLVED_MAP_EVENTS:
-            logger.info("[大世界] 保守模式 L1：已解决目标事件，无需强制移动")
-            return
-        logger.info("[大世界] 保守模式 L1：未命中目标事件，进入逐队移动")
-
-        # ---- L2：逐队强制移动，每移一队整图重扫，命中事件即停 ----
-        order = [primary] + [f for f in [1, 2, 3, 4] if f != primary]
-        moved_any = False
-        backup = self.config.temporary(
-            OpsiGeneral_RepairThreshold=-1, Campaign_UseAutoSearch=False
-        )
-        try:
-            for fleet in order:
-                # ---- 移动前雷达预检：换队后先扫当前舰队的雷达，附近有事件
-                #（问号；明石/装置在雷达上同样显示为问号）则直接用当前舰队
-                # 处理，省去一次无意义的强制移动。未扫到则照常移动该队。----
-                self.fleet_set(fleet)
-                self._solved_map_event = set()
-                self._solved_fleet_mechanism = False
-                self.clear_question(drop=None)
-                if self._solved_map_event & ALREADY_SOLVED_MAP_EVENTS:
-                    logger.info("[大世界] 保守模式：移动前雷达预检解决事件，停止强制移动")
-                    break
-
-                if not self._move_fleet_to_patrol(fleet, location[fleet]):
-                    continue
-                moved_any = True
-
-                # 移开遮挡后整图重扫，看能否发现事件
-                self._solved_map_event = set()
-                self._solved_fleet_mechanism = False
-                try:
-                    self.map_rescan(rescan_mode="full")
-                except (
-                    TaskEnd,
-                    GameStuckError,
-                    GameTooManyClickError,
-                    RequestHumanTakeover,
-                ):
-                    raise
-                except Exception as e:
-                    logger.debug(f"[大世界] 单队移动后的重扫异常，继续: {e}", exc_info=True)
-
-                if self._solved_map_event & ALREADY_SOLVED_MAP_EVENTS:
-                    logger.info("[大世界] 保守模式：扫描命中事件，停止继续强制移动")
-                    break
-        finally:
-            backup.recover()
-
-        # ---- L3：只要移动过舰队，就补一次自律寻敌清装置，顺路复查事件 ----
-        if moved_any:
-            logger.info("[大世界] 执行一次自律寻敌以清理可能的装置")
-            try:
-                self.run_auto_search(question=True, rescan=None, after_auto_search=True)
-            except (
-                TaskEnd,
-                GameStuckError,
-                GameTooManyClickError,
-                RequestHumanTakeover,
-            ):
-                raise
-            except Exception as e:
-                logger.warning(f"[大世界] 自律寻敌过程出现异常: {e}")
-
-    def _radar_question_to_local(self):
         """把当前舰队雷达上的问号换算成本地视野里可点击的格子。
 
         明石/记录塔/装置刷新在舰队模型附近时图标会被挡住，视图的模板匹配
@@ -2446,6 +2441,12 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
         Returns:
             bool: 是否已通过某支舰队完成明石购买。
         """
+        if self.config.task.command == "OpsiMeowfficerFarming":
+            # 短猫相接不走这套共享兜底（换队点明石 + 挪舰队）。它的强制移动只有
+            # “换队扫雷达清问号”（_meow_fixed_patrol_scan），这里交回上层，
+            # 让那份雷达扫描去处理；扫不到就等下一轮。
+            logger.info("[大世界] 短猫相接不走共享兜底，交给换队扫雷达")
+            return False
         if node in self._unreachable_event_nodes:
             logger.info(f"[大世界] {node} 的明石本轮已判定无法到达，跳过重复尝试")
             return False

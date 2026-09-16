@@ -3570,11 +3570,8 @@
       "help": "Give it a try, the bicycle turns into a motorcycle. Yukikaze-sama has given the luck to Commander nanoda, go for it nanoda!"
     },
     "ExecuteFixedPatrolScan": {
-      "name": "Forced movement level",
-      "help": "When Akashi is blocked by a fleet icon or spawns outside radar range, decide whether to move fleets to deal with it. 0 = off: do nothing. 1 = Efficiency mode: only switch fleets and check each radar, move no fleet, fastest; give up if not found. 2 = Conservative mode: first scan radars only (no movement), then move fleets one by one and rescan if not found; more thorough but moves fleets and slower. Default 0 (off); legacy bool true maps to 2, false maps to 0.",
-      "0": "Off",
-      "1": "Efficiency mode",
-      "2": "Conservative mode"
+      "name": "Post-battle forced movement (efficiency mode)",
+      "help": "When enabled, after each battle ALAS cycles through fleets 1-4 and checks each radar for remaining question marks (switching fleets only, moving none), and handles Akashi / logging tower / Siren device if found. If that is not enough, it moves fleets one by one and rescans the whole map, with fixed destinations C1/D1/E1/F1 (only fit for the Hazard-1 map): if some fleet saw a question mark it could not reach (blocked / out of movement range) it moves right away; only when no fleet saw anything does it check the current action points, moving only when they are above 7, otherwise saving them for the next round. Default off. Meowfficer Farming does not use this; it only switches fleets and checks radars."
     },
     "SkipHpCheck": {
       "name": "Sacrifice run: skip HP check",
