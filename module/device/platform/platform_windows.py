@@ -601,9 +601,14 @@ class PlatformWindows(PlatformBase, EmulatorManager):
         Returns:
             bool: True 表示名单里的 MuMu 进程都已退出。
         """
-        # 先礼貌关闭全部实例，让 MuMu 自己释放一遍再动手
+        # 先礼貌关闭全部实例，让 MuMu 自己释放一遍再动手。
+        # 这一步失败（MuMuManager 不可用等）不影响后续按进程名清理，
+        # 深度重启本身是最后手段，不能因为它的一部分失败就把恢复流程打断。
         manager = Emulator.single_to_console(exe).replace('\\', '/')
-        self.execute(f'"{manager}" control -v all shutdown', wait=True, timeout=60)
+        try:
+            self.execute(f'"{manager}" control -v all shutdown', wait=True, timeout=60)
+        except Exception as e:
+            logger.warning(f'[设备-Windows] 深度重启：关闭全部实例失败，继续清理进程: {e}')
 
         killed = 0
         for proc in psutil.process_iter(['name']):

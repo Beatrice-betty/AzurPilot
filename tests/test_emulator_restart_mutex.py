@@ -306,6 +306,32 @@ class TestDeepRestart(unittest.TestCase):
         ):
             self.assertFalse(platform._deep_clean_mumu12('F:/mumu/shell/MuMuPlayer.exe'))
 
+    def test_deep_clean_survives_manager_failure(self):
+        """关闭全部实例失败（MuMuManager 不可用）不影响按进程名清理。
+
+        深度重启是最后手段，不能因为其中一步失败就把整个恢复流程打断。
+        """
+        platform = self.make_platform()
+        platform.execute = Mock(side_effect=OSError('MuMuManager missing'))
+        mumu_vm = self.fake_process('MuMuVMMHeadless.exe')
+
+        with patch.object(platform_windows.psutil, 'process_iter', side_effect=[[mumu_vm], []]):
+            self.assertTrue(platform._deep_clean_mumu12('F:/mumu/shell/MuMuPlayer.exe'))
+
+        mumu_vm.kill.assert_called_once()
+
+    def test_deep_is_ignored_on_non_mumu12(self):
+        """非 MuMu12 平台忽略 deep，行为与原来完全一致。"""
+        platform = self.make_platform()
+        platform.config.EmulatorInfo_Emulator = 'LDPlayer9'
+        platform._clean_mumu12_residue = Mock()
+        platform._deep_clean_mumu12 = Mock()
+
+        self.assertTrue(platform.emulator_start(deep=True))
+
+        platform._deep_clean_mumu12.assert_not_called()
+        platform._clean_mumu12_residue.assert_not_called()
+
     def test_start_with_deep_uses_deep_clean(self):
         platform = self.make_platform()
         platform.emulator_instance = Mock()
