@@ -8,6 +8,11 @@ from module.campaign.os_run import OSCampaignRun
 from module.config.config import Function, TaskEnd
 from module.config.deep import deep_get, deep_set
 from module.config.time_source import now as current_time
+from module.config.utils import (
+    get_os_next_reset,
+    get_os_next_reset_after,
+    get_os_reset_remain_days,
+)
 from module.os.operation_siren import OperationSiren
 from module.os.tasks.prevent_action_point_overflow import OpsiPreventActionPointOverflow
 from module.os.tasks.scheduling import OpsiScheduling
@@ -614,7 +619,7 @@ class TestObscureAbyssalCheckDelay(unittest.TestCase):
         )
         reset = current_time() + timedelta(days=5)
 
-        with patch('module.os.tasks.scheduling.get_os_next_reset', return_value=reset):
+        with patch('module.os.tasks.scheduling.get_os_next_reset_after', return_value=reset):
             postpone = scheduling._get_coin_task_check_postpone_time('OpsiObscure')
 
         # 30 天太长，被下次大世界重置截断，重置后照常检查
@@ -628,7 +633,7 @@ class TestObscureAbyssalCheckDelay(unittest.TestCase):
         )
         reset = current_time() + timedelta(days=10)
 
-        with patch('module.os.tasks.scheduling.get_os_next_reset', return_value=reset):
+        with patch('module.os.tasks.scheduling.get_os_next_reset_after', return_value=reset):
             postpone = scheduling._get_coin_task_check_postpone_time('OpsiAbyssal')
 
         self.assertEqual(postpone, cleared_at + timedelta(days=3))
@@ -684,3 +689,195 @@ class TestObscureAbyssalCheckDelay(unittest.TestCase):
                 state = self.state_of(scheduling)
                 self.assertNotIn(self.OBSCURE_KEY, state)
                 self.assertNotIn(self.ABYSSAL_KEY, state)
+
+    @staticmethod
+    def next_reset_after(reset, following):
+        """模拟真实实现：返回基准时间之后的第一（或第二）次重置。"""
+        return lambda moment: reset if moment < reset else following
+
+    def test_does_not_skip_past_the_monthly_reset(self):
+        # 10-31 打空、延迟 3 天，11-01 重置会刷新隐秘/深渊，不能再顺延到 11-03
+        cleared_at = datetime(2026, 10, 31, 10, 0)
+        reset = datetime(2026, 11, 1, 0, 0)
+        scheduling = self.make_scheduling(
+            state={self.OBSCURE_KEY: cleared_at.isoformat()},
+            delay_days=3,
+        )
+        next_reset_after = self.next_reset_after(reset, datetime(2026, 12, 1))
+
+        with patch('module.os.tasks.scheduling.get_os_next_reset_after',
+                   side_effect=next_reset_after):
+            # 重置前：截止时间被截断到重置 + 缓冲
+            with patch('module.os.tasks.scheduling.current_time',
+                       return_value=datetime(2026, 10, 31, 12, 0)):
+                self.assertEqual(
+                    scheduling._get_coin_task_check_postpone_time('OpsiObscure'),
+                    reset + OpsiScheduling.RESET_CHECK_GRACE,
+                )
+            # 重置后：到点必须恢复检查，而不是继续用到 11-03 的原始截止时间
+            with patch('module.os.tasks.scheduling.current_time',
+                       return_value=reset + OpsiScheduling.RESET_CHECK_GRACE):
+                self.assertIsNone(
+                    scheduling._get_coin_task_check_postpone_time('OpsiObscure')
+                )
+
+        self.assertNotIn(self.OBSCURE_KEY, self.state_of(scheduling))
+
+    def test_checks_again_right_after_the_monthly_reset(self):
+        cleared_at = datetime(2026, 10, 31, 10, 0)
+        reset = datetime(2026, 11, 1, 0, 0)
+        scheduling = self.make_scheduling(
+            state={self.OBSCURE_KEY: cleared_at.isoformat()},
+            delay_days=3,
+        )
+
+        with (
+            patch('module.os.tasks.scheduling.current_time',
+                  return_value=reset + OpsiScheduling.RESET_CHECK_GRACE),
+            patch('module.os.tasks.scheduling.get_os_next_reset_after',
+                  side_effect=self.next_reset_after(reset, datetime(2026, 12, 1))),
+        ):
+            executed = self.dispatch(scheduling, coin_tasks=('OpsiObscure',))
+
+        self.assertEqual(executed, ['OpsiObscure'])
+
+    def test_long_delay_expires_at_the_monthly_reset(self):
+        # 30 天延迟从 10-20 算起本会到 11-19，重置后必须立即恢复检查
+        cleared_at = datetime(2026, 10, 20, 10, 0)
+        reset = datetime(2026, 11, 1, 0, 0)
+        scheduling = self.make_scheduling(
+            state={self.OBSCURE_KEY: cleared_at.isoformat()},
+            delay_days=30,
+        )
+
+        with (
+            patch('module.os.tasks.scheduling.current_time',
+                  return_value=reset + OpsiScheduling.RESET_CHECK_GRACE),
+            patch('module.os.tasks.scheduling.get_os_next_reset_after',
+                  side_effect=self.next_reset_after(reset, datetime(2026, 12, 1))),
+        ):
+            self.assertIsNone(
+                scheduling._get_coin_task_check_postpone_time('OpsiObscure')
+            )
+
+        self.assertNotIn(self.OBSCURE_KEY, self.state_of(scheduling))
+
+
+class TestOsResetRemainDays(unittest.TestCase):
+    """大世界重置时间的计算基准与剩余天数语义。"""
+
+    def test_next_reset_after_anchors_on_the_given_moment(self):
+        now = current_time()
+
+        self.assertEqual(get_os_next_reset_after(now), get_os_next_reset())
+        # 40 天前的记录，其「之后第一次重置」必然早于从今天算出的下一次重置
+        self.assertLess(
+            get_os_next_reset_after(now - timedelta(days=40)),
+            get_os_next_reset(),
+        )
+
+    def test_remain_days_counts_calendar_days(self):
+        # 8-29 距 9-01 还有 3 个自然日，不能用整天数向下取整算成 2
+        for moment, expected in (
+            (datetime(2026, 8, 29, 0, 0), 3),
+            (datetime(2026, 8, 29, 12, 0), 3),
+            (datetime(2026, 8, 30, 12, 0), 2),
+            (datetime(2026, 8, 31, 23, 0), 1),
+        ):
+            with self.subTest(moment=moment):
+                with (
+                    patch('module.config.utils.get_os_next_reset',
+                          return_value=datetime(2026, 9, 1)),
+                    patch('module.config.utils.current_time', return_value=moment),
+                ):
+                    self.assertEqual(get_os_reset_remain_days(), expected)
+
+
+class TestMonthEndCleanupGrace(unittest.TestCase):
+    """月底强制消耗行动力：按自然日触发，且不受隐秘/深渊延迟检查影响。"""
+
+    def make_scheduling(self, state=None, delay_days=0, cleanup_days=1):
+        scheduling = OpsiScheduling.__new__(OpsiScheduling)
+        scheduling.config = CoinCheckDelayConfig(
+            state=state,
+            delay_days=delay_days,
+            task_command='OpsiScheduling',
+        )
+        scheduling.cleanup_days = cleanup_days
+        return scheduling
+
+    def cleanup_active_at(self, scheduling, moment):
+        """在指定时间点判断月末清理是否启动，剩余天数走真实实现。"""
+        with (
+            patch('module.config.utils.get_os_next_reset',
+                  return_value=datetime(2026, 9, 1)),
+            patch('module.config.utils.current_time', return_value=moment),
+            patch.object(scheduling, '_config_enabled', return_value=True),
+            patch.object(
+                scheduling,
+                '_get_month_end_cleanup_days',
+                return_value=scheduling.cleanup_days,
+            ),
+            # 用整天数（不足一天向下取整）会在重置前一天中午就启动，已改为自然日
+            patch(
+                'module.os.tasks.scheduling.get_os_reset_remain',
+                side_effect=AssertionError('月末清理不应再用整天数判断剩余天数'),
+            ),
+        ):
+            return scheduling._is_month_end_cleanup_active()
+
+    def test_cleanup_starts_at_the_configured_calendar_days(self):
+        # 用户反馈：设置 2 天却在 8-29 就跑了，按自然日应当 8-30 才启动
+        scheduling = self.make_scheduling(cleanup_days=2)
+
+        self.assertFalse(self.cleanup_active_at(scheduling, datetime(2026, 8, 29, 12, 0)))
+        self.assertTrue(self.cleanup_active_at(scheduling, datetime(2026, 8, 30, 0, 30)))
+
+    def test_cleanup_starts_on_the_last_day_when_set_to_one(self):
+        scheduling = self.make_scheduling(cleanup_days=1)
+
+        self.assertFalse(self.cleanup_active_at(scheduling, datetime(2026, 8, 30, 23, 0)))
+        self.assertTrue(self.cleanup_active_at(scheduling, datetime(2026, 8, 31, 0, 30)))
+
+    def test_cleanup_pulls_coin_tasks_despite_the_check_delay(self):
+        # 延迟 3 天仍生效（记录是刚写的），月末清理每一轮依旧要拉起隐秘/深渊
+        moment = datetime(2026, 10, 31, 12, 0)
+        cleared = moment - timedelta(hours=1)
+        scheduling = self.make_scheduling(
+            state={
+                OpsiScheduling.STATE_KEY_OBSCURE_CLEARED_AT: cleared.isoformat(),
+                OpsiScheduling.STATE_KEY_ABYSSAL_CLEARED_AT: cleared.isoformat(),
+            },
+            delay_days=3,
+        )
+        scheduling.clear_obscure = Mock()
+        scheduling.clear_abyssal = Mock()
+        scheduling.clear_stronghold = Mock()
+
+        with (
+            patch('module.os.tasks.scheduling.current_time', return_value=moment),
+            self.assertRaises(TaskEnd),
+            patch.object(
+                scheduling,
+                '_run_with_opsi_task_context',
+                side_effect=lambda task, func, *args, **kwargs: func(*args, **kwargs),
+            ),
+            patch.object(scheduling, '_run_scheduled_meowfficer_farming'),
+            patch.object(scheduling, '_run_month_end_shop_purchase'),
+            patch.object(scheduling, '_delay_smart_scheduling_to_server_update'),
+            patch.object(scheduling, 'notify_push'),
+            patch.object(
+                scheduling,
+                '_get_scheduling_action_point',
+                side_effect=[(5000, 1000), (400, 100), (400, 100)],
+            ),
+        ):
+            # 记录仍在推迟期内（正常派发路径会跳过），但月末清理照样拉起隐秘/深渊
+            self.assertEqual(
+                scheduling._get_coin_task_check_postpone_time('OpsiObscure'),
+                datetime(2026, 11, 1, 2, 0),
+            )
+            scheduling._run_month_end_cleanup(500, 1000, 5000, 1000)
+
+        scheduling.clear_obscure.assert_called_once()
+        scheduling.clear_abyssal.assert_called_once()

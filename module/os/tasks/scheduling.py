@@ -30,7 +30,13 @@ from datetime import datetime, timedelta
 from module.config.config import Function, name_to_function
 from module.config.deep import deep_get
 from module.config.time_source import now as current_time
-from module.config.utils import get_nearest_weekday_date, get_os_next_reset, get_os_reset_remain
+from module.config.utils import (
+    get_nearest_weekday_date,
+    get_os_next_reset,
+    get_os_next_reset_after,
+    get_os_reset_remain,
+    get_os_reset_remain_days,
+)
 
 from module.logger import logger
 from module.os.map import OSMap
@@ -786,7 +792,8 @@ class CoinTaskMixin:
         """
         记录隐秘/深渊已打完，延迟指定天数内不再检查。
 
-        大世界每月重置会刷新隐秘/深渊，推迟截止时间不会跨过下次重置。
+        大世界每月重置会刷新隐秘/深渊，推迟不会跨过打完之后的第一次重置；
+        重置后记录作废，照常检查。
 
         Args:
             task_name (str): 黄币补充任务名（仅隐秘/深渊会记录）。
@@ -800,17 +807,21 @@ class CoinTaskMixin:
             return
         self._set_smart_scheduling_state_value(state_key, current_time().isoformat())
         task_display = self.TASK_NAMES.get(task_name, task_name)
-        logger.info(f'[大世界-智能调度+] {reason}，{task_display}将在 {days} 天后再检查')
+        logger.info(
+            f'[大世界-智能调度+] {reason}，{task_display}最多 {days} 天后重新检查'
+            f'（不跨大世界重置）'
+        )
 
     def _get_coin_task_check_postpone_time(self, task_name):
         """
         读取隐秘/深渊的下次检查时间。
 
-        推迟截止时间为「打完时间 + 延迟天数」，且不晚于下次大世界重置加缓冲。
+        推迟截止时间为「打完时间 + 延迟天数」，且不晚于打完之后的第一次大世界重置加缓冲。
 
         Returns:
             datetime.datetime | None: 仍在推迟中返回该时间；没有记录、天数为 0、
-                记录损坏或已到检查时间则返回 None（到期时顺带清理记录）。
+                记录损坏、记录早于上次重置或已到检查时间则返回 None
+                （到期时顺带清理记录）。
         """
         state_key = self.COIN_TASK_CLEAR_STATE_KEYS.get(task_name)
         if state_key is None:
@@ -831,7 +842,10 @@ class CoinTaskMixin:
             return None
 
         next_check = cleared_at + timedelta(days=days)
-        reset_check = get_os_next_reset() + self.RESET_CHECK_GRACE
+        # 封顶基准取「记录时间之后的第一次重置」，不能用「现在之后的下一次重置」：
+        # 后者会在记录跨过重置后跳到下下次，封顶失效，重置完仍要继续跳过若干天。
+        # 记录早于上次重置时该基准落在过去，推迟立即到期，重置后照常检查。
+        reset_check = get_os_next_reset_after(cleared_at) + self.RESET_CHECK_GRACE
         if next_check > reset_check:
             next_check = reset_check
         if current_time() >= next_check:
@@ -1484,7 +1498,10 @@ class OpsiScheduling(CoinTaskMixin, OSMap):
         触发条件：
             1. MonthEndActionPointCleanupEnable 开关已开启
             2. MonthEndActionPointCleanupDays > 0
-            3. 距大世界重置剩余天数 <= MonthEndActionPointCleanupDays
+            3. 距大世界重置剩余自然天数 <= MonthEndActionPointCleanupDays
+
+        按自然日计算：设置 N 天即最后 N 个自然日。用整天数（不足一天向下取整）
+        会在重置前一天的中午就跳成 N，导致提前半天开始清理。
 
         Returns:
             bool: 是否启用月末清理。
@@ -1494,7 +1511,7 @@ class OpsiScheduling(CoinTaskMixin, OSMap):
         cleanup_days = self._get_month_end_cleanup_days()
         if cleanup_days <= 0:
             return False
-        remain = get_os_reset_remain()
+        remain = get_os_reset_remain_days()
         active = remain <= cleanup_days
         logger.info(
             f'[大世界-月末清理] 清理天数={cleanup_days}, 重置剩余={remain}, '
@@ -1568,8 +1585,11 @@ class OpsiScheduling(CoinTaskMixin, OSMap):
 
         执行流程：
             1. 首次运行时先调出塞壬要塞
-            2. 每轮循环：短猫相接 → 商店购买 → 隐秘海域 → 深渊坐标
+            2. 每轮循环：隐秘海域 → 深渊坐标 → 短猫相接 → 商店购买
             3. 循环直到总行动力 <= 保留值 或 所有任务无可执行内容
+
+        不受隐秘/深渊的「延迟检查」影响：这里直接代跑子任务，不经过
+        _dispatch_coin_task 的推迟判断，每一轮都照常拉起隐秘海域与深渊坐标。
 
         Args:
             month_end_preserve (int): 月末清理行动力保留值。
