@@ -401,6 +401,32 @@ test('移动端放大布局无横向溢出，单栏导航可以收起', async ({
   await page.screenshot({path: 'test-results/mock-mobile.png', fullPage: true, animations: 'disabled'})
 })
 
+test('窄窗口调度器入口位于左侧标题栏且可展开右栏', async ({page}) => {
+  await page.setViewportSize({width: 950, height: 844})
+  await page.goto('/#/i/demo-main/overview')
+  const topbar = page.locator('.topbar')
+  const toggle = page.getByRole('button', {name: '打开调度与任务'})
+  await expect(toggle).toBeVisible()
+  const [toggleBox, topbarBox] = await Promise.all([toggle.boundingBox(), topbar.boundingBox()])
+  expect(toggleBox!.y).toBeGreaterThanOrEqual(topbarBox!.y)
+  expect(toggleBox!.y + toggleBox!.height).toBeLessThanOrEqual(topbarBox!.y + topbarBox!.height)
+  expect(toggleBox!.x + toggleBox!.width).toBeLessThanOrEqual(topbarBox!.x + topbarBox!.width / 2)
+  await toggle.click()
+  await expect(page.locator('.app-shell')).toHaveClass(/rail-open/)
+  await expect(page.locator('.right-rail')).toBeVisible()
+  await page.locator('.mobile-rail-toggle').click()
+  await expect(page.locator('.app-shell')).not.toHaveClass(/rail-open/)
+  await page.setViewportSize({width: 213, height: 500})
+  await expect(page.locator('.breadcrumb')).toBeHidden()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.locator('.mobile-rail-toggle').click()
+  await expect(page.locator('.right-rail')).toBeVisible()
+  await page.locator('.right-rail').getByRole('button', {name: '关闭调度与任务'}).click()
+  await expect(page.locator('.app-shell')).not.toHaveClass(/rail-open/)
+  await page.setViewportSize({width: 951, height: 844})
+  await expect(page.locator('.mobile-rail-toggle')).toBeHidden()
+})
+
 
 test('主页实例状态、任务搜索收起与导航固定', async ({page}) => {
   const errors: string[] = []
