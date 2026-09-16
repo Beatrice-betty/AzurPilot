@@ -14598,6 +14598,10 @@
         "type": "textarea",
         "value": "OpsiStronghold > OpsiObscure > OpsiAbyssal > OpsiMeowfficerFarming"
       },
+      "ObscureAbyssalCheckDelayDays": {
+        "type": "input",
+        "value": 0
+      },
       "MonthEndActionPointCleanupEnable": {
         "type": "checkbox",
         "value": false,

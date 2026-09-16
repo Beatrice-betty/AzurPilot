@@ -3730,6 +3730,10 @@
       "name": "补充黄币任务优先级喵~",
       "help": "黄币不足时，执行补充黄币任务的优先级顺序喵~。使用 > 分隔。"
     },
+    "ObscureAbyssalCheckDelayDays": {
+      "name": "隐秘/深渊延迟检查天数喵~",
+      "help": "隐秘海域和深渊坐标全部打完后，智能调度会延迟指定天数再检查，期间直接跳过，补黄币跑得更快喵~。0 表示每轮都检查 (´・ω・`)。大世界每月重置会刷新它们，重置后会照常检查喵~"
+    },
     "MonthEndActionPointCleanupEnable": {
       "name": "OpsiScheduling.MonthEndActionPointCleanupEnable.name",
       "help": "OpsiScheduling.MonthEndActionPointCleanupEnable.help",
