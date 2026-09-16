@@ -151,6 +151,31 @@ class OpsiMeowfficerFarming(MeowfficerTargetZoneMixin, CoinTaskMixin, OSMap):
         self.fleet_set(primary)
         return cleared
 
+    def _meow_retrieve_events(self):
+        """一轮战后的事件检索：重扫地图 + 逐队扫雷达清问号。
+
+        强制移动（`_meow_fixed_patrol_scan`）开着的时候，它自己就会逐队扫描
+        1~4 号舰队的雷达清问号（主队优先），这里再调 `_clear_question_primary`
+        / `_clear_question_other_fleets` 就是同一轮里把同一批雷达扫两遍——
+        两次之间没有任何舰队移动、也没有问号被清掉，第二次的结果必然和第一次
+        一模一样，只是白白多切一圈舰队。所以开着时这里只保留全图重扫。
+
+        Pages:
+            in: page_os
+            out: page_os
+        """
+        if self.config.OpsiMeowfficerFarming_ExecuteFixedPatrolScan:
+            self.map_rescan()
+            return
+
+        # 先清主舰队周围问号
+        if not self._clear_question_primary():
+            # 主舰队没清到事件，重扫地图
+            self.map_rescan()
+            # 重扫也没发现事件，再切换其他舰队依次清问号
+            if not self._solved_map_event:
+                self._clear_question_other_fleets()
+
     def _meow_ap_check(self, preserve, ap_checked):
         """
         行动力检查。
@@ -280,13 +305,7 @@ class OpsiMeowfficerFarming(MeowfficerTargetZoneMixin, CoinTaskMixin, OSMap):
                 if search_completed:
                     self._solved_map_event = set()
                     self._solved_fleet_mechanism = False
-                    # 先清主舰队周围问号
-                    if not self._clear_question_primary():
-                        # 主舰队没清到事件，重扫地图
-                        self.map_rescan()
-                        # 重扫也没发现事件，再切换其他舰队依次清问号
-                        if not self._solved_map_event:
-                            self._clear_question_other_fleets()
+                    self._meow_retrieve_events()
                     self._meow_fixed_patrol_scan()
 
                 try:

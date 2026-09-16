@@ -16,6 +16,7 @@ from types import SimpleNamespace
 
 from module.config.redirect_utils.utils import execute_fixed_patrol_scan_redirect
 from module.os.map import ALREADY_SOLVED_MAP_EVENTS, OSMap
+from module.os.tasks.meowfficer_farming import OpsiMeowfficerFarming
 
 
 class TestForcedMoveRedirect(unittest.TestCase):
@@ -469,6 +470,63 @@ class TestDeviceOtherFleets(unittest.TestCase):
         stub = DeviceStub(False, False)
         self.run_goto(stub)
         self.assertEqual(stub.fleet_sets[-1], 1)
+
+
+class MeowRetrieveStub:
+    """只提供 `_meow_retrieve_events` 需要的属性。"""
+
+    def __init__(self, fixed_patrol_enabled, primary_clears=False, rescan_solves=False):
+        self.config = SimpleNamespace(
+            OpsiMeowfficerFarming_ExecuteFixedPatrolScan=fixed_patrol_enabled,
+        )
+        self.primary_clears = primary_clears
+        self.rescan_solves = rescan_solves
+        self.calls = []
+        self._solved_map_event = set()
+
+    def map_rescan(self):
+        self.calls.append('map_rescan')
+        if self.rescan_solves:
+            self._solved_map_event.add('is_akashi')
+
+    def _clear_question_primary(self):
+        self.calls.append('clear_primary')
+        return self.primary_clears
+
+    def _clear_question_other_fleets(self):
+        self.calls.append('clear_other')
+        return False
+
+
+class TestMeowRetrieveEvents(unittest.TestCase):
+    """短猫相接一轮战后的事件检索：强制移动开着时不能再自己逐队扫一遍。"""
+
+    def run_retrieve(self, **kwargs):
+        stub = MeowRetrieveStub(**kwargs)
+        OpsiMeowfficerFarming._meow_retrieve_events(stub)
+        return stub
+
+    def test_fixed_patrol_enabled_only_rescans(self):
+        """开关打开 -> 只重扫地图；逐队扫雷达交给强制移动，别扫两遍。"""
+        stub = self.run_retrieve(fixed_patrol_enabled=True)
+        self.assertEqual(stub.calls, ['map_rescan'])
+
+    def test_switch_off_keeps_step_by_step_retrieval(self):
+        """开关关闭 -> 保持原来的分步检索：先主队清问号。"""
+        stub = self.run_retrieve(fixed_patrol_enabled=False, primary_clears=True)
+        self.assertEqual(stub.calls, ['clear_primary'])
+
+    def test_switch_off_falls_back_to_other_fleets(self):
+        """主队没清到、重扫也没有 -> 才逐队清问号。"""
+        stub = self.run_retrieve(fixed_patrol_enabled=False, primary_clears=False)
+        self.assertEqual(stub.calls, ['clear_primary', 'map_rescan', 'clear_other'])
+
+    def test_switch_off_stops_when_rescan_solves(self):
+        """重扫已经找到事件 -> 不再切换其他舰队。"""
+        stub = self.run_retrieve(
+            fixed_patrol_enabled=False, primary_clears=False, rescan_solves=True
+        )
+        self.assertEqual(stub.calls, ['clear_primary', 'map_rescan'])
 
 
 if __name__ == '__main__':
