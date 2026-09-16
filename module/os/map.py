@@ -2154,6 +2154,10 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
                     f"{self._FIXED_PATROL_L2_AP}，跳过 L2 挪舰队，留给下一轮练级"
                 )
                 return
+            logger.info(
+                f"[大世界] 当前行动力 {current_ap} 大于 {self._FIXED_PATROL_L2_AP}，"
+                "执行 L2 挪舰队"
+            )
             logger.hr("[大世界] 强制移动 L2：逐队挪动舰队后整图重扫")
             self._move_fleets_and_rescan()
         finally:
