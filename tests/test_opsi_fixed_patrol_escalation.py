@@ -5,10 +5,11 @@
 `TEMPLATE_MAP_WALK_OUT_OF_STEP`）。这时「只换队看雷达、一支都不挪动」的
 零移动检索永远点不到猫——只有把挡路的舰队挪开才能解决。
 
-所以强制移动是一个开关：开启后先零移动遍历 1~4 队雷达（L0/L1），再决定要不要
-逐队挪动舰队做整图重扫（L2）。要不要挪分三种：看到了问号却点不到的必须挪
-（和行动力无关），短猫相接直接挪（找猫是它的任务），侵蚀1 练级全队都没线索时
-才看当前行动力（大于 7 才挪，否则留给下一轮练级）。这里的用例锁定这几条边界。
+所以侵蚀一的强制移动是一个开关：开启后先零移动遍历 1~4 队雷达（L0/L1），再决定
+要不要逐队挪动舰队做整图重扫（L2）。要不要挪分两种：看到了问号却点不到的必须挪
+（和行动力无关）；全队雷达都没线索时才看当前行动力（大于 7 才挪，否则留给下一轮
+练级）。**短猫相接不吃这一套**：它的强制移动只有换队扫雷达（等价于 L0/L1），
+不挪舰队、也不走共享兜底——L2 的落点是照侵蚀1 那张图定的。这里的用例锁定这些边界。
 """
 
 import unittest
@@ -94,6 +95,7 @@ class FixedPatrolStub:
         self.unreachable = unreachable
         self.ap_reads = 0
         self.move_calls = 0
+        self.scan_calls = 0
         self.fleet_sets = []
 
     def map_init(self, map_=None):
@@ -104,6 +106,7 @@ class FixedPatrolStub:
 
     def clear_question_any_fleet(self, drop=None):
         # 真实实现会复位并在清不掉时置位 _question_unreachable，这里直接给定
+        self.scan_calls += 1
         self._question_unreachable = self.unreachable
         return self.any_fleet_result
 
@@ -138,11 +141,13 @@ class TestFixedPatrolScan(unittest.TestCase):
         stub = self.run_scan(enabled=False)
         self.assertEqual(stub.move_calls, 0)
         self.assertEqual(stub.ap_reads, 0)
+        self.assertEqual(stub.scan_calls, 0)
         self.assertEqual(stub.fleet_sets, [])
 
     def test_solved_during_zero_move_scan_skips_l2(self):
         """零移动检索就找到了事件 -> 直接结束，不查行动力也不挪舰队。"""
         stub = self.run_scan(any_fleet_result=True)
+        self.assertEqual(stub.scan_calls, 1)
         self.assertEqual(stub.move_calls, 0)
         self.assertEqual(stub.ap_reads, 0)
 
@@ -193,21 +198,24 @@ class TestFixedPatrolScan(unittest.TestCase):
                 self.assertEqual(stub.ap_reads, 0)
                 self.assertEqual(stub.move_calls, 1)
 
-    def test_meowfficer_task_skips_action_point_gate(self):
-        """短猫相接不设行动力门槛：找猫就是它的任务，行动力不去查也照样挪。"""
-        stub = self.run_scan(
-            any_fleet_result=False, current_ap=0, task='OpsiMeowfficerFarming'
-        )
-        self.assertEqual(stub.ap_reads, 0)
-        self.assertEqual(stub.move_calls, 1)
+    def test_meowfficer_task_never_uses_shared_forced_move(self):
+        """短猫不走共享强制移动：L2 的落点是照侵蚀1 那张图定的，短猫地图不一样。
 
-    def test_meowfficer_task_still_skips_l2_when_solved(self):
-        """短猫只是不看行动力，零移动检索找到事件时照样不挪舰队。"""
-        stub = self.run_scan(
-            any_fleet_result=True, current_ap=0, task='OpsiMeowfficerFarming'
-        )
-        self.assertEqual(stub.ap_reads, 0)
-        self.assertEqual(stub.move_calls, 0)
+        短猫的强制移动只有换队扫雷达（meowfficer_farming 的 _meow_fixed_patrol_scan），
+        所以哪怕雷达上什么都没看到、行动力也够，这里也不能挪舰队。
+        """
+        for unreachable in (True, False):
+            with self.subTest(unreachable=unreachable):
+                stub = self.run_scan(
+                    any_fleet_result=False,
+                    current_ap=99,
+                    task='OpsiMeowfficerFarming',
+                    unreachable=unreachable,
+                )
+                self.assertEqual(stub.ap_reads, 0)
+                self.assertEqual(stub.move_calls, 0)
+                self.assertEqual(stub.fleet_sets, [])
+                self.assertEqual(stub.scan_calls, 0)
 
 
 def make_question_grid(is_logging_tower=False):
@@ -384,9 +392,15 @@ class MarkStub:
 class RecoveryStub(MarkStub):
     """只提供 `_recover_unreachable_akashi` 需要的属性。"""
 
-    def __init__(self, other_fleet_succeeds=False, unreachable_nodes=None):
+    def __init__(
+        self,
+        other_fleet_succeeds=False,
+        unreachable_nodes=None,
+        task='OpsiHazard1Leveling',
+    ):
         super().__init__(unreachable_nodes)
         self.other_fleet_succeeds = other_fleet_succeeds
+        self.config = SimpleNamespace(task=SimpleNamespace(command=task))
         self._solved_map_event = set()
         self.force_move_calls = 0
 
@@ -425,6 +439,15 @@ class TestRecoverUnreachableAkashi(unittest.TestCase):
         stub = RecoveryStub(other_fleet_succeeds=False, unreachable_nodes=['B7'])
         self.assertFalse(OSMap._recover_unreachable_akashi(stub, None, 'C3'))
         self.assertEqual(stub.force_move_calls, 1)
+
+    def test_meowfficer_task_skips_the_shared_recovery(self):
+        """短猫不走共享兜底：不换队点明石、也不挪舰队，交给换队扫雷达。"""
+        stub = RecoveryStub(other_fleet_succeeds=True, task='OpsiMeowfficerFarming')
+        self.assertFalse(OSMap._recover_unreachable_akashi(stub, None, 'B7'))
+        self.assertEqual(stub.force_move_calls, 0)
+        self.assertNotIn('is_akashi', stub._solved_map_event)
+        # 也没记“到不了”，免得挡住短猫自己的后续尝试（它是按格记的）
+        self.assertNotIn('B7', stub._unreachable_event_nodes)
 
     def test_marking_does_not_touch_shared_default(self):
         """标记不能写进类属性上的默认 set（那是所有实例共享的）。"""

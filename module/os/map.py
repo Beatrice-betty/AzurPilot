@@ -2117,13 +2117,15 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
 
         L0/L1（零移动）：遍历 1~4 号舰队的雷达清剩余问号，只切换舰队看雷达、
                 一支舰队都不挪动，速度最快；找到明石/记录塔/装置就处理，命中即止。
-        L2（挪舰队）：逐个挪动舰队再整图重扫，把挡路的舰队让开。要不要挪分三种：
+        L2（挪舰队）：逐个挪动舰队再整图重扫，把挡路的舰队让开。要不要挪分两种：
                 ① 有舰队看到了问号却点不到（被别的舰队挡住/超出移动范围）：
                    必须挪，和行动力无关——已经看见的事件不能因为行动力不够放跑；
-                ② 短猫相接（全队雷达都没线索）：也直接挪，找猫本来就是它的任务；
-                ③ 侵蚀1 练级（全队雷达都没线索）：看界面上的当前行动力
-                   （不含药剂箱），大于 `_FIXED_PATROL_L2_AP` 才挪，否则留给
-                   下一轮正常练级。
+                ② 全队雷达都没线索：看界面上的当前行动力（不含药剂箱），
+                   大于 `_FIXED_PATROL_L2_AP` 才挪，否则留给下一轮正常练级。
+
+        短猫相接（OpsiMeowfficerFarming）不走这里：L2 把舰队挪到的 C1/D1/E1/F1
+        是照侵蚀1 那张图定的，短猫跑的海域地图各不相同，挪了没意义。短猫的
+        强制移动只有“换队扫雷达清问号”（`_meow_fixed_patrol_scan`）。
 
         Args:
             ExecuteFixedPatrolScan (bool, optional): 是否启用强制移动。
@@ -2137,6 +2139,13 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
 
         if not ExecuteFixedPatrolScan:
             logger.info("[大世界] ExecuteFixedPatrolScan 未启用，跳过强制移动。")
+            return
+        if self.config.task.command == "OpsiMeowfficerFarming":
+            # 短猫相接不走这套共享强制移动：它的 L2 把舰队挪到固定的
+            # C1/D1/E1/F1，那是照侵蚀1 那张图定的；短猫跑的海域地图各不相同，
+            # 挪了没意义还可能把舰队挪到不该去的地方。短猫的强制移动只有
+            # “换队扫雷达清问号”（_meow_fixed_patrol_scan）。
+            logger.info("[大世界] 短猫相接不走共享强制移动，只换队扫雷达")
             return
         if not self._forced_move_enabled():
             logger.info("[大世界] 强制移动已关闭，跳过。")
@@ -2163,13 +2172,10 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
             # ---- L2：挪舰队 ----
             # “看到了问号却点不到”只能靠挪舰队解决，和行动力无关：
             # 已经看见的猫不能因为行动力不够就放跑，先挪了再说。
-            # 只有“全队雷达上什么都没有”这种没线索的情况才看行动力：
-            # 侵蚀1 练级要留行动力给下一轮，不够就不挪；
-            # 短猫相接找猫本来就是它的任务，行动力该花就花，不做门控。
+            # 只有“全队雷达上什么都没有”这种没线索的情况才看行动力——
+            # 这一轮是为找事件额外多开的，当前行动力不够就留给下一轮练级。
             if self._question_unreachable:
                 logger.info("[大世界] 有舰队看到问号却无法到达，直接执行 L2 挪舰队")
-            elif self.config.task.command == "OpsiMeowfficerFarming":
-                logger.info("[大世界] 短猫相接不做行动力门控，直接执行 L2 挪舰队")
             else:
                 current_ap = self._read_current_action_point()
                 if current_ap <= self._FIXED_PATROL_L2_AP:
@@ -2435,6 +2441,12 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
         Returns:
             bool: 是否已通过某支舰队完成明石购买。
         """
+        if self.config.task.command == "OpsiMeowfficerFarming":
+            # 短猫相接不走这套共享兜底（换队点明石 + 挪舰队）。它的强制移动只有
+            # “换队扫雷达清问号”（_meow_fixed_patrol_scan），这里交回上层，
+            # 让那份雷达扫描去处理；扫不到就等下一轮。
+            logger.info("[大世界] 短猫相接不走共享兜底，交给换队扫雷达")
+            return False
         if node in self._unreachable_event_nodes:
             logger.info(f"[大世界] {node} 的明石本轮已判定无法到达，跳过重复尝试")
             return False
