@@ -3570,11 +3570,8 @@
       "help": "Give it a try, the bicycle turns into a motorcycle. Yukikaze-sama has given the luck to Commander nanoda, go for it nanoda!"
     },
     "ExecuteFixedPatrolScan": {
-      "name": "Forced movement level",
-      "help": "When Akashi is blocked by a fleet icon or spawns outside radar range, decide whether to move fleets to deal with it. 0 = off: do nothing. 1 = Efficiency mode: only switch fleets and check each radar, move no fleet, fastest; give up if not found. 2 = Conservative mode: first scan radars only (no movement), then move fleets one by one and rescan if not found; more thorough but moves fleets and slower. Default 0 (off); legacy bool true maps to 2, false maps to 0.",
-      "0": "Off",
-      "1": "Efficiency mode",
-      "2": "Conservative mode"
+      "name": "Post-battle forced movement (efficiency mode)",
+      "help": "When enabled, after each battle ALAS cycles through fleets 1-4 and checks each radar for remaining question marks (switching fleets only, moving none), and handles Akashi / logging tower / Siren device if found. If still nothing is found and action points are above 7, it then moves fleets one by one and rescans the whole map (to clear whatever blocks the path). Default off."
     },
     "SkipHpCheck": {
       "name": "Sacrifice run: skip HP check",
