@@ -3571,7 +3571,7 @@
     },
     "ExecuteFixedPatrolScan": {
       "name": "Post-battle forced movement (efficiency mode)",
-      "help": "When enabled, after each battle ALAS cycles through fleets 1-4 and checks each radar for remaining question marks (switching fleets only, moving none), and handles Akashi / logging tower / Siren device if found. If still nothing is found and action points are above 7, it then moves fleets one by one and rescans the whole map (to clear whatever blocks the path). Default off."
+      "help": "When enabled, after each battle ALAS cycles through fleets 1-4 and checks each radar for remaining question marks (switching fleets only, moving none), and handles Akashi / logging tower / Siren device if found. If still nothing is found and the current action points are above 7, it then moves fleets one by one and rescans the whole map (to clear whatever blocks the path). Default off."
     },
     "SkipHpCheck": {
       "name": "Sacrifice run: skip HP check",

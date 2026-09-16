@@ -73,13 +73,13 @@ class FixedPatrolStub:
     # 阈值取真实实现，避免测试和代码各写一份
     _FIXED_PATROL_L2_AP = OSMap._FIXED_PATROL_L2_AP
 
-    def __init__(self, enabled=True, any_fleet_result=False, ap_ok=True):
+    def __init__(self, enabled=True, any_fleet_result=False, current_ap=0):
         self.config = SimpleNamespace(OpsiFleet_Fleet=1)
         self.map = SimpleNamespace(grids=[object()])
         self.enabled = enabled
         self.any_fleet_result = any_fleet_result
-        self.ap_ok = ap_ok
-        self.ap_checks = []
+        self.current_ap = current_ap
+        self.ap_reads = 0
         self.move_calls = 0
         self.fleet_sets = []
 
@@ -92,9 +92,9 @@ class FixedPatrolStub:
     def clear_question_any_fleet(self, drop=None):
         return self.any_fleet_result
 
-    def action_point_check(self, amount):
-        self.ap_checks.append(amount)
-        return self.ap_ok
+    def _read_current_action_point(self):
+        self.ap_reads += 1
+        return self.current_ap
 
     def _move_fleets_and_rescan(self):
         self.move_calls += 1
@@ -122,37 +122,41 @@ class TestFixedPatrolScan(unittest.TestCase):
         """开关关闭 -> 什么都不做，连行动力都不去查。"""
         stub = self.run_scan(enabled=False)
         self.assertEqual(stub.move_calls, 0)
-        self.assertEqual(stub.ap_checks, [])
+        self.assertEqual(stub.ap_reads, 0)
         self.assertEqual(stub.fleet_sets, [])
 
     def test_solved_during_zero_move_scan_skips_l2(self):
         """零移动检索就找到了事件 -> 直接结束，不查行动力也不挪舰队。"""
         stub = self.run_scan(any_fleet_result=True)
         self.assertEqual(stub.move_calls, 0)
-        self.assertEqual(stub.ap_checks, [])
+        self.assertEqual(stub.ap_reads, 0)
 
     def test_moves_fleets_when_action_point_enough(self):
-        """什么都没找到但行动力大于 7 -> 走一遍 L2 挪舰队。"""
-        stub = self.run_scan(any_fleet_result=False, ap_ok=True)
-        self.assertEqual(stub.ap_checks, [OSMap._FIXED_PATROL_L2_AP])
+        """什么都没找到但当前行动力大于 7 -> 走一遍 L2 挪舰队。"""
+        stub = self.run_scan(any_fleet_result=False, current_ap=8)
+        self.assertEqual(stub.ap_reads, 1)
         self.assertEqual(stub.move_calls, 1)
 
     def test_keeps_farming_when_action_point_low(self):
-        """行动力不够 -> 不挪舰队，留给下一轮正常练级。"""
-        stub = self.run_scan(any_fleet_result=False, ap_ok=False)
-        self.assertEqual(stub.ap_checks, [OSMap._FIXED_PATROL_L2_AP])
-        self.assertEqual(stub.move_calls, 0)
+        """当前行动力不够 -> 不挪舰队，留给下一轮正常练级。"""
+        for current_ap in (0, 5, 7):
+            with self.subTest(current_ap=current_ap):
+                stub = self.run_scan(any_fleet_result=False, current_ap=current_ap)
+                self.assertEqual(stub.ap_reads, 1)
+                self.assertEqual(stub.move_calls, 0)
 
     def test_main_fleet_restored_after_scan(self):
         """无论走哪条分支，结束后都要复位主队。"""
-        for any_fleet_result, ap_ok in ((True, True), (False, True), (False, False)):
-            with self.subTest(any_fleet_result=any_fleet_result, ap_ok=ap_ok):
-                stub = self.run_scan(any_fleet_result=any_fleet_result, ap_ok=ap_ok)
+        for any_fleet_result, current_ap in ((True, 0), (False, 30), (False, 0)):
+            with self.subTest(any_fleet_result=any_fleet_result, current_ap=current_ap):
+                stub = self.run_scan(
+                    any_fleet_result=any_fleet_result, current_ap=current_ap
+                )
                 self.assertEqual(stub.fleet_sets, [1])
 
     def test_nested_call_is_skipped(self):
         """已经在强制移动流程里 -> 跳过嵌套调用，避免重复挪舰队。"""
-        stub = FixedPatrolStub()
+        stub = FixedPatrolStub(current_ap=30)
         stub._in_akashi_recovery = True
         OSMap._execute_fixed_patrol_scan(stub, ExecuteFixedPatrolScan=True)
         self.assertEqual(stub.move_calls, 0)
@@ -161,8 +165,8 @@ class TestFixedPatrolScan(unittest.TestCase):
     def test_action_point_threshold_is_seven(self):
         """阈值就是 7：大于 7 才挪，等于 7 不挪。"""
         self.assertEqual(OSMap._FIXED_PATROL_L2_AP, 7)
-        stub = self.run_scan(any_fleet_result=False, ap_ok=True)
-        self.assertEqual(stub.ap_checks, [7])
+        stub = self.run_scan(any_fleet_result=False, current_ap=7)
+        self.assertEqual(stub.move_calls, 0)
 
 
 def make_question_grid(is_logging_tower=False):

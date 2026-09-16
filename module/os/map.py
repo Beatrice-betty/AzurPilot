@@ -2107,8 +2107,9 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
         L0/L1（零移动）：遍历 1~4 号舰队的雷达清剩余问号，只切换舰队看雷达、
                 一支舰队都不挪动，速度最快；找到明石/记录塔/装置就处理，命中即止。
         L2（挪舰队）：L0/L1 什么都没找到时，逐个挪动舰队再整图重扫，把挡路的
-                舰队让开。前提是行动力大于 `_FIXED_PATROL_L2_AP`——这一轮是为
-                找事件额外多开的，行动力不够就宁可留给下一轮正常练级。
+                舰队让开。前提是界面上的当前行动力大于 `_FIXED_PATROL_L2_AP`
+                （不含药剂箱）——这一轮是为找事件额外多开的，当前行动力不够就
+                宁可留给下一轮正常练级。
 
         Args:
             ExecuteFixedPatrolScan (bool, optional): 是否启用强制移动。
@@ -2145,11 +2146,12 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
             if self.clear_question_any_fleet():
                 return
 
-            # ---- L2：挪舰队之前先确认行动力够不够 ----
-            if not self.action_point_check(self._FIXED_PATROL_L2_AP):
+            # ---- L2：挪舰队之前先确认当前行动力够不够 ----
+            current_ap = self._read_current_action_point()
+            if current_ap <= self._FIXED_PATROL_L2_AP:
                 logger.info(
-                    f"[大世界] 行动力不足 {self._FIXED_PATROL_L2_AP}，"
-                    "跳过 L2 挪舰队，留给下一轮练级"
+                    f"[大世界] 当前行动力 {current_ap} 不超过 "
+                    f"{self._FIXED_PATROL_L2_AP}，跳过 L2 挪舰队，留给下一轮练级"
                 )
                 return
             logger.hr("[大世界] 强制移动 L2：逐队挪动舰队后整图重扫")
@@ -2159,9 +2161,26 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
             # 复位主队，避免后续流程作用在错误的舰队上
             self.fleet_set(self.config.OpsiFleet_Fleet)
 
-    # L2（挪舰队）要求的行动力下限：不超过该值就不挪，留给下一轮练级。
-    # 侵蚀1 一次出击消耗 5 点行动力，行动力要大于 7 才有余量多开这一轮。
+    # L2（挪舰队）要求的当前行动力下限：不超过该值就不挪，留给下一轮练级。
+    # 侵蚀1 一次出击消耗 5 点行动力，当前行动力要大于 7 才有余量多开这一轮。
     _FIXED_PATROL_L2_AP = 7
+
+    def _read_current_action_point(self):
+        """读界面上的当前行动力（不含行动力药剂箱）。
+
+        不能用 `action_point_check()`：那个比的是含箱总行动力，只要背包里还有
+        药剂箱就恒为真，挡不住「当前行动力已经不够下一轮练级」。L2 挪舰队是为
+        找事件额外多开的一轮，可能顺路开打，所以按当前行动力判断，并开一次
+        弹窗读即时值（上一轮战斗消耗后的缓存值已经过期）。
+
+        Returns:
+            int: 当前行动力。
+        """
+        self.action_point_enter()
+        self.action_point_safe_get()
+        current = getattr(self, "_action_point_current", 0)
+        self.action_point_quit()
+        return current
 
     def _forced_move_enabled(self):
         """读取强制移动开关，并兼容旧版的等级配置。
