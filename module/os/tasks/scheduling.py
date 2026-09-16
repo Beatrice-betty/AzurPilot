@@ -80,8 +80,12 @@ class CoinTaskMixin:
     STATE_KEY_SCHEDULING_MODE = 'SchedulingMode'
     STATE_KEY_MONTH_END_CLEANUP_FIRST_RUN = 'MonthEndCleanupFirstRun'
     STATE_KEY_STRONGHOLD_NEXT_CHECK = 'StrongholdNextCheck'
-    # 要塞刷新后留出的检查缓冲：刷新瞬间就去查可能扑空，白等一周
-    STRONGHOLD_CHECK_GRACE = timedelta(hours=2)
+    STATE_KEY_OBSCURE_CLEARED_AT = 'ObscureClearedAt'
+    STATE_KEY_ABYSSAL_CLEARED_AT = 'AbyssalClearedAt'
+    # 大世界重置/刷新后留出的检查缓冲：刷新瞬间就去查可能扑空
+    RESET_CHECK_GRACE = timedelta(hours=2)
+    # 隐秘/深渊打完后延迟检查的天数配置
+    CONFIG_PATH_OBSCURE_ABYSSAL_CHECK_DELAY = 'OpsiScheduling.OpsiScheduling.ObscureAbyssalCheckDelayDays'
     SCHEDULING_MODE_COIN_TARGET = 'coin_target'
     SCHEDULING_MODE_ACTION_POINT = 'action_point'
     SCHEDULING_MODE_MONTH_END_CLEANUP = 'month_end_cleanup'
@@ -100,6 +104,11 @@ class CoinTaskMixin:
     TASK_NAME_ABYSSAL = 'OpsiAbyssal'
     TASK_NAME_STRONGHOLD = 'OpsiStronghold'
     AP_NOTIFY_MIN_INTERVAL_MINUTES = 30
+    # 会因「已打完」延迟检查的任务 → 打完时间的状态键
+    COIN_TASK_CLEAR_STATE_KEYS = {
+        TASK_NAME_OBSCURE: STATE_KEY_OBSCURE_CLEARED_AT,
+        TASK_NAME_ABYSSAL: STATE_KEY_ABYSSAL_CLEARED_AT,
+    }
 
     def _config_enabled(self, keys, default=False):
         """
@@ -706,7 +715,7 @@ class CoinTaskMixin:
         """
         next_weekly = get_nearest_weekday_date(0)
         next_monthly = get_os_next_reset()
-        return min(next_weekly, next_monthly) + self.STRONGHOLD_CHECK_GRACE
+        return min(next_weekly, next_monthly) + self.RESET_CHECK_GRACE
 
     def _postpone_stronghold_check(self, reason):
         """
@@ -756,6 +765,81 @@ class CoinTaskMixin:
 
         return next_check
 
+    def _get_obscure_abyssal_check_delay_days(self):
+        """
+        读取隐秘/深渊打完后的延迟检查天数。
+
+        Returns:
+            int: 延迟天数，0 表示每轮都检查。
+        """
+        try:
+            days = int(self.config.cross_get(
+                keys=self.CONFIG_PATH_OBSCURE_ABYSSAL_CHECK_DELAY,
+                default=0,
+            ) or 0)
+        except (TypeError, ValueError):
+            logger.warning('[大世界-智能调度+] 隐秘/深渊延迟检查天数无效，按 0 处理')
+            return 0
+        return max(days, 0)
+
+    def _postpone_coin_task_check(self, task_name, reason):
+        """
+        记录隐秘/深渊已打完，延迟指定天数内不再检查。
+
+        大世界每月重置会刷新隐秘/深渊，推迟截止时间不会跨过下次重置。
+
+        Args:
+            task_name (str): 黄币补充任务名（仅隐秘/深渊会记录）。
+            reason (str): 记录原因（仅用于日志）。
+        """
+        state_key = self.COIN_TASK_CLEAR_STATE_KEYS.get(task_name)
+        if state_key is None:
+            return
+        days = self._get_obscure_abyssal_check_delay_days()
+        if days <= 0:
+            return
+        self._set_smart_scheduling_state_value(state_key, current_time().isoformat())
+        task_display = self.TASK_NAMES.get(task_name, task_name)
+        logger.info(f'[大世界-智能调度+] {reason}，{task_display}将在 {days} 天后再检查')
+
+    def _get_coin_task_check_postpone_time(self, task_name):
+        """
+        读取隐秘/深渊的下次检查时间。
+
+        推迟截止时间为「打完时间 + 延迟天数」，且不晚于下次大世界重置加缓冲。
+
+        Returns:
+            datetime.datetime | None: 仍在推迟中返回该时间；没有记录、天数为 0、
+                记录损坏或已到检查时间则返回 None（到期时顺带清理记录）。
+        """
+        state_key = self.COIN_TASK_CLEAR_STATE_KEYS.get(task_name)
+        if state_key is None:
+            return None
+        days = self._get_obscure_abyssal_check_delay_days()
+        if days <= 0:
+            return None
+
+        value = self._get_smart_scheduling_state_value(state_key)
+        if not value:
+            return None
+
+        try:
+            cleared_at = datetime.fromisoformat(value)
+        except (TypeError, ValueError):
+            logger.warning(f'[大世界-智能调度+] {task_name} 打完时间无效: {value}，重新检查')
+            self._clear_smart_scheduling_state_value(state_key)
+            return None
+
+        next_check = cleared_at + timedelta(days=days)
+        reset_check = get_os_next_reset() + self.RESET_CHECK_GRACE
+        if next_check > reset_check:
+            next_check = reset_check
+        if current_time() >= next_check:
+            self._clear_smart_scheduling_state_value(state_key)
+            return None
+
+        return next_check
+
     def _handle_coin_task_no_content(self, task_display_name, log_message):
         """
         处理黄币补充任务没有可执行内容的情况。
@@ -763,6 +847,8 @@ class CoinTaskMixin:
         logger.info(f'[大世界-智能调度+] {log_message}，准备结束当前任务')
         task_name = self._get_current_coin_task_name()
         logger.info(f'[大世界-智能调度+] 处理任务: {task_name}')
+        # 仓库取空即「已打完」，按配置延迟 X 天内不再检查
+        self._postpone_coin_task_check(task_name, log_message)
 
         if self.is_running_smart_scheduling_task():
             if '没有更多' not in log_message:
@@ -1273,14 +1359,16 @@ class OpsiScheduling(CoinTaskMixin, OSMap):
         for task_name in all_coin_tasks:
             if task_name == self.TASK_NAME_STRONGHOLD:
                 postpone_until = self._get_stronghold_check_postpone_time()
-                if postpone_until is not None:
-                    task_display = self.TASK_NAMES.get(task_name, task_name)
-                    logger.info(
-                        f'[大世界-智能调度+] {task_display}已全部清除，跳过本轮检查，'
-                        f'下次检查 {postpone_until}'
-                    )
-                    skipped_tasks.append(task_display)
-                    continue
+            else:
+                postpone_until = self._get_coin_task_check_postpone_time(task_name)
+            if postpone_until is not None:
+                task_display = self.TASK_NAMES.get(task_name, task_name)
+                logger.info(
+                    f'[大世界-智能调度+] {task_display}已全部清除，跳过本轮检查，'
+                    f'下次检查 {postpone_until}'
+                )
+                skipped_tasks.append(task_display)
+                continue
 
             if self._run_scheduled_coin_task_once(task_name, meow_ap_preserve):
                 self._notify_coin_task_proxy(

@@ -3730,6 +3730,10 @@
       "name": "Replenishment task priority",
       "help": "The priority order of tasks for yellow coin replenishment when they are insufficient. Separated by >."
     },
+    "ObscureAbyssalCheckDelayDays": {
+      "name": "Obscure/Abyssal recheck delay (days)",
+      "help": "After all Obscure Zones and Abyssal Zones are cleared, Smart Scheduling delays their checks by the given number of days and skips them in the meantime to speed up coin replenishing. 0 checks every round. The Operation Siren monthly reset refreshes them, and checks resume after the reset."
+    },
     "MonthEndActionPointCleanupEnable": {
       "name": "Enable month-end action point cleanup",
       "help": "Whether to enable the month-end Action Point cleanup. When enabled, once the days remaining until the Operation Siren reset are at or below the \"Month-end Action Point Cleanup Days\" value, the month-end cleanup mode starts to consume Action Points.",

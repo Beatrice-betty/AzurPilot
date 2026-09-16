@@ -459,7 +459,7 @@ class TestStrongholdCheckPostpone(unittest.TestCase):
                 ):
                     self.assertEqual(
                         scheduling._get_next_stronghold_check_time(),
-                        earlier + OpsiScheduling.STRONGHOLD_CHECK_GRACE,
+                        earlier + OpsiScheduling.RESET_CHECK_GRACE,
                     )
 
     def assert_postponed_by_clear_stronghold(self, zones):
@@ -489,7 +489,7 @@ class TestStrongholdCheckPostpone(unittest.TestCase):
         ):
             stronghold.clear_stronghold()
 
-        expected = (min(weekly, monthly) + OpsiScheduling.STRONGHOLD_CHECK_GRACE).isoformat()
+        expected = (min(weekly, monthly) + OpsiScheduling.RESET_CHECK_GRACE).isoformat()
         self.assertEqual(self.state_of(stronghold)[self.NEXT_CHECK_KEY], expected)
 
     def test_records_postpone_when_no_stronghold_is_found(self):
@@ -497,3 +497,190 @@ class TestStrongholdCheckPostpone(unittest.TestCase):
 
     def test_records_postpone_after_clearing_the_last_stronghold(self):
         self.assert_postponed_by_clear_stronghold(zones=[Mock(), None])
+
+
+class CoinCheckDelayConfig(StrongholdPostponeConfig):
+    """提供隐秘/深渊延迟检查天数所需的配置接口。"""
+
+    def __init__(self, state=None, delay_days=0, task_command='OpsiScheduling'):
+        super().__init__(state=state)
+        self.delay_days = delay_days
+        self.task = SimpleNamespace(command=task_command)
+
+    def cross_get(self, keys, default=None):
+        if keys == 'OpsiScheduling.OpsiScheduling.ObscureAbyssalCheckDelayDays':
+            return self.delay_days
+        return super().cross_get(keys, default=default)
+
+
+class TestObscureAbyssalCheckDelay(unittest.TestCase):
+    """隐秘/深渊打完后延迟指定天数再检查，0 表示每轮都检查。"""
+
+    OBSCURE_KEY = OpsiScheduling.STATE_KEY_OBSCURE_CLEARED_AT
+    ABYSSAL_KEY = OpsiScheduling.STATE_KEY_ABYSSAL_CLEARED_AT
+
+    def make_scheduling(self, state=None, delay_days=0, task_command='OpsiScheduling'):
+        scheduling = OpsiScheduling.__new__(OpsiScheduling)
+        scheduling.config = CoinCheckDelayConfig(
+            state=state,
+            delay_days=delay_days,
+            task_command=task_command,
+        )
+        return scheduling
+
+    @staticmethod
+    def state_of(scheduling):
+        return scheduling.config.cross_get('OpsiScheduling.Storage.Storage')
+
+    def dispatch(self, scheduling, coin_tasks=('OpsiObscure', 'OpsiAbyssal')):
+        """派发一轮补黄币，返回真正被代理执行的任务名。"""
+        executed = []
+
+        def run_once(task_name, ap_preserve):
+            executed.append(task_name)
+            return True
+
+        with (
+            patch.object(scheduling, '_get_enabled_coin_tasks', return_value=list(coin_tasks)),
+            patch.object(scheduling, '_run_scheduled_coin_task_once', side_effect=run_once),
+            patch.object(scheduling, '_notify_coin_task_proxy'),
+        ):
+            scheduling._dispatch_coin_task(
+                yellow_coins=1000,
+                total_ap=5000,
+                coin_target=2000,
+                meow_ap_preserve=1000,
+            )
+        return executed
+
+    def handle_no_content(self, scheduling, task_display, log_message):
+        """走真实的无内容处理函数，捕获结束任务时抛出的 TaskEnd。"""
+        with (
+            patch.object(scheduling, 'is_smart_scheduling_enabled', return_value=False),
+            self.assertRaises(TaskEnd),
+        ):
+            scheduling._handle_coin_task_no_content(task_display, log_message)
+
+    def test_zero_delay_checks_every_round_despite_cleared_state(self):
+        scheduling = self.make_scheduling(
+            state={
+                self.OBSCURE_KEY: (current_time() - timedelta(hours=1)).isoformat(),
+                self.ABYSSAL_KEY: (current_time() - timedelta(hours=2)).isoformat(),
+            },
+            delay_days=0,
+        )
+
+        # 每轮派发只代理执行一个任务，两个任务分别到期待派发
+        self.assertEqual(self.dispatch(scheduling, coin_tasks=('OpsiObscure',)), ['OpsiObscure'])
+        self.assertEqual(self.dispatch(scheduling, coin_tasks=('OpsiAbyssal',)), ['OpsiAbyssal'])
+
+    def test_skips_both_obscure_and_abyssal_within_delay_days(self):
+        scheduling = self.make_scheduling(
+            state={
+                self.OBSCURE_KEY: (current_time() - timedelta(hours=1)).isoformat(),
+                self.ABYSSAL_KEY: (current_time() - timedelta(hours=2)).isoformat(),
+            },
+            delay_days=3,
+        )
+
+        with self.assertRaises(TaskEnd):
+            self.dispatch(scheduling)
+
+        # 推迟期内直接跳过，打完记录保持不变
+        state = self.state_of(scheduling)
+        self.assertIn(self.OBSCURE_KEY, state)
+        self.assertIn(self.ABYSSAL_KEY, state)
+        self.assertEqual(
+            scheduling.config.task_delay_calls,
+            [((), {'server_update': '00:00', 'task': 'OpsiScheduling'})],
+        )
+
+    def test_checks_again_after_delay_days_have_passed(self):
+        scheduling = self.make_scheduling(
+            state={self.OBSCURE_KEY: (current_time() - timedelta(days=4)).isoformat()},
+            delay_days=3,
+        )
+
+        executed = self.dispatch(scheduling, coin_tasks=('OpsiObscure',))
+
+        self.assertEqual(executed, ['OpsiObscure'])
+        self.assertNotIn(self.OBSCURE_KEY, self.state_of(scheduling))
+
+    def test_postpone_is_capped_at_next_monthly_reset(self):
+        cleared_at = current_time() - timedelta(hours=1)
+        scheduling = self.make_scheduling(
+            state={self.OBSCURE_KEY: cleared_at.isoformat()},
+            delay_days=30,
+        )
+        reset = current_time() + timedelta(days=5)
+
+        with patch('module.os.tasks.scheduling.get_os_next_reset', return_value=reset):
+            postpone = scheduling._get_coin_task_check_postpone_time('OpsiObscure')
+
+        # 30 天太长，被下次大世界重置截断，重置后照常检查
+        self.assertEqual(postpone, reset + OpsiScheduling.RESET_CHECK_GRACE)
+
+    def test_postpone_uses_delay_days_before_reset(self):
+        cleared_at = current_time() - timedelta(hours=1)
+        scheduling = self.make_scheduling(
+            state={self.ABYSSAL_KEY: cleared_at.isoformat()},
+            delay_days=3,
+        )
+        reset = current_time() + timedelta(days=10)
+
+        with patch('module.os.tasks.scheduling.get_os_next_reset', return_value=reset):
+            postpone = scheduling._get_coin_task_check_postpone_time('OpsiAbyssal')
+
+        self.assertEqual(postpone, cleared_at + timedelta(days=3))
+
+    def test_ignores_broken_cleared_state_and_checks_again(self):
+        scheduling = self.make_scheduling(
+            state={self.ABYSSAL_KEY: 'not-a-time'},
+            delay_days=3,
+        )
+
+        executed = self.dispatch(scheduling, coin_tasks=('OpsiAbyssal',))
+
+        self.assertEqual(executed, ['OpsiAbyssal'])
+        self.assertNotIn(self.ABYSSAL_KEY, self.state_of(scheduling))
+
+    def test_records_cleared_time_when_storage_is_empty(self):
+        now = datetime(2026, 9, 16, 12, 0, 0)
+        for task_command, display, message, state_key in (
+            ('OpsiObscure', '隐秘海域', '隐秘海域没有可执行内容', self.OBSCURE_KEY),
+            ('OpsiAbyssal', '深渊坐标', '深渊坐标没有可执行内容', self.ABYSSAL_KEY),
+        ):
+            with self.subTest(task=task_command):
+                scheduling = self.make_scheduling(delay_days=3, task_command=task_command)
+
+                with patch('module.os.tasks.scheduling.current_time', return_value=now):
+                    self.handle_no_content(scheduling, display, message)
+
+                self.assertEqual(self.state_of(scheduling)[state_key], now.isoformat())
+
+    def test_zero_delay_never_records_cleared_time(self):
+        scheduling = self.make_scheduling(delay_days=0, task_command='OpsiAbyssal')
+
+        with patch(
+            'module.os.tasks.scheduling.current_time',
+            return_value=datetime(2026, 9, 16, 12, 0, 0),
+        ):
+            self.handle_no_content(scheduling, '深渊坐标', '深渊坐标没有可执行内容')
+
+        self.assertEqual(self.state_of(scheduling), {})
+
+    def test_does_not_record_for_stronghold_and_meowfficer(self):
+        now = datetime(2026, 9, 16, 12, 0, 0)
+        for task_command, display, message in (
+            ('OpsiStronghold', '塞壬要塞', '塞壬要塞没有可执行内容'),
+            ('OpsiMeowfficerFarming', '耄耋相接', '耄耋相接没有可执行内容'),
+        ):
+            with self.subTest(task=task_command):
+                scheduling = self.make_scheduling(delay_days=3, task_command=task_command)
+
+                with patch('module.os.tasks.scheduling.current_time', return_value=now):
+                    self.handle_no_content(scheduling, display, message)
+
+                state = self.state_of(scheduling)
+                self.assertNotIn(self.OBSCURE_KEY, state)
+                self.assertNotIn(self.ABYSSAL_KEY, state)
