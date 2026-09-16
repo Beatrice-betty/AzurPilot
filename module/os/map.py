@@ -1380,8 +1380,9 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
                 return True
 
         # 连续 attempts 次都在雷达上看到问号却没清掉：舰队根本到不了
-        #（视频实测游戏提示“目标点超出移动范围”）。不可达的问号交给上层
-        # 换其他舰队去点，全都点不到时由强制移动的 L2 挪舰队让路。
+        #（视频实测游戏提示“目标点超出移动范围”）。记下来——这种“看到了却点不到”
+        # 只能靠挪舰队解决，和行动力无关，上层必须为它挪一次。
+        self._question_unreachable = True
         logger.warning(
             f"[大世界-地图] 前往问号{attempts}次尝试失败, "
             "可能是相邻双舰队机关, 已停止"
@@ -1399,6 +1400,10 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
         若只是清掉普通问号，则先做一次全图扫描把清问号后才显现的事件捞出来，
         仍无所获才切换下一支舰队，直到找到目标或扫完所有舰队。
 
+        整轮结束后 `self._question_unreachable` 表示「有舰队看到了问号却清不掉」：
+        换舰队点解决不了所有情况（目标本来就超出所有舰队的移动范围），
+        调用方要为它挪一次舰队，且不受行动力门控限制。
+
         Args:
             drop: 掉落记录对象。
 
@@ -1408,6 +1413,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
         logger.hr("[大世界] 遍历舰队查找问号", level=2)
         primary = self.config.OpsiFleet_Fleet
         fleets = [primary] + [f for f in [1, 2, 3, 4] if f != primary]
+        self._question_unreachable = False
         for fleet in fleets:
             try:
                 self.fleet_set(fleet)
@@ -1518,6 +1524,11 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
 
     _solved_map_event = set()
     _solved_fleet_mechanism = 0
+    # 是否有舰队在雷达上看到了问号却怎么也到不了（游戏提示“目标点超出移动范围”，
+    # 即被其他舰队挡住/海域移动次数耗尽）。由 clear_question 置位、
+    # clear_question_any_fleet 复位，_execute_fixed_patrol_scan 据此判断：
+    # “看到了却点不到”必须挪舰队，不受行动力门控限制。
+    _question_unreachable = False
     # 本轮重扫中已判定“到不了”的事件格子（node 字符串，如 'B7'）。
     # 整图重扫时同一格会出现在多个摄像机视野里，不记下来的话每个视野都会把
     # “换队点 + 强制移动”这套慢流程重跑一遍。每次 map_rescan_once 开头清空。
@@ -2106,11 +2117,13 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
 
         L0/L1（零移动）：遍历 1~4 号舰队的雷达清剩余问号，只切换舰队看雷达、
                 一支舰队都不挪动，速度最快；找到明石/记录塔/装置就处理，命中即止。
-        L2（挪舰队）：L0/L1 什么都没找到时，逐个挪动舰队再整图重扫，把挡路的
-                舰队让开。侵蚀1 练级的前提是界面上的当前行动力大于
-                `_FIXED_PATROL_L2_AP`（不含药剂箱）——这一轮是为找事件额外多开
-                的，当前行动力不够就宁可留给下一轮正常练级；短猫相接不设这道
-                门槛，找猫本来就是它的任务，行动力该花就花。
+        L2（挪舰队）：逐个挪动舰队再整图重扫，把挡路的舰队让开。要不要挪分三种：
+                ① 有舰队看到了问号却点不到（被别的舰队挡住/超出移动范围）：
+                   必须挪，和行动力无关——已经看见的事件不能因为行动力不够放跑；
+                ② 短猫相接（全队雷达都没线索）：也直接挪，找猫本来就是它的任务；
+                ③ 侵蚀1 练级（全队雷达都没线索）：看界面上的当前行动力
+                   （不含药剂箱），大于 `_FIXED_PATROL_L2_AP` 才挪，否则留给
+                   下一轮正常练级。
 
         Args:
             ExecuteFixedPatrolScan (bool, optional): 是否启用强制移动。
@@ -2147,22 +2160,27 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
             if self.clear_question_any_fleet():
                 return
 
-            # ---- L2：挪舰队之前先确认当前行动力够不够 ----
-            # 短猫相接不设这道门槛：找猫本来就是它的任务，行动力该花就花；
-            # 侵蚀1 练级才要为下一轮留行动力，不够就不挪。
-            if self.config.task.command == "OpsiMeowfficerFarming":
+            # ---- L2：挪舰队 ----
+            # “看到了问号却点不到”只能靠挪舰队解决，和行动力无关：
+            # 已经看见的猫不能因为行动力不够就放跑，先挪了再说。
+            # 只有“全队雷达上什么都没有”这种没线索的情况才看行动力：
+            # 侵蚀1 练级要留行动力给下一轮，不够就不挪；
+            # 短猫相接找猫本来就是它的任务，行动力该花就花，不做门控。
+            if self._question_unreachable:
+                logger.info("[大世界] 有舰队看到问号却无法到达，直接执行 L2 挪舰队")
+            elif self.config.task.command == "OpsiMeowfficerFarming":
                 logger.info("[大世界] 短猫相接不做行动力门控，直接执行 L2 挪舰队")
             else:
                 current_ap = self._read_current_action_point()
                 if current_ap <= self._FIXED_PATROL_L2_AP:
                     logger.info(
-                        f"[大世界] 当前行动力 {current_ap} 不超过 "
+                        f"[大世界] 没看到事件、当前行动力 {current_ap} 不超过 "
                         f"{self._FIXED_PATROL_L2_AP}，跳过 L2 挪舰队，留给下一轮练级"
                     )
                     return
                 logger.info(
-                    f"[大世界] 当前行动力 {current_ap} 大于 {self._FIXED_PATROL_L2_AP}，"
-                    "执行 L2 挪舰队"
+                    f"[大世界] 没看到事件、当前行动力 {current_ap} 大于 "
+                    f"{self._FIXED_PATROL_L2_AP}，执行 L2 挪舰队"
                 )
             logger.hr("[大世界] 强制移动 L2：逐队挪动舰队后整图重扫")
             self._move_fleets_and_rescan()

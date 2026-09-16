@@ -5,9 +5,10 @@
 `TEMPLATE_MAP_WALK_OUT_OF_STEP`）。这时「只换队看雷达、一支都不挪动」的
 零移动检索永远点不到猫——只有把挡路的舰队挪开才能解决。
 
-所以强制移动是一个开关：开启后先零移动遍历 1~4 队雷达（L0/L1），什么都没
-找到、且行动力大于 7 时，再逐队挪动舰队做一遍整图重扫（L2）。行动力不够
-就不挪，留给下一轮正常练级。这里的用例锁定这几条边界。
+所以强制移动是一个开关：开启后先零移动遍历 1~4 队雷达（L0/L1），再决定要不要
+逐队挪动舰队做整图重扫（L2）。要不要挪分三种：看到了问号却点不到的必须挪
+（和行动力无关），短猫相接直接挪（找猫是它的任务），侵蚀1 练级全队都没线索时
+才看当前行动力（大于 7 才挪，否则留给下一轮练级）。这里的用例锁定这几条边界。
 """
 
 import unittest
@@ -80,6 +81,7 @@ class FixedPatrolStub:
         any_fleet_result=False,
         current_ap=0,
         task='OpsiHazard1Leveling',
+        unreachable=False,
     ):
         self.config = SimpleNamespace(
             OpsiFleet_Fleet=1,
@@ -89,6 +91,7 @@ class FixedPatrolStub:
         self.enabled = enabled
         self.any_fleet_result = any_fleet_result
         self.current_ap = current_ap
+        self.unreachable = unreachable
         self.ap_reads = 0
         self.move_calls = 0
         self.fleet_sets = []
@@ -100,6 +103,8 @@ class FixedPatrolStub:
         return self.enabled
 
     def clear_question_any_fleet(self, drop=None):
+        # 真实实现会复位并在清不掉时置位 _question_unreachable，这里直接给定
+        self._question_unreachable = self.unreachable
         return self.any_fleet_result
 
     def _read_current_action_point(self):
@@ -178,6 +183,16 @@ class TestFixedPatrolScan(unittest.TestCase):
         stub = self.run_scan(any_fleet_result=False, current_ap=7)
         self.assertEqual(stub.move_calls, 0)
 
+    def test_seen_but_unreachable_moves_regardless_of_action_point(self):
+        """看到问号却点不到 -> 不看行动力，直接挪舰队：已看见的事件不能放跑。"""
+        for current_ap in (0, 3, 7):
+            with self.subTest(current_ap=current_ap):
+                stub = self.run_scan(
+                    any_fleet_result=False, current_ap=current_ap, unreachable=True
+                )
+                self.assertEqual(stub.ap_reads, 0)
+                self.assertEqual(stub.move_calls, 1)
+
     def test_meowfficer_task_skips_action_point_gate(self):
         """短猫相接不设行动力门槛：找猫就是它的任务，行动力不去查也照样挪。"""
         stub = self.run_scan(
@@ -217,6 +232,7 @@ class ClearQuestionStub:
         self.radar = SimpleNamespace(predict_question=self.predict_question)
         self.is_siren_device_confirmed = False
         self._solved_map_event = set()
+        self._question_unreachable = False
 
     def predict_question(self, image, in_port=True):
         return self.predictions.pop(0) if self.predictions else None
@@ -261,6 +277,25 @@ class TestClearQuestion(unittest.TestCase):
         stub, result = self.run_clear_question([make_question_grid()], walk_result='akashi')
         self.assertTrue(result)
 
+    def test_marks_unreachable_after_all_attempts_failed(self):
+        """三次都在雷达上看到问号却清不掉 -> 置位“看到了却到不了”。"""
+        grid = make_question_grid()
+        stub, result = self.run_clear_question([grid, grid, grid])
+        self.assertFalse(result)
+        self.assertTrue(stub._question_unreachable)
+
+    def test_does_not_mark_when_radar_has_no_question(self):
+        """雷达上没有问号 -> 只是没线索，不算“看到了却到不了”。"""
+        stub, _ = self.run_clear_question([None])
+        self.assertFalse(stub._question_unreachable)
+
+    def test_does_not_mark_when_akashi_reached(self):
+        """点到明石 -> 不置位。"""
+        grid = make_question_grid()
+        stub, result = self.run_clear_question([grid], walk_result='akashi')
+        self.assertTrue(result)
+        self.assertFalse(stub._question_unreachable)
+
 
 class AnyFleetStub:
     """只提供 `clear_question_any_fleet` 需要的属性。"""
@@ -275,6 +310,7 @@ class AnyFleetStub:
         self.solve_on_fleet = solve_on_fleet
         self._solved_map_event = set()
         self._solved_fleet_mechanism = False
+        self._question_unreachable = False
         self.fleet_sets = []
 
     def predict_question(self, image, in_port=True):
@@ -289,6 +325,8 @@ class AnyFleetStub:
         if self.solve_on_fleet is not None and self.fleet_sets[-1] == self.solve_on_fleet:
             self._solved_map_event.add('is_akashi')
             return True
+        # 看到了却清不掉：真实实现会置位“看到了却到不了”
+        self._question_unreachable = True
         return False
 
     def map_rescan_once(self, rescan_mode='full', drop=None):
@@ -319,6 +357,19 @@ class TestAnyFleetFleetOrder(unittest.TestCase):
         result = self.run_any_fleet(stub)
         self.assertTrue(result)
         self.assertEqual(stub.fleet_sets, [1, 2, 3])
+
+    def test_unreachable_flag_starts_clean_each_round(self):
+        """每轮从干净状态开始：上一轮的“看到却到不了”不能留给这一轮。"""
+        stub = AnyFleetStub([None, None, None, None])
+        stub._question_unreachable = True
+        self.run_any_fleet(stub)
+        self.assertFalse(stub._question_unreachable)
+
+    def test_keeps_flag_when_a_fleet_saw_but_could_not_clear(self):
+        """有舰队看到问号却点不到 -> 标记留给调用方，且不受行动力限制。"""
+        stub = AnyFleetStub([make_question_grid(), None, None, None])
+        self.run_any_fleet(stub)
+        self.assertTrue(stub._question_unreachable)
 
 
 class MarkStub:
@@ -497,61 +548,22 @@ class TestDeviceOtherFleets(unittest.TestCase):
         self.assertEqual(stub.fleet_sets[-1], 1)
 
 
-class MeowRetrieveStub:
-    """只提供 `_meow_retrieve_events` 需要的属性。"""
+class TestMeowNoStepByStepChain(unittest.TestCase):
+    """分步检索链整个删掉：扫雷达只归强制移动，避免同一轮把 1~4 队雷达扫两遍。
 
-    def __init__(self, fixed_patrol_enabled, primary_clears=False, rescan_solves=False):
-        self.config = SimpleNamespace(
-            OpsiMeowfficerFarming_ExecuteFixedPatrolScan=fixed_patrol_enabled,
-        )
-        self.primary_clears = primary_clears
-        self.rescan_solves = rescan_solves
-        self.calls = []
-        self._solved_map_event = set()
+    链和强制移动扫的是同一批雷达，中间没有任何舰队移动，先后跑一遍就是白扫
+    第二遍（日志里每支舰队都会先出现「舰队 N 附近无问号」、再出现一次
+    「舰队 N 雷达上无问号」）。这几个方法别再捡回来。
+    """
 
-    def map_rescan(self):
-        self.calls.append('map_rescan')
-        if self.rescan_solves:
-            self._solved_map_event.add('is_akashi')
-
-    def _clear_question_primary(self):
-        self.calls.append('clear_primary')
-        return self.primary_clears
-
-    def _clear_question_other_fleets(self):
-        self.calls.append('clear_other')
-        return False
-
-
-class TestMeowRetrieveEvents(unittest.TestCase):
-    """短猫相接一轮战后的事件检索：强制移动开着时不能再自己逐队扫一遍。"""
-
-    def run_retrieve(self, **kwargs):
-        stub = MeowRetrieveStub(**kwargs)
-        OpsiMeowfficerFarming._meow_retrieve_events(stub)
-        return stub
-
-    def test_fixed_patrol_enabled_only_rescans(self):
-        """开关打开 -> 只重扫地图；逐队扫雷达交给强制移动，别扫两遍。"""
-        stub = self.run_retrieve(fixed_patrol_enabled=True)
-        self.assertEqual(stub.calls, ['map_rescan'])
-
-    def test_switch_off_keeps_step_by_step_retrieval(self):
-        """开关关闭 -> 保持原来的分步检索：先主队清问号。"""
-        stub = self.run_retrieve(fixed_patrol_enabled=False, primary_clears=True)
-        self.assertEqual(stub.calls, ['clear_primary'])
-
-    def test_switch_off_falls_back_to_other_fleets(self):
-        """主队没清到、重扫也没有 -> 才逐队清问号。"""
-        stub = self.run_retrieve(fixed_patrol_enabled=False, primary_clears=False)
-        self.assertEqual(stub.calls, ['clear_primary', 'map_rescan', 'clear_other'])
-
-    def test_switch_off_stops_when_rescan_solves(self):
-        """重扫已经找到事件 -> 不再切换其他舰队。"""
-        stub = self.run_retrieve(
-            fixed_patrol_enabled=False, primary_clears=False, rescan_solves=True
-        )
-        self.assertEqual(stub.calls, ['clear_primary', 'map_rescan'])
+    def test_chain_methods_are_gone(self):
+        for name in (
+            '_clear_question_primary',
+            '_clear_question_other_fleets',
+            '_meow_retrieve_events',
+        ):
+            with self.subTest(name=name):
+                self.assertFalse(hasattr(OpsiMeowfficerFarming, name))
 
 
 if __name__ == '__main__':
