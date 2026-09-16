@@ -15,12 +15,9 @@
 .monitor-panel {min-width:0;overflow:hidden;display:flex;flex-direction:column}
 .overview-main {display:flex;flex-direction:column;flex:1;min-height:0}
 @media(min-width:951px) {
-  /* 必须是确定高度：flex 链路（overview-main → monitor-panel → log-content）靠它才有界，
-     否则日志行数会把整页越撑越高，日志区永远不会内部滚动。 */
   .overview-page {display:flex;flex-direction:column;flex:1;height:calc(var(--viewport-height) - var(--topbar-height, 69px) - 48px);min-height:380px;width:100%}
   .overview-main .monitor-panel,
   .monitor-panel {flex:1;min-height:380px;height:auto}
-  /* 日志面板下沿再往下 10px；负外边距不占页面高度，避免整页多出滚动条。 */
   .overview-main {margin-bottom:-10px}
 }
 .schedule-panel .panel-heading,.schedule-panel .schedule-summary {flex-shrink:0}
