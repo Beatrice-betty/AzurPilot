@@ -61,7 +61,8 @@ COMMISSION_SWITCH.add_state('daily', COMMISSION_DAILY)
 COMMISSION_SWITCH.add_state('urgent', COMMISSION_URGENT)
 COMMISSION_SCROLL = Scroll(COMMISSION_SCROLL_AREA, color=(247, 211, 66), name='COMMISSION_SCROLL')
 
-# 委托收益截图保留张数：与统计页「最近委托记录」的 50 条上限保持一致
+# 委托收益截图保留张数：与统计页「最近委托记录」的 50 条上限保持一致。
+# 仅在「掉落记录 - 截图保留天数」为 0 时生效，填了天数就改按天数清理。
 COMMISSION_REWARD_SCREENSHOT_KEEP = 50
 
 
@@ -1060,15 +1061,22 @@ class RewardCommission(UI, InfoHandler):
         文件名使用毫秒时间戳避免冲突。返回相对 ``log/commission_rewards``
         根目录的路径列表（POSIX 风格），写入数据库供 WebUI 查看截图使用。
 
+        关掉「掉落记录 - 委托收益截图」后不再落盘，
+        但收益数据本身仍然记录，只是统计页不再有截图可看。
+
         Args:
             images: 通过「获取物品」页面校验的截图列表（RGB numpy 数组）。
             instance: 配置实例名称。
 
         Returns:
-            list[str]: 保存成功的截图相对路径列表，失败时返回空列表。
+            list[str]: 保存成功的截图相对路径列表，未保存或失败时返回空列表。
         """
         import os
 
+        from module.statistics.drop_cleanup import drop_screenshot_retention_days
+
+        if self.config.DropRecord_CommissionIncomeScreenshot == 'do_not':
+            return []
         if not images:
             return []
 
@@ -1092,7 +1100,10 @@ class RewardCommission(UI, InfoHandler):
             paths.append(f'{instance}/{month_str}/{filename}')
             logger.info(f'[委托-收入] 已保存收益截图: log/commission_rewards/{instance}/{month_str}/{filename}')
 
-        self._prune_commission_reward_screenshots(instance)
+        # 填了保留天数就交给掉落记录模块按天数统一清理
+        # （见 module/statistics/drop_cleanup.py），没填才沿用张数上限
+        if drop_screenshot_retention_days(self.config) <= 0:
+            self._prune_commission_reward_screenshots(instance)
         return paths
 
     @staticmethod

@@ -223,12 +223,21 @@ class InfoHandler(ModuleBase):
         - calculate 模式（不含 ignore）：正常不应出现红脸弹窗（已预检），
           若出现则视为异常，取消弹窗退出关卡、心情清零、延时任务
 
+        作战档案出击后的「消耗档案密钥」弹窗同样由 POPUP_CANCEL /
+        POPUP_CONFIRM 这两个通用按钮组成，仅凭按钮判定会把出击被数据密钥
+        弹窗拦住误判成红脸弹窗（取消弹窗、清零心情、任务延后到次日），
+        因此先交给 handle_use_data_key() 处理。
+
         Returns:
             bool: 是否处理了弹窗。calculate 模式下若触发保底会抛出 ScriptEnd。
 
         Raises:
             ScriptEnd: calculate 模式下出现红脸弹窗时，心情清零并延时后抛出。
         """
+        # 作战档案强制启用数据密钥，此时的双按钮弹窗优先按数据密钥弹窗处理
+        if self.handle_use_data_key():
+            return True
+
         # calculate 模式保底：正常不应出现红脸弹窗
         # 若出现则可能是ALAS计算错误或用户手动操作，需异常处理
         if self.emotion.is_calculate and not self.emotion.is_ignore:
@@ -296,7 +305,54 @@ class InfoHandler(ModuleBase):
                 self.withdraw()
                 break
 
+    def use_data_key_notified_enabled(self):
+        """
+        判断「今日不再提示」复选框是否已勾选。
+
+        Returns:
+            bool: 复选框变绿（已勾选）返回 True。
+        """
+        return self.image_color_count(
+            USE_DATA_KEY_NOTIFIED, color=(140, 207, 66), threshold=75, count=10)
+
+    def use_data_key_appear(self):
+        """
+        判断当前画面是否为作战档案的数据密钥确认弹窗。
+
+        弹窗内容「进入所选关卡需要消耗档案密钥x5，是否进入？」是逐元素渲染
+        且整行居中的：刚弹出时文字可能还没画出来，数量位数变化又会让黄色
+        文字左右移动，位置写死的 USE_DATA_KEY 模板可能匹配不到。因此再用
+        固定位置的「今日不再提示」复选框兜底——该复选框只在这个弹窗上出现，
+        未勾选是标题栏右侧的深色方块，勾选后是绿色方块。
+
+        Returns:
+            bool: 是数据密钥确认弹窗返回 True。
+        """
+        if self.appear(USE_DATA_KEY, offset=(20, 20)):
+            return True
+        if self.image_color_count(USE_DATA_KEY_NOTIFIED, color=(34, 49, 75), threshold=40, count=100):
+            return True
+        if self.use_data_key_notified_enabled():
+            return True
+
+        return False
+
     def handle_use_data_key(self):
+        """
+        处理作战档案的数据密钥确认弹窗：勾选「今日不再提示」后确认。
+
+        勾选后当天不再弹出，省掉每次出击的确认。弹窗刚出现时内容可能还没
+        渲染完，此时不能直接放弃——调用方（含红脸弹窗判定）只看
+        POPUP_CANCEL / POPUP_CONFIRM 这两个通用按钮，放弃就会被当成别的弹窗
+        处理。所以这里等弹窗渲染完成再判断，勾选失败也不影响确认弹窗。
+
+        Pages:
+            in: 作战档案出击后的数据密钥确认弹窗
+            out: 弹窗已确认
+
+        Returns:
+            bool: 是否处理了数据密钥弹窗。
+        """
         if not self.config.USE_DATA_KEY:
             return False
 
@@ -304,21 +360,33 @@ class InfoHandler(ModuleBase):
                 and not self.appear(POPUP_CANCEL, offset=self._popup_offset, interval=2):
             return False
 
-        if self.appear(USE_DATA_KEY, offset=(20, 20)):
-            # enable USE_DATA_KEY_NOTIFIED
-            for _ in self.loop():
-                enabled = self.image_color_count(
-                    USE_DATA_KEY_NOTIFIED, color=(140, 207, 66), threshold=75, count=10)
-                if enabled:
+        # 等待弹窗渲染完成；等待期间弹窗消失说明不是数据密钥弹窗，交回上层
+        if not self.use_data_key_appear():
+            for _ in self.loop(timeout=2):
+                if self.use_data_key_appear():
                     break
-                if self.appear(USE_DATA_KEY, offset=(20, 20), interval=5):
-                    self.device.click(USE_DATA_KEY_NOTIFIED)
-                    continue
+                if not self.appear(POPUP_CONFIRM, offset=self._popup_offset):
+                    return False
+            else:
+                return False
 
+        # enable USE_DATA_KEY_NOTIFIED
+        # 定时器不启动，首次判断立即点击，之后每 2 秒重试一次，最多重试 6 秒
+        interval = Timer(2, count=2)
+        for _ in self.loop(timeout=Timer(6, count=20)):
+            if self.use_data_key_notified_enabled():
+                break
+            if interval.reached() and self.use_data_key_appear():
+                self.device.click(USE_DATA_KEY_NOTIFIED)
+                interval.reset()
+                continue
+        else:
+            logger.warning('[作战档案] 「今日不再提示」未勾选成功，直接确认弹窗')
+
+        result = self.handle_popup_confirm('USE_DATA_KEY')
+        if result:
             self.config.USE_DATA_KEY = False  # 成功后重置，因为任务可能在恢复前被停止
-            return self.handle_popup_confirm('USE_DATA_KEY')
-
-        return False
+        return result
 
     def handle_vote_popup(self):
         """

@@ -269,6 +269,9 @@ Optimization:
     validate: [1, 1440]
 DropRecord:
   SaveFolder: ./screenshots
+  RetentionDays:
+    value: 0
+    validate: [0, 3650]
   AzurStatsID: null
   API:
     value: default
@@ -279,6 +282,9 @@ DropRecord:
   CommissionRecord:
     value: do_not
     option: [do_not, save, upload, save_and_upload]
+  CommissionIncomeScreenshot:
+    value: save
+    option: [do_not, save]
   CombatRecord:
     value: do_not
     option: [do_not, save]
@@ -2110,6 +2116,9 @@ EmulatorManagement:
   RestartIntervalHours:
     value: 4
     validate: [1, 24]
+  DeepRestartAfterFailures:
+    value: 0
+    validate: [0, 10]
 EmulatorManager:
   EnableRemoteSSH:
     type: checkbox

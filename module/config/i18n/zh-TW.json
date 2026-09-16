@@ -930,6 +930,10 @@
       "name": "掉落儲存目錄",
       "help": ""
     },
+    "RetentionDays": {
+      "name": "截圖保留天數",
+      "help": "掉落記錄截圖超過該天數的自動刪除\n0 = 不按天數清理（委託收益截圖仍只保留最近 50 張）"
+    },
     "AzurStatsID": {
       "name": "AzurStat ID",
       "help": "上傳至 https://azur-stats.lyoko.io 時，宣告的客戶端 ID\n由隨機字元組成，可隨意修改"
@@ -955,6 +959,12 @@
       "save": "儲存",
       "upload": "上傳",
       "save_and_upload": "儲存並上傳"
+    },
+    "CommissionIncomeScreenshot": {
+      "name": "委託收益截圖",
+      "help": "委託結算時儲存「獲取物品」截圖，供統計頁「檢視截圖」使用\n關閉後收益資料仍然記錄，只是不再儲存圖片",
+      "do_not": "不儲存",
+      "save": "儲存"
     },
     "CombatRecord": {
       "name": "戰鬥掉落截圖",
@@ -6194,6 +6204,10 @@
     "RestartIntervalHours": {
       "name": "多久重啟一次（小時）",
       "help": "隔幾小時重啟一次模擬器。"
+    },
+    "DeepRestartAfterFailures": {
+      "name": "深度重啟：連續失敗幾次後執行",
+      "help": "模擬器連不上、連續重啟失敗達到這個次數後，改成「深度重啟」：結束 MuMu 的全部處理程序（含背景服務與虛擬機）再重新啟動。\n用在裝置較差、反覆重啟都起不來的機器上，是最後的保底手段。\n注意：深度重啟會連帶結束該 MuMu 的所有實例，多開時其他實例會被中斷。\n0 表示停用（只重啟實例，不結束處理程序）。預設 0。"
     }
   },
   "EmulatorManager": {

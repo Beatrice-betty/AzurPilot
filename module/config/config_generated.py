@@ -156,10 +156,12 @@ class GeneratedConfig:
 
     # 配置组 `DropRecord`
     DropRecord_SaveFolder = './screenshots'
+    DropRecord_RetentionDays = 0
     DropRecord_AzurStatsID = None
     DropRecord_API = 'default'  # default, cn_gz_reverse_proxy
     DropRecord_ResearchRecord = 'do_not'  # do_not, save, upload, save_and_upload
     DropRecord_CommissionRecord = 'do_not'  # do_not, save, upload, save_and_upload
+    DropRecord_CommissionIncomeScreenshot = 'save'  # do_not, save
     DropRecord_CombatRecord = 'do_not'  # do_not, save
     DropRecord_OpsiRecord = 'upload'  # do_not, save, upload, save_and_upload
     DropRecord_MeowfficerBuy = 'do_not'  # do_not, save
@@ -1055,6 +1057,7 @@ class GeneratedConfig:
     EmulatorManagement_ScheduledEmulatorRestart = False
     EmulatorManagement_ForceScheduledRestart = False
     EmulatorManagement_RestartIntervalHours = 4
+    EmulatorManagement_DeepRestartAfterFailures = 0
 
     # 配置组 `EmulatorManager`
     EmulatorManager_EnableRemoteSSH = False  # True, False
