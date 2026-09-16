@@ -25,12 +25,12 @@ OpsiScheduling - 智能调度+模块
     - CoinTaskMixin: 黄币补充任务的通用 Mixin 类（供其他任务继承使用）
 """
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from module.config.config import Function, name_to_function
 from module.config.deep import deep_get
 from module.config.time_source import now as current_time
-from module.config.utils import get_os_reset_remain
+from module.config.utils import get_nearest_weekday_date, get_os_next_reset, get_os_reset_remain
 
 from module.logger import logger
 from module.os.map import OSMap
@@ -79,6 +79,9 @@ class CoinTaskMixin:
     STATE_KEY_AP_REPLENISH_ACTIVE = 'ApReplenishActive'
     STATE_KEY_SCHEDULING_MODE = 'SchedulingMode'
     STATE_KEY_MONTH_END_CLEANUP_FIRST_RUN = 'MonthEndCleanupFirstRun'
+    STATE_KEY_STRONGHOLD_NEXT_CHECK = 'StrongholdNextCheck'
+    # 要塞刷新后留出的检查缓冲：刷新瞬间就去查可能扑空，白等一周
+    STRONGHOLD_CHECK_GRACE = timedelta(hours=2)
     SCHEDULING_MODE_COIN_TARGET = 'coin_target'
     SCHEDULING_MODE_ACTION_POINT = 'action_point'
     SCHEDULING_MODE_MONTH_END_CLEANUP = 'month_end_cleanup'
@@ -691,6 +694,68 @@ class CoinTaskMixin:
         
         return enabled_tasks
 
+    def _get_next_stronghold_check_time(self):
+        """
+        获取塞壬要塞下次可能的刷新时间。
+
+        要塞数量有限：每周（服务器周一 0 点）刷新 1 个，每月 1 日随大世界重置
+        再刷新。清除干净后要等到这两个时间点才会有新的，因此取其中较早的一个。
+
+        Returns:
+            datetime.datetime: 下次检查要塞的时间（本地时间）。
+        """
+        next_weekly = get_nearest_weekday_date(0)
+        next_monthly = get_os_next_reset()
+        return min(next_weekly, next_monthly) + self.STRONGHOLD_CHECK_GRACE
+
+    def _postpone_stronghold_check(self, reason):
+        """
+        记录塞壬要塞已清除干净，把下次检查推迟到要塞刷新之后。
+
+        要塞打完就没了，继续搜索只是反复遍历全球地图、拖慢补黄币流程，
+        因此记录时间点，期间直接跳过要塞检查。
+
+        Args:
+            reason (str): 记录原因（仅用于日志）。
+        """
+        next_check = self._get_next_stronghold_check_time()
+        self._set_smart_scheduling_state_value(
+            self.STATE_KEY_STRONGHOLD_NEXT_CHECK,
+            next_check.isoformat(),
+        )
+        logger.info(f'[大世界-智能调度+] {reason}，塞壬要塞检查推迟到 {next_check}')
+
+    def _get_stronghold_check_postpone_time(self):
+        """
+        读取塞壬要塞的下次检查时间。
+
+        Returns:
+            datetime.datetime | None: 仍在推迟中返回该时间；没有记录、记录损坏
+                或已到检查时间则返回 None（到期时顺带清理记录以便重新搜索）。
+        """
+        value = self._get_smart_scheduling_state_value(
+            self.STATE_KEY_STRONGHOLD_NEXT_CHECK
+        )
+        if not value:
+            return None
+
+        try:
+            next_check = datetime.fromisoformat(value)
+        except (TypeError, ValueError):
+            logger.warning(f'[大世界-智能调度+] 塞壬要塞下次检查时间无效: {value}，重新搜索要塞')
+            self._clear_smart_scheduling_state_value(
+                self.STATE_KEY_STRONGHOLD_NEXT_CHECK
+            )
+            return None
+
+        if current_time() >= next_check:
+            self._clear_smart_scheduling_state_value(
+                self.STATE_KEY_STRONGHOLD_NEXT_CHECK
+            )
+            return None
+
+        return next_check
+
     def _handle_coin_task_no_content(self, task_display_name, log_message):
         """
         处理黄币补充任务没有可执行内容的情况。
@@ -1204,7 +1269,19 @@ class OpsiScheduling(CoinTaskMixin, OSMap):
         task_names = '、'.join([self.TASK_NAMES.get(task, task) for task in all_coin_tasks])
         logger.info(f'[大世界-智能调度+] 启用的黄币补充任务: {task_names}')
 
+        skipped_tasks = []
         for task_name in all_coin_tasks:
+            if task_name == self.TASK_NAME_STRONGHOLD:
+                postpone_until = self._get_stronghold_check_postpone_time()
+                if postpone_until is not None:
+                    task_display = self.TASK_NAMES.get(task_name, task_name)
+                    logger.info(
+                        f'[大世界-智能调度+] {task_display}已全部清除，跳过本轮检查，'
+                        f'下次检查 {postpone_until}'
+                    )
+                    skipped_tasks.append(task_display)
+                    continue
+
             if self._run_scheduled_coin_task_once(task_name, meow_ap_preserve):
                 self._notify_coin_task_proxy(
                     yellow_coins,
@@ -1215,7 +1292,10 @@ class OpsiScheduling(CoinTaskMixin, OSMap):
                 )
                 return
 
-        logger.warning('[大世界-智能调度+] 智能调度+启用的黄币补充任务均无可执行内容，结束本轮智能调度+')
+        message = '智能调度+启用的黄币补充任务均无可执行内容'
+        if skipped_tasks:
+            message += f'（本轮跳过: {"、".join(skipped_tasks)}）'
+        logger.warning(f'[大世界-智能调度+] {message}，结束本轮智能调度+')
         self._delay_smart_scheduling_to_server_update('黄币补充任务均无可执行内容')
         self.config.task_stop()
 
