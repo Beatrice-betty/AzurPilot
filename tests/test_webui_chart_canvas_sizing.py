@@ -471,14 +471,16 @@ class TestChartThemePolish(unittest.TestCase):
                     f'{name} 的跌色不是上游的 #26a69a')
 
     def test_series_colors_match_upstream(self):
-        """统计数值/图例的系列色必须等于上游 seriesColors。
+        """统计数值/图例的系列色必须等于上游实际用于绘制的颜色。
 
-        上游：["#64b5f6", "#ce93d8", "#ffd54f", "#22d3ee", "#1565c0"]
-        → 黄币 #ffd54f 紫币 #ce93d8 资产 #22d3ee 海里数 #1565c0。
+        上游 webapp/ap_chart.js 自己就不一致：`seriesColors` 数组里资产写的是
+        #22d3ee（青），但真正画线、画点、提示框用的都是 #81c784（绿）。
+        本仓库统一按「实际绘制色」取值，所以资产是绿色：
+        黄币 #ffd54f 紫币 #ce93d8 资产 #81c784 海里数 #1565c0。
         资产与海里数都是冷色，给反了肉眼很容易漏。
         """
         UPSTREAM = {'--ap-series-1': '#64b5f6', '--ap-series-2': '#ffd54f',
-                    '--ap-series-3': '#ce93d8', '--ap-series-4': '#22d3ee',
+                    '--ap-series-3': '#ce93d8', '--ap-series-4': '#81c784',
                     '--ap-series-5': '#1565c0'}
         for name in ('dark-alas.css', 'light-alas.css',
                      'advanced-material-alas.css',
@@ -488,14 +490,18 @@ class TestChartThemePolish(unittest.TestCase):
                 with self.subTest(theme=name, token=token):
                     self.assertRegex(
                         css, rf'{token}:\s*{want}\b',
-                        f'{name} 的 {token} 不是上游的 {want}')
+                        f'{name} 的 {token} 不是上游实际绘制的 {want}')
         src = (ROOT / 'module/webui/app_stat_action_point.py').read_text(
             encoding='utf-8')
-        for label, token in (('黄币', 'ap-series-2'), ('紫币', 'ap-series-3'),
-                             ('资产', 'ap-series-4'), ('海里数', 'ap-series-5')):
+        for label, token in (('ChartSeriesYellow', 'ap-series-2'),
+                             ('ChartSeriesPurple', 'ap-series-3'),
+                             ('ChartSeriesAsset', 'ap-series-4'),
+                             ('ChartSeriesDistance', 'ap-series-5')):
             with self.subTest(label=label):
                 self.assertRegex(
-                    src, rf'<span>{label}: <b class="ap-value {token}"',
+                    src,
+                    rf'<span>\{{t\(.Gui\.Stat\.{label}.\)\}}: '
+                    rf'<b class="ap-value {token}"',
                     f'{label} 没有用 {token}；与上游配色不符')
 
 
@@ -515,8 +521,14 @@ class TestChartThemePolish(unittest.TestCase):
             '资源统计栏被并进右栏统计栏规则；它会跟着右栏一起被调透。')
         k = css.index('#pywebio-scope-resource_chart {')
         rblk = css[k:css.index('}', k)]
-        self.assertIn('var(--alas-apple-card-bg)', rblk,
+        self.assertIn('var(--alas-card-user-bg)', rblk,
                       '资源统计栏没用自己的基础卡片面令牌。')
+        # 高级材质滑块把卡片面令牌包了一层可覆盖的 --alas-card-user-bg，
+        # 但它必须仍然指向基础卡片面，而不是右栏专用的调透令牌。
+        self.assertRegex(
+            css, r'--alas-card-user-bg:\s*var\(--alas-apple-card-bg\)',
+            '--alas-card-user-bg 不再指向基础卡片面；'
+            '资源统计栏会跟着右栏一起被调透。')
 
     def test_ap_segmented_line_is_emphasised(self):
         """体力红绿分段主线也要加宽。
@@ -625,8 +637,21 @@ class TestChartThemePolish(unittest.TestCase):
                                  f'{name} 缺 .ap-up；最高值的红色提示会丢')
                 self.assertRegex(css, r'\.ap-down\s*\{[^}]*color',
                                  f'{name} 缺 .ap-down；最低值的绿色提示会丢')
-                self.assertRegex(css, r'\.ap-value\s*\{[^}]*filter',
-                                 f'{name} 缺 .ap-value；数值没有加亮')
+                # 数值加亮靠字重。filter 会改变渲染色值，与「数值和曲线严格
+                # 同色」的设计冲突，观感也偏亮偏糊；text-shadow 会让数字发糊。
+                m = re.search(r'\.ap-value\s*\{(.*?)\}', css, re.DOTALL)
+                self.assertIsNotNone(m, f'{name} 缺 .ap-value；数值没有加亮')
+                block = m.group(1)
+                self.assertRegex(
+                    block, r'font-weight\s*:\s*700',
+                    f'{name} 的 .ap-value 没有加粗；数值与正文分不出主次')
+                self.assertNotRegex(
+                    block, r'(?<!-)\bfilter\s*:',
+                    f'{name} 的 .ap-value 用了 filter；它会改变渲染色值，'
+                    '数值与曲线不再严格同色')
+                self.assertNotRegex(
+                    block, r'text-shadow\s*:',
+                    f'{name} 的 .ap-value 用了 text-shadow；数字会发糊')
 
     def test_every_stat_row_has_five_columns(self):
         """统计标注的每一行都必须是 5 个元素，否则列对不齐。

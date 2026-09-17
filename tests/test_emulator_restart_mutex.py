@@ -13,16 +13,21 @@ import inspect
 import json
 import threading
 import unittest
-from unittest.mock import Mock, call, patch
+from unittest.mock import Mock, call, create_autospec, patch
 
 from alas import RESTART_EMULATOR_OP_TIMEOUT, AzurLaneAutoScript
 from module.device.platform import platform_windows
 from module.device.platform.platform_windows import (
     EMULATOR_START_WATCH_TIMEOUTS,
+    MUMU12_DEEP_WAIT_TIMEOUT,
     MUMU12_STOP_WAIT_TIMEOUT,
     PlatformWindows,
 )
 from module.exception import EmulatorNotRunningError, EmulatorOpBusy
+
+
+# autospec 反射整个 Device 类很慢（约 26 秒），复用同一个实例
+_DEVICE_AUTOSPEC = None
 
 
 def make_platform():
@@ -109,22 +114,31 @@ class TestEmulatorOpExclusive(unittest.TestCase):
 
         self.assertFalse(thread.is_alive())
 
-    def test_watch_timeout_grows_across_retries(self):
-        """冷启动可能耗时数分钟：重试的等待时间必须递增，而不是固定 180 秒。"""
+    def test_watch_timeout_follows_the_failure_ladder(self):
+        """连续失败越多等得越久，上限 300 秒。
+
+        好设备 60 秒内就能起来，没必要一上来就等几分钟；持续起不来时才逐级放宽。
+        """
+        cases = [(0, 60), (1, 90), (2, 120), (3, 180), (4, 300), (9, 300)]
+        for failures, expected in cases:
+            with self.subTest(failures=failures):
+                platform = make_platform()
+                platform.emulator_start_watch = Mock(return_value=False)
+
+                self.assertFalse(platform.emulator_start(failures=failures))
+                platform.emulator_start_watch.assert_called_once_with(timeout=expected)
+
+        self.assertEqual(list(EMULATOR_START_WATCH_TIMEOUTS),
+                         sorted(EMULATOR_START_WATCH_TIMEOUTS))
+
+    def test_start_makes_exactly_one_attempt(self):
+        """一轮只试一次，重试交给调度器下一轮——不再在一次调用里连试 3 次。"""
         platform = make_platform()
-        platform.emulator_start_watch = Mock(return_value=False)
+        platform.emulator_start_watch = Mock(return_value=True)
 
-        self.assertFalse(platform.emulator_start())
+        self.assertTrue(platform.emulator_start())
 
-        self.assertEqual(
-            platform.emulator_start_watch.call_args_list,
-            [call(timeout=t) for t in EMULATOR_START_WATCH_TIMEOUTS],
-        )
-        self.assertGreater(len(EMULATOR_START_WATCH_TIMEOUTS), 1)
-        self.assertEqual(
-            list(EMULATOR_START_WATCH_TIMEOUTS),
-            sorted(EMULATOR_START_WATCH_TIMEOUTS),
-        )
+        platform.emulator_start_watch.assert_called_once()
 
 
 def mumu_info(*players):
@@ -365,23 +379,28 @@ class TestDeepRestart(unittest.TestCase):
 
 
 class TestDeepFlagPortability(unittest.TestCase):
-    """`deep` 必须是所有平台都能接的关键字参数。
+    """`deep` 必须是调用链上每一层都能接的关键字参数。
 
-    alas.py 调 emulator_start 时不区分平台，任何平台少了这个参数都会在
-    运行时抛 TypeError。
+    alas.py 调的是 `Device.emulator_start`（转发层），Device 再转发给平台。
+    只检查平台层会漏掉转发层——2026-09-17 正是这样漏掉了 Device 一层，
+    导致 `TypeError: Device.emulator_start() got an unexpected keyword
+    argument 'deep'`，模拟器被关掉后再也起不来，白挂了一晚。
     """
 
-    def test_all_platforms_accept_deep(self):
+    def test_every_layer_of_the_call_chain_accepts_both_params(self):
+        from module.device.device import Device
         from module.device.platform.platform_base import PlatformBase
         from module.device.platform.platform_mac import PlatformMac
         from module.device.platform.platform_windows import PlatformWindows
 
-        for cls in (PlatformBase, PlatformMac, PlatformWindows):
-            with self.subTest(platform=cls.__name__):
+        for cls in (Device, PlatformBase, PlatformMac, PlatformWindows):
+            with self.subTest(layer=cls.__name__):
                 # inspect.signature 会自动跟随 functools.wraps 的 __wrapped__
                 parameters = inspect.signature(cls.emulator_start).parameters
                 self.assertIn('deep', parameters)
                 self.assertIs(False, parameters['deep'].default)
+                self.assertIn('failures', parameters)
+                self.assertEqual(0, parameters['failures'].default)
 
 
 class TestDeepRestartThreshold(unittest.TestCase):
@@ -422,12 +441,15 @@ class TestRestartTimeoutBudget(unittest.TestCase):
         平台侧一旦新增耗时步骤（如"等实例真正关闭"），这条断言就会失败，
         提醒同步调大外层超时。
         """
-        # 每次尝试：_emulator_stop(subprocess timeout=30) + 等确认关闭 + 监视 + 再关一次
-        stop_budget = 30
-        per_attempt = stop_budget * 2 + MUMU12_STOP_WAIT_TIMEOUT
+        # 一次 emulator_start 的最坏耗时（取深度重启路径，它最长）：
+        #   _emulator_stop(subprocess timeout=30)
+        #   + 深度清场（control -v all shutdown ≤60 + 等进程退出 ≤30）
+        #   + 等实例真正关闭
+        #   + 启动监视（阶梯上限）
+        deep_clean_budget = 60 + MUMU12_DEEP_WAIT_TIMEOUT
         platform_budget = (
-            sum(EMULATOR_START_WATCH_TIMEOUTS)
-            + per_attempt * len(EMULATOR_START_WATCH_TIMEOUTS)
+            30 + deep_clean_budget + MUMU12_STOP_WAIT_TIMEOUT
+            + max(EMULATOR_START_WATCH_TIMEOUTS)
         )
 
         self.assertGreaterEqual(RESTART_EMULATOR_OP_TIMEOUT, platform_budget)
@@ -452,6 +474,13 @@ class TestDeviceAutoStartBusyHandling(unittest.TestCase):
 
 
 class TestRestartEmulatorBusyHandling(unittest.TestCase):
+    def setUp(self):
+        # _try_restart_emulator 在 stop 与 start 之间有固定等待，且超过阈值时
+        # 有最长 300 秒的退避等待。这些测试不验证等待行为，打桩掉以免跑满分钟级。
+        patcher = patch('alas.time.sleep')
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def make_script(self):
         script = AzurLaneAutoScript.__new__(AzurLaneAutoScript)
         script.consecutive_adb_offline = 0
@@ -459,10 +488,27 @@ class TestRestartEmulatorBusyHandling(unittest.TestCase):
         script.config.Error_AdbOfflineThreshold = 3
         return script
 
+    @staticmethod
+    def make_device():
+        """用 autospec 而不是裸 Mock：裸 Mock 接受任意参数，会把调用方的
+        参数错误（如传了实现不接受的 deep=）悄悄吞掉——2026-09-17 的事故
+        正是这样漏过测试的。autospec 会按真实签名校验并抛 TypeError。
+
+        autospec 要反射整个 Device 类，创建一次约 26 秒，因此复用同一个
+        实例（每次先 reset 干净）。
+        """
+        global _DEVICE_AUTOSPEC
+        if _DEVICE_AUTOSPEC is None:
+            from module.device.device import Device
+
+            _DEVICE_AUTOSPEC = create_autospec(Device, instance=True)
+        _DEVICE_AUTOSPEC.reset_mock(return_value=True, side_effect=True)
+        return _DEVICE_AUTOSPEC
+
     def test_gives_up_round_when_stop_is_busy(self):
         """上一轮启动仍在进行时，本轮不能去 stop——那正是打断启动的元凶。"""
         script = self.make_script()
-        device = Mock()
+        device = self.make_device()
         device.emulator_stop.side_effect = EmulatorOpBusy('busy')
         script.__dict__['device'] = device
 
@@ -471,7 +517,7 @@ class TestRestartEmulatorBusyHandling(unittest.TestCase):
 
     def test_gives_up_round_when_start_is_busy(self):
         script = self.make_script()
-        device = Mock()
+        device = self.make_device()
         device.emulator_start.side_effect = EmulatorOpBusy('busy')
         script.__dict__['device'] = device
 
@@ -481,10 +527,40 @@ class TestRestartEmulatorBusyHandling(unittest.TestCase):
     def test_returns_true_and_resets_counter_when_restart_succeeds(self):
         script = self.make_script()
         script.consecutive_adb_offline = 2
-        script.__dict__['device'] = Mock()
+        script.__dict__['device'] = self.make_device()
 
         self.assertTrue(script._try_restart_emulator())
         self.assertEqual(0, script.consecutive_adb_offline)
+
+    def test_passes_deep_flag_matching_the_threshold(self):
+        """未达阈值时必须以 deep=False 调用——参数名写错会在这里炸出来。"""
+        script = self.make_script()
+        script.consecutive_adb_offline = 1
+        device = self.make_device()
+        script.__dict__['device'] = device
+
+        self.assertTrue(script._try_restart_emulator())
+        self.assertIs(False, device.emulator_start.call_args.kwargs['deep'])
+
+    def test_passes_deep_true_after_threshold(self):
+        script = self.make_script()
+        script.consecutive_adb_offline = 5
+        script.config.EmulatorManagement_DeepRestartAfterFailures = 3
+        device = self.make_device()
+        script.__dict__['device'] = device
+
+        self.assertTrue(script._try_restart_emulator())
+        self.assertIs(True, device.emulator_start.call_args.kwargs['deep'])
+
+    def test_passes_failure_count_for_the_watch_ladder(self):
+        """已连续失败次数要透传给平台，否则等待时间永远停在第一档 60 秒。"""
+        script = self.make_script()
+        script.consecutive_adb_offline = 4  # 本次调用开头会 +1，故本次之前失败过 4 次
+        device = self.make_device()
+        script.__dict__['device'] = device
+
+        self.assertTrue(script._try_restart_emulator())
+        self.assertEqual(4, device.emulator_start.call_args.kwargs['failures'])
 
 
 if __name__ == '__main__':

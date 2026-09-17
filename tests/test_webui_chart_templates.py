@@ -14,12 +14,16 @@ from pathlib import Path
 
 WEBAPP = Path(__file__).resolve().parents[1] / 'webapp'
 
-# 模板声明的占位符（与调用处 .format(...) 的关键字保持一致）
+# 模板声明的占位符（与 module/webui/app_stat_action_point.py 里
+# `_render_ap_chart_content()` 的 .format(...) 关键字保持一致）。
+# 多语言适配把面板文字改成了 lbl_* / panel_title，由调用方用 t() 填进来。
 TEMPLATES = {
     'ap_chart_panel.html': {
-        'chart_id', 'view_title', 'ap_cur', 'change_color', 'change_sign',
-        'ap_change', 'ap_max', 'ap_min', 'ap_avg', 'coins_stats_html',
-        'coins_legend_html', 'detail_controls_display',
+        'chart_id', 'panel_title', 'lbl_ap', 'lbl_change', 'lbl_max',
+        'lbl_min', 'lbl_mean', 'lbl_ap_series', 'lbl_reset',
+        'ap_cur', 'change_color', 'change_sign', 'ap_change', 'ap_max',
+        'ap_min', 'ap_avg', 'detail_controls_display',
+        'coins_stats_html', 'coins_legend_html',
     },
     'resource_chart.html': {
         'chart_id', 'title', 'stats_html', 'legend_html',
