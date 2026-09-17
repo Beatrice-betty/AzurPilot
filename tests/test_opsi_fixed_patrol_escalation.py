@@ -571,6 +571,21 @@ class TestDeviceOtherFleets(unittest.TestCase):
         self.assertEqual(stub.fleet_sets[-1], 1)
 
 
+class TestOtherFleetFallbackHelpersExist(unittest.TestCase):
+    """换队兜底路径调用的内部方法必须在 OSMap 上真实存在。
+
+    历史事故：`_radar_question_to_local` 在一次重构里丢了 `def` 行，方法体留在
+    原处，成了 `_move_fleet_to_patrol` 里 `return` 之后的死代码。这一路语法合法、
+    ruff 检查不出来，而本文件的 DeviceStub 自带同名方法，所以单测照样全绿——
+    线上却每次走到「换队后视野识别不到装置/明石，回退用雷达问号」都抛
+    AttributeError，任务判为未处理异常，直接重启游戏。
+    """
+
+    def test_radar_question_to_local_is_a_real_method(self):
+        self.assertTrue(hasattr(OSMap, '_radar_question_to_local'))
+        self.assertTrue(callable(OSMap._radar_question_to_local))
+
+
 class TestMeowNoStepByStepChain(unittest.TestCase):
     """分步检索链整个删掉：扫雷达只归强制移动，避免同一轮把 1~4 队雷达扫两遍。
 
