@@ -1006,7 +1006,7 @@
   "Backup": {
     "_info": {
       "name": "每日备份喵",
-      "help": "每天第一次启动调度器的时候，把数据库和用户配置备份到项目上一层目录的 AzurPilot_Data_Backup 文件夹里喵。"
+      "help": "每天第一次启动调度器的时候，把数据库和用户配置备份到项目根目录的 AzurPilot_Data_Backup 文件夹里喵。"
     },
     "Enable": {
       "name": "启用每日备份喵",

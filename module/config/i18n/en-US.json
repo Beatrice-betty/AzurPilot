@@ -1006,7 +1006,7 @@
   "Backup": {
     "_info": {
       "name": "Daily backup",
-      "help": "Backs up the database and user configs when the scheduler starts for the first time each day. Backups are stored in the AzurPilot_Data_Backup folder next to the project directory."
+      "help": "Backs up the database and user configs when the scheduler starts for the first time each day. Backups are stored in the AzurPilot_Data_Backup folder inside the project directory."
     },
     "Enable": {
       "name": "Enable daily backup",
