@@ -10,7 +10,7 @@ from module.logger import logger
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 CONFIG_DIR = ROOT_DIR / 'config'
-BACKUP_ROOT = ROOT_DIR.parent / 'AzurPilot_Data_Backup'
+BACKUP_ROOT = ROOT_DIR / 'AzurPilot_Data_Backup'
 
 BACKUP_KEEP_DAYS = 7
 
