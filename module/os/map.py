@@ -2391,6 +2391,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
 
         return moved
 
+    def _radar_question_to_local(self):
         """把当前舰队雷达上的问号换算成本地视野里可点击的格子。
 
         明石/记录塔/装置刷新在舰队模型附近时图标会被挡住，视图的模板匹配
