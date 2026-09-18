@@ -1006,7 +1006,7 @@
   "Backup": {
     "_info": {
       "name": "每日備份",
-      "help": "每天首次啟動排程器時，自動備份資料庫與使用者設定，備份檔案存放在專案上層目錄的 AzurPilot_Data_Backup 資料夾。"
+      "help": "每天首次啟動排程器時，自動備份資料庫與使用者設定，備份檔案存放在專案根目錄的 AzurPilot_Data_Backup 資料夾。"
     },
     "Enable": {
       "name": "啟用每日備份",
