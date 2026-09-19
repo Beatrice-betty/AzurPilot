@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../api/client'
+import { translateCurrentUi } from '../i18n'
 import { EditQueue } from './EditQueue'
 import { prepareValue } from './editors'
 
@@ -54,7 +55,7 @@ describe('即时配置队列', () => {
     await queue.flush()
     expect(queue.getSnapshot().edits.date).toMatchObject({value: '2026-', status: 'error'})
     expect(queue.getSnapshot().edits.enabled.status).toBe('saved')
-    await expect(queue.settled()).rejects.toThrow(/尚未全部保存/)
+    await expect(queue.settled()).rejects.toThrow(translateCurrentUi('edit.unsaved'))
     queue.change('date', '2026-09-14 12:00:00')
     await queue.settled()
     expect(queue.getSnapshot().edits.date.status).toBe('saved')
@@ -109,7 +110,7 @@ describe('即时配置队列', () => {
     queue.change('serial', 'retained')
     await queue.settled()
     expect(send).toHaveBeenCalledWith('serial', 'retained')
-    expect(queue.getSnapshot().storageError).toContain('保持页面打开')
+    expect(queue.getSnapshot().storageError).toBe(translateCurrentUi('edit.draftPersistError'))
   })
 })
 
