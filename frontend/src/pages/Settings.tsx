@@ -63,7 +63,7 @@ export function Settings() {
           </div>
         </div>
         {theme === 'minimal' && <ThemePreferences/>}
-        <BackgroundPreferences/>
+        {(theme === 'light' || theme === 'dark') && <BackgroundPreferences/>}
         <div className="field-row">
           <div className="field-label">
             <label htmlFor="ui-language">{ui('settings.language')}</label>

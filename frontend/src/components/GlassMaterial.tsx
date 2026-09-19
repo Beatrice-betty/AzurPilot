@@ -12,5 +12,5 @@ export function GlassMaterial() {
 
 export function ThemeWallpaper() {
   const {theme} = useApp()
-  return theme === 'minimal' ? null : <Suspense fallback={null}><Wallpaper/></Suspense>
+  return (theme === 'light' || theme === 'dark') ? <Suspense fallback={null}><Wallpaper/></Suspense> : null
 }
