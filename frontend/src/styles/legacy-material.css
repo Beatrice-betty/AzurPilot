@@ -1,0 +1,14 @@
+/* 旧版「高级材质」主题：与新前端默认的 Apple 玻璃风同源，只换配色与圆角。
+   import 顺序照 classic.css，palette 放最后才能覆盖 apple.css 的变量值。 */
+@import './tokens.css';
+@import './layout.css';
+@import './components.css';
+@import './insights.css';
+@import './home.css';
+@import './apple.css';
+@import './dev-effects.css';
+@import './dev.css';
+@import './theme-system.css';
+@import './forms.css';
+@import './legacy-material-palette.css';
+@import './legacy-fonts.css';

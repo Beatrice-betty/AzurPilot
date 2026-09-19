@@ -1,9 +1,18 @@
 import { palettes, paletteColors, paletteTokens, readCustomPalettes, type Palette, type ColorMode, type ResolvedMode, type CustomPalette } from './palettes'
 export type Theme = 'light' | 'dark' | 'minimal'
+  | 'legacy-light' | 'legacy-dark'
+  | 'legacy-material' | 'legacy-material-dark'
 export { palettes } from './palettes'
 export type { Palette, ColorMode, CustomPalette } from './palettes'
 type Preference = {theme: Theme; palette: Palette; colorMode: ColorMode; customPalettes: CustomPalette[]}
 const defaults: Preference = {theme: 'light', palette: 'ocean', colorMode: 'auto', customPalettes: []}
+
+/** 走 Apple 玻璃/壁纸/装饰动画一档的主题；旧版浅色与深色是朴素风格，不在此列。 */
+const MATERIAL_THEMES: readonly Theme[] = ['light', 'dark', 'legacy-material', 'legacy-material-dark']
+export const usesMaterial = (theme: Theme) => MATERIAL_THEMES.includes(theme)
+
+const VALID_THEMES: readonly string[] = ['light', 'dark', 'minimal',
+  'legacy-light', 'legacy-dark', 'legacy-material', 'legacy-material-dark']
 
 export function readThemePreference(): Preference {
   try {
@@ -12,7 +21,7 @@ export function readThemePreference(): Preference {
     const colorMode = localStorage.getItem('azurpilot.color-mode')
     const customPalettes = readCustomPalettes(localStorage.getItem('azurpilot.custom-palettes'))
     return {
-      theme: theme === 'dark' || theme === 'minimal' ? theme : 'light',
+      theme: VALID_THEMES.includes(theme ?? '') ? theme as Theme : 'light',
       palette: palettes.some(item => item === palette) || customPalettes.some(item => item.id === palette) ? palette as Palette : 'ocean',
       colorMode: colorMode === 'light' || colorMode === 'dark' ? colorMode : 'auto',
       customPalettes,
@@ -67,15 +76,30 @@ function systemModeChanged() {
   listeners.forEach(listener => listener())
 }
 
+/** Vite 要求 import 路径静态可分析，所以用显式映射表而不是变量拼接。 */
+const skinLoaders = {
+  minimal: () => import('../styles/minimal.css?inline'),
+  legacy: () => import('../styles/legacy.css?inline'),
+  'legacy-material': () => import('../styles/legacy-material.css?inline'),
+  classic: () => import('../styles/classic.css?inline'),
+} as const
+type Skin = keyof typeof skinLoaders
+
+/** 浅色与深色各自是独立主题值，但共用同一份 CSS：明暗靠 data-theme 选择器切换。 */
+function skinFor(theme: Theme): Skin {
+  if (theme === 'minimal') return 'minimal'
+  if (theme === 'legacy-light' || theme === 'legacy-dark') return 'legacy'
+  if (theme === 'legacy-material' || theme === 'legacy-material-dark') return 'legacy-material'
+  return 'classic'
+}
+
 /** 样式作为惰性文本模块加载，切换时替换唯一节点，避免旧主题规则驻留。 */
 export async function applyTheme(next: Preference) {
   const request = ++revision
-  const skin = next.theme === 'minimal' ? 'minimal' : 'classic'
+  const skin = skinFor(next.theme)
   let css: string | undefined
   if (activeSkin !== skin) {
-    const module = skin === 'minimal'
-      ? await import('../styles/minimal.css?inline')
-      : await import('../styles/classic.css?inline')
+    const module = await skinLoaders[skin]()
     css = module.default
   }
   // 快速切换时只提交最后一次选择，较早返回的请求不能覆盖新主题。
@@ -90,15 +114,17 @@ export async function applyTheme(next: Preference) {
     style.textContent = css
     activeSkin = skin
   }
+  // 外部 theme.css 是材质主题的用户定制入口；朴素主题（简约、旧版浅色/深色）不加载。
   const custom = document.querySelector('link[data-azurpilot-theme]')
-  if (skin === 'minimal') custom?.remove()
-  else if (!custom) {
-    const link = document.createElement('link')
-    link.rel = 'stylesheet'
-    link.href = `${import.meta.env.BASE_URL}theme.css`
-    link.dataset.azurpilotTheme = 'user'
-    document.head.appendChild(link)
-  }
+  if (usesMaterial(next.theme)) {
+    if (!custom) {
+      const link = document.createElement('link')
+      link.rel = 'stylesheet'
+      link.href = `${import.meta.env.BASE_URL}theme.css`
+      link.dataset.azurpilotTheme = 'user'
+      document.head.appendChild(link)
+    }
+  } else custom?.remove()
   const root = document.documentElement
   if (root.dataset.theme !== next.theme) root.dataset.theme = next.theme
   if (root.dataset.palette !== next.palette) root.dataset.palette = next.palette
