@@ -15,7 +15,11 @@ from module.api.protocol import ApiError
 from module.config.transaction import config_transaction
 
 ROOT = Path(__file__).resolve().parents[2]
-NAME = re.compile(r'[A-Za-z][A-Za-z0-9_-]{0,63}\Z')
+# 实例名会成为配置文件名，字符集必须避开路径分隔符与系统保留字符。
+# 汉字（扩展 A、基本区、兼容区）允许出现在名称任意位置，其余字符仍限定为字母、数字、
+# 短横线和下划线，保证名称既能在文件系统中安全落地，也能原样放进前端路由。
+HAN = r'\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff'
+NAME = re.compile(r'[A-Za-z' + HAN + r'][A-Za-z0-9_' + HAN + r'\-]{0,63}\Z')
 RESERVED = {'template', 'deploy', 'backup', 'con', 'prn', 'aux', 'nul',
             *(f'com{i}' for i in range(1, 10)), *(f'lpt{i}' for i in range(1, 10))}
 
@@ -45,7 +49,7 @@ class ConfigService:
 
     def path(self, name, exists=True):
         if not isinstance(name, str) or not NAME.fullmatch(name) or name.lower() in RESERVED:
-            raise ApiError('INVALID_PARAMS', '实例名须以英文字母开头，仅包含字母、数字、短横线或下划线')
+            raise ApiError('INVALID_PARAMS', '实例名须以字母或汉字开头，仅包含字母、数字、汉字、短横线或下划线')
         path = self.directory / f'{name}.json'
         if path.is_symlink() or path.resolve().parent != self.directory.resolve():
             raise ApiError('INVALID_PARAMS', '配置路径无效')

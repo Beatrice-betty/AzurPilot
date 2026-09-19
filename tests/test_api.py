@@ -57,6 +57,19 @@ class ConfigApiTests(unittest.TestCase):
             with self.subTest(name=name), self.assertRaises(ApiError):
                 self.configs.path(name, exists=False)
 
+    def test_accepts_chinese_instance_names(self):
+        """汉字可出现在名称任意位置，首字符仍须是字母或汉字。"""
+        # 真实落盘一个汉字实例名，确认创建、列举、读取都按原样往返。
+        self.configs.create('测试实例')
+        self.assertIn('测试实例', self.configs.names())
+        self.assertEqual('测试实例', self.configs.get('测试实例')['instance'])
+        for name in ['测试', 'alas测试', '测试-2']:
+            with self.subTest(name=name):
+                self.configs.path(name, exists=False)
+        for name in ['1测试', '-测试', '测 试', '测试.1', '测试#1', 'テスト']:
+            with self.subTest(name=name), self.assertRaises(ApiError):
+                self.configs.path(name, exists=False)
+
     def test_patch_merges_fields_from_stale_revision(self):
         original = self.configs.get('testpilot')
         changed = self.configs.patch('testpilot', original['revision'], [ConfigChange(path='Alas.Emulator.Serial', value='127.0.0.1:5555')])
