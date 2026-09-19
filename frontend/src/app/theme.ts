@@ -1,18 +1,17 @@
 import { palettes, paletteColors, paletteTokens, readCustomPalettes, type Palette, type ColorMode, type ResolvedMode, type CustomPalette } from './palettes'
 export type Theme = 'light' | 'dark' | 'minimal'
   | 'legacy-light' | 'legacy-dark'
-  | 'legacy-material' | 'legacy-material-dark'
 export { palettes } from './palettes'
 export type { Palette, ColorMode, CustomPalette } from './palettes'
 type Preference = {theme: Theme; palette: Palette; colorMode: ColorMode; customPalettes: CustomPalette[]}
 const defaults: Preference = {theme: 'light', palette: 'ocean', colorMode: 'auto', customPalettes: []}
 
 /** 走 Apple 玻璃/壁纸/装饰动画一档的主题；旧版浅色与深色是朴素风格，不在此列。 */
-const MATERIAL_THEMES: readonly Theme[] = ['light', 'dark', 'legacy-material', 'legacy-material-dark']
+const MATERIAL_THEMES: readonly Theme[] = ['light', 'dark']
 export const usesMaterial = (theme: Theme) => MATERIAL_THEMES.includes(theme)
 
 const VALID_THEMES: readonly string[] = ['light', 'dark', 'minimal',
-  'legacy-light', 'legacy-dark', 'legacy-material', 'legacy-material-dark']
+  'legacy-light', 'legacy-dark']
 
 export function readThemePreference(): Preference {
   try {
@@ -80,7 +79,6 @@ function systemModeChanged() {
 const skinLoaders = {
   minimal: () => import('../styles/minimal.css?inline'),
   legacy: () => import('../styles/legacy.css?inline'),
-  'legacy-material': () => import('../styles/legacy-material.css?inline'),
   classic: () => import('../styles/classic.css?inline'),
 } as const
 type Skin = keyof typeof skinLoaders
@@ -89,7 +87,6 @@ type Skin = keyof typeof skinLoaders
 function skinFor(theme: Theme): Skin {
   if (theme === 'minimal') return 'minimal'
   if (theme === 'legacy-light' || theme === 'legacy-dark') return 'legacy'
-  if (theme === 'legacy-material' || theme === 'legacy-material-dark') return 'legacy-material'
   return 'classic'
 }
 

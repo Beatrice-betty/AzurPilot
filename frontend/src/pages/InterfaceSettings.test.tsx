@@ -85,17 +85,9 @@ describe('界面设置页自定义背景显示逻辑', () => {
     }
   })
 
-  it('旧版高级材质与经典主题一样渲染自定义背景', () => {
-    for (const theme of ['legacy-material', 'legacy-material-dark'] as const) {
-      const html = render(theme)
-      expect(html).toContain('自定义背景')
-      expect(html).not.toContain('配色方案')
-    }
-  })
-
-  it('主题下拉列出全部七个主题', () => {
+  it('主题下拉列出全部五个主题', () => {
     const html = render('light')
-    for (const label of ['浅色', '深色', '简约', '旧版·浅色', '旧版·深色', '旧版·高级材质', '旧版·高级材质（深色）']) {
+    for (const label of ['浅色', '深色', '简约', '旧版·浅色', '旧版·深色']) {
       expect(html).toContain(label)
     }
   })
