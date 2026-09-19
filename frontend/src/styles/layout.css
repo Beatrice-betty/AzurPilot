@@ -114,7 +114,7 @@ main {padding: 32px 32px 16px; max-width: 1600px; width: 100%; margin: 0 auto; f
 .mobile-toggle, .mobile-close, .mobile-rail-toggle, .mobile-rail-close {display: none !important}
 .login-page {min-height: var(--viewport-height); display: grid; grid-template-columns: 1fr 1fr; background: var(--surface)}
 .login-art {background: #142d3a; color: #72c6b4; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 60px; position: relative; overflow: hidden}
-.login-art::before {content: ''; position: absolute; inset: -50%; opacity: .14; background: repeating-radial-gradient(circle at center, transparent 0, transparent 70px, #77d8c0 71px, transparent 72px)}
+
 .login-art > span {font-size: 15px; letter-spacing: 4px; color: #bdd2d8}
 .login-card {width: 360px; max-width: calc(100% - 40px); margin: auto; display: flex; flex-direction: column; gap: 18px}
 .login-card .brand-mark {background: var(--navy); border-radius: 10px; margin-bottom: 20px; width: 48px; height: 48px}

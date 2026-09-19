@@ -48,6 +48,10 @@ const mockContext: AppContextValue = {
   setDevMode: () => {},
   theme: 'light',
   setTheme: () => {},
+  colorMode: 'auto', resolvedMode: 'light', setColorMode: () => {},
+  customPalettes: [], saveCustomPalette: () => {}, deleteCustomPalette: () => {},
+  palette: 'ocean',
+  setPalette: () => {},
   language: 'zh-CN',
   setLanguage: () => {},
 }

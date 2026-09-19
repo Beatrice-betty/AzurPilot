@@ -39,17 +39,22 @@ export function StatisticsChart({series}: {series: StatSeries[]}) {
     function render() {
       const colors = getComputedStyle(document.documentElement)
       const text = colors.getPropertyValue('--text').trim() || '#82929f'
+      const minimal = document.documentElement.dataset.theme === 'minimal'
+      const primary = minimal ? colors.getPropertyValue('--accent').trim() : '#159b88'
+      const secondary = minimal ? colors.getPropertyValue('--secondary').trim() : '#de7861'
+      const surface = colors.getPropertyValue('--surface').trim()
+      const border = colors.getPropertyValue('--border').trim()
       chart.setOption({
         animation: false, textStyle: {color: text, fontFamily: 'Microsoft YaHei, sans-serif'},
         grid: {left: 65, right: 30, top: 65, bottom: 85},
-        tooltip: {trigger: 'axis', confine: true, renderMode: 'richText', axisPointer: {type: 'cross'}},
+        tooltip: {trigger: 'axis', confine: true, renderMode: 'richText', axisPointer: {type: 'cross'}, ...(minimal ? {backgroundColor: surface, borderColor: border, textStyle: {color: text}, extraCssText: '', shadowBlur: 0} : {})},
         toolbox: {right: 20, feature: {dataZoom: {yAxisIndex: 'none', title: {zoom: ui('stats.toolboxZoom'), back: ui('stats.toolboxBack')}}, restore: {title: ui('stats.toolboxRestore')}, saveAsImage: {title: ui('stats.toolboxSave'), name: current.label, pixelRatio: 2}}},
         xAxis: mode === 'candlestick' ? {type: 'category', data: buckets.map(item => item.time), axisLabel: {hideOverlap: true}} : {type: 'time', axisLabel: {hideOverlap: true}},
         yAxis: {type: 'value', scale: true, splitLine: {lineStyle: {color: colors.getPropertyValue('--border').trim()}}},
-        dataZoom: [{type: 'inside', zoomOnMouseWheel: 'ctrl'}, {type: 'slider', bottom: 16, height: 26}],
+        dataZoom: [{type: 'inside', zoomOnMouseWheel: 'ctrl'}, {type: 'slider', bottom: 16, height: 26, ...(minimal ? {backgroundColor: surface, fillerColor: colors.getPropertyValue('--accent-soft').trim(), borderColor: border, dataBackground: {lineStyle: {color: secondary, opacity: 1}, areaStyle: {color: surface, opacity: 1}}, selectedDataBackground: {lineStyle: {color: primary, opacity: 1}, areaStyle: {color: colors.getPropertyValue('--accent-soft').trim(), opacity: 1}}, handleStyle: {color: primary, borderColor: primary}, moveHandleStyle: {color: secondary}} : {})}],
         series: [{name: current.label, type: mode === 'candlestick' ? 'candlestick' : 'line',
           showSymbol: points.length < 80, symbolSize: 5, connectNulls: false,
-          lineStyle: {width: 2}, itemStyle: mode === 'candlestick' ? {color: '#159b88', color0: '#de7861', borderColor: '#159b88', borderColor0: '#de7861'} : {color: '#159b88'},
+          lineStyle: {width: 2}, itemStyle: mode === 'candlestick' ? {color: primary, color0: secondary, borderColor: primary, borderColor0: secondary} : {color: primary},
           data: buckets.map(item => mode === 'candlestick' ? [item.open, item.close, item.low, item.high] : [new Date(item.time.replace(' ', 'T')).getTime(), item.close]),
         }],
       }, true)
@@ -58,7 +63,7 @@ export function StatisticsChart({series}: {series: StatSeries[]}) {
     const observer = new ResizeObserver(() => chart.resize())
     observer.observe(element.current)
     const theme = new MutationObserver(render)
-    theme.observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme']})
+    theme.observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme', 'data-palette', 'data-color-mode', 'style']})
     return () => {observer.disconnect(); theme.disconnect(); chart.dispose()}
   }, [points, buckets, mode, current.label, language, ui])
   return <section className={`panel statistics-chart ${expanded ? 'chart-expanded' : ''}`}>

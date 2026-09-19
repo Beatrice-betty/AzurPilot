@@ -8,6 +8,7 @@ import { ErrorBox, Loading, PageTitle } from '../components/ui'
 import { editor, prepareValue } from '../config/editors'
 import { EditStatus } from '../components/EditStatus'
 import { FieldInput } from '../components/FieldInput'
+import { ThemePreferences } from '../components/ThemePreferences'
 
 export function Settings() {
   const {theme, setTheme, language, setLanguage, t, ui} = useApp()
@@ -56,9 +57,11 @@ export function Settings() {
             <Select id="ui-theme" value={theme} onChange={event => setTheme(event.target.value as typeof theme)}>
               <option value="light">{ui('settings.themeLight')}</option>
               <option value="dark">{ui('settings.themeDark')}</option>
+              <option value="minimal">{ui('settings.themeMinimal')}</option>
             </Select>
           </div>
         </div>
+        {theme === 'minimal' && <ThemePreferences/>}
         <div className="field-row">
           <div className="field-label">
             <label htmlFor="ui-language">{ui('settings.language')}</label>

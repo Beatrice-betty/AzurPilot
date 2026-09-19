@@ -16,7 +16,7 @@ function DevField({id, label, help, multiline = false, children}: {id: string; l
 }
 
 export function DevControls() {
-  const {devMode, setDevMode, notify, ui} = useApp()
+  const {devMode, setDevMode, notify, ui, theme} = useApp()
   const navigate = useNavigate()
   const [text, setText] = useState('AzurPilot')
   const [number, setNumber] = useState(25548)
@@ -53,7 +53,7 @@ export function DevControls() {
       <span className="small-label">{ui('developer.only')}</span>
     </section>
 
-    <section className="panel config-group">
+    {theme !== 'minimal' && <section className="panel config-group">
       <div className="panel-heading"><div><Sparkles size={18}/><h2 aria-label={ui('developer.visualLab')} data-text={ui('developer.visualLab')}>{ui('developer.visualLab')}</h2></div><span className="small-label">{ui('developer.liveTuning')}</span></div>
       <div className="dev-effect-lab">
         <div className="dev-effect-stage">
@@ -79,7 +79,7 @@ export function DevControls() {
       <div className="dev-blur-presets">
         {[0, 6, 12, 18, 24, 32].map(value => <div key={value} className="dev-blur-preset-wrap"><div className="dev-blur-preset-bg"><div style={{backdropFilter: `blur(${value}px)`, WebkitBackdropFilter: `blur(${value}px)`}}>{ui('developer.blur')} {value}px</div></div><span>{value === 0 ? ui('developer.blurNone') : value <= 12 ? ui('developer.blurLight') : value <= 24 ? ui('developer.blurMedium') : ui('developer.blurHeavy')}</span></div>)}
       </div>
-    </section>
+    </section>}
 
     <section className="panel config-group">
       <div className="panel-heading"><div><Layers3 size={18}/><h2 aria-label={ui('developer.layers')} data-text={ui('developer.layers')}>{ui('developer.layers')}</h2></div></div>
