@@ -86,6 +86,26 @@ def name_to_function(name):
     return function
 
 
+def resolve_ocr_device(backend, device):
+    """按后端和当前平台解析 OCR 设备选择，不修改配置。"""
+    if device == 'auto':
+        if backend == 'onnxruntime':
+            if sys.platform == 'darwin' and platform.machine() == 'arm64':
+                return 'ane'
+            if sys.platform == 'win32':
+                # Windows ML 自行筛选 NPU、独显和 CPU。
+                return 'auto'
+            return 'gpu' if is_good_gpu() else 'cpu'
+        from module.ocr.ncnn_ocr import has_ncnn_vulkan_gpu
+        return 'gpu' if has_ncnn_vulkan_gpu() else 'cpu'
+
+    if backend == 'ncnn' and device in {
+        'qnn_npu', 'openvino_npu', 'openvino_gpu', 'openvino_cpu',
+    }:
+        return 'cpu'
+    return device
+
+
 class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher):
     """碧蓝航线自动化配置管理器。
 
@@ -268,28 +288,7 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
 
     @property
     def ocr_device(self) -> str:
-        val = self.Optimization_OcrDevice
-        if val == 'auto':
-            if self.ocr_backend == 'onnxruntime':
-                if sys.platform == 'darwin' and platform.machine() == 'arm64':
-                    return 'ane'
-                if sys.platform == 'win32':
-                    # Windows ML 会自行筛选 NPU、独显和 CPU，不应仅以显存决定是否尝试。
-                    return 'auto'
-                return 'gpu' if is_good_gpu() else 'cpu'
-            else:
-                # ncnn 后端：检查 Vulkan GPU 可用性
-                from module.ocr.ncnn_ocr import has_ncnn_vulkan_gpu
-                return 'gpu' if has_ncnn_vulkan_gpu() else 'cpu'
-
-        if self.ocr_backend == 'ncnn' and val in {
-            'qnn_npu',
-            'openvino_npu',
-            'openvino_gpu',
-            'openvino_cpu',
-        }:
-            return 'cpu'
-        return val
+        return resolve_ocr_device(self.ocr_backend, self.Optimization_OcrDevice)
 
     @property
     def hoarding(self):
