@@ -147,7 +147,7 @@ class ConfigService:
         # 存储区禁止编辑内容，但允许通过同一配置事务显式清空。
         if field.get('type') == 'storage' and field.get('display') != 'hide' and type(value) is dict and not value:
             return parts
-        if not field or field.get('display') in ('hide', 'disabled', 'readonly', 'display') or field.get('type') in ('storage', 'stored', 'state', 'lock'):
+        if not field or field.get('display') in ('hide', 'disabled', 'readonly') or field.get('type') in ('storage', 'stored', 'state', 'lock'):
             raise ApiError('READ_ONLY', f'参数不存在或不允许修改：{path}')
         default, kind = field.get('value'), field.get('type')
         options = field.get('option')
