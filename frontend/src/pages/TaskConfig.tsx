@@ -131,7 +131,7 @@ export function TaskConfig() {
                   const value = edit ? edit.value : config.values[task]?.[group]?.[arg] ?? field.value
                   const label = t(`${group}.${arg}.name`)
                   const help = t(`${group}.${arg}.help`)
-                  const readonly = ['disabled', 'readonly', 'display'].includes(field.display ?? '') || ['storage', 'stored', 'state', 'lock'].includes(field.type)
+                  const readonly = ['disabled', 'readonly'].includes(field.display ?? '') || ['storage', 'stored', 'state', 'lock'].includes(field.type)
                   const restrictedLua = field.mode === 'restricted_lua'
                   const shopMode = group === 'ShopAdvanced' && arg === 'Mode'
                   // 「立刻运行」只对每个任务的调度时间有意义，其他时间字段（如仪表盘记录时间）不显示。

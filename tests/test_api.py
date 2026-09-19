@@ -111,6 +111,15 @@ class ConfigApiTests(unittest.TestCase):
                 self.configs.validate(path, True)
             self.assertEqual('READ_ONLY', context.exception.code)
 
+    def test_display_fields_are_editable_within_options(self):
+        for path in ['GemsFarming.Fleet.FleetOrder', 'ThreeOilLowCost.Fleet.FleetOrder']:
+            with self.subTest(path=path):
+                parts = self.configs.validate(path, 'fleet1_standby_fleet2_all')
+                self.assertEqual(path.split('.'), parts)
+                with self.assertRaises(ApiError) as context:
+                    self.configs.validate(path, 'fleet1_mob_fleet2_boss')
+                self.assertEqual('INVALID_PARAMS', context.exception.code)
+
     def test_storage_can_only_be_cleared(self):
         import json
         path = self.configs.path('testpilot')

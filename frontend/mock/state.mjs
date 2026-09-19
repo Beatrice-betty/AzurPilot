@@ -144,7 +144,7 @@ function validateField(path, value) {
   const field = parts.length === 3 && parts.reduce((node, key) => Object.hasOwn(node ?? {}, key) ? node[key] : undefined, args)
   if (!field) fail('INVALID_PARAMS', '配置项不存在')
   if (field.type === 'storage' && field.display !== 'hide' && value !== null && typeof value === 'object' && !Array.isArray(value) && !Object.keys(value).length) return parts
-  if (['hide', 'disabled', 'readonly', 'display'].includes(field.display) || ['storage', 'stored', 'state', 'lock'].includes(field.type)) fail('READ_ONLY', '此配置项不可修改')
+  if (['hide', 'disabled', 'readonly'].includes(field.display) || ['storage', 'stored', 'state', 'lock'].includes(field.type)) fail('READ_ONLY', '此配置项不可修改')
   if (field.type === 'multiselect') {
     if (!Array.isArray(value) || value.some(item => !field.option?.includes(item)) || new Set(value).size !== value.length) fail('INVALID_PARAMS', '多选项无效')
     return parts
