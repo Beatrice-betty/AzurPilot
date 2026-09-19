@@ -146,7 +146,8 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 @media (max-width: 950px) {
   .topbar, .app-shell.with-rail .topbar {width: 100%; padding: 0 14px}
   .sidebar, .right-rail {top: 0; height: var(--viewport-height); z-index: 100}
-  .sidebar-brand .mobile-close {top: 10px}
+  .sidebar-brand {padding: 0}
+  .sidebar-brand .mobile-close {position: static; margin-left: auto}
   main {padding: 28px 16px}
   .monitor-segmented button {min-height: 44px}
 }

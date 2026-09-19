@@ -314,7 +314,7 @@ input, select, textarea {border-radius: 10px; min-height: 40px; background: var(
   .icon-button {width: 44px; height: 44px}
   .task-group-button, .task-submenu-item {min-height: 44px}
   .sidebar-label .icon-button {width: 36px; height: 36px}
-  .mobile-close {top: 6px}
+  .mobile-close {position: static; margin-left: auto}
   .monitor-tabs {height: 66px; padding: 8px 12px}
   .monitor-segmented button {min-width: 92px; height: 40px; min-height: 40px; padding: 0 12px}
   .monitor-tabs .text-button {font-size: 11px}

@@ -102,6 +102,28 @@ test('简约总览、弹窗、控件和移动端导航均使用实色', async ({
   await page.setViewportSize({width: 390, height: 844})
   await page.getByRole('button', {name: '打开导航', exact: true}).click()
   await expect(page.locator('.sidebar')).toHaveCSS('border-radius', '0px')
+  await page.evaluate(() => {
+    const left = document.querySelector('.sidebar-brand-left')!
+    if (!left.querySelector('.sidebar-update-notice')) {
+      const notice = document.createElement('a')
+      notice.className = 'update-notice sidebar-update-notice'
+      notice.href = '#/updater'
+      notice.innerHTML = '<span>新</span>'
+      left.appendChild(notice)
+    }
+  })
+  const separation = await page.evaluate(() => {
+    const closeBox = document.querySelector('.sidebar-brand .mobile-close')!.getBoundingClientRect()
+    const noticeBox = document.querySelector('.sidebar-brand .sidebar-update-notice')!.getBoundingClientRect()
+    return {
+      closeLeft: closeBox.left,
+      noticeRight: noticeBox.right,
+      overlap: !(closeBox.right < noticeBox.left || closeBox.left > noticeBox.right || closeBox.bottom < noticeBox.top || closeBox.top > noticeBox.bottom),
+    }
+  })
+  expect(separation.overlap).toBe(false)
+  expect(separation.closeLeft).toBeGreaterThanOrEqual(separation.noticeRight)
+  await page.screenshot({path: testInfo.outputPath('minimal-mobile-nav.png')})
   await page.getByRole('button', {name: '关闭导航', exact: true}).click()
   await page.getByRole('button', {name: '打开调度与任务', exact: true}).click()
   await expect(page.locator('.right-rail')).toBeInViewport()
