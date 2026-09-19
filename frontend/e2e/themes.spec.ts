@@ -247,3 +247,34 @@ test('自定义方案支持创建、校验、浅深通用配色、编辑和删�
   await page.reload()
   await expect(customRadio).toHaveCount(0)
 })
+
+test('自定义背景支持 URL 与上传文件并在刷新后恢复', async ({page}) => {
+  const remote = 'https://background.example/custom.jpg'
+  await page.route(remote, route => route.fulfill({
+    contentType: 'image/png',
+    body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'),
+  }))
+  await page.route('https://api.yppp.net/**', route => route.abort())
+  await page.goto('/#/settings')
+
+  const source = page.getByRole('combobox', {name: '自定义背景'})
+  await source.click()
+  await page.getByRole('option', {name: '填写 URL'}).click()
+  await page.getByRole('textbox', {name: '填写 URL'}).fill(remote)
+  await page.getByRole('button', {name: '应用背景'}).click()
+  await expect(page.locator('.wallpaper img')).toHaveAttribute('src', remote)
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('azurpilot.background') ?? '{}').source)).toBe('url')
+
+  await source.click()
+  await page.getByRole('option', {name: '上传文件'}).click()
+  await page.locator('.background-upload input[type="file"]').setInputFiles({
+    name: 'local.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'),
+  })
+  await expect(page.locator('.background-upload')).toContainText('local.png')
+  await expect(page.locator('.wallpaper img')).toHaveAttribute('src', /^blob:/)
+  await page.reload()
+  await expect(page.locator('.wallpaper img')).toHaveAttribute('src', /^blob:/)
+  await expect(page.getByRole('combobox', {name: '自定义背景'})).toHaveText('上传文件')
+})

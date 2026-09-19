@@ -9,6 +9,7 @@ import { editor, prepareValue } from '../config/editors'
 import { EditStatus } from '../components/EditStatus'
 import { FieldInput } from '../components/FieldInput'
 import { ThemePreferences } from '../components/ThemePreferences'
+import { BackgroundPreferences } from '../components/BackgroundPreferences'
 
 export function Settings() {
   const {theme, setTheme, language, setLanguage, t, ui} = useApp()
@@ -62,6 +63,7 @@ export function Settings() {
           </div>
         </div>
         {theme === 'minimal' && <ThemePreferences/>}
+        <BackgroundPreferences/>
         <div className="field-row">
           <div className="field-label">
             <label htmlFor="ui-language">{ui('settings.language')}</label>
