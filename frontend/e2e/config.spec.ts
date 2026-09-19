@@ -121,3 +121,17 @@ test('遗留的空时间草稿在恢复时被丢弃，字段回到配置里的�
   await expect(page.locator('[id="Main.Scheduler.NextRun"]')).toHaveValue('2020-01-01 00:00:00')
   await expect(page.locator('[id="Main.Scheduler.NextRun-status"]')).toHaveCount(0)
 })
+
+test('立刻运行按钮把调度时间改成可立即运行', async ({page}) => {
+  await page.goto('/#/i/testpilot/task/Main')
+  const date = page.locator('[id="Main.Scheduler.NextRun"]')
+  const status = page.locator('[id="Main.Scheduler.NextRun-status"]')
+  await date.fill('2099-01-01 12:00:00')
+  await expect(status).toHaveText('已保存')
+  // 按钮等同清空该字段：提交参数默认值，它落在过去，调度器下一轮即运行。
+  await page.getByRole('button', {name: '立刻运行', exact: true}).click()
+  await expect(date).toHaveValue('2020-01-01 00:00:00')
+  await expect(status).toHaveText('已保存')
+  await page.reload()
+  await expect(date).toHaveValue('2020-01-01 00:00:00')
+})

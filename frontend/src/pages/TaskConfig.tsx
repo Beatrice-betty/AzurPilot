@@ -134,6 +134,8 @@ export function TaskConfig() {
                   const readonly = ['disabled', 'readonly', 'display'].includes(field.display ?? '') || ['storage', 'stored', 'state', 'lock'].includes(field.type)
                   const restrictedLua = field.mode === 'restricted_lua'
                   const shopMode = group === 'ShopAdvanced' && arg === 'Mode'
+                  // 「立刻运行」只对每个任务的调度时间有意义，其他时间字段（如仪表盘记录时间）不显示。
+                  const runNow = group === 'Scheduler' && arg === 'NextRun' && !readonly
                   const isMultiline = ['textarea', 'task_priority', 'yaml', 'storage'].includes(field.type) || field.mode === 'yaml' || restrictedLua
 
                   return (
@@ -187,6 +189,16 @@ export function TaskConfig() {
                               queue.change(path, text ?? next, payload, error)
                             }}
                           />
+                        )}
+                        {runNow && (
+                          <div className="field-actions">
+                            <button type="button" className="button subtle" disabled={connection !== 'ready'}
+                              onClick={() => {
+                                // 按钮等同清空该字段：空时间按参数默认值提交，调度器下一轮即把任务视为待运行。
+                                const {payload, text, error} = prepareValue('', field)
+                                queue.change(path, text ?? '', payload, error)
+                              }}><Play size={15}/>{ui('task.runNow')}</button>
+                          </div>
                         )}
                         {shopMode && shopModeError && !edit ? (
                           <div id={`${path}-status`} className="edit-status edit-error" role="alert">{shopModeError}</div>
