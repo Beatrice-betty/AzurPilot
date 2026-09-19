@@ -13,7 +13,6 @@ from collections.abc import Sequence
 import os
 import queue
 import uuid
-import subprocess
 import threading
 import time
 from multiprocessing import Process
@@ -35,6 +34,7 @@ from module.submodule.utils import (
     list_mod_instance,
 )
 from module.runtime.setting import State
+from module.runtime.process_control import is_process_alive, stop_process, stop_process_tree
 from module.runtime.worker_events import ExitEvent, TaskEvent, WorkerResult
 from module.runtime.worker_registry import (
     get_workers,
@@ -136,7 +136,7 @@ class ProcessManager:
                     # alive 在登记不可验证时保守返回 False；
                     # 此处再次确认登记状态，防止在登记不一致时启动重复 worker。
                     _pid, _, _verified = self._registered_worker()
-                    if not _verified and _pid is not None:
+                    if not _verified:
                         logger.warning(
                             f"[{self.config_name}] Worker 登记不一致，拒绝启动以避免重复"
                         )
@@ -171,7 +171,9 @@ class ProcessManager:
                         self._register_process(process.pid)
                     except Exception:
                         self._terminate_unregistered_process(process)
-                        self._process = None
+                        # 回滚失败时仍保留可信句柄，alive 会阻止重复启动。
+                        if not self._is_process_alive(process):
+                            self._process = None
                         self.exit_result = WorkerResult.ERROR
                         raise
                     self.start_log_queue_handler()
@@ -247,35 +249,16 @@ class ProcessManager:
             local_process_alive = False
 
         stopped = pid is None and not local_process_alive
-        if pid is not None and not pid_verified:
-            # _registered_worker 可能已通过 join(0) 回收了僵尸句柄；
-            # 若句柄已被清理说明 worker 已确认退出，视为成功停止。
-            if self._is_process_alive(self._process):
-                logger.error(
-                    f"[{self.config_name}] worker PID {pid} 身份无法确认，拒绝终止未知进程"
-                )
-                stopped = False
-            else:
-                logger.info(
-                    f"[{self.config_name}] worker PID {pid} 本地句柄已回收，确认已退出"
-                )
-                stopped = True
+        if not pid_verified:
+            logger.error(f"[{self.config_name}] worker 身份无法确认，保留登记并拒绝终止")
+            stopped = False
         elif pid is not None:
-            if local_process_alive and process is not None:
-                # 优先使用本地 Process 句柄的 terminate/kill，
-                # 比 taskkill 更可靠。
-                stopped = ProcessManager._stop_local_process(process)
-                if not stopped:
-                    # 本地句柄失败时回退到 taskkill 终止进程树
-                    stopped = self._kill_registered_process_tree(pid, record)
-                    if stopped:
-                        process.join(timeout=3)
-                        stopped = not self._is_process_alive(process)
-            else:
-                stopped = self._kill_registered_process_tree(pid, record)
-                if stopped and process is not None:
-                    process.join(timeout=3)
-                    stopped = not self._is_process_alive(process)
+            stopped = stop_process_tree(
+                process if local_process_alive else None,
+                record=record,
+                name=f"worker {self.config_name}",
+                timeout=5 if local_process_alive else 0,
+            )
         if stopped:
             self._process = None
             stopped = self._unregister_process()
@@ -329,14 +312,8 @@ class ProcessManager:
 
     @staticmethod
     def _terminate_manual_stop_action(process: Process) -> None:
-        """终止超时的收尾进程，避免停止按钮无限阻塞。"""
-        try:
-            process.terminate()
-            process.join(timeout=1)
-            if process.is_alive():
-                process.kill()
-                process.join(timeout=1)
-        except (OSError, ValueError, AssertionError):
+        """终止超时收尾进程及其子树，避免遗留设备操作。"""
+        if not stop_process_tree(process, name="停止收尾", timeout=1, kill_timeout=1):
             logger.warning("[WebUI-进程管理] 终止停止收尾进程失败")
 
     @staticmethod
@@ -346,149 +323,15 @@ class ProcessManager:
 
         run_stop_action(config_name)
 
-    @staticmethod
-    def _is_process_alive(process: Process | None) -> bool:
-        """读取本地进程状态，回收僵尸句柄并将失效句柄视为已退出。
-
-        已退出但未 join 的 multiprocessing.Process 句柄在 join() 之前
-        仍报告 is_alive() == True（僵尸状态）。此方法调用 join(timeout=0)
-        回收僵尸句柄，避免活性检查在整个 stop 流程中误判。
-        join(timeout=0) 对仍在运行的进程完全不阻塞。
-        """
-        try:
-            if process is None:
-                return False
-            if not process.is_alive():
-                return False
-            # 尝试 join(0) 回收已退出但未 join 的僵尸进程句柄
-            process.join(timeout=0)
-            return process.is_alive()
-        except (OSError, ValueError, AssertionError):
-            return False
-
-    @staticmethod
-    def _stop_local_process(process: Process) -> bool:
-        """使用本地 Process 句柄逐级终止 worker，优先于 taskkill。
-
-        先 terminate() 等待 5 秒，超时则 kill() 等待 3 秒。
-        taskkill 可能因权限或进程状态问题静默失败；
-        本地句柄的 terminate/kill 更可靠。
-        注意：此方法仅终止根进程，不处理子进程树。
-        调用方应在失败时回退到 _kill_process_tree。
-        """
-        try:
-            process.terminate()
-        except (OSError, ValueError, AssertionError):
-            pass
-        process.join(timeout=5)
-        if process.is_alive():
-            try:
-                process.kill()
-            except (OSError, ValueError, AssertionError):
-                pass
-            process.join(timeout=3)
-        return not process.is_alive()
+    _is_process_alive = staticmethod(is_process_alive)
 
     @classmethod
     def _terminate_unregistered_process(cls, process: Process) -> None:
-        """通过本地进程句柄回滚启动失败的未登记 worker。"""
-        if not cls._is_process_alive(process):
-            try:
-                process.join(timeout=0)
-            except (OSError, ValueError, AssertionError):
-                pass
-            return
-
-        try:
-            # Process 句柄绑定创建时的子进程，可避免按已复用 PID 误杀其他进程。
-            process.terminate()
-            process.join(timeout=3)
-            if cls._is_process_alive(process):
-                process.kill()
-                process.join(timeout=3)
-        except (OSError, ValueError, AssertionError):
-            pass
-
-    def _kill_registered_process_tree(self, pid: int, record: dict | None) -> bool:
-        """在 taskkill 前再次校验登记身份，缩小 PID 复用窗口。"""
-        if record is None:
-            logger.error(f"[{self.config_name}] worker PID {pid} 缺少持久化身份记录")
-            return False
-        try:
-            matches = process_matches(record)
-        except RuntimeError as exc:
-            logger.error(f"[{self.config_name}] 无法再次验证 worker PID {pid}: {exc}")
-            return False
-
-        if matches is True:
-            return self._kill_process_tree(pid)
-        if matches is None:
-            logger.info(f"[{self.config_name}] worker PID {pid} 已在终止前退出")
-            return True
-
-        logger.error(
-            f"[{self.config_name}] worker PID {pid} 已复用，拒绝终止未知进程"
-        )
-        return False
-
-    @staticmethod
-    def _kill_process_tree(pid: int) -> bool:
-        """终止 worker 及其派生进程，避免关闭 WebUI 后任务留在后台。"""
-        if os.name == "nt":
-            try:
-                result = subprocess.run(
-                    ["taskkill", "/PID", str(pid), "/T", "/F"],
-                    check=False,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                    timeout=3,
-                )
-                if result.returncode == 0:
-                    return ProcessManager._wait_pid_exit(pid, timeout=3)
-                if not ProcessManager._pid_exists(pid):
-                    return True
-                logger.warning(f"[WebUI-进程管理] 停止工作进程失败 PID {pid}: taskkill 返回 {result.returncode}")
-                return False
-            except (OSError, subprocess.TimeoutExpired) as exc:
-                logger.warning(f"[WebUI-进程管理] 停止工作进程失败 PID {pid}: {exc}")
-                return False
-        else:
-            try:
-                import psutil
-
-                parent = psutil.Process(pid)
-                for child in reversed(parent.children(recursive=True)):
-                    try:
-                        child.kill()
-                    except psutil.NoSuchProcess:
-                        pass
-            except (ImportError, psutil.Error if "psutil" in locals() else OSError):
-                pass
-        try:
-            os.kill(pid, 9)
-        except ProcessLookupError:
-            return True
-        return ProcessManager._wait_pid_exit(pid, timeout=3)
-
-    @staticmethod
-    def _pid_exists(pid: int) -> bool:
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            return False
-        except PermissionError:
-            return True
-        return True
-
-    @staticmethod
-    def _wait_pid_exit(pid: int, timeout: float) -> bool:
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            if not ProcessManager._pid_exists(pid):
-                return True
-            time.sleep(0.1)
-        return not ProcessManager._pid_exists(pid)
+        """通过本地句柄回滚登记失败的进程及其子树。"""
+        if not stop_process_tree(process, name="未登记 worker", timeout=3):
+            logger.warning("[WebUI-进程管理] 回滚未登记 worker 失败")
+            # 树枚举可能被拒绝，但刚创建的 Process 句柄仍可安全终止根进程。
+            stop_process(process, timeout=3)
 
     def _registered_worker(
         self, expected_pid: int | None = None
@@ -500,51 +343,38 @@ class ProcessManager:
             try:
                 cached_pid = registry.get(self.config_name)
                 cached_pid = int(cached_pid) if cached_pid is not None else None
-            except (TypeError, ValueError):
-                logger.error(f"[{self.config_name}] worker PID 登记无效")
-                return expected_pid, None, False
             except Exception as exc:
-                logger.error(f"[{self.config_name}] 无法读取 worker PID 登记: {exc}")
-                return expected_pid, None, False
-
+                logger.warning(f"[{self.config_name}] 无法读取 worker PID 缓存: {exc}")
         try:
             expected_pid = int(expected_pid) if expected_pid is not None else None
         except (TypeError, ValueError):
-            logger.error(f"[{self.config_name}] 本地 worker PID 无效")
             return None, None, False
 
-        if expected_pid is not None and cached_pid not in (None, expected_pid):
-            logger.error(
-                f"[{self.config_name}] 本地 worker PID {expected_pid} 与共享登记 {cached_pid} 不一致"
-            )
-            return expected_pid, None, False
-
         pid = expected_pid if expected_pid is not None else cached_pid
-        if pid is None:
-            return None, None, True
-
         try:
-            if not is_current_owner(os.getpid()):
-                logger.error(
-                    f"[{self.config_name}] 当前 WebUI 不拥有 worker 登记，拒绝操作 PID {pid}"
-                )
-                return pid, None, False
             record = get_workers(os.getpid()).get(self.config_name)
-            try:
-                record_pid = int(record["pid"])
-            except (KeyError, TypeError, ValueError):
-                record_pid = None
-            if not isinstance(record, dict) or record_pid != pid:
-                logger.error(
-                    f"[{self.config_name}] worker PID {pid} 缺少匹配的持久化登记"
-                )
+            if record is None:
+                # 缓存只用于兼容；缺少身份的缓存 PID 不能授权终止或重复启动。
+                return pid, None, pid is None
+            record_pid = int(record["pid"])
+            if expected_pid is not None and expected_pid != record_pid:
+                logger.error(f"[{self.config_name}] 本地 worker 与持久化身份不一致")
+                return expected_pid, None, False
+            pid = record_pid
+            if not is_current_owner(os.getpid()):
+                logger.error(f"[{self.config_name}] 当前 WebUI 不拥有 worker 登记")
                 return pid, None, False
             matches = process_matches(record)
-        except RuntimeError as exc:
+        except (KeyError, TypeError, ValueError, RuntimeError) as exc:
             logger.error(f"[{self.config_name}] 无法验证 worker PID {pid}: {exc}")
             return pid, None, False
 
         if matches is True:
+            if registry is not None and cached_pid != pid:
+                try:
+                    registry[self.config_name] = pid
+                except Exception as exc:
+                    logger.warning(f"[{self.config_name}] 无法修复 worker PID 缓存: {exc}")
             return pid, record, True
 
         if matches is False:
@@ -830,6 +660,7 @@ class ProcessManager:
             AzurLaneConfig.stop_event = e
         try:
             # 运行 AzurPilot
+            single_task = False
             if func == "alas":
                 from alas import AzurLaneAutoScript
 
@@ -839,6 +670,7 @@ class ProcessManager:
             elif func in get_available_func():
                 from alas import AzurLaneAutoScript
 
+                single_task = True
                 task_result = AzurLaneAutoScript(config_name=config_name).run(
                     inflection.underscore(func), skip_first_screenshot=True
                 )
@@ -861,7 +693,7 @@ class ProcessManager:
                     f"[WebUI] 杂鱼大叔，连功能模块都找不到吗？{func} 这种东西根本不存在啦~"
                 )
                 return WorkerResult.ERROR
-            if task_result is False:
+            if task_result is False or (single_task and task_result == "recoverable"):
                 return WorkerResult.ERROR
             if e is not None and e.is_set():
                 logger.info(f"[{config_name}] exited. Reason: Update\n")
@@ -877,6 +709,10 @@ class ProcessManager:
     def running_instances(cls) -> List["ProcessManager"]:
         with cls._managers_lock:
             names = set(cls._processes)
+        try:
+            names.update(get_workers(os.getpid()))
+        except RuntimeError as exc:
+            logger.warning(f"无法读取 worker 身份登记: {exc}")
         if State.process_registry is not None:
             names.update(State.process_registry.keys())
         return [cls.get_manager(name) for name in names if cls.get_manager(name).alive]

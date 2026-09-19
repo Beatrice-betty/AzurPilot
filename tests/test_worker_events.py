@@ -254,6 +254,7 @@ class TestWorkerEvents(unittest.TestCase):
             (True, False, WorkerResult.FINISHED),
             (False, False, WorkerResult.ERROR),
             (False, True, WorkerResult.ERROR),
+            ("recoverable", False, WorkerResult.ERROR),
             (True, True, WorkerResult.UPDATE),
         ):
             with self.subTest(task_result=task_result, updating=updating):
