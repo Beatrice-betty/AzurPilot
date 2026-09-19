@@ -1,7 +1,7 @@
 {
   "Menu": {
     "Alas": {
-      "name": "智慧港區Plus",
+      "name": "系統",
       "help": ""
     },
     "Farm": {
@@ -43,7 +43,7 @@
   },
   "Task": {
     "Alas": {
-      "name": "智慧港區設定",
+      "name": "系統設定",
       "help": ""
     },
     "General": {
@@ -374,13 +374,13 @@
       "name": "每週珍珠採購與售賣",
       "help": "僅支援minitouch。每週二 01:00 自動處理珍珠：先採購本週珍珠，再售賣已有珍珠。金幣一定要夠購買200x220個這是最低要求能一次買光本週珍珠，否則可能會報錯."
     },
-    "FleetScan": {
-      "name": "艦隊掃描",
-      "help": "掃描目前編入艦隊的艦船資訊"
-    },
     "FleetInfo": {
       "name": "艦隊資訊",
       "help": "查看最近一次艦隊掃描結果"
+    },
+    "FleetScan": {
+      "name": "艦隊掃描",
+      "help": "掃描目前編入艦隊的艦船資訊"
     },
     "Daemon": {
       "name": "半自動點選",
@@ -2106,6 +2106,22 @@
     "CustomFilter": {
       "name": "自訂過濾器",
       "help": "使用自訂過濾器需將\"活動商店過濾器\"設定為\"自訂\"，並閱讀 https://github.com/LmeSzinc/AzurLaneAutoScript/wiki/filter_string_cn"
+    }
+  },
+  "ShopAdvanced": {
+    "_info": {
+      "name": "進階商店策略",
+      "help": "使用受限 Lua 風格規則產生商店購買計畫。"
+    },
+    "Mode": {
+      "name": "策略模式",
+      "help": "簡單模式會繼續使用既有篩選器；進階模式使用下方策略指令碼。",
+      "legacy": "簡單模式",
+      "advanced": "進階模式"
+    },
+    "Script": {
+      "name": "策略指令碼",
+      "help": "僅支援受限 Lua 風格規則。驗證失敗時，本次執行不會購買任何物品。"
     }
   },
   "Commission": {

@@ -30,11 +30,10 @@ class TestGameNotRunningErrorHandling(unittest.TestCase):
     def test_schedules_restart_without_requesting_traceback(self):
         script = AzurLaneAutoScript.__new__(AzurLaneAutoScript)
         script.config_name = 'test'
+        # 跳过与本测试无关的启动浮窗处理，直接验证任务异常边界。
+        script._channel_float_done = True
         script.__dict__['config'] = Mock()
         script.config.cross_get.return_value = False
-        # 上游渠道服悬浮球检查需要的字段：空配置与最小 device 桩
-        script.config.data = {}
-        script.__dict__['device'] = Mock()
         error = GameNotRunningError('Game not running')
         script.__dict__['commission'] = Mock(side_effect=error)
 

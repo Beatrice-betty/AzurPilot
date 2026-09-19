@@ -906,12 +906,6 @@ class ConfigUpdater:
         # 当修改侵蚀1的黄币保留时，同步到智能调度
         elif key == 'OpsiHazard1Leveling.OpsiHazard1Leveling.OperationCoinsPreserve':
             yield 'OpsiScheduling.OpsiScheduling.OperationCoinsPreserve', value
-        
-        # 注意：动态下拉菜单更新仅在 pywebio > 1.8.0 时可用
-        # elif key == 'Alas.Emulator.ScreenshotMethod' and value == 'nemu_ipc':
-        #     yield 'Alas.Emulator.ControlMethod', 'nemu_ipc'
-        # elif key == 'Alas.Emulator.ControlMethod' and value == 'nemu_ipc':
-        #     yield 'Alas.Emulator.ScreenshotMethod', 'nemu_ipc'
 
     def read_file(self, config_name, is_template=False):
         """

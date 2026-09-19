@@ -1,8 +1,5 @@
 ### AzurLaneAutoScript
 log
-# 自定义背景图：用户放的图片与运行时生成的覆盖样式，不属于源码
-/bg/
-config/webui_bg.css
 cache/
 .codex
 config/backup/*
@@ -14,9 +11,6 @@ config/*.yaml
 !config/deploy.*.yaml
 config/*.json
 config/*.db
-# 数据库备份（如 cl1_data.db.bak-<标签>-<时间戳>）：既不以 .db 也不以 .bak 结尾，
-# 需单独忽略，避免个人统计数据被提交并推送到公开仓库
-config/*.db.bak*
 config/tmp*
 !config/template*.json
 *.pyw
@@ -332,3 +326,10 @@ RTK.md
 /nul
 
 .workbuddy
+
+# React 前端本地依赖与测试产物
+frontend/node_modules/
+frontend/test-results/
+frontend/playwright-report/
+frontend/*.tsbuildinfo
+!uv.lock
