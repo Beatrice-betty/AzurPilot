@@ -156,17 +156,34 @@ export function LogLine({entry, search, isCenter}: {entry: LogEntry; search: str
   )
 }
 
+const LOG_LEVELS = ['ALL', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+
+function loadLogLevel(instance: string): string {
+  try {
+    const saved = localStorage.getItem(`azurpilot.log.level.${instance}`)
+    if (saved && LOG_LEVELS.includes(saved)) return saved
+  } catch { /* 存储不可用时使用默认等级。 */ }
+  return 'ALL'
+}
+
 export function LogPanel({active = true}: {active?: boolean}) {
   const {instance = ''} = useParams()
   const [entries, setEntries] = useState<LogEntry[]>([])
   const [search, setSearch] = useState('')
-  const [level, setLevel] = useState('ALL')
+  const [level, setLevel] = useState(() => loadLogLevel(instance))
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [follow, setFollow] = useState(true)
   const [floor, setFloor] = useState(0)
   const connection = useConnection()
   const {notify, ui} = useApp()
   const scroll = useRef<HTMLDivElement>(null)
+
+  useEffect(() => setLevel(loadLogLevel(instance)), [instance])
+
+  function updateLevel(next: string) {
+    setLevel(next)
+    try { localStorage.setItem(`azurpilot.log.level.${instance}`, next) } catch { /* 无存储权限时仅本页生效。 */ }
+  }
 
   useEffect(() => {
     if (connection !== 'ready') return
@@ -236,8 +253,8 @@ export function LogPanel({active = true}: {active?: boolean}) {
           <Search size={15} />
           <input aria-label={ui('log.search')} placeholder={ui('log.searchPlaceholder')} value={search} onChange={event => setSearch(event.target.value)} />
         </div>
-        <Select aria-label={ui('log.level')} value={level} onChange={event => setLevel(event.target.value)}>
-          {['ALL', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'].map(item => (
+        <Select aria-label={ui('log.level')} value={level} onChange={event => updateLevel(event.target.value)}>
+          {LOG_LEVELS.map(item => (
             <option key={item} value={item}>{item === 'ALL' ? ui('log.allLevels') : item}</option>
           ))}
         </Select>
