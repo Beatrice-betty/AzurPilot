@@ -4,6 +4,7 @@ from unittest.mock import Mock, PropertyMock, patch
 
 from module.runtime.process_manager import ProcessManager
 from module.runtime.setting import State
+from module.runtime.worker_events import WorkerResult
 
 
 class TestProcessManagerRegistry(unittest.TestCase):
@@ -66,6 +67,8 @@ class TestProcessManagerRegistry(unittest.TestCase):
 
         kill.assert_called_once_with(12345)
         self.assertNotIn("alas", State.process_registry)
+        self.assertEqual(manager.exit_result, WorkerResult.MANUAL_STOP)
+        self.assertEqual(manager.state, 2)
 
     def test_stop_uses_local_process_handle_before_tree_kill(self):
         """本地 Process 句柄存活时应优先使用 terminate/kill，而非 taskkill。"""

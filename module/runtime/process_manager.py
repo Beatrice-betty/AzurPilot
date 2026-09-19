@@ -20,7 +20,7 @@ from multiprocessing import Process
 from typing import Dict, List, Union
 
 import inflection
-from rich.console import Console, ConsoleRenderable
+from rich.console import ConsoleRenderable
 from rich.text import Text
 
 from module.logger import logger, set_file_logger, set_func_logger
@@ -35,6 +35,7 @@ from module.submodule.utils import (
     list_mod_instance,
 )
 from module.runtime.setting import State
+from module.runtime.worker_events import ExitEvent, TaskEvent, WorkerResult
 from module.runtime.worker_registry import (
     get_workers,
     is_current_owner,
@@ -55,10 +56,14 @@ class ProcessManager:
 
     def __init__(self, config_name: str = DEFAULT_CONFIG_NAME) -> None:
         self.config_name = config_name
-        self._renderable_queue: queue.Queue[ConsoleRenderable] = State.manager.Queue()
+        self._renderable_queue: queue.Queue[ConsoleRenderable | TaskEvent | ExitEvent] = State.manager.Queue()
         self._preview_queue = None
         self.current_task = None
         self.run_id = None
+        self.exit_result: WorkerResult | None = None
+        self._worker_observed = False
+        self._runtime_lock = threading.RLock()
+        self._queue_lock = threading.Lock()
         self.renderables: List[ConsoleRenderable] = []
         self.renderables_max_length = 400
         self.renderables_reduce_length = 80
@@ -138,8 +143,13 @@ class ProcessManager:
                         return
                     if func is None:
                         func = get_config_mod(self.config_name)
-                    self.current_task = None
-                    self.run_id = uuid.uuid4().hex
+                    with self._runtime_lock:
+                        self.current_task = None
+                        self.run_id = uuid.uuid4().hex
+                        self.exit_result = None
+                        # 每轮独立队列，旧读线程不会消费新 worker 的事件。
+                        self._renderable_queue = State.manager.Queue()
+                        self._queue_lock = threading.Lock()
                     self._preview_queue = State.manager.Queue(maxsize=2)
                     from module.runtime.preview import hub
                     hub.publish(self.config_name, {"instance": self.config_name, "image": None, "capturedAt": None})
@@ -162,6 +172,7 @@ class ProcessManager:
                     except Exception:
                         self._terminate_unregistered_process(process)
                         self._process = None
+                        self.exit_result = WorkerResult.ERROR
                         raise
                     self.start_log_queue_handler()
             finally:
@@ -172,11 +183,9 @@ class ProcessManager:
     def start_log_queue_handler(self) -> None:
         threading.Thread(target=self._thread_preview_queue_handler,
                          args=(self._preview_queue, self.run_id), daemon=True).start()
-        log_queue_handler = self.thd_log_queue_handler
-        if log_queue_handler is not None and log_queue_handler.is_alive():
-            return
         self.thd_log_queue_handler = threading.Thread(
-            target=self._thread_log_queue_handler
+            target=self._thread_log_queue_handler,
+            args=(self._renderable_queue, self._process, self.run_id, self._queue_lock),
         )
         self.thd_log_queue_handler.start()
 
@@ -271,6 +280,9 @@ class ProcessManager:
             self._process = None
             stopped = self._unregister_process()
             if stopped and pid is not None:
+                with self._runtime_lock:
+                    self.exit_result = WorkerResult.MANUAL_STOP
+                    self.current_task = None
                 self.renderables.append(
                     Text(f"[{self.config_name}] exited. Reason: Manual stop\n")
                 )
@@ -610,27 +622,65 @@ class ProcessManager:
             except (EOFError, OSError):
                 return
 
-    def _thread_log_queue_handler(self) -> None:
-        while self.alive:
-            try:
-                log = self._renderable_queue.get(timeout=1)
-            except queue.Empty:
-                continue
-            if isinstance(log, dict) and "runtimeTask" in log:
-                if log.get("runId") == self.run_id:
-                    self.current_task = log["runtimeTask"]
-                continue
-            self.renderables.append(log)
+    def _consume_worker_message(self, message, run_id) -> None:
+        """状态只接受当前轮事件；已确认的最终结果不被迟到事件覆盖。"""
+        with self._runtime_lock:
+            if run_id != self.run_id:
+                return
+            if isinstance(message, (TaskEvent, ExitEvent)):
+                if message.run_id != self.run_id:
+                    return
+                if self.exit_result is not None:
+                    return
+                if isinstance(message, TaskEvent):
+                    self.current_task = message.command
+                else:
+                    self.exit_result = message.result
+                    self.current_task = None
+                return
+            self.renderables.append(message)
             if len(self.renderables) > self.renderables_max_length:
                 self.renderables = self.renderables[self.renderables_reduce_length :]
+
+    def _drain_worker_queue(self, output, run_id, queue_lock=None) -> None:
+        """已确认 worker 退出后排空队列，包含其最后一次同步 put。"""
+        if queue_lock is None:
+            queue_lock = self._queue_lock
+        with queue_lock:
+            while True:
+                try:
+                    message = output.get_nowait()
+                except (queue.Empty, EOFError, OSError):
+                    return
+                self._consume_worker_message(message, run_id)
+
+    def _thread_log_queue_handler(self, output, process, run_id, queue_lock=None) -> None:
+        # 锁与队列一起绑定本轮，旧线程的阻塞读取不影响新轮状态。
+        if queue_lock is None:
+            queue_lock = self._queue_lock
+        while True:
+            try:
+                with queue_lock:
+                    message = output.get(timeout=0.2)
+                    self._consume_worker_message(message, run_id)
+            except queue.Empty:
+                # 检查本轮句柄，不取生命周期锁，避免 stop 持锁 join 时互相等待。
+                if not self._is_process_alive(process):
+                    self._drain_worker_queue(output, run_id, queue_lock)
+                    break
+            except (EOFError, OSError):
+                break
         logger.info("日志队列处理循环结束")
 
     @property
     def alive(self) -> bool:
         with self._get_lifecycle_lock(self.config_name):
             if self._is_process_alive(self._process):
+                self._worker_observed = True
                 return True
             pid, pid_verified = self._registered_pid()
+            if pid is not None:
+                self._worker_observed = True
             if not pid_verified:
                 # 登记验证失败且本地句柄已死时，保守默认已退出，
                 # 避免 alert 属性持续阻塞日志线程和状态展示。
@@ -643,47 +693,29 @@ class ProcessManager:
         override_state = self._get_state_override()
         if override_state is not None:
             return override_state
-        if self.alive:
-            return 1
-        elif len(self.renderables) == 0:
-            return 2
-        else:
-            console = Console(no_color=True)
-            tail = self.renderables[-8:]
-            rendered_tail = []
-            for renderable in tail:
-                with console.capture() as capture:
-                    console.print(renderable)
-                rendered_tail.append(capture.get().strip())
-            s = rendered_tail[-1] if rendered_tail else ""
-            tail_text = "\n".join(rendered_tail)
-
-            if ("Reason: Manual stop" in s) or ("原因: 手动停止" in s):
-                return 2
-
-            update_marker_hit = (
-                ("Reason: Update" in s)
-                or ("原因: 更新" in s)
-                or ("检测到更新事件" in s)
-            )
-            update_tail_hit = (
-                ("Reason: Update" in tail_text)
-                or ("原因: 更新" in tail_text)
-                or ("检测到更新事件" in tail_text)
-            )
-            if update_marker_hit:
-                return 4
-
-            if ("Reason: Finish" in s) or ("原因: 完成" in s):
-                # 在更新流程中，部分代码路径可能会在更新退出日志之后追加 "Finish"。
-                if update_tail_hit:
+        # 整轮读取保持生命周期锁，避免把旧句柄退出码用于新轮事件。
+        with self._get_lifecycle_lock(self.config_name):
+            process = self._process
+            if self.alive:
+                return 1
+            if self.run_id is not None:
+                self._drain_worker_queue(self._renderable_queue, self.run_id)
+            with self._runtime_lock:
+                if self.exit_result == WorkerResult.MANUAL_STOP:
+                    return 2
+                try:
+                    exitcode = getattr(process, "exitcode", None)
+                except (OSError, ValueError, AssertionError):
+                    exitcode = None
+                if isinstance(exitcode, int) and exitcode != 0:
+                    return 3
+                if self.exit_result == WorkerResult.UPDATE:
                     return 4
-                return 2
-            elif "此版本为演示用途" in s:
-                return 2
-            elif update_tail_hit:
-                return 4
-            else:
+                if self.exit_result == WorkerResult.FINISHED:
+                    return 2
+                # 从未启动的实例默认停止；缺失最终结果的退出一律视为异常。
+                if self.run_id is None and self.exit_result is None and not self._worker_observed:
+                    return 2
                 return 3
 
     @classmethod
@@ -719,11 +751,29 @@ class ProcessManager:
     def run_process(
         config_name,
         func: str,
-        q: queue.Queue[ConsoleRenderable],
+        q: queue.Queue[ConsoleRenderable | TaskEvent | ExitEvent],
         e: threading.Event | None = None,
         preview_queue=None,
         run_id=None,
     ) -> None:
+        """统一发布最终结果，包括调度器通过 SystemExit 退出的路径。"""
+        from module.runtime.worker_events import initialize
+
+        initialize(q.put, run_id)
+        result = WorkerResult.ERROR
+        try:
+            result = ProcessManager._run_process(config_name, func, q, e, preview_queue, run_id)
+        except SystemExit as exc:
+            if exc.code in (None, 0):
+                result = WorkerResult.UPDATE if e is not None and e.is_set() else WorkerResult.FINISHED
+            raise
+        except Exception as exc:
+            logger.exception(exc)
+        finally:
+            q.put(ExitEvent(run_id, result))
+
+    @staticmethod
+    def _run_process(config_name, func, q, e, preview_queue, run_id) -> WorkerResult:
         import sys
 
         if sys.platform != "win32":
@@ -768,7 +818,7 @@ class ProcessManager:
             logger.info("[WebUI-进程] 日志1")
             time.sleep(1)
             logger.info("[WebUI] 此版本为演示用途")
-            return
+            return WorkerResult.FINISHED
 
         from module.config.config import AzurLaneConfig
 
@@ -785,11 +835,11 @@ class ProcessManager:
 
                 if e is not None:
                     AzurLaneAutoScript.stop_event = e
-                AzurLaneAutoScript(config_name=config_name).loop()
+                task_result = AzurLaneAutoScript(config_name=config_name).loop()
             elif func in get_available_func():
                 from alas import AzurLaneAutoScript
 
-                AzurLaneAutoScript(config_name=config_name).run(
+                task_result = AzurLaneAutoScript(config_name=config_name).run(
                     inflection.underscore(func), skip_first_screenshot=True
                 )
             elif func in get_available_mod():
@@ -797,25 +847,31 @@ class ProcessManager:
 
                 if mod is None:
                     logger.critical(f"[WebUI] 无法加载功能模块：{func}")
-                    return
+                    return WorkerResult.ERROR
 
                 if e is not None:
                     mod.set_stop_event(e)
-                mod.loop(config_name)
+                task_result = mod.loop(config_name)
             elif func in get_available_mod_func():
-                getattr(load_mod(get_func_mod(func)), inflection.underscore(func))(
+                task_result = getattr(load_mod(get_func_mod(func)), inflection.underscore(func))(
                     config_name
                 )
             else:
                 logger.critical(
                     f"[WebUI] 杂鱼大叔，连功能模块都找不到吗？{func} 这种东西根本不存在啦~"
                 )
+                return WorkerResult.ERROR
+            if task_result is False:
+                return WorkerResult.ERROR
             if e is not None and e.is_set():
                 logger.info(f"[{config_name}] exited. Reason: Update\n")
+                return WorkerResult.UPDATE
             else:
                 logger.info(f"[{config_name}] exited. Reason: Finish\n")
+                return WorkerResult.FINISHED
         except Exception as ex:
             logger.exception(ex)
+            return WorkerResult.ERROR
 
     @classmethod
     def running_instances(cls) -> List["ProcessManager"]:
