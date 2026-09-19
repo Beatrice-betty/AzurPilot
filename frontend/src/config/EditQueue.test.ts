@@ -88,6 +88,26 @@ describe('即时配置队列', () => {
     expect(again.getSnapshot().edits.number.value).toBe('-')
   })
 
+  it('恢复草稿时丢弃服务端已拒绝的空值，字段回到配置里的值', () => {
+    const memory = storage()
+    // 空值没有可修正的内容，却会把字段永久钉死：字段本来就是空的，用户再清空
+    // 不会触发输入事件，草稿永远换不掉。旧版本拒绝空时间后正是这样卡住的。
+    memory.setItem('instance-stuck', JSON.stringify({
+      'Main.Scheduler.NextRun': {value: '', payload: '', sequence: 1, status: 'error', retryable: false, error: '日期格式应为 YYYY-MM-DD HH:mm:ss：Main.Scheduler.NextRun'},
+    }))
+    const queue = new EditQueue('instance-stuck', {ready: () => true, send: vi.fn()}, memory)
+    expect(queue.getSnapshot().edits['Main.Scheduler.NextRun']).toBeUndefined()
+  })
+
+  it('恢复草稿时保留非空的错误原文，用户仍可修正', () => {
+    const memory = storage()
+    memory.setItem('instance-stuck', JSON.stringify({
+      date: {value: '2026-', payload: '2026-', sequence: 1, status: 'error', retryable: false, error: '日期格式不正确'},
+    }))
+    const queue = new EditQueue('instance-stuck', {ready: () => true, send: vi.fn()}, memory)
+    expect(queue.getSnapshot().edits.date).toMatchObject({value: '2026-', status: 'error'})
+  })
+
   it('断线和超时会自动重试，其他实例的队列不受影响', async () => {
     vi.useFakeTimers()
     const send = vi.fn().mockRejectedValueOnce(new ApiError('TIMEOUT', '请求超时')).mockResolvedValue(undefined)

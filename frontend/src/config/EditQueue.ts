@@ -30,6 +30,10 @@ export class EditQueue {
       const saved = JSON.parse(storage?.getItem(key) ?? '{}') as Record<string, Edit>
       for (const [path, edit] of Object.entries(saved)) {
         if (!edit || typeof edit.sequence !== 'number' || !('value' in edit)) continue
+        // 服务端已明确拒绝、内容又为空的草稿没有可修正的东西，却会把字段永久钉死：
+        // 字段本来就是空的，用户再清空也不会触发输入事件，草稿永远换不掉。
+        // 丢弃它，字段回到配置里的值；非空的错误原文照旧保留给用户修正。
+        if (edit.status === 'error' && !edit.retryable && (edit.value === '' || edit.value === null)) continue
         this.sequence = Math.max(this.sequence, edit.sequence)
         this.state.edits[path] = {...edit, status: edit.status === 'error' && !edit.retryable ? 'error' : 'queued'}
       }

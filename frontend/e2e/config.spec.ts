@@ -107,3 +107,17 @@ test('非法数字、日期和 YAML 保留草稿，其他字段仍即时保存',
   await page.reload()
   await expect(date).toHaveValue('2020-01-01 00:00:00')
 })
+
+test('遗留的空时间草稿在恢复时被丢弃，字段回到配置里的值', async ({page}) => {
+  // 旧版本拒绝空时间后把空值留在草稿里：字段已空时再清空不会触发输入事件，
+  // 草稿永远换不掉。恢复草稿时丢弃它，字段回到配置里的值。
+  await page.addInitScript(() => sessionStorage.setItem('azurpilot.edits.config:testpilot', JSON.stringify({
+    'Main.Scheduler.NextRun': {
+      value: '', payload: '', sequence: 1, status: 'error', retryable: false,
+      error: '日期格式应为 YYYY-MM-DD HH:mm:ss：Main.Scheduler.NextRun',
+    },
+  })))
+  await page.goto('/#/i/testpilot/task/Main')
+  await expect(page.locator('[id="Main.Scheduler.NextRun"]')).toHaveValue('2020-01-01 00:00:00')
+  await expect(page.locator('[id="Main.Scheduler.NextRun-status"]')).toHaveCount(0)
+})
