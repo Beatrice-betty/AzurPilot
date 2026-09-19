@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { readThemePreference } from './theme'
+import { readThemePreference, usesMaterial, type Theme } from './theme'
 
 afterEach(() => vi.unstubAllGlobals())
+
+const ALL_THEMES: Theme[] = ['light', 'dark', 'minimal', 'legacy-light', 'legacy-dark', 'legacy-material', 'legacy-material-dark']
 
 describe('主题偏好恢复', () => {
   it('保留旧版浅深色偏好，并为缺少的配色提供默认值', () => {
@@ -26,5 +28,20 @@ describe('主题偏好恢复', () => {
     saved['azurpilot.custom-palettes'] = '{损坏的数据'
     saved['azurpilot.color-mode'] = 'invalid'
     expect(readThemePreference()).toEqual({theme: 'minimal', palette: 'ocean', colorMode: 'auto', customPalettes: []})
+  })
+})
+
+// 白名单与装饰层判定共同决定毛玻璃、壁纸、标题遮罩与图表取色，改动主题集合时这两处必须同步。
+describe('旧版主题注册与装饰层判定', () => {
+  it('七个主题都能从存储里恢复', () => {
+    for (const theme of ALL_THEMES) {
+      vi.stubGlobal('localStorage', {getItem: (key: string) => key === 'azurpilot.theme' ? theme : null})
+      expect(readThemePreference().theme).toBe(theme)
+    }
+    vi.unstubAllGlobals()
+  })
+  it('只有 Apple 玻璃系主题使用材质装饰', () => {
+    const material = ALL_THEMES.filter(usesMaterial)
+    expect(material).toEqual(['light', 'dark', 'legacy-material', 'legacy-material-dark'])
   })
 })
