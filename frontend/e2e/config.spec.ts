@@ -135,3 +135,16 @@ test('立刻运行按钮把调度时间改成可立即运行', async ({page}) =>
   await page.reload()
   await expect(date).toHaveValue('2020-01-01 00:00:00')
 })
+
+test('清空数字字段回落到参数默认值，不再提示格式错误', async ({page}) => {
+  await page.goto('/#/i/testpilot/task/Main')
+  const value = page.locator('[id="Main.Emotion.Fleet1Value"]')
+  const status = page.locator('[id="Main.Emotion.Fleet1Value-status"]')
+  await value.fill('95')
+  await expect(status).toHaveText('已保存')
+  await value.fill('')
+  await expect(value).toHaveValue('119')
+  await expect(status).toHaveText('已保存')
+  await page.reload()
+  await expect(value).toHaveValue('119')
+})

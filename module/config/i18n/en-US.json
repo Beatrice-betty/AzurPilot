@@ -1657,6 +1657,10 @@
       "ignore": "Ignore low morale warning",
       "calculate_ignore": "Calculate morale + ignore low morale warning"
     },
+    "IgnoreShipwreck": {
+      "name": "Ignore shipwreck morale penalty",
+      "help": "When enabled, the extra 10 morale penalty for sinking ships in battle (non-S rating) is no longer counted. Only effective when the morale mode includes \"Calculate morale consumption\"."
+    },
     "Fleet1Value": {
       "name": "Fleet 1 morale value",
       "help": ""

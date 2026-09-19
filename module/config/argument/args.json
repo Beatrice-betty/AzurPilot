@@ -1384,6 +1384,10 @@
           "calculate_ignore"
         ]
       },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
+      },
       "Fleet1Value": {
         "type": "input",
         "value": 119
@@ -1819,6 +1823,10 @@
           "calculate_ignore"
         ]
       },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
+      },
       "Fleet1Value": {
         "type": "input",
         "value": 119
@@ -2253,6 +2261,10 @@
           "ignore",
           "calculate_ignore"
         ]
+      },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
       },
       "Fleet1Value": {
         "type": "input",
@@ -2821,6 +2833,10 @@
         ],
         "display": "hide"
       },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
+      },
       "Fleet1Value": {
         "type": "input",
         "value": 119
@@ -3360,6 +3376,10 @@
         ],
         "display": "hide"
       },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
+      },
       "Fleet1Value": {
         "type": "input",
         "value": 119
@@ -3884,6 +3904,10 @@
           "calculate_ignore"
         ]
       },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
+      },
       "Fleet1Value": {
         "type": "input",
         "value": 119
@@ -4333,6 +4357,10 @@
           "ignore",
           "calculate_ignore"
         ]
+      },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
       },
       "Fleet1Value": {
         "type": "input",
@@ -4787,6 +4815,10 @@
           "calculate_ignore"
         ]
       },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
+      },
       "Fleet1Value": {
         "type": "input",
         "value": 119
@@ -5239,6 +5271,10 @@
           "calculate_ignore"
         ]
       },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
+      },
       "Fleet1Value": {
         "type": "input",
         "value": 119
@@ -5567,6 +5603,10 @@
           "ignore",
           "calculate_ignore"
         ]
+      },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
       },
       "Fleet1Value": {
         "type": "input",
@@ -5995,6 +6035,10 @@
           "calculate_ignore"
         ]
       },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
+      },
       "Fleet1Value": {
         "type": "input",
         "value": 119
@@ -6193,6 +6237,10 @@
           "ignore",
           "calculate_ignore"
         ]
+      },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
       },
       "Fleet1Value": {
         "type": "input",
@@ -6491,6 +6539,10 @@
           "ignore",
           "calculate_ignore"
         ]
+      },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
       },
       "Fleet1Value": {
         "type": "input",
@@ -6795,6 +6847,10 @@
           "ignore",
           "calculate_ignore"
         ]
+      },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
       },
       "Fleet1Value": {
         "type": "input",
@@ -7699,6 +7755,10 @@
           "calculate_ignore"
         ]
       },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
+      },
       "Fleet1Value": {
         "type": "input",
         "value": 119
@@ -8168,6 +8228,10 @@
           "ignore",
           "calculate_ignore"
         ]
+      },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
       },
       "Fleet1Value": {
         "type": "input",
@@ -8639,6 +8703,10 @@
           "calculate_ignore"
         ]
       },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
+      },
       "Fleet1Value": {
         "type": "input",
         "value": 119
@@ -9108,6 +9176,10 @@
           "ignore",
           "calculate_ignore"
         ]
+      },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
       },
       "Fleet1Value": {
         "type": "input",
@@ -9579,6 +9651,10 @@
           "calculate_ignore"
         ]
       },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
+      },
       "Fleet1Value": {
         "type": "input",
         "value": 119
@@ -10040,6 +10116,10 @@
           "calculate_ignore"
         ]
       },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
+      },
       "Fleet1Value": {
         "type": "input",
         "value": 119
@@ -10360,6 +10440,10 @@
           "calculate_ignore"
         ]
       },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
+      },
       "Fleet1Value": {
         "type": "input",
         "value": 119
@@ -10654,6 +10738,10 @@
           "ignore",
           "calculate_ignore"
         ]
+      },
+      "IgnoreShipwreck": {
+        "type": "checkbox",
+        "value": false
       },
       "Fleet1Value": {
         "type": "input",

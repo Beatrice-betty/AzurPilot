@@ -576,6 +576,7 @@ Emotion:
   Mode:
     value: calculate
     option: [calculate, ignore, calculate_ignore]
+  IgnoreShipwreck: false
   Fleet1Value: 119
   Fleet1Record:
     value: 2020-01-01 00:00:00

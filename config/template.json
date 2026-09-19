@@ -277,6 +277,7 @@
     },
     "Emotion": {
       "Mode": "calculate",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_green_face",
@@ -361,6 +362,7 @@
     },
     "Emotion": {
       "Mode": "calculate",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_green_face",
@@ -445,6 +447,7 @@
     },
     "Emotion": {
       "Mode": "calculate",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_green_face",
@@ -548,6 +551,7 @@
     },
     "Emotion": {
       "Mode": "calculate_ignore",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_red_face",
@@ -641,6 +645,7 @@
     },
     "Emotion": {
       "Mode": "calculate_ignore",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_red_face",
@@ -734,6 +739,7 @@
     },
     "Emotion": {
       "Mode": "calculate",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_green_face",
@@ -819,6 +825,7 @@
     },
     "Emotion": {
       "Mode": "calculate",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_green_face",
@@ -903,6 +910,7 @@
     },
     "Emotion": {
       "Mode": "calculate",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_green_face",
@@ -987,6 +995,7 @@
     },
     "Emotion": {
       "Mode": "calculate",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_green_face",
@@ -1056,6 +1065,7 @@
     },
     "Emotion": {
       "Mode": "calculate",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_yellow_face",
@@ -1131,6 +1141,7 @@
     },
     "Emotion": {
       "Mode": "calculate",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_green_face",
@@ -1174,6 +1185,7 @@
     },
     "Emotion": {
       "Mode": "calculate",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_yellow_face",
@@ -1230,6 +1242,7 @@
     },
     "Emotion": {
       "Mode": "calculate",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_green_face",
@@ -1289,6 +1302,7 @@
     },
     "Emotion": {
       "Mode": "calculate",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_green_face",
@@ -1413,6 +1427,7 @@
     },
     "Emotion": {
       "Mode": "calculate",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_green_face",
@@ -1501,6 +1516,7 @@
     },
     "Emotion": {
       "Mode": "calculate",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_green_face",
@@ -1589,6 +1605,7 @@
     },
     "Emotion": {
       "Mode": "calculate",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_green_face",
@@ -1677,6 +1694,7 @@
     },
     "Emotion": {
       "Mode": "calculate",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_green_face",
@@ -1765,6 +1783,7 @@
     },
     "Emotion": {
       "Mode": "calculate",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_green_face",
@@ -1849,6 +1868,7 @@
     },
     "Emotion": {
       "Mode": "calculate",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_green_face",
@@ -1917,6 +1937,7 @@
     },
     "Emotion": {
       "Mode": "calculate",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_green_face",
@@ -1973,6 +1994,7 @@
     },
     "Emotion": {
       "Mode": "calculate",
+      "IgnoreShipwreck": false,
       "Fleet1Value": 119,
       "Fleet1Record": "2020-01-01 00:00:00",
       "Fleet1Control": "prevent_green_face",

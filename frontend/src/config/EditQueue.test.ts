@@ -136,7 +136,7 @@ describe('即时配置队列', () => {
 
 describe('保留数值输入原文', () => {
   const field = {type: 'int', value: 3, validate: [1, 10]}
-  it.each(['', '-', '1e', 'abc', 'Infinity', '1.5', '11', '9007199254740993'])('拒绝不完整或不合法的数值 %s', value => {
+  it.each(['-', '1e', 'abc', 'Infinity', '1.5', '11', '9007199254740993'])('拒绝不完整或不合法的数值 %s', value => {
     expect(prepareValue(value, field).error).toBeTruthy()
   })
   it('只转换提交值，不改写原始文本', () => {
@@ -147,15 +147,26 @@ describe('保留数值输入原文', () => {
   })
 })
 
-describe('清空时间回落到参数默认值', () => {
-  const field = {type: 'datetime', value: '2020-01-01 00:00:00', validate: 'datetime'}
-  it('清空后提交参数默认值，输入框同步显示它', () => {
-    expect(prepareValue('', field)).toEqual({payload: '2020-01-01 00:00:00', text: '2020-01-01 00:00:00'})
+describe('清空时回落到参数默认值', () => {
+  const datetime = {type: 'datetime', value: '2020-01-01 00:00:00', validate: 'datetime'}
+  it('清空时间后提交参数默认值，输入框同步显示它', () => {
+    expect(prepareValue('', datetime)).toEqual({payload: '2020-01-01 00:00:00', text: '2020-01-01 00:00:00'})
   })
-  it('只有清空才改写文本，输入中的时间原样提交', () => {
-    expect(prepareValue('2026-09-19 12:00:00', field)).toEqual({payload: '2026-09-19 12:00:00'})
+  it('清空数字后同样回落，不再提示格式错误', () => {
+    expect(prepareValue('', {type: 'input', value: 119})).toEqual({payload: 119, text: '119'})
+    expect(prepareValue('', {type: 'int', value: 3, validate: [1, 10]})).toEqual({payload: 3, text: '3'})
   })
-  it('非时间字段的清空不受影响', () => {
+  it('只有清空才改写文本，输入中的值原样提交', () => {
+    expect(prepareValue('2026-09-19 12:00:00', datetime)).toEqual({payload: '2026-09-19 12:00:00'})
+    expect(prepareValue('03', {type: 'int', value: 3, validate: [1, 10]})).toEqual({payload: 3})
+  })
+  it('声明 preserve_empty 的字段保留空值本身', () => {
+    expect(prepareValue('', {type: 'int', value: 3, preserve_empty: true}).error).toBeTruthy()
+  })
+  it('默认值缺失时维持原有的报错行为', () => {
+    expect(prepareValue('', {type: 'int', value: null}).error).toBeTruthy()
+  })
+  it('非时间非数字字段的清空不受影响', () => {
     expect(prepareValue('', {type: 'input', value: 'text'})).toEqual({payload: ''})
   })
 })
