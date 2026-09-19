@@ -122,10 +122,7 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
 
     def __setattr__(self, key, value):
         if key in self.bound:
-            path = self.bound[key]
-            self.modified[path] = value
-            if self.auto_update:
-                self.update()
+            self.cross_set(self.bound[key], value)
         else:
             super().__setattr__(key, value)
 
@@ -186,11 +183,13 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
         self.task = task
         self.save()
 
-    def load(self):
+    def load(self, *, apply_override=True):
+        """重读磁盘并合并待保存修改；update 会将覆盖检查延后到合并之后。"""
         self.data = self.read_file(self.config_name)
         self._discard_stale_changes(self.data)
         self._loaded_data = copy.deepcopy(self.data)
-        self.config_override()
+        if apply_override:
+            self.config_override()
 
         for path, value in self.modified.items():
             deep_set(self.data, keys=path, value=value)
@@ -405,7 +404,10 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
             self.modified.clear()
 
     def update(self):
-        self.load()
+        """显式提交：合并最新磁盘值、检查覆盖、恢复任务绑定，再事务保存。"""
+        # update 原先在 load 内外各检查一次。保留合并后的检查，避免删除
+        # 后一次检查后，让待保存的异常 NextRun 绕过调度夹限。
+        self.load(apply_override=False)
         self.config_override()
         self.bind(getattr(self, '_bind_task_override', self.task))
         self.save()
@@ -468,7 +470,7 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
                 self.__setattr__(record, current_time().replace(microsecond=0))
 
     def multi_set(self):
-        """批量设置多个参数，但只保存一次。
+        """批量设置多个参数，最外层退出时保存一次，包括 TaskEnd 或普通异常。
 
         Examples:
             with self.config.multi_set():
@@ -496,7 +498,15 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
             keys (str, list[str]): 配置路径，如 `{task}.Scheduler.Enable`。
             value (Any): 要设置的值。
         """
-        self.modified[keys] = value
+        self.cross_set_many({keys: value})
+
+    def cross_set_many(self, values):
+        """按配置路径批量排队修改；自动更新时提交，multi_set 内留待退出提交。
+
+        Args:
+            values (dict[str, Any]): 配置路径到新值的映射。
+        """
+        self.modified.update(values)
         if self.auto_update:
             self.update()
 
@@ -556,8 +566,7 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
             if task is None:
                 task = self.task.command
             logger.info(f"[配置] 延迟任务 `{task}` 到 {run} ({kv})")
-            self.modified[f'{task}.Scheduler.NextRun'] = run
-            self.update()
+            self.cross_set(f'{task}.Scheduler.NextRun', run)
         else:
             raise ScriptError(
                 "[配置] delay_next_run 缺少参数，应至少设置一个"
@@ -593,6 +602,8 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
             allow_none=False,
         )
 
+        changes = {}
+
         def delay_tasks(task_list, minutes):
             next_run = current_time().replace(microsecond=0) + timedelta(
                 minutes=minutes
@@ -602,7 +613,7 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
                 current = deep_get(self.data, keys=keys, default=DEFAULT_TIME)
                 if current < next_run:
                     logger.info(f"[配置-大世界] 延迟任务 `{task}` 到 {next_run} ({kv})")
-                    self.modified[keys] = next_run
+                    changes[keys] = next_run
 
         def is_submarine_call(task):
             return (
@@ -685,7 +696,7 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
             )
             delay_tasks(tasks, minutes=360)
 
-        self.update()
+        self.cross_set_many(changes)
 
     def task_call(self, task, force_call=True):
         """调用另一个任务运行。
@@ -706,12 +717,10 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
 
         if force_call or self.is_task_enabled(task):
             logger.info(f"[配置] 任务调用: {task}")
-            self.modified[f"{task}.Scheduler.NextRun"] = current_time().replace(
-                microsecond=0
-            )
-            self.modified[f"{task}.Scheduler.Enable"] = True
-            if self.auto_update:
-                self.update()
+            self.cross_set_many({
+                f"{task}.Scheduler.NextRun": current_time().replace(microsecond=0),
+                f"{task}.Scheduler.Enable": True,
+            })
             return True
         else:
             logger.info(f"[配置] 任务调用: {task} (因用户禁用而跳过)")
@@ -913,16 +922,18 @@ class MultiSetWrapper:
             main (AzurLaneConfig): 配置实例。
         """
         self.main = main
-        self.in_wrapper = False
+        self._previous_auto_update = []
 
     def __enter__(self):
-        if self.main.auto_update:
-            self.main.auto_update = False
-        else:
-            self.in_wrapper = True
+        self._previous_auto_update.append(self.main.auto_update)
+        self.main.auto_update = False
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if not self.in_wrapper:
-            self.main.update()
-            self.main.auto_update = True
+        auto_update = self._previous_auto_update.pop()
+        try:
+            if auto_update:
+                self.main.update()
+        finally:
+            # 提交失败仍恢复自动更新，保留 modified 供重试；退出异常不回滚。
+            self.main.auto_update = auto_update
