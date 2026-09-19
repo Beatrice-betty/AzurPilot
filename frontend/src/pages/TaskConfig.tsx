@@ -11,8 +11,6 @@ import { FieldInput } from '../components/FieldInput'
 import { RestrictedLuaEditor } from '../components/RestrictedLuaEditor'
 import { ShopStrategyHelp } from '../components/ShopStrategyHelp'
 import { StorageField } from '../components/StorageField'
-import { LegacyRail } from '../components/LegacyRail'
-import { useInstanceOverview } from '../components/useInstanceOverview'
 import { editor, prepareValue } from '../config/editors'
 import { EditStatus } from '../components/EditStatus'
 import { isFieldVisible } from './configVisibility'
@@ -30,9 +28,7 @@ export function TaskConfig() {
 
   const queue = editor(`config:${instance}`)
   const {edits, storageError} = useSyncExternalStore(queue.subscribe, queue.getSnapshot)
-  // 旧版主题把左侧的分组导航那一列让给调度器与任务计划，只有这种版式才需要总览数据。
   const legacy = usesLegacyLayout(theme)
-  const [railData, setRailData] = useInstanceOverview(instance, legacy)
   const reload = useCallback(async () => {
     try {
       const confirmed = queue.confirmed()
@@ -191,7 +187,24 @@ export function TaskConfig() {
     {search && !visibleGroups.length && <Empty icon={<Search size={26} />} title={ui('task.noConfigFound')}>{ui('task.tryOtherKeyword')}</Empty>}
   </>
 
-  const body = <>
+  const hasGroups = task !== 'FleetInfo' && Boolean(groups) && visibleGroups.length > 0
+  const groupCardsBlock = <div className="config-groups">{groupCards}</div>
+  const groupNav = <nav className="group-nav">
+    {visibleGroups.map(({group}) => (
+      <a
+        key={group}
+        href={`#group-${group}`}
+        onClick={event => {
+          event.preventDefault()
+          document.getElementById(`group-${group}`)?.scrollIntoView({behavior: 'smooth', block: 'start'})
+        }}
+      >
+        {t(`${group}._info.name`)}
+      </a>
+    ))}
+  </nav>
+
+  const head = <>
     {error && <ErrorBox message={error} retry={reload} />}
     {storageError && <ErrorBox message={storageError} />}
     {showConfigToolbar && <div className="config-toolbar">
@@ -200,51 +213,33 @@ export function TaskConfig() {
         <input placeholder={ui('task.searchConfigPlaceholder')} aria-label={ui('task.searchConfig')} value={search} onChange={event => setSearch(event.target.value)} />
       </div>
     </div>}
-    {task === 'FleetInfo' ? (
-      <FleetInfo value={config.values.FleetInfo?.FleetInfo?.Result} />
-    ) : !groups || !visibleGroups.length ? (
-      (search || !tool) && <Empty icon={<Settings2 size={30} />} title={ui('task.noConfig')}>
-        {search ? ui('task.tryOtherKeyword') : ui('task.viewRelated')}
-      </Empty>
-    ) : legacy ? (
-      // 旧版主题没有分组导航那一列，参数卡直接铺满内容区。
-      <div className="config-groups">{groupCards}</div>
-    ) : (
-      <div className="config-layout">
-        <nav className="group-nav">
-          {visibleGroups.map(({group}) => (
-            <a
-              key={group}
-              href={`#group-${group}`}
-              onClick={event => {
-                event.preventDefault()
-                document.getElementById(`group-${group}`)?.scrollIntoView({behavior: 'smooth', block: 'start'})
-              }}
-            >
-              {t(`${group}._info.name`)}
-            </a>
-          ))}
-        </nav>
-        <div className="config-groups">{groupCards}</div>
-      </div>
-    )}
-    {tool && <section className="panel tool-log-panel" aria-label={ui('monitor.logs')}>
-      <div className="panel-heading">
-        <div><Terminal size={18}/><h2>{ui('monitor.logs')}</h2></div>
-        <button className="button primary" onClick={() => setConfirmRun(true)} disabled={busy || connection !== 'ready'}>
-          <Play size={16}/>{ui('task.runTool')}
-        </button>
-      </div>
-      <LogPanel />
-    </section>}
   </>
 
-  // 旧版版式：左列调度器与任务计划，右列任务设置；页名由顶栏居中显示。
+  const groupsSection = task === 'FleetInfo' ? (
+    <FleetInfo value={config.values.FleetInfo?.FleetInfo?.Result} />
+  ) : !hasGroups ? (
+    (search || !tool) && <Empty icon={<Settings2 size={30} />} title={ui('task.noConfig')}>
+      {search ? ui('task.tryOtherKeyword') : ui('task.viewRelated')}
+    </Empty>
+  ) : groupCardsBlock
+
+  const toolPanel = tool && <section className="panel tool-log-panel" aria-label={ui('monitor.logs')}>
+    <div className="panel-heading">
+      <div><Terminal size={18}/><h2>{ui('monitor.logs')}</h2></div>
+      <button className="button primary" onClick={() => setConfirmRun(true)} disabled={busy || connection !== 'ready'}>
+        <Play size={16}/>{ui('task.runTool')}
+      </button>
+    </div>
+    <LogPanel />
+  </section>
+
+  // 旧版的任务详细设置：参数卡在左、分组导航在右，页名由顶栏居中显示。
+  // 这里不放调度器与任务计划 —— 旧版把它们留在总览页。
   if (legacy) return <>
-    <div className="instance-page-grid">
+    <div className={`task-config-legacy${hasGroups ? '' : ' no-nav'}`}>
       <h1 className="legacy-sr-title">{t(`Task.${task}.name`)}</h1>
-      <LegacyRail instance={instance} data={railData} onData={setRailData}/>
-      <div className="instance-page-main">{body}</div>
+      <div className="task-config-settings">{head}{groupsSection}{toolPanel}</div>
+      {hasGroups && groupNav}
     </div>
     {modal}
   </>
@@ -253,7 +248,9 @@ export function TaskConfig() {
     <PageTitle
       title={t(`Task.${task}.name`)}
     />
-    {body}
+    {head}
+    {hasGroups ? <div className="config-layout">{groupNav}{groupCardsBlock}</div> : groupsSection}
+    {toolPanel}
     {modal}
   </>
 }

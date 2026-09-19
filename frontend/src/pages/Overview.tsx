@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Overview as OverviewData } from '../api/types'
 import { useApp, useConnection } from '../app/context'
@@ -58,10 +58,7 @@ export function Overview() {
     <LegacyRail instance={instance} data={data} onData={setData}>
       <section className="panel legacy-stat-card" aria-label={ui('overview.statCard')}>
         <span className="legacy-stat-title">{ui('overview.statCard')}</span>
-        <div className="legacy-stat-actions">
-          <Link className="button primary" to={`/i/${instance}/statistics`}>{ui('overview.statOpen')}</Link>
-          {actions}
-        </div>
+        {actions}
       </section>
     </LegacyRail>
     <div className="instance-page-main">

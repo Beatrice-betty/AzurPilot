@@ -110,6 +110,8 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 .app-shell.legacy-shell {
   /* 旧版文字菜单宽 12rem(16px 基准)=192px；本仓库根字号是 14px，所以直接写像素。 */
   --sidebar-width: 192px;
+  /* 内容区顶部那行「主页 / 实例 / 任务」，算进页内两列的高度预算里。 */
+  --legacy-page-nav-height: 42px;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   grid-template-rows: auto 1fr;
   grid-template-areas: 'topbar topbar' 'sidebar main';
@@ -126,11 +128,11 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 .legacy-topbar-brand {height: auto; margin-bottom: 0; padding: 0}
 /* 旧版顶栏的第三列是居中的页面名。 */
 .legacy-topbar-title {flex: 1; min-width: 0; text-align: center; font-size: 1.2rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap}
-.legacy-topbar-tail {flex: 1}
 /* 旧版实例页的页名由顶栏居中显示，内容区只留一个给读屏的标题。 */
 .legacy-sr-title {position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap}
-/* 顶栏里的实例下拉沿用侧栏那套 26px 下间距，顶栏里必须清零。 */
-.app-shell.legacy-shell > .topbar .instance-picker {margin: 0}
+/* 顶栏只留招牌与居中的页面名；「主页 / 实例 / 任务」这一行落在内容区顶部。 */
+.legacy-page-nav {flex-shrink: 0; height: var(--legacy-page-nav-height, 42px); display: flex; align-items: center; padding: 0 28px}
+.legacy-page-nav .instance-picker {margin: 0}
 
 /* 侧栏任务菜单：分组展开后具体任务往下列（旧版树状格式）。 */
 .task-group-button:hover .task-group-arrow {transform: none}
@@ -157,29 +159,50 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
   .app-shell.legacy-shell > .right-rail {top: var(--topbar-height); height: calc(var(--viewport-height) - var(--topbar-height))}
   .app-shell.legacy-shell .legacy-sidebar-actions {display: none}
 
-  /* 旧版实例页：左列调度器与任务计划，右列页面内容。总览、任务配置、资源统计共用这一套，
+  /* 旧版实例页：左列调度器与任务计划，右列页面内容。总览与资源统计共用这一套，
      所以左列由各页面自己渲染（LegacyRail），不是外壳的一列。 */
   .instance-page-grid {
     display: grid;
     grid-template-columns: minmax(16rem, 20rem) minmax(24rem, 1fr);
     gap: 14px;
     align-items: stretch;
-    height: calc(var(--viewport-height) - var(--topbar-height) - 64px);
+    height: calc(var(--viewport-height) - var(--topbar-height) - var(--legacy-page-nav-height, 0px) - 64px);
   }
   /* 两列各自滚动；左列的队列列表不再自己开一层滚动区。 */
   .instance-page-rail {display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto}
   .instance-page-rail .rail-task-list {flex: 0 0 auto; overflow: visible}
+  /* 右栏那套边距会让调度器与任务计划比同列其他卡片窄，这里清零让三块左右对齐。 */
+  .instance-page-rail .scheduler-widget {margin: 0}
+  .instance-page-rail .rail-schedule {padding: 12px 0 0}
   .instance-page-main {display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto}
   .instance-page-main .resource-grid {margin-bottom: 0}
   /* 搜索框与参数卡同宽，「任务设置和搜索对齐」。 */
-  .instance-page-main .config-toolbar .input-icon {max-width: none}
+  .instance-page-main .config-toolbar .input-icon,
+  .task-config-settings .config-toolbar .input-icon {max-width: none}
+  .task-config-settings .config-toolbar {margin-bottom: 0}
   .instance-page-main .statistics-toolbar-row {display: flex; align-items: center; gap: 12px; flex-wrap: wrap}
   .instance-page-main .statistics-toolbar-row .statistics-category-control {margin-bottom: 0; flex: 1; min-width: 0}
   .instance-page-main .statistics-actions {display: flex; align-items: center; gap: 8px; margin-left: auto}
+
+  /* 旧版的任务详细设置：参数卡在左、分组导航在右（旧版是 13rem≈208px 的右列）。
+     和总览一样定高 + 内部滚动，顶栏与侧栏才不会跟着滚走。 */
+  .task-config-legacy {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 208px;
+    gap: 22px;
+    align-items: stretch;
+    height: calc(var(--viewport-height) - var(--topbar-height) - var(--legacy-page-nav-height, 0px) - 64px);
+  }
+  .task-config-legacy.no-nav {grid-template-columns: minmax(0, 1fr)}
+  .task-config-settings {min-width: 0; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px}
+  .task-config-legacy .group-nav {max-height: 100%}
+  /* 参数列自己滚，锚点跳转不需要再给吸顶的顶栏留出 72px。 */
+  .task-config-legacy .config-group {scroll-margin-top: 0}
 }
 .legacy-stat-card {display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; flex-shrink: 0}
 .legacy-stat-title {font-size: 15px; font-weight: 600}
-.legacy-stat-actions {display: flex; align-items: center; gap: 8px}
+.group-nav {padding: 6px; border-radius: var(--theme-radius-panel)}
+.group-nav a {border-radius: 4px}
 .monitor-tabs {height: auto; min-height: 60px; padding: 10px 16px; flex-wrap: wrap; gap: 8px}
 .monitor-panel .log-toolbar {display: flex; align-items: center; margin-left: auto; gap: 4px}
 .monitor-panel .log-panel {border: 0; border-radius: 0}
@@ -215,10 +238,10 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
   .app-shell.legacy-shell {display: block}
   .instance-page-grid {display: flex; flex-direction: column; gap: 12px; height: auto}
   .instance-page-rail, .instance-page-main {overflow: visible}
+  .task-config-legacy {display: block}
+  .legacy-page-nav {padding: 0 16px}
   /* 窄屏顶栏放不下两块招牌：顶栏那份收起来，侧栏抽屉里那份照旧。 */
   .app-shell.legacy-shell .legacy-topbar-brand {display: none}
-  /* 跨任务跳转在窄屏交给侧栏抽屉（那里是完整的任务树），顶栏留给页面名。 */
-  .app-shell.legacy-shell .task-picker {display: none}
   .topbar, .app-shell.with-rail .topbar {width: 100%; padding: 0 14px}
   .sidebar, .right-rail {top: 0; height: var(--viewport-height); z-index: 100}
   .sidebar-brand {padding: 0}
