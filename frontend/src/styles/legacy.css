@@ -40,9 +40,9 @@ input:focus, textarea:focus,
 .toggle:disabled::before {background: var(--surface-muted)}
 .toggle:disabled > span {background: var(--theme-toggle-off)}
 
-/* 旧版浅色/深色没有自定义背景图，壁纸层不挂载；首页侧栏改用实色底，避免白字落在浅色背景上。 */
-:root[data-theme='legacy-light'] .home-visual,
-:root[data-theme='legacy-dark'] .home-visual {
+/* 旧版浅色/深色没有自定义背景图，壁纸层不挂载；首页指挥台改用实色底，避免白字落在浅色背景上。 */
+:root[data-theme='legacy-light'] .home-deck,
+:root[data-theme='legacy-dark'] .home-deck {
   color: var(--text);
   background: var(--surface-muted);
   text-shadow: none;

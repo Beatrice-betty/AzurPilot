@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Plus } from 'lucide-react'
+import { ArrowRight, ExternalLink, Plus, Server } from 'lucide-react'
 import { useApp, useConnection } from '../app/context'
 import type { UiTranslator } from '../i18n'
 import { CreateInstance } from '../app/App'
@@ -21,21 +21,40 @@ export function Home() {
     document.documentElement.classList.add('home-active')
     return () => document.documentElement.classList.remove('home-active')
   }, [])
+  const running = instances.filter(item => item.status === 'running').length
+  const errored = instances.filter(item => item.status === 'error').length
   return <>
     <div className="home-editorial">
-      <header className="home-visual">
-        <div className="home-visual-copy"><h1>{getGreeting(ui)}</h1></div>
-      </header>
-      <section className="home-workspace">
-        <div className="home-workspace-heading"><h2>{ui('home.instances')}</h2><button className="button primary" disabled={connection !== 'ready'} onClick={() => setCreating(true)}><Plus size={16}/>{ui('home.newInstance')}</button></div>
-        <div className="home-instance-list">
+      <aside className="home-deck">
+        <div className="home-deck-copy">
+          <p className="home-deck-eyebrow">{ui('home.commandCenter')}</p>
+          <h1 className="home-deck-greeting">{getGreeting(ui)}</h1>
+          <p className="home-deck-subtitle">{ui('home.subtitle')}</p>
+        </div>
+        <div className="home-deck-foot">
+          <dl className="home-stats" aria-label={ui('home.summary')}>
+            <div className="home-stat"><dt>{ui('home.allInstances')}</dt><dd>{instances.length}</dd></div>
+            <div className="home-stat"><dt>{ui('status.running')}</dt><dd>{running}</dd></div>
+            <div className="home-stat"><dt>{ui('status.error')}</dt><dd>{errored}</dd></div>
+          </dl>
+          <div className="home-deck-links">
+            <a className="home-deck-link" href="https://github.com/wess09/AzurPilot" target="_blank" rel="noreferrer"><ExternalLink size={14}/>{ui('home.openSource')}</a>
+          </div>
+        </div>
+      </aside>
+      <section className="home-main">
+        <header className="home-main-heading">
+          <h2>{ui('home.instances')}</h2>
+          <button className="button primary" disabled={connection !== 'ready'} onClick={() => setCreating(true)}><Plus size={16}/>{ui('home.newInstance')}</button>
+        </header>
+        <div className="home-instance-grid">
           {instances.map(item => {
             const task = item.status === 'running' ? item.currentTask ? t(`Task.${item.currentTask}.name`) : ui('home.waitingSchedule') : item.status === 'error' ? ui('status.error') : item.status === 'updating' ? ui('status.updating') : ui('home.notRunning')
-            return <Link className="home-instance-row" key={item.name} to={`/i/${item.name}/overview`}>
-              <div className="home-instance-identity"><h3>{item.name}</h3><div className="instance-device">{item.server !== 'disabled' && <span>{t(`Emulator.ServerName.${item.server}`)}</span>}<span>{item.serial}</span></div></div>
-              <StatusBadge status={item.status}/>
-              <strong className="home-instance-task">{task}</strong>
-              <span className="home-instance-arrow" aria-hidden="true"><ArrowRight size={17}/></span>
+            return <Link className="instance-card panel" key={item.name} to={`/i/${item.name}/overview`}>
+              <div className="instance-card-heading"><span className="home-instance-icon"><Server size={20}/></span><StatusBadge status={item.status}/></div>
+              <h3>{item.name}</h3>
+              <div className="instance-device">{item.server !== 'disabled' && <span>{t(`Emulator.ServerName.${item.server}`)}</span>}<span>{item.serial}</span></div>
+              <div className="instance-card-footer"><span>{task}</span><ArrowRight size={17}/></div>
             </Link>
           })}
           {!instances.length && <button className="home-instance-empty" disabled={connection !== 'ready'} onClick={() => setCreating(true)}><Plus size={28}/><span>{ui('instance.createFirst')}</span></button>}
