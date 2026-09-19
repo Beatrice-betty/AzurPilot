@@ -53,10 +53,11 @@ describe('WebSocket 客户端', () => {
     expect(FakeSocket.latest.sent).toHaveLength(0)
   })
   it('WebSocket 地址跟随 document.baseURI，远程访问隧道前缀不丢', () => {
-    vi.stubGlobal('window', {location: {href: 'https://remurl.nanoda.work/32d93f1d640077ed/', protocol: 'https:'}})
-    vi.stubGlobal('document', {baseURI: 'https://remurl.nanoda.work/32d93f1d640077ed/'})
+    // 地址与 peer_id 都是占位符，不要填真实隧道。
+    vi.stubGlobal('window', {location: {href: 'https://tunnel.example.com/example-peer-id/', protocol: 'https:'}})
+    vi.stubGlobal('document', {baseURI: 'https://tunnel.example.com/example-peer-id/'})
     client.disconnect(); client = new ApiClient(); client.connect()
-    expect(FakeSocket.latest.url).toBe('wss://remurl.nanoda.work/32d93f1d640077ed/api/v1/ws')
+    expect(FakeSocket.latest.url).toBe('wss://tunnel.example.com/example-peer-id/api/v1/ws')
   })
   it('保留校验失败的诊断详情供脚本编辑器定位行列', async () => {
     const request = client.request('system.ping', {})

@@ -181,7 +181,7 @@ export function createMockState({empty = false} = {}) {
       {key: 'Branch', type: 'string', label: '分支', help: '模拟系统级分组，用于验证系统设置页。', value: 'dev', options: []},
     ]},
   ], notice: '前端测试数据', demo: false, remote: {
-    enabled: true, state: 'waiting_peer', address: 'https://remurl.nanoda.work/p2p/32d93f1d640077ed', error: '',
+    enabled: true, state: 'waiting_peer', address: 'https://tunnel.example.com/p2p/example-peer-id', error: '',
   }}
   const get = name => instances.get(name) ?? fail('NOT_FOUND', '实例不存在')
   const snapshot = name => ({instance: name, revision: revision(get(name).values), values: structuredClone(get(name).values)})
