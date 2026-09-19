@@ -1136,3 +1136,20 @@ class RemoteAccess:
     @staticmethod
     def get_error():
         return _provider.get_error()
+
+
+def remote_access_status() -> dict:
+    """返回界面展示用的远程访问状态。
+
+    地址与连接状态活在 WebUI 服务进程内，设置接口与被访问的 provider 同进程，
+    直接读即可。未启用或未就绪时地址为 ``None``，统一成空串交给前端判断。
+
+    Returns:
+        dict: ``enabled`` 是否开启、``state`` 状态串、``address`` 访问地址、``error`` 错误信息。
+    """
+    return {
+        'enabled': bool(getattr(State.deploy_config, 'EnableRemoteAccess', False)),
+        'state': RemoteAccess.get_connection_state(),
+        'address': RemoteAccess.get_entry_point() or '',
+        'error': RemoteAccess.get_error(),
+    }

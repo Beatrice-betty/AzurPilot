@@ -167,11 +167,22 @@ export function createMockState({empty = false} = {}) {
   let localHead = commits[3].sha
   let upstreamHead = commits[0].sha
   const updateStatus = () => ({state: localHead === upstreamHead ? 'idle' : 'available', localHead, upstreamHead, branch: 'dev', ahead: 0, behind: commits.findIndex(item => item.sha === localHead), available: localHead !== upstreamHead, busy: false, canApply: localHead !== upstreamHead, canCancel: false, error: ''})
-  const settings = {groups: [{key: 'Webui', label: 'WebUI 设置', fields: [
-    {key: 'WebuiHost', type: 'string', label: '监听地址', help: '模拟部署设置，仅在当前 mock 会话中保留。', value: '127.0.0.1', options: []},
-    {key: 'WebuiPort', type: 'int', label: '监听端口', help: '用于验证数值输入与保存。', value: 22267, options: []},
-    {key: 'Password', type: 'password', label: '访问密码', help: '留空保留原密码。', value: '', options: []},
-  ]}], notice: '前端测试数据', demo: false}
+  const settings = {groups: [
+    {key: 'Webui', label: 'WebUI 设置', fields: [
+      {key: 'WebuiHost', type: 'string', label: '监听地址', help: '模拟部署设置，仅在当前 mock 会话中保留。', value: '0.0.0.0', options: []},
+      {key: 'WebuiPort', type: 'int', label: '监听端口', help: '用于验证数值输入与保存。', value: 22267, options: []},
+      {key: 'Password', type: 'password', label: '访问密码', help: '留空保留原密码。', value: '', options: []},
+    ]},
+    {key: 'RemoteAccess', label: '远程访问', fields: [
+      {key: 'EnableRemoteAccess', type: 'bool', label: '启用远程访问', help: '模拟部署设置，仅在当前 mock 会话中保留。', value: true, options: []},
+      {key: 'RemoteAccessMode', type: 'select', label: '远程访问模式', help: '自动模式优先 P2P，失败后回退 SSH 转发。', value: 'auto', options: ['auto', 'webrtc', 'ssh']},
+    ]},
+    {key: 'Git', label: 'Git', fields: [
+      {key: 'Branch', type: 'string', label: '分支', help: '模拟系统级分组，用于验证系统设置页。', value: 'dev', options: []},
+    ]},
+  ], notice: '前端测试数据', demo: false, remote: {
+    enabled: true, state: 'waiting_peer', address: 'https://remurl.nanoda.work/p2p/32d93f1d640077ed', error: '',
+  }}
   const get = name => instances.get(name) ?? fail('NOT_FOUND', '实例不存在')
   const snapshot = name => ({instance: name, revision: revision(get(name).values), values: structuredClone(get(name).values)})
   function log(name, text, level = 'INFO') {

@@ -339,6 +339,53 @@ class SocketApiTests(unittest.TestCase):
             self.login(ws)
             self.assertEqual('READ_ONLY', self.call(ws, 'instances.create', {'name': 'newpilot'})['error']['code'])
 
+    def test_settings_get_exposes_remote_access_status(self):
+        """远程访问地址原本只写进服务端日志，界面要能拿到它。"""
+        class Provider:
+            @staticmethod
+            def get_connection_state():
+                return 'direct_p2p'
+
+            @staticmethod
+            def get_entry_point():
+                return 'https://remurl.example/p2p/abc'
+
+            @staticmethod
+            def get_error():
+                return ''
+
+        with patch('module.runtime.remote_access._provider', Provider):
+            with self.client.websocket_connect('/api/v1/ws') as ws:
+                self.login(ws)
+                remote = self.call(ws, 'settings.get')['result']['remote']
+        self.assertEqual('direct_p2p', remote['state'])
+        self.assertEqual('https://remurl.example/p2p/abc', remote['address'])
+        self.assertEqual('', remote['error'])
+        self.assertIn('enabled', remote)
+
+    def test_remote_access_status_empty_address_is_blank(self):
+        """服务未运行时地址是空串，前端据此隐藏复制按钮。"""
+        class Provider:
+            @staticmethod
+            def get_connection_state():
+                return 'stopped'
+
+            @staticmethod
+            def get_entry_point():
+                return None
+
+            @staticmethod
+            def get_error():
+                return 'ssh_not_found'
+
+        with patch('module.runtime.remote_access._provider', Provider):
+            with self.client.websocket_connect('/api/v1/ws') as ws:
+                self.login(ws)
+                remote = self.call(ws, 'settings.get')['result']['remote']
+        self.assertEqual('stopped', remote['state'])
+        self.assertEqual('', remote['address'])
+        self.assertEqual('ssh_not_found', remote['error'])
+
     def test_health_and_missing_frontend(self):
         self.assertEqual({'status': 'ok', 'protocolVersion': 1}, self.client.get('/healthz').json())
         self.assertEqual(503, self.client.get('/').status_code)
