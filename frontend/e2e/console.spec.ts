@@ -45,7 +45,7 @@ test('新建实例使用真实 API，移动端无横向溢出', async ({page}) =
   await expect(page.locator('[id="Alas.Emulator.Serial"]')).toBeVisible()
   await page.setViewportSize({width: 390, height: 844})
   await page.getByRole('button', {name: '打开导航'}).click()
-  await page.locator('.primary-nav').getByRole('link', {name, exact: true}).click()
+  await page.locator('.primary-nav a[href$="/overview"]').click()
   await expect(page.getByRole('heading', {name, exact: true})).toBeVisible()
   await expect(page.locator('.app-shell')).not.toHaveClass(/mobile-open/)
   await page.screenshot({path: 'test-results/overview-mobile.png', fullPage: true, animations: 'disabled'})
