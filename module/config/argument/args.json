@@ -690,6 +690,14 @@
         "type": "input",
         "value": "./screenshots"
       },
+      "RetentionDays": {
+        "type": "input",
+        "value": 0,
+        "validate": [
+          0,
+          3650
+        ]
+      },
       "AzurStatsID": {
         "type": "input",
         "value": null
@@ -720,6 +728,14 @@
           "save",
           "upload",
           "save_and_upload"
+        ]
+      },
+      "CommissionIncomeScreenshot": {
+        "type": "select",
+        "value": "save",
+        "option": [
+          "do_not",
+          "save"
         ]
       },
       "CombatRecord": {
@@ -767,6 +783,20 @@
         "value": true
       }
     },
+    "Backup": {
+      "Enable": {
+        "type": "checkbox",
+        "value": true
+      },
+      "KeepDays": {
+        "type": "input",
+        "value": 7,
+        "validate": [
+          1,
+          3650
+        ]
+      }
+    },
     "EmulatorManagement": {
       "ScheduledEmulatorRestart": {
         "type": "checkbox",
@@ -782,6 +812,14 @@
         "validate": [
           1,
           24
+        ]
+      },
+      "DeepRestartAfterFailures": {
+        "type": "input",
+        "value": 0,
+        "validate": [
+          0,
+          10
         ]
       }
     },
@@ -14446,13 +14484,8 @@
         "value": 200
       },
       "ExecuteFixedPatrolScan": {
-        "type": "select",
-        "value": 0,
-        "option": [
-          0,
-          1,
-          2
-        ]
+        "type": "checkbox",
+        "value": false
       },
       "SkipHpCheck": {
         "type": "checkbox",
@@ -14698,6 +14731,10 @@
       "TaskPriority": {
         "type": "textarea",
         "value": "OpsiStronghold > OpsiObscure > OpsiAbyssal > OpsiMeowfficerFarming"
+      },
+      "ObscureAbyssalCheckDelayDays": {
+        "type": "input",
+        "value": 0
       },
       "MonthEndActionPointCleanupEnable": {
         "type": "checkbox",

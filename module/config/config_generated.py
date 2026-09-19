@@ -156,16 +156,22 @@ class GeneratedConfig:
 
     # 配置组 `DropRecord`
     DropRecord_SaveFolder = './screenshots'
+    DropRecord_RetentionDays = 0
     DropRecord_AzurStatsID = None
     DropRecord_API = 'default'  # default, cn_gz_reverse_proxy
     DropRecord_ResearchRecord = 'do_not'  # do_not, save, upload, save_and_upload
     DropRecord_CommissionRecord = 'do_not'  # do_not, save, upload, save_and_upload
+    DropRecord_CommissionIncomeScreenshot = 'save'  # do_not, save
     DropRecord_CombatRecord = 'do_not'  # do_not, save
     DropRecord_OpsiRecord = 'upload'  # do_not, save, upload, save_and_upload
     DropRecord_MeowfficerBuy = 'do_not'  # do_not, save
     DropRecord_MeowfficerTalent = 'do_not'  # do_not, save, upload, save_and_upload
     DropRecord_TelemetryReport = True
     DropRecord_BugReport = True
+
+    # 配置组 `Backup`
+    Backup_Enable = True
+    Backup_KeepDays = 7
 
     # 配置组 `Log`
     Log_LogKeepCount = 3
@@ -690,7 +696,7 @@ class GeneratedConfig:
     OpsiHazard1Leveling_TargetZone = 0  # 0, 44, 22
     OpsiHazard1Leveling_OperationCoinsPreserve = 40000
     OpsiHazard1Leveling_MinimumActionPointReserve = 200
-    OpsiHazard1Leveling_ExecuteFixedPatrolScan = 0  # 0, 1, 2
+    OpsiHazard1Leveling_ExecuteFixedPatrolScan = False
     OpsiHazard1Leveling_SkipHpCheck = False  # True, False
     OpsiHazard1Leveling_Cl1Filter = 'ActionPoint'
     OpsiHazard1Leveling_RecordNonCL1AP = True
@@ -725,6 +731,7 @@ class GeneratedConfig:
     OpsiScheduling_EnableAbyssal = False  # True, False
     OpsiScheduling_EnableStronghold = False  # True, False
     OpsiScheduling_TaskPriority = 'OpsiStronghold > OpsiObscure > OpsiAbyssal > OpsiMeowfficerFarming'
+    OpsiScheduling_ObscureAbyssalCheckDelayDays = 0
     OpsiScheduling_MonthEndActionPointCleanupEnable = False  # True, False
     OpsiScheduling_MonthEndActionPointCleanupDays = 0
     OpsiScheduling_MonthEndActionPointPreserve = 0
@@ -1058,6 +1065,7 @@ class GeneratedConfig:
     EmulatorManagement_ScheduledEmulatorRestart = False
     EmulatorManagement_ForceScheduledRestart = False
     EmulatorManagement_RestartIntervalHours = 4
+    EmulatorManagement_DeepRestartAfterFailures = 0
 
     # 配置组 `EmulatorManager`
     EmulatorManager_EnableRemoteSSH = False  # True, False

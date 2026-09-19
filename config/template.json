@@ -134,10 +134,12 @@
     },
     "DropRecord": {
       "SaveFolder": "./screenshots",
+      "RetentionDays": 0,
       "AzurStatsID": null,
       "API": "default",
       "ResearchRecord": "do_not",
       "CommissionRecord": "do_not",
+      "CommissionIncomeScreenshot": "save",
       "CombatRecord": "do_not",
       "OpsiRecord": "upload",
       "MeowfficerBuy": "do_not",
@@ -145,10 +147,15 @@
       "TelemetryReport": true,
       "BugReport": true
     },
+    "Backup": {
+      "Enable": true,
+      "KeepDays": 7
+    },
     "EmulatorManagement": {
       "ScheduledEmulatorRestart": false,
       "ForceScheduledRestart": false,
-      "RestartIntervalHours": 4
+      "RestartIntervalHours": 4,
+      "DeepRestartAfterFailures": 0
     },
     "Storage": {
       "Storage": {}
@@ -2860,7 +2867,7 @@
       "TargetZone": 0,
       "OperationCoinsPreserve": 40000,
       "MinimumActionPointReserve": 200,
-      "ExecuteFixedPatrolScan": 0,
+      "ExecuteFixedPatrolScan": false,
       "SkipHpCheck": false,
       "Cl1Filter": "ActionPoint",
       "RecordNonCL1AP": true,
@@ -2914,6 +2921,7 @@
       "EnableAbyssal": false,
       "EnableStronghold": false,
       "TaskPriority": "OpsiStronghold > OpsiObscure > OpsiAbyssal > OpsiMeowfficerFarming",
+      "ObscureAbyssalCheckDelayDays": 0,
       "MonthEndActionPointCleanupEnable": false,
       "MonthEndActionPointCleanupDays": 0,
       "MonthEndActionPointPreserve": 0,
