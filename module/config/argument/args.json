@@ -2863,14 +2863,13 @@
       },
       "Fleet2Value": {
         "type": "input",
-        "value": 119,
-        "display": "hide"
+        "value": 119
       },
       "Fleet2Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
-        "display": "hide"
+        "display": "disabled"
       },
       "Fleet2Control": {
         "type": "select",
@@ -5608,12 +5607,12 @@
         "value": false
       },
       "Fleet2Value": {
-        "type": "input",
+        "type": "stored",
         "value": 119,
         "display": "hide"
       },
       "Fleet2Record": {
-        "type": "datetime",
+        "type": "stored",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "hide"
@@ -6237,12 +6236,12 @@
         "display": "hide"
       },
       "Fleet2Value": {
-        "type": "input",
+        "type": "stored",
         "value": 119,
         "display": "hide"
       },
       "Fleet2Record": {
-        "type": "datetime",
+        "type": "stored",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "hide"
@@ -6531,12 +6530,12 @@
         "value": false
       },
       "Fleet2Value": {
-        "type": "input",
+        "type": "stored",
         "value": 119,
         "display": "hide"
       },
       "Fleet2Record": {
-        "type": "datetime",
+        "type": "stored",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "hide"
@@ -10399,12 +10398,12 @@
         "value": false
       },
       "Fleet2Value": {
-        "type": "input",
+        "type": "stored",
         "value": 119,
         "display": "hide"
       },
       "Fleet2Record": {
-        "type": "datetime",
+        "type": "stored",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "hide"
@@ -10694,12 +10693,12 @@
         "value": false
       },
       "Fleet2Value": {
-        "type": "input",
+        "type": "stored",
         "value": 119,
         "display": "hide"
       },
       "Fleet2Record": {
-        "type": "datetime",
+        "type": "stored",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "hide"
