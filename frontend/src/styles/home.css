@@ -23,18 +23,29 @@
 .task-nav-heading {margin-bottom: 8px; flex-shrink: 0}
 .sidebar-label .icon-button {width: 28px; height: 28px; padding: 6px}
 .filter-active {color: var(--accent) !important; background: var(--accent-soft) !important}
-.home-section-heading {display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 20px}
-.home-section-heading h2 {display: flex; gap: 10px; align-items: center; font-size: 16px}
-.instance-grid {display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 265px), 1fr)); gap: 20px}
-.instance-card {display: flex; flex-direction: column; padding: 24px; color: var(--text); transition: border-color .15s, box-shadow .15s; text-decoration: none; min-width: 0}
-.instance-card:hover {border-color: var(--accent); box-shadow: 0 6px 24px #138b7810}
-.instance-card-heading {display: flex; justify-content: space-between; align-items: center; gap: 12px}
-.home-instance-icon {width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: var(--accent-soft); color: var(--accent)}
-.instance-card h3 {font-size: 21px; font-weight: 650; margin: 22px 0 10px; overflow-wrap: anywhere}
-.instance-device {display: flex; gap: 12px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere}
+.main-shell > main:has(> .home-editorial) {max-width: none; min-height: calc(var(--viewport-height) - 56px); padding: 0; display: flex}
+.home-editorial {flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(280px, 38%) minmax(0, 1fr)}
+.home-visual {position: relative; isolation: isolate; min-width: 0; padding: clamp(30px, 4vw, 64px); display: flex; flex-direction: column; justify-content: space-between; color: #fff; text-shadow: 0 2px 18px #000b}
+.home-active .wallpaper::after {content: ''; position: absolute; inset: 0; background: rgb(0 0 0 / .42); pointer-events: none}
+.home-visual-copy {margin: auto 0; padding: 48px 0}
+.home-visual h1 {max-width: 560px; margin: 13px 0 18px; font-size: clamp(38px, 3.8vw, 58px); line-height: .98; letter-spacing: -.055em; overflow-wrap: normal}
+.home-workspace {min-width: 0; padding: clamp(28px, 4vw, 58px); background: var(--surface); color: var(--text)}
+.home-workspace-heading {min-height: 72px; padding-bottom: 26px; display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--border)}
+.home-workspace-heading h2 {margin: 0; font-size: clamp(24px, 2.4vw, 32px); letter-spacing: -.7px}
+.home-instance-list {margin-top: 10px}
+.home-instance-row {min-height: 120px; padding: 20px 4px; display: grid; grid-template-columns: minmax(150px, 1.25fr) minmax(100px, .7fr) minmax(120px, .8fr) 36px; align-items: center; gap: 22px; color: var(--text); text-decoration: none; border-bottom: 1px solid var(--border)}
+.home-instance-row:hover .home-instance-arrow {border-color: var(--text); transform: translateX(3px)}
+.home-instance-identity {min-width: 0}
+.home-instance-identity h3 {margin: 0 0 7px; font-size: 18px; font-weight: 680; overflow-wrap: anywhere}
+.instance-device {display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--muted); font-size: 11px; overflow-wrap: anywhere}
 .instance-device > span:first-child {text-transform: uppercase; flex-shrink: 0}
-.instance-card-footer {margin-top: 25px; padding-top: 17px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--accent)}
-.instance-add {min-height: 230px; border: 1px dashed var(--border); border-radius: var(--radius); align-items: center; justify-content: center; gap: 18px; color: var(--accent)}
+.home-instance-row .status {justify-self: start}
+.home-instance-task {min-width: 0; font-size: 12px; font-weight: 650; overflow-wrap: anywhere}
+.home-instance-arrow {width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 50%; transition: border-color .15s, transform .15s}
+.home-instance-empty {width: 100%; min-height: 180px; display: flex; align-items: center; justify-content: center; gap: 12px; border: 1px dashed var(--border); border-radius: 16px; color: var(--accent); background: transparent}
+[data-theme='minimal'] .home-visual {color: var(--text); background: var(--surface-muted); text-shadow: none}
+[data-theme='minimal'] .main-shell > main:has(> .home-editorial) {min-height: calc(var(--viewport-height) - var(--topbar-height))}
+[data-theme='minimal'] .home-visual::before {content: none}
 .head-grid {display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-bottom: 24px}
 .head-card {padding: 22px; display: grid; gap: 15px}
 .head-card > span {display: flex; align-items: center; gap: 8px; color: var(--muted)}
@@ -69,5 +80,19 @@
   .head-card {padding: 18px}
   .commit-row {padding: 16px; gap: 10px}
   .commit-pagination {padding: 16px; gap: 8px}
+  .home-editorial {grid-template-columns: 1fr}
+  .home-visual {min-height: 430px; padding: 32px}
+  .home-visual-copy {padding: 58px 0}
+  .home-visual h1 {font-size: clamp(40px, 10vw, 64px)}
+  .home-workspace {padding: 30px 26px}
 }
 
+@media (max-width: 620px) {
+  .home-visual {min-height: 380px; padding: 26px 22px}
+  .home-visual-copy {padding: 42px 0}
+  .home-workspace {padding: 26px 20px}
+  .home-workspace-heading {align-items: flex-start; flex-direction: column}
+  .home-instance-row {grid-template-columns: minmax(0, 1fr) 36px; gap: 13px; padding: 22px 2px}
+  .home-instance-row .status, .home-instance-task {grid-column: 1}
+  .home-instance-arrow {grid-column: 2; grid-row: 1 / 4}
+}
