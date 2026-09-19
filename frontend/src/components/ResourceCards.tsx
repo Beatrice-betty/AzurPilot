@@ -33,7 +33,11 @@ export function ResourceCards({resources, selected}: {resources: Resource[]; sel
       const recorded = resource?.record && !resource.record.startsWith('2020-01-01')
       const labelKey = resourceLabels[key]
       const label = labelKey ? ui(labelKey) : resource?.label ?? key
-      return <section key={key} className={`resource-card resource-${index % 4}`}><div className="resource-heading"><span>{label}</span><div className="resource-image-wrap"><ResourceIcon resourceKey={key} size={32}/></div></div><div className="resource-value">{recorded && resource?.value != null ? resource.value.toLocaleString() : '—'}{recorded && !!resource?.limit && <small>/ {resource.limit.toLocaleString()}</small>}</div><div className="resource-foot">{recorded ? ui('resource.recordedAt', {time: resource.record?.replace('T', ' ').slice(5, 19) ?? ''}) : ui('resource.waitingSync')}</div></section>
+      const limit = resource?.limit
+      const total = resource?.total
+      const showLimit = typeof limit === 'number' && limit > 0
+      const showTotal = !showLimit && resource?.name === 'ActionPoint' && typeof resource.value === 'number' && typeof total === 'number' && Number.isFinite(total) && total > resource.value
+      return <section key={key} className={`resource-card resource-${index % 4}`}><div className="resource-heading"><span>{label}</span><div className="resource-image-wrap"><ResourceIcon resourceKey={key} size={32}/></div></div><div className="resource-value">{recorded && resource?.value != null ? resource.value.toLocaleString() : '—'}{recorded && showLimit && <small>/ {limit.toLocaleString()}</small>}{recorded && showTotal && <small>/ {ui('resource.totalActionPoint')} {total.toLocaleString()}</small>}</div><div className="resource-foot">{recorded ? ui('resource.recordedAt', {time: resource.record?.replace('T', ' ').slice(5, 19) ?? ''}) : ui('resource.waitingSync')}</div></section>
     })}</div>
 }
 

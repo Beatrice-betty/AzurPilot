@@ -67,6 +67,15 @@ class RuntimeTests(unittest.TestCase):
             manager.state = 2
             self.assertNotIn('running', {task['state'] for task in runtime.overview('pilot')['tasks']})
 
+    def test_overview_preserves_action_point_total(self):
+        data = {'Dashboard': {'ActionPoint': {'Value': 101, 'Total': 1301, 'Record': '2026-09-16 12:00:00'}}}
+        configs = SimpleNamespace(read=lambda _: (data, 'revision'), translate=Mock(return_value='行动力'))
+        with patch('module.api.runtime_service.ProcessManager._processes', {}):
+            resource = RuntimeService(configs).overview('pilot')['resources'][0]
+        self.assertEqual('ActionPoint', resource['name'])
+        self.assertEqual(101, resource['value'])
+        self.assertEqual(1301, resource['total'])
+
     def test_logs_preserves_spaces_for_level_0_rule_title_and_tracebacks(self):
         from rich.rule import Rule
         from rich.text import Text
@@ -186,6 +195,7 @@ class StatisticsTests(unittest.TestCase):
         raw = {'ap_snapshots': [{'ts': '2026-09-01 12:00:00', 'ap': 0, 'asset': 50, 'distance': 100, 'source': 'cl1'}],
                'coins_snapshots': [{'ts': '2026-09-02 13:00:00', 'yellow_coins': 200, 'purple_coins': 5}]}
         entries = [{'ts': '2026-09-01 12:00:00', 'commission_count': 2, 'items': {'Gems': 7, 'Cubes': 3}},
+                   {'ts': '2026-09-02 12:00:00', 'commission_count': 1, 'items': {}},
                    {'ts': '2026-10-01 00:00:00', 'items': {'Gem': 999}}]
         database = SimpleNamespace(get_stats=Mock(return_value=raw), get_commission_income=Mock(side_effect=lambda instance, year, month: entries if month == 9 else []))
         configs = SimpleNamespace(path=lambda _: None)
@@ -199,8 +209,9 @@ class StatisticsTests(unittest.TestCase):
             income = report(configs, 'pilot', 'commission', '2026-09', 7, 'month')
             metrics = {item['label']: item['value'] for item in income['metrics']}
             self.assertEqual(7, metrics['钻石'])
-            self.assertEqual(2, metrics['完成委托'])
-            self.assertEqual(1, len(income['tables'][1]['rows']))
+            self.assertEqual(3, metrics['完成委托'])
+            self.assertEqual(2, len(income['tables'][1]['rows']))
+            self.assertEqual({'index': 0, 'descending': True}, income['tables'][1]['defaultSort'])
             self.assertEqual(3, income['series'][1]['points'][0]['value'])
             database.get_commission_income.assert_called_with('pilot', 2026, 9)
 

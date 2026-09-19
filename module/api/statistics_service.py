@@ -25,8 +25,11 @@ RESOURCE_LABELS = {
 }
 
 
-def table(title, columns, rows, note=''):
-    return {'title': title, 'columns': columns, 'rows': rows, 'note': note}
+def table(title, columns, rows, note='', default_sort=None):
+    result = {'title': title, 'columns': columns, 'rows': rows, 'note': note}
+    if default_sort is not None:
+        result['defaultSort'] = default_sort
+    return result
 
 
 def series(rows, key, label):
@@ -141,7 +144,8 @@ def report(configs, instance, category, month, days, period):
         from module.statistics.commission_income_stats import COMMISSION_ITEM_NAME_MAP
         normalized = [{**item, 'items': {COMMISSION_ITEM_NAME_MAP.get(k, k): v for k, v in item.get('items', {}).items()}} for item in entries]
         result['tables'].append(table('委托结算记录', ['时间', '委托数量', '钻石', '魔方', '心智单元', '石油', '物资'],
-            [[item['ts'], item.get('commission_count', 1), *[item['items'].get(k) for k in ('Gem', 'Cube', 'Chip', 'Oil', 'Coin')]] for item in normalized]))
+            [[item['ts'], item.get('commission_count', 1), *[item['items'].get(k) for k in ('Gem', 'Cube', 'Chip', 'Oil', 'Coin')]] for item in normalized],
+            default_sort={'index': 0, 'descending': True}))
         result['series'] = [series([{'ts': item['ts'], **item['items']} for item in normalized], k, labels[k]) for k in ('Gem', 'Cube', 'Chip', 'Oil', 'Coin')]
     elif category == 'ships':
         from module.statistics.ship_exp_stats import ShipExpStats

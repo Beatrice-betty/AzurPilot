@@ -211,9 +211,9 @@ button:focus-visible, a:focus-visible, summary:focus-visible {outline-color: var
 }
 .task-submenu-flyout {
   isolation: isolate;
-  background: var(--theme-sidebar);
-  -webkit-backdrop-filter: blur(var(--theme-glass-blur)) saturate(var(--theme-glass-saturation));
-  backdrop-filter: blur(var(--theme-glass-blur)) saturate(var(--theme-glass-saturation));
+  background: var(--theme-surface);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 .task-submenu-item {border: 1px solid transparent}
 .task-submenu-item.active {border-color: transparent}

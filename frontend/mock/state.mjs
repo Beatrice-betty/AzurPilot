@@ -193,6 +193,9 @@ export function createMockState({empty = false} = {}) {
         values.Dashboard[key].Value = value - index * 100
         values.Dashboard[key].Record = timestamp(new Date())
       }
+      values.Dashboard.ActionPoint.Value = 101 - index * 2
+      values.Dashboard.ActionPoint.Total = values.Dashboard.ActionPoint.Value + 1200
+      values.Dashboard.ActionPoint.Record = timestamp(new Date())
       for (const [order, task] of ['Commission', 'Research', 'Dorm', 'Main'].entries()) {
         values[task].Scheduler.Enable = true
         values[task].Scheduler.NextRun = timestamp(new Date(Date.now() + (order - 1) * 1800000))
@@ -212,7 +215,7 @@ export function createMockState({empty = false} = {}) {
         pending: groups.Scheduler.NextRun <= timestamp(new Date()),
       })),
       resources: Object.entries(data.values.Dashboard).filter(([, resource]) => 'Value' in resource).map(([key, resource]) => ({
-        name: key, label: translate(`${key}._info.name`), value: resource.Value, limit: resource.Limit, record: resource.Record,
+        name: key, label: translate(`${key}._info.name`), value: resource.Value, limit: resource.Limit, total: resource.Total, record: resource.Record,
       })),
     }
   }

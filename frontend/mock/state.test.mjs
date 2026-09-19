@@ -27,6 +27,12 @@ describe('前端模拟服务', () => {
     expect(dispatch('instances.list').map(item => item.name)).toEqual(['first'])
     expect(createMockState({empty: true}).dispatch('instances.list')).toEqual([])
   })
+  it('总览投影保留行动力总值', () => {
+    const {dispatch} = createMockState()
+    const actionPoint = dispatch('overview.get', {instance: 'demo-main'}).resources.find(resource => resource.name === 'ActionPoint')
+
+    expect(actionPoint).toMatchObject({value: 101, total: 1301})
+  })
   it('契约参数、只读字段、语言、日志游标和被动预览可验证', () => {
     const {dispatch, tick} = createMockState()
     expect(() => dispatch('schema.get', {language: '../deploy'})).toThrow(/契约/)

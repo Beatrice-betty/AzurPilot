@@ -17,7 +17,7 @@ export interface Schema {
 }
 export interface Config { instance: string; revision: string; values: Values }
 export interface ScheduledTask { name: string; nextRun: string; pending: boolean; state: 'running' | 'pending' | 'waiting' }
-export interface Resource { name: string; label: string; value: number | null; limit?: number; record?: string }
+export interface Resource { name: string; label: string; value: number | null; limit?: number; total?: number | null; record?: string }
 export interface Overview {
   instance: string; revision: string; status: Status; tasks: ScheduledTask[]
   resources: Resource[]; emulator: Record<string, Value>
@@ -28,7 +28,8 @@ export interface Preview { instance: string; image: string | null; capturedAt: s
 export interface Statistics { instance: string; resource: string; points: {time: string; value: number}[]; truncated: boolean }
 export interface StatPoint {time: string; value: number; source?: string}
 export interface StatSeries {key: string; label: string; points: StatPoint[]}
-export interface StatTable {title: string; columns: string[]; rows: Scalar[][]; note?: string}
+export interface StatTable {title: string; columns: string[]; rows: Scalar[][]; note?: string; defaultSort?: TableSort}
+export interface TableSort {index: number; descending: boolean}
 export interface StatisticsReport {
   instance: string; category: string; month: string
   metrics: {label: string; value: number | null; unit: string}[]
