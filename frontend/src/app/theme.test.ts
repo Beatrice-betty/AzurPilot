@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { readThemePreference, usesMaterial, type Theme } from './theme'
+import { readThemePreference, showsRightRail, usesLegacyLayout, usesLegacyShell, usesMaterial, type Theme } from './theme'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -43,5 +43,35 @@ describe('旧版主题注册与装饰层判定', () => {
   it('只有 Apple 玻璃系主题使用材质装饰', () => {
     const material = ALL_THEMES.filter(usesMaterial)
     expect(material).toEqual(['light', 'dark'])
+  })
+})
+
+// 旧版版式只在实例视图生效：主页要留新版外壳，总览页要收起右栏免得调度器出现两处。
+describe('旧版版式的生效范围', () => {
+  it('只有两个旧版主题在实例视图里换外壳', () => {
+    for (const theme of ALL_THEMES) {
+      expect(usesLegacyShell(theme, 'alas')).toBe(usesLegacyLayout(theme))
+    }
+    expect(usesLegacyLayout('light')).toBe(false)
+    expect(usesLegacyLayout('minimal')).toBe(false)
+  })
+  it('主页视图不换外壳', () => {
+    for (const theme of ALL_THEMES) expect(usesLegacyShell(theme, undefined)).toBe(false)
+    expect(usesLegacyShell('legacy-light', '')).toBe(false)
+  })
+  it('旧版总览页收起右栏，其余实例页保留', () => {
+    expect(showsRightRail('legacy-light', 'alas', '/i/alas/overview')).toBe(false)
+    expect(showsRightRail('legacy-dark', 'alas', '/i/alas/overview')).toBe(false)
+    expect(showsRightRail('legacy-light', 'alas', '/i/alas/task/Main')).toBe(true)
+    expect(showsRightRail('legacy-light', 'alas', '/i/alas/statistics')).toBe(true)
+  })
+  it('新版主题在任何实例页都保留右栏', () => {
+    for (const theme of ['light', 'dark', 'minimal'] as Theme[]) {
+      expect(showsRightRail(theme, 'alas', '/i/alas/overview')).toBe(true)
+      expect(usesLegacyShell(theme, 'alas')).toBe(false)
+    }
+  })
+  it('主页没有实例时不渲染右栏', () => {
+    for (const theme of ALL_THEMES) expect(showsRightRail(theme, undefined, '/')).toBe(false)
   })
 })

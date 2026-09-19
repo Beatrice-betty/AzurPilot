@@ -65,7 +65,6 @@ body {background-attachment: scroll}
 .task-submenu-item {font-size: 13px; min-height: 38px}
 .task-group-button.expanded {border-color: var(--accent)}
 .topbar {position: sticky; top: 0; z-index: 80; height: var(--topbar-height); margin: 0; padding: 0 24px}
-.app-shell.with-rail .topbar {width: calc(100% + var(--right-rail-width))}
 .right-rail {top: var(--topbar-height); height: calc(var(--viewport-height) - var(--topbar-height)); z-index: 70}
 .breadcrumb, .breadcrumb .instance-caption strong {font-size: 13px}
 main {padding: 40px 28px 24px}
@@ -105,11 +104,56 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 .resource-editor-add-icon, .resource-editor-add, .resource-editor-add:hover, .resource-editor-add.open {background: var(--accent-soft)}
 .statistics-note {border-left-color: var(--secondary)}
 .chart-expanded {inset: 0; border-radius: 0; z-index: 150}
-@media (min-width: 951px) {
-  .overview-page {height: calc(var(--viewport-height) - var(--topbar-height) - 72px)}
-  .overview-main {flex: 19; margin-bottom: 0}
-  .overview-page::after {content: ''; display: block; flex: 1; min-height: 0}
+/* 旧版版式：只在实例视图生效（App.tsx 的 .legacy-shell）。
+   旧版外壳是「顶栏跨全宽 + 文字菜单在顶栏下方」，与共享层的「侧栏整列 + 顶栏在主内容列内」
+   是两套网格，所以在这里整块重排，主页视图不受影响。 */
+.app-shell.legacy-shell {
+  /* 旧版文字菜单宽 12rem(16px 基准)=192px；本仓库根字号是 14px，所以直接写像素。 */
+  --sidebar-width: 192px;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas: 'topbar topbar' 'sidebar main';
 }
+.app-shell.legacy-shell.with-rail {
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--right-rail-width);
+  grid-template-areas: 'topbar topbar topbar' 'sidebar main rail';
+}
+.app-shell.legacy-shell > .topbar {grid-area: topbar; width: auto}
+.app-shell.legacy-shell > .sidebar {grid-area: sidebar}
+.app-shell.legacy-shell > .main-shell {grid-area: main}
+.app-shell.legacy-shell > .right-rail {grid-area: rail}
+/* 招牌随顶栏走：顶栏里的那份紧贴左侧，不参与侧栏那套 72px 间距。 */
+.legacy-topbar-brand {height: auto; margin-bottom: 0; padding: 0}
+.legacy-overview-title {position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap}
+
+@media (min-width: 951px) {
+  /* 顶栏占了第一行，侧栏与右栏从它下方开始各自滚动。 */
+  .app-shell.legacy-shell > .sidebar,
+  .app-shell.legacy-shell > .right-rail {top: var(--topbar-height); height: calc(var(--viewport-height) - var(--topbar-height))}
+  .app-shell.legacy-shell .legacy-sidebar-actions {display: none}
+
+  /* 旧版总览：左列调度器与任务计划，右列资源卡与日志。 */
+  .overview-page.overview-legacy {
+    display: grid;
+    grid-template-columns: minmax(16rem, 20rem) minmax(24rem, 1fr);
+    gap: 14px;
+    align-items: stretch;
+    height: calc(var(--viewport-height) - var(--topbar-height) - 64px);
+  }
+  .overview-schedulers {display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto}
+  /* 左列整体滚动，队列列表不再自己开一层滚动区。 */
+  .overview-schedulers .rail-task-list {flex: 0 0 auto; overflow: visible}
+  .overview-logs {display: flex; flex-direction: column; gap: 12px; min-height: 0}
+  .overview-logs .resource-grid {margin-bottom: 0}
+  .overview-logs .monitor-panel {flex: 1; min-height: 0; display: flex; flex-direction: column}
+  .overview-logs .monitor-view {flex: 1; min-height: 0; display: flex; flex-direction: column}
+  .overview-logs .monitor-view[hidden] {display: none}
+  .overview-logs .log-panel {flex: 1; min-height: 0}
+  .overview-logs .log-content {height: auto; flex: 1; min-height: 12rem}
+}
+.legacy-stat-card {display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; flex-shrink: 0}
+.legacy-stat-title {font-size: 15px; font-weight: 600}
+.legacy-stat-actions {display: flex; align-items: center; gap: 8px}
 .monitor-tabs {height: auto; min-height: 60px; padding: 10px 16px; flex-wrap: wrap; gap: 8px}
 .monitor-panel .log-toolbar {display: flex; align-items: center; margin-left: auto; gap: 4px}
 .monitor-panel .log-panel {border: 0; border-radius: 0}
@@ -143,6 +187,9 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 .modal {border: 1px solid var(--border)}
 .toast {border: 1px solid var(--border)}
 @media (max-width: 950px) {
+  /* 窄屏下侧栏与右栏都是抽屉，旧版版式回到共享层的单列流。 */
+  .app-shell.legacy-shell {display: block}
+  .overview-page.overview-legacy {display: flex; flex-direction: column; height: auto; gap: 12px}
   .topbar, .app-shell.with-rail .topbar {width: 100%; padding: 0 14px}
   .sidebar, .right-rail {top: 0; height: var(--viewport-height); z-index: 100}
   .sidebar-brand {padding: 0}

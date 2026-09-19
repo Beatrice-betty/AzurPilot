@@ -10,6 +10,17 @@ const defaults: Preference = {theme: 'light', palette: 'ocean', colorMode: 'auto
 const MATERIAL_THEMES: readonly Theme[] = ['light', 'dark']
 export const usesMaterial = (theme: Theme) => MATERIAL_THEMES.includes(theme)
 
+/** 走旧版版式的主题：实例视图的顶栏跨全宽、总览页两列、右栏让位。 */
+const LEGACY_LAYOUT_THEMES: readonly Theme[] = ['legacy-light', 'legacy-dark']
+export const usesLegacyLayout = (theme: Theme) => LEGACY_LAYOUT_THEMES.includes(theme)
+
+/** 实例视图是否换用旧版外壳；主页视图（没有实例）一律沿用新版外壳。 */
+export const usesLegacyShell = (theme: Theme, instance?: string) => Boolean(instance) && usesLegacyLayout(theme)
+
+/** 是否渲染右栏。旧版外壳的总览页把调度器与任务计划放进页内两列，右栏必须让位，否则调度器会出现两处。 */
+export const showsRightRail = (theme: Theme, instance: string | undefined, pathname: string) =>
+  Boolean(instance) && !(usesLegacyShell(theme, instance) && pathname.endsWith('/overview'))
+
 const VALID_THEMES: readonly string[] = ['light', 'dark', 'minimal',
   'legacy-light', 'legacy-dark']
 
