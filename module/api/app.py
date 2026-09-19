@@ -14,6 +14,7 @@ from module.api.router import Router
 from module.api.runtime_service import RuntimeService
 from module.api.socket import Gateway
 from module.api.static import FrontendFiles
+from module.logger import logger
 from module.runtime.password_utils import ensure_password_for_host, is_demo_mode
 from module.runtime.setting import State
 
@@ -44,8 +45,11 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
                 runs = args.run or parse_run_config(State.deploy_config.Run)
                 await asyncio.to_thread(startup, runs)
                 if State.deploy_config.DiscordRichPresence:
-                    from module.runtime.discord_presence import init_discord_rpc
-                    init_discord_rpc()
+                    try:
+                        from module.runtime.discord_presence import init_discord_rpc
+                        init_discord_rpc()
+                    except Exception:
+                        logger.exception('Discord RPC 启动失败，继续运行 WebUI')
             yield
         finally:
             try:
@@ -54,8 +58,14 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
                     await mcp_app.state.tools.close()
             finally:
                 if manage_runtime:
-                    from module.api.lifecycle import clearup
-                    await asyncio.to_thread(clearup)
+                    try:
+                        from module.runtime.discord_presence import async_close_discord_rpc
+                        await async_close_discord_rpc()
+                    except Exception:
+                        logger.exception('Discord RPC 清理失败，继续回收共享运行时')
+                    finally:
+                        from module.api.lifecycle import clearup
+                        await asyncio.to_thread(clearup)
 
     dist = root / 'frontend/dist'
 

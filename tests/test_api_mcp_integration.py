@@ -93,12 +93,14 @@ class ApiMcpCleanupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, \
                 patch.object(State, '_deploy_config_', settings, create=True), \
                 patch('module.api.lifecycle.startup', side_effect=lambda runs: events.append('startup')), \
-                patch('module.api.lifecycle.clearup', side_effect=lambda: events.append('runtime_cleanup')):
+                patch('module.api.lifecycle.clearup', side_effect=lambda: events.append('runtime_cleanup')), \
+                patch('module.runtime.discord_presence.async_close_discord_rpc',
+                      new=AsyncMock(side_effect=lambda: events.append('discord_cleanup'))):
             app = create_app(root=fixture(directory), password='')
             with patch.object(mounted_mcp(app).state.tools, 'close', new=AsyncMock(side_effect=lambda: events.append('mcp_cleanup'))):
                 with TestClient(app) as client:
                     self.assertEqual(200, client.get('/healthz').status_code)
-            self.assertEqual(['startup', 'mcp_cleanup', 'runtime_cleanup'], events)
+            self.assertEqual(['startup', 'mcp_cleanup', 'discord_cleanup', 'runtime_cleanup'], events)
 
     def test_runtime_cleanup_still_runs_when_mcp_cleanup_fails(self):
         settings = SimpleNamespace(Run='', DiscordRichPresence=False)
