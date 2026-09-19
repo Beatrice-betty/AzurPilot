@@ -11,6 +11,7 @@ import { RightRail } from '../components/RightRail'
 import { TaskNav } from '../components/TaskNav'
 import { useUpdater } from './updater'
 import { recordDevLogoClick } from './devMode'
+import { INSTANCE_NAME_PATTERN } from './instanceName'
 
 export function CreateInstance({onClose}: {onClose: () => void}) {
   const [name, setName] = useState('')
@@ -29,7 +30,7 @@ export function CreateInstance({onClose}: {onClose: () => void}) {
   }
   return <Modal title={ui('instance.createTitle')} onClose={onClose}><form onSubmit={submit} className="form-stack">
     <p className="muted">{ui('instance.createHint')}</p>
-    <label>{ui('instance.name')}<input autoFocus required pattern="[A-Za-z][A-Za-z0-9_-]{0,63}" value={name} onChange={event => setName(event.target.value)} placeholder={ui('instance.namePlaceholder')} maxLength={64}/></label>
+    <label>{ui('instance.name')}<input autoFocus required pattern={INSTANCE_NAME_PATTERN} value={name} onChange={event => setName(event.target.value)} placeholder={ui('instance.namePlaceholder')} maxLength={64}/></label>
     <label>{ui('instance.initialConfig')}<Select value={source} onChange={event => setSource(event.target.value)}><option value="">{ui('instance.defaultConfig')}</option>{instances.map(item => <option key={item.name}>{item.name}</option>)}</Select></label>
     {error && <ErrorBox message={error}/>}
     <button className="button primary" disabled={busy}>{busy ? ui('instance.creating') : ui('instance.create')}<ArrowRight size={16}/></button>
