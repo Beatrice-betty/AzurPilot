@@ -842,8 +842,23 @@ class AzurLaneAutoScript:
     def device(self):
         try:
             from module.device.device import Device
-            device = Device(config=self.config)
+            # 调度器统一管理模拟器恢复，避免设备初始化再嵌套一轮启动重试。
+            device = Device(config=self.config, auto_start_emulator=False)
             return device
+        except EmulatorNotRunningError as e:
+            if self.config.Error_HandleError:
+                # loop() 会在 run() 之前初始化设备，同样必须遵守敏感任务保护。
+                self._check_sensitive_exit(self.config.task.command, e)
+                raise
+            logger.error_context(
+                title='设备离线且自动恢复已关闭',
+                reason='初始化设备时无法建立连接，Error.HandleError 已禁用。',
+                impact='调度器停止运行，不会启动或重启模拟器。',
+                action='手动恢复设备连接后重新启动，或启用错误处理。',
+                exc=e,
+                level=50,
+            )
+            exit(1)
         except RequestHumanTakeover:
             logger.error_context(
                 title='设备初始化需要人工介入',
@@ -2333,7 +2348,7 @@ class AzurLaneAutoScript:
                     continue
                 else:
                     self._stop_daily_summary_scheduler()
-                    break
+                    return False
 
             # 捕获全局异常并执行重启
             # 说明：调度器永不主动退出，所有未处理异常均通过指数退避重试恢复，

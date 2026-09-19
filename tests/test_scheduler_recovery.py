@@ -65,7 +65,46 @@ class TestSchedulerRecovery(unittest.TestCase):
         script.get_next_task = Mock(side_effect=tasks)
         script.stop_event = Mock()
         script.stop_event.is_set.side_effect = [False] * len(tasks) + [True]
-        script.loop()
+        return script.loop()
+
+    def test_unhandled_task_failure_returns_false_when_recovery_is_disabled(self):
+        script = self.make_script()
+        script.config.Error_HandleError = False
+        script.run = Mock(return_value=False)
+
+        self.assertIs(self.run_tasks(script, ['Commission']), False)
+
+        script._stop_daily_summary_scheduler.assert_called_once_with()
+        script._try_restart_emulator.assert_not_called()
+        script.config.task_call.assert_not_called()
+
+    def test_initial_device_offline_is_recovered_by_scheduler(self):
+        script = self.make_script()
+        del script.__dict__['device']
+        del script.__dict__['_try_restart_emulator']
+        script.config.task.command = 'Commission'
+        script.config.Error_AdbOfflineThreshold = 3
+        connected_device = Mock()
+        with (
+            patch(
+                'module.device.device.Device',
+                side_effect=[EmulatorNotRunningError('设备离线'), connected_device],
+            ) as device_class,
+            patch('module.device.platform.Platform') as platform_class,
+        ):
+            self.run_tasks(script, ['Commission', 'Restart'])
+
+        self.assertEqual(device_class.call_args_list, [
+            call(config=script.config, auto_start_emulator=False),
+            call(config=script.config, auto_start_emulator=False),
+        ])
+        platform_class.assert_called_once_with(script.config, connect=False)
+        platform_class.return_value.emulator_stop.assert_called_once_with()
+        platform_class.return_value.emulator_start.assert_called_once_with(deep=False, failures=0)
+        script.config.task_call.assert_called_once_with('Restart')
+        script.restart.assert_called_once_with()
+        script.commission.assert_not_called()
+        self.assertEqual(self.sleep.call_args_list, [call(5), call(20)])
 
     def test_strict_restart_policy_for_task_exceptions(self):
         errors = (
