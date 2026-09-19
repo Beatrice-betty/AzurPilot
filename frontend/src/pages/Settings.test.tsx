@@ -4,25 +4,26 @@ import { AppContext, type AppContextValue } from '../app/context'
 import { Settings } from './Settings'
 import { translateUi } from '../i18n'
 
-vi.mock('react', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react')>()
-  return {
-    ...actual,
-    useSyncExternalStore: (_subscribe: any, getSnapshot: any, getServerSnapshot?: any) => {
-      return (getServerSnapshot ?? getSnapshot)()
-    },
-  }
-})
-
-vi.mock('../api/client', () => ({
-  api: {
-    subscribe: () => () => {},
-    getSnapshot: () => 'disconnected',
-    request: vi.fn().mockResolvedValue({ groups: [], notice: '', demo: false }),
-  },
+// vi.mock 的工厂会被提升到 import 之前，模块级数据必须走 vi.hoisted。
+const {groups, queue} = vi.hoisted(() => ({
+  groups: [
+    {key: 'Git', label: 'Git', fields: [{key: 'Branch', type: 'string', label: 'Branch', help: 'help', value: 'dev', options: []}]},
+    {key: 'RemoteAccess', label: 'RemoteAccess', fields: []},
+    {key: 'Webui', label: 'Webui', fields: []},
+  ],
+  queue: {change: () => {}, retry: () => {}},
 }))
 
-function createMockContext(theme: AppContextValue['theme']): AppContextValue {
+vi.mock('../app/useDeploySettings', () => ({
+  useDeploySettings: () => ({
+    data: {groups, notice: '', demo: false},
+    error: '',
+    edits: {edits: {}, storageError: ''},
+    queue,
+  }),
+}))
+
+function createMockContext(): AppContextValue {
   return {
     instancesLoaded: true,
     instances: [],
@@ -34,7 +35,7 @@ function createMockContext(theme: AppContextValue['theme']): AppContextValue {
     setPreviewEnabled: () => {},
     devMode: false,
     setDevMode: () => {},
-    theme,
+    theme: 'light',
     setTheme: () => {},
     palette: 'ocean',
     setPalette: () => {},
@@ -49,34 +50,28 @@ function createMockContext(theme: AppContextValue['theme']): AppContextValue {
   }
 }
 
-describe('Settings 页面自定义背景显示逻辑', () => {
-  it('浅色主题下渲染自定义背景，不渲染简约配色方案', () => {
-    const html = renderToStaticMarkup(
-      <AppContext.Provider value={createMockContext('light')}>
-        <Settings />
-      </AppContext.Provider>
-    )
-    expect(html).toContain('自定义背景')
-    expect(html).not.toContain('配色方案')
+function render() {
+  return renderToStaticMarkup(
+    <AppContext.Provider value={createMockContext()}>
+      <Settings />
+    </AppContext.Provider>
+  )
+}
+
+describe('系统设置页分组归属', () => {
+  it('渲染系统级分组', () => {
+    expect(render()).toContain('Gui.DeploySetting.GroupGit')
   })
 
-  it('深色主题下渲染自定义背景，不渲染简约配色方案', () => {
-    const html = renderToStaticMarkup(
-      <AppContext.Provider value={createMockContext('dark')}>
-        <Settings />
-      </AppContext.Provider>
-    )
-    expect(html).toContain('自定义背景')
-    expect(html).not.toContain('配色方案')
+  it('远程访问与 WebUI 分组在远程访问页，这里不再出现', () => {
+    const html = render()
+    expect(html).not.toContain('Gui.DeploySetting.GroupRemoteAccess')
+    expect(html).not.toContain('Gui.DeploySetting.GroupWebui')
   })
 
-  it('简约主题下不渲染自定义背景，仅渲染简约配色方案', () => {
-    const html = renderToStaticMarkup(
-      <AppContext.Provider value={createMockContext('minimal')}>
-        <Settings />
-      </AppContext.Provider>
-    )
+  it('外观偏好已移到界面设置页', () => {
+    const html = render()
     expect(html).not.toContain('自定义背景')
-    expect(html).toContain('配色方案')
+    expect(html).not.toContain('配色方案')
   })
 })
