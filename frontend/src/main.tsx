@@ -10,6 +10,8 @@ import { TaskConfig } from './pages/TaskConfig'
 import { Statistics } from './pages/Statistics'
 import { Home } from './pages/Home'
 import { Updater } from './pages/Updater'
+import { InterfaceSettings } from './pages/InterfaceSettings'
+import { RemoteAccess } from './pages/RemoteAccess'
 import { Settings } from './pages/Settings'
 import { DevControls } from './pages/DevControls'
 import { translateCurrentUi } from './i18n'
@@ -23,7 +25,7 @@ class ErrorBoundary extends Component<{children: ReactNode}, {failed: boolean}> 
   }
 }
 const router = createHashRouter([
-  {path: '/', element: <App/>, children: [{index: true, element: <Home/>}, {path: 'settings', element: <Settings/>}, {path: 'updater', element: <Updater/>}, {path: 'dev', element: <DevControls/>}]},
+  {path: '/', element: <App/>, children: [{index: true, element: <Home/>}, {path: 'interface', element: <InterfaceSettings/>}, {path: 'remote', element: <RemoteAccess/>}, {path: 'settings', element: <Settings/>}, {path: 'updater', element: <Updater/>}, {path: 'dev', element: <DevControls/>}]},
   {path: '/i/:instance', element: <App/>, children: [
     {index: true, element: <Navigate to="overview" replace/>},
     {path: 'overview', element: <Overview/>}, {path: 'task/:task', element: <TaskConfig/>},
