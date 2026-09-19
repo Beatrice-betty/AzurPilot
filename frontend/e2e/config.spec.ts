@@ -100,4 +100,10 @@ test('非法数字、日期和 YAML 保留草稿，其他字段仍即时保存',
   await expect(date).toHaveValue('2026-02-30 12:00:00')
   await date.fill('2099-01-01 12:00:00')
   await expect(page.locator('[id="Main.Scheduler.NextRun-status"]')).toHaveText('已保存')
+  // 清空时间要回落到参数默认值：它落在过去，调度器下一轮就把任务当作待运行。
+  await date.fill('')
+  await expect(date).toHaveValue('2020-01-01 00:00:00')
+  await expect(page.locator('[id="Main.Scheduler.NextRun-status"]')).toHaveText('已保存')
+  await page.reload()
+  await expect(date).toHaveValue('2020-01-01 00:00:00')
 })

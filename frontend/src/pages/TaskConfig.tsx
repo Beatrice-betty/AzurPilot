@@ -183,8 +183,8 @@ export function TaskConfig() {
                                 }
                               }
                               if (shopMode) setShopModeError('')
-                              const {payload, error} = prepareValue(next, field)
-                              queue.change(path, next, payload, error)
+                              const {payload, text, error} = prepareValue(next, field)
+                              queue.change(path, text ?? next, payload, error)
                             }}
                           />
                         )}

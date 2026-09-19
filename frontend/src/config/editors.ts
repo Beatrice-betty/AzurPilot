@@ -33,8 +33,15 @@ export function resumeEditors() {
   for (const queue of queues.values()) queue.retry()
 }
 
-/** 数字的原始文本与提交值分离，保留空值、负号、小数点等输入中间态。 */
-export function prepareValue(value: Value, field: Pick<Field, 'type' | 'value' | 'validate'>): {payload: Value; error?: string} {
+/** 数字的原始文本与提交值分离，保留空值、负号、小数点等输入中间态。
+ *  时间被清空时回落到参数默认值，并让输入框改写为该默认值：配置加载时
+ *  `config_update()` 也把空值还原成默认值，NextRun 的默认值在过去，
+ *  保存后调度器下一轮就把它当待运行任务。 */
+export function prepareValue(value: Value, field: Pick<Field, 'type' | 'value' | 'validate'>): {payload: Value; text?: Value; error?: string} {
+  if (field.type === 'datetime' && String(value).trim() === '') {
+    const fallback = String(field.value ?? '')
+    return {payload: fallback, text: fallback}
+  }
   const numeric = !['select', 'multiselect', 'checkbox'].includes(field.type)
     && (typeof field.value === 'number' || ['number', 'int', 'float'].includes(field.type))
   if (!numeric) return {payload: value}

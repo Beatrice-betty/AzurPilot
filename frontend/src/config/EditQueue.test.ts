@@ -126,3 +126,16 @@ describe('保留数值输入原文', () => {
     expect(prepareValue('9007199254740993', {type: 'input', value: 1}).error).toBeTruthy()
   })
 })
+
+describe('清空时间回落到参数默认值', () => {
+  const field = {type: 'datetime', value: '2020-01-01 00:00:00', validate: 'datetime'}
+  it('清空后提交参数默认值，输入框同步显示它', () => {
+    expect(prepareValue('', field)).toEqual({payload: '2020-01-01 00:00:00', text: '2020-01-01 00:00:00'})
+  })
+  it('只有清空才改写文本，输入中的时间原样提交', () => {
+    expect(prepareValue('2026-09-19 12:00:00', field)).toEqual({payload: '2026-09-19 12:00:00'})
+  })
+  it('非时间字段的清空不受影响', () => {
+    expect(prepareValue('', {type: 'input', value: 'text'})).toEqual({payload: ''})
+  })
+})
