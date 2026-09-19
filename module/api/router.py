@@ -93,6 +93,7 @@ class Router:
 
     def settings(self, _):
         from module.runtime.deploy_settings import deploy_settings_schema
+        from module.runtime.remote_access import remote_access_status
         result = deploy_settings_schema(self.configs.translate)
         # 密码只写不读，前端留空表示保持原密码。
         for group in result['groups']:
@@ -100,6 +101,8 @@ class Router:
                 if field['key'] == 'Password':
                     field['value'] = ''
                     field['type'] = 'password'
+        # 远程访问地址不属于设置，但设置页要展示，一并带回。
+        result['remote'] = remote_access_status()
         return result
 
     def save_settings(self, params):
