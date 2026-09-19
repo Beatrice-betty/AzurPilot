@@ -59,19 +59,19 @@ describe('旧版版式的生效范围', () => {
     for (const theme of ALL_THEMES) expect(usesLegacyShell(theme, undefined)).toBe(false)
     expect(usesLegacyShell('legacy-light', '')).toBe(false)
   })
-  it('旧版总览页收起右栏，其余实例页保留', () => {
-    expect(showsRightRail('legacy-light', 'alas', '/i/alas/overview')).toBe(false)
-    expect(showsRightRail('legacy-dark', 'alas', '/i/alas/overview')).toBe(false)
-    expect(showsRightRail('legacy-light', 'alas', '/i/alas/task/Main')).toBe(true)
-    expect(showsRightRail('legacy-light', 'alas', '/i/alas/statistics')).toBe(true)
+  it('旧版主题的实例视图收起右栏，调度器与任务计划改由页内左列承载', () => {
+    for (const theme of ['legacy-light', 'legacy-dark'] as Theme[]) {
+      expect(showsRightRail(theme, 'alas')).toBe(false)
+      expect(usesLegacyShell(theme, 'alas')).toBe(true)
+    }
   })
   it('新版主题在任何实例页都保留右栏', () => {
     for (const theme of ['light', 'dark', 'minimal'] as Theme[]) {
-      expect(showsRightRail(theme, 'alas', '/i/alas/overview')).toBe(true)
+      expect(showsRightRail(theme, 'alas')).toBe(true)
       expect(usesLegacyShell(theme, 'alas')).toBe(false)
     }
   })
   it('主页没有实例时不渲染右栏', () => {
-    for (const theme of ALL_THEMES) expect(showsRightRail(theme, undefined, '/')).toBe(false)
+    for (const theme of ALL_THEMES) expect(showsRightRail(theme, undefined)).toBe(false)
   })
 })

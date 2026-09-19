@@ -17,9 +17,8 @@ export const usesLegacyLayout = (theme: Theme) => LEGACY_LAYOUT_THEMES.includes(
 /** 实例视图是否换用旧版外壳；主页视图（没有实例）一律沿用新版外壳。 */
 export const usesLegacyShell = (theme: Theme, instance?: string) => Boolean(instance) && usesLegacyLayout(theme)
 
-/** 是否渲染右栏。旧版外壳的总览页把调度器与任务计划放进页内两列，右栏必须让位，否则调度器会出现两处。 */
-export const showsRightRail = (theme: Theme, instance: string | undefined, pathname: string) =>
-  Boolean(instance) && !(usesLegacyShell(theme, instance) && pathname.endsWith('/overview'))
+/** 是否渲染右栏。旧版主题把调度器与任务计划放进实例页左列，右栏整体让位，否则同一块内容会出现两处。 */
+export const showsRightRail = (theme: Theme, instance?: string) => Boolean(instance) && !usesLegacyLayout(theme)
 
 const VALID_THEMES: readonly string[] = ['light', 'dark', 'minimal',
   'legacy-light', 'legacy-dark']

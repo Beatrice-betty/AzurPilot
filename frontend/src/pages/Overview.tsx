@@ -8,8 +8,7 @@ import { ErrorBox, Loading, PageTitle } from '../components/ui'
 import { MonitorPanel } from '../components/MonitorPanel'
 import { defaultResourceKeys, ResourceCards } from '../components/ResourceCards'
 import { InstanceActions } from '../components/InstanceActions'
-import { SchedulerWidget } from '../components/SchedulerWidget'
-import { TaskQueue } from '../components/TaskQueue'
+import { LegacyRail } from '../components/LegacyRail'
 
 function loadResourceSelection(instance: string) {
   try {
@@ -53,11 +52,10 @@ export function Overview() {
 
   const actions = <InstanceActions instance={instance} status={data.status} resources={data.resources} selectedResources={selectedResources} onResourcesChange={updateResourceSelection}/>
 
-  // 旧版版式：左列调度器与任务计划，右列资源卡与日志，右栏让位（否则调度器会出现两处）。
-  if (usesLegacyLayout(theme)) return <div className="overview-page overview-legacy">
-    <h1 className="legacy-overview-title">{instance}</h1>
-    <div className="overview-schedulers">
-      <SchedulerWidget instance={instance} data={data} onData={setData}/>
+  // 旧版版式：左列调度器与任务计划，右列资源卡与日志；右栏在旧版主题下不渲染。
+  if (usesLegacyLayout(theme)) return <div className="instance-page-grid">
+    <h1 className="legacy-sr-title">{instance}</h1>
+    <LegacyRail instance={instance} data={data} onData={setData}>
       <section className="panel legacy-stat-card" aria-label={ui('overview.statCard')}>
         <span className="legacy-stat-title">{ui('overview.statCard')}</span>
         <div className="legacy-stat-actions">
@@ -65,9 +63,8 @@ export function Overview() {
           {actions}
         </div>
       </section>
-      <TaskQueue instance={instance} data={data}/>
-    </div>
-    <div className="overview-logs">
+    </LegacyRail>
+    <div className="instance-page-main">
       <ResourceCards resources={data.resources} selected={selectedResources}/>
       <MonitorPanel instance={instance}/>
     </div>
