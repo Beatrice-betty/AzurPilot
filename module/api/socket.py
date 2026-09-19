@@ -13,6 +13,7 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from module.api.protocol import ApiError, AuthParams, Request, SubscribeParams, failure, response
 from module.logger import logger
+from module.runtime.password_utils import REMOTE_ACCESS_HEADER, is_local_client
 
 
 class Gateway:
@@ -36,9 +37,20 @@ class Gateway:
             return
         self.connections += 1
         try:
-            await Session(self, ws).run()
+            await Session(self, ws, self.is_local(ws)).run()
         finally:
             self.connections -= 1
+
+    @staticmethod
+    def is_local(ws: WebSocket):
+        """本机直连判定：启动器内嵌窗口与本机浏览器免密，其余仍需密码。"""
+        client = ws.client.host if ws.client else ''
+        return is_local_client(
+            client,
+            ws.headers.get('host'),
+            ws.headers.get('origin'),
+            ws.headers.get(REMOTE_ACCESS_HEADER),
+        )
 
     def authenticate(self, peer, password):
         now = time.monotonic()
@@ -55,9 +67,10 @@ class Gateway:
 
 
 class Session:
-    def __init__(self, gateway, ws):
+    def __init__(self, gateway, ws, local=False):
+        """local 为 True 表示本机直连：无需密码即可使用全部方法。"""
         self.gateway, self.ws = gateway, ws
-        self.authorized = not bool(gateway.password)
+        self.authorized = local or not bool(gateway.password)
         self.queue = asyncio.Queue(maxsize=32)
         self.subscription = SubscribeParams(topics=[])
         self.sequence = 0

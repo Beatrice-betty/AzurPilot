@@ -22,6 +22,7 @@ from urllib.parse import urlsplit
 from module.base.ssh import clear_ssh_host_key
 from module.config.utils import random_id
 from module.logger import logger
+from module.runtime.password_utils import REMOTE_ACCESS_HEADER
 from module.runtime.setting import State
 
 if TYPE_CHECKING:
@@ -561,7 +562,12 @@ class WebRTCTunnel:
         return text
 
     @staticmethod
-    def _apply_browser_headers(headers: dict, payload: dict) -> dict:
+    def _forward_headers(headers: dict, payload: dict) -> dict:
+        """拼装转发给本地服务的请求头。
+
+        透明传递浏览器信息，并打上隧道标记：隧道连接同样来自回环地址，
+        标记后 WebUI 才不会把它当成免密的本机直连。
+        """
         headers = dict(headers or {})
         user_agent = payload.get("user_agent")
         accept_language = payload.get("accept_language")
@@ -569,6 +575,7 @@ class WebRTCTunnel:
             headers["User-Agent"] = user_agent
         if accept_language:
             headers.setdefault("Accept-Language", accept_language)
+        headers[REMOTE_ACCESS_HEADER] = "1"
         return headers
 
     async def handle(self, payload: dict) -> None:
@@ -599,7 +606,7 @@ class WebRTCTunnel:
 
             method = payload.get("method") or "GET"
             path = self._normalize_proxy_path(payload.get("path"))
-            headers = self._apply_browser_headers(payload.get("headers"), payload)
+            headers = self._forward_headers(payload.get("headers"), payload)
             body = payload.get("body") or ""
             data = base64.b64decode(body) if body else None
             url = f"{self.base_http_url}{path}"
@@ -635,7 +642,7 @@ class WebRTCTunnel:
             ws = await session.ws_connect(
                 url,
                 heartbeat=30,
-                headers=self._apply_browser_headers({}, payload),
+                headers=self._forward_headers({}, payload),
             )
             self.ws_sessions[ws_id] = (session, ws)
             self.send_json({"type": "ws.opened", "id": ws_id})
@@ -730,7 +737,7 @@ class WebRTCTunnel:
             path = self._normalize_proxy_path(payload.get("path"))
             url = f"{self.base_http_url}{path}"
             async with aiohttp.ClientSession() as session:
-                headers = self._apply_browser_headers({"Accept": "text/event-stream"}, payload)
+                headers = self._forward_headers({"Accept": "text/event-stream"}, payload)
                 async with session.get(url, headers=headers) as resp:
                     async for chunk in resp.content.iter_chunked(8192):
                         self.send_json({

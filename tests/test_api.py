@@ -252,6 +252,29 @@ class SocketApiTests(unittest.TestCase):
             with self.client.websocket_connect('/api/v1/ws', headers={'origin': 'https://evil.example'}):
                 pass
 
+    def test_local_connection_skips_password(self):
+        """本机浏览器与启动器内嵌窗口直接进入，不再要求输入密码。"""
+        client = TestClient(self.app, client=('127.0.0.1', 55555))
+        with client.websocket_connect('/api/v1/ws', headers={'host': '127.0.0.1:22267',
+                                                             'origin': 'http://127.0.0.1:22267'}) as ws:
+            self.assertFalse(ws.receive_json()['data']['authRequired'])
+            self.assertEqual('testpilot', self.call(ws, 'instances.list')['result'][0]['name'])
+
+    def test_remote_connection_still_requires_password(self):
+        """局域网与远程访问入口仍受密码保护。"""
+        client = TestClient(self.app, client=('203.0.113.7', 55555))
+        with client.websocket_connect('/api/v1/ws', headers={'host': 'app.hk1.azurlane.cloud'}) as ws:
+            self.assertTrue(ws.receive_json()['data']['authRequired'])
+            self.assertEqual('UNAUTHORIZED', self.call(ws, 'instances.list')['error']['code'])
+
+    def test_tunnel_forwarded_request_keeps_password(self):
+        """远程访问隧道同样来自回环地址，靠标记头避免被当成免密的本机直连。"""
+        client = TestClient(self.app, client=('127.0.0.1', 55555))
+        with client.websocket_connect('/api/v1/ws', headers={'host': '127.0.0.1:22267',
+                                                             'x-azurpilot-remote-access': '1'}) as ws:
+            self.assertTrue(ws.receive_json()['data']['authRequired'])
+            self.assertEqual('UNAUTHORIZED', self.call(ws, 'instances.list')['error']['code'])
+
     def test_missing_parameter_returns_correlated_error_and_connection_survives(self):
         with self.client.websocket_connect('/api/v1/ws') as ws:
             self.login(ws)
