@@ -481,6 +481,7 @@ test('主页实例状态、任务搜索收起与导航固定', async ({page}) =>
   await expect(page.locator('.sidebar .instance-picker')).toHaveCount(0)
   await expect(page.locator('.sidebar-footer')).toHaveCount(0)
   await expect(page.locator('.home-deck-link')).toHaveAttribute('href', 'https://github.com/wess09/AzurPilot')
+  await expect(page.locator('.primary-nav .nav-open-source')).toHaveAttribute('href', 'https://github.com/wess09/AzurPilot')
   await page.screenshot({path: 'test-results/home-desktop.png', fullPage: true})
   await page.locator('.instance-card').filter({hasText: 'demo-main'}).click()
   await expect(page.getByRole('heading', {name: 'demo-main', exact: true})).toBeVisible()
