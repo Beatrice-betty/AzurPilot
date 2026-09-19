@@ -37,6 +37,7 @@ function createTitleMask(title: string) {
 }
 
 export function PageTitle({title, actions, className = ''}: {title: string; actions?: ReactNode; className?: string}) {
-  const titleStyle = {'--page-title-mask': createTitleMask(title)} as CSSProperties
+  const {theme} = useApp()
+  const titleStyle = theme === 'minimal' ? undefined : {'--page-title-mask': createTitleMask(title)} as CSSProperties
   return <div className={`page-title ${className}`.trim()}><h1 aria-label={title} data-text={title} style={titleStyle}>{title}</h1>{actions && <div className="title-actions"><GlassMaterial/>{actions}</div>}</div>
 }
