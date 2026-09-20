@@ -225,7 +225,7 @@
 
 /* 旧版外壳里，内容区那两列（`.instance-page-grid` / `.task-config-legacy`）的高度预算也要跟着这一行走，
    否则它们按旧值算出来的高度会把整壳顶出视口，页面就能滚、接缝就露出来了。 */
-:root[data-tab-size] .app-shell.legacy-shell:has(.instance-tabs) {--legacy-page-nav-height: calc(56px * var(--row-scale, 1))}
+:root[data-tab-size] .app-shell.legacy-shell:has(.topbar-tab-size) {--legacy-page-nav-height: calc(56px * var(--row-scale, 1))}
 
 /* 形状跟着主题家族走：light / dark 是操场形（四角半圆），简约与两个旧版主题保持上方矩形并贴住下方栏（浏览器标签页那样）。 */
 :root[data-theme='minimal'], :root[data-theme='legacy-light'], :root[data-theme='legacy-dark'] {--instance-tab-radius: 0px}
