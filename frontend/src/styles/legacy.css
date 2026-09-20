@@ -128,8 +128,8 @@ body {background-attachment: scroll}
 .primary-nav a, .task-group-button {font-size: 14px; font-weight: 500; min-height: 44px; border-radius: 22px; transition: background-color .2s cubic-bezier(.2, 0, 0, 1), color .2s cubic-bezier(.2, 0, 0, 1)}
 .task-submenu-item {font-size: 13px; min-height: 36px; border-radius: 18px}
 .task-group-button.expanded {border-color: var(--accent)}
-/* 收起后仍然是当前所在的大类：只留文字与图标的换色高亮，不铺展开态底色与边框。 */
-.task-group-button.active:not(.expanded) {color: var(--accent); background: none; border-color: transparent}
+/* 收起后仍是当前所在的大类：保持展开时的底色、边框与强调。 */
+.task-group-button.active:not(.expanded) {color: var(--accent); background: var(--accent-soft); border-color: var(--accent); font-weight: 600}
 .task-group-button.active:not(.expanded) .task-group-icon {color: var(--accent)}
 .topbar {position: sticky; top: 0; z-index: 80; height: var(--topbar-height); margin: 0; padding: 0 24px}
 .right-rail {top: var(--topbar-height); height: calc(var(--viewport-height) - var(--topbar-height)); z-index: 70}
@@ -401,10 +401,14 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 :root[data-theme='legacy-dark'] .monitor-segmented button:active {background: var(--accent-soft)}
 /* 旧版外壳下换页时页面内容淡入并轻微上移；动画挂在页面根元素上，子页面互相切换也会重放。 */
 .app-shell.legacy-shell .instance-page-grid,
-.app-shell.legacy-shell .task-config-legacy,
 .app-shell.legacy-shell .statistics-legacy {animation: legacy-page-in .22s cubic-bezier(.22, .61, .36, 1)}
+/* 任务页只让内容列参与：右列是调度器时它不随换页重挂，目录时才跟着重挂。 */
+.app-shell.legacy-shell .task-config-settings {animation: legacy-page-in .22s cubic-bezier(.22, .61, .36, 1)}
+.app-shell.legacy-shell .task-config-rail-slot {display: flex; flex-direction: column; min-height: 0}
+.app-shell.legacy-shell .task-config-rail-slot > .task-config-rail {flex: 1 1 auto; min-height: 0}
+.app-shell.legacy-shell .task-config-rail-slot .task-rail-directory {animation: legacy-page-in .22s cubic-bezier(.22, .61, .36, 1)}
 @keyframes legacy-page-in {from {opacity: 0; transform: translateY(6px)} to {opacity: 1; transform: none}}
-@media (prefers-reduced-motion: reduce) {.app-shell.legacy-shell .instance-page-grid, .app-shell.legacy-shell .task-config-legacy, .app-shell.legacy-shell .statistics-legacy {animation: none}}
+@media (prefers-reduced-motion: reduce) {.app-shell.legacy-shell .instance-page-grid, .app-shell.legacy-shell .statistics-legacy, .app-shell.legacy-shell .task-config-settings, .app-shell.legacy-shell .task-config-rail-slot {animation: none}}
 .app-shell.legacy-shell > .main-shell > main > .instance-page-grid,
 .app-shell.legacy-shell > .main-shell > main > .task-config-legacy {flex-shrink: 1; min-height: 0}
 .app-shell.legacy-shell > .right-rail {grid-area: rail}
@@ -643,7 +647,13 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 /* 侧栏任务菜单：分组展开后具体任务往下列（旧版树状格式）。 */
 .task-group-button:hover .task-group-arrow {transform: none}
 .task-group-button.expanded .task-group-arrow {color: var(--accent); transform: rotate(180deg)}
-.task-submenu-list {margin: 2px 0 6px 12px; padding-left: 8px; border-left: 1px solid var(--border)}
+/* 内层承载外边距，外层高度从 0 过渡到自身高度，展开折叠才有动画。 */
+:root {interpolate-size: allow-keywords}
+.task-submenu-list {height: 0; overflow: hidden; transition: height .22s cubic-bezier(.22, .61, .36, 1)}
+.task-submenu-list.expanded {height: auto}
+.task-submenu-inner {margin: 2px 0 6px 12px; padding-left: 8px; border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 2px}
+.task-submenu-list:not(.expanded) .task-submenu-inner {visibility: hidden}
+@media (prefers-reduced-motion: reduce) {.task-submenu-list {transition: none}}
 
 /* 顶栏的「任务配置」下拉：旧版实例页删掉了页内的分组导航，跨任务跳转放在这里。 */
 .task-picker {position: relative; flex-shrink: 0}

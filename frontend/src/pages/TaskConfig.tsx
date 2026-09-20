@@ -283,8 +283,9 @@ export function TaskConfig() {
   if (legacy) return <>
     <div className="task-config-legacy">
       <h1 className="legacy-sr-title">{t(`Task.${task}.name`)}</h1>
-      <div className="task-config-settings">{head}{groupsSection}{scorePanel}{toolPanel}</div>
-      {rail}
+      <div className="task-config-settings" key={task}>{head}{groupsSection}{scorePanel}{toolPanel}</div>
+      {/* 目录是逐页内容，跟着任务换；调度器是常驻的，换任务不重挂。 */}
+      <div className="task-config-rail-slot" key={railView === 'directory' ? task : 'scheduler'}>{rail}</div>
     </div>
     {modal}
   </>
