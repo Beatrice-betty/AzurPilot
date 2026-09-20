@@ -1,7 +1,7 @@
 import { Select } from './FormControls'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
-import { Download, Pause, Play, Search, Terminal, Trash2 } from 'lucide-react'
+import { ArrowDownUp, Download, Pause, Play, Search, Terminal, Trash2 } from 'lucide-react'
 import { api } from '../api/client'
 import type { Logs as LogsData, LogEntry } from '../api/types'
 import { useApp, useConnection } from '../app/context'
@@ -166,6 +166,11 @@ function loadLogLevel(instance: string): string {
   return 'ALL'
 }
 
+/** 日志排序：默认正序（旧→新），与自动滚到底的行为配套。 */
+function loadLogDescending(instance: string): boolean {
+  try { return localStorage.getItem(`azurpilot.log.order.${instance}`) === 'desc' } catch { return false }
+}
+
 export function LogPanel({active = true}: {active?: boolean}) {
   const {instance = ''} = useParams()
   const [entries, setEntries] = useState<LogEntry[]>([])
@@ -173,16 +178,28 @@ export function LogPanel({active = true}: {active?: boolean}) {
   const [level, setLevel] = useState(() => loadLogLevel(instance))
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [follow, setFollow] = useState(true)
+  const [descending, setDescending] = useState(() => loadLogDescending(instance))
   const [floor, setFloor] = useState(0)
   const connection = useConnection()
   const {notify, ui} = useApp()
   const scroll = useRef<HTMLDivElement>(null)
 
-  useEffect(() => setLevel(loadLogLevel(instance)), [instance])
+  useEffect(() => {
+    setLevel(loadLogLevel(instance))
+    setDescending(loadLogDescending(instance))
+  }, [instance])
 
   function updateLevel(next: string) {
     setLevel(next)
     try { localStorage.setItem(`azurpilot.log.level.${instance}`, next) } catch { /* 无存储权限时仅本页生效。 */ }
+  }
+
+  function toggleOrder() {
+    setDescending(previous => {
+      const next = !previous
+      try { localStorage.setItem(`azurpilot.log.order.${instance}`, next ? 'desc' : 'asc') } catch { /* 同上。 */ }
+      return next
+    })
   }
 
   useEffect(() => {
@@ -214,16 +231,18 @@ export function LogPanel({active = true}: {active?: boolean}) {
   }), [instance])
 
   useEffect(() => {
-    if (active && follow && scroll.current) {
-      scroll.current.scrollTop = scroll.current.scrollHeight
-    }
-  }, [entries, follow, active])
+    if (!active || !follow || !scroll.current) return
+    // 倒序时最新的在顶部，跟随就要贴顶；正序时才滚到底。
+    scroll.current.scrollTop = descending ? 0 : scroll.current.scrollHeight
+  }, [entries, follow, active, descending])
 
   const visible = entries.filter(entry =>
     entry.id > floor &&
     (level === 'ALL' || entry.level === level) &&
     entry.text.toLowerCase().includes(search.toLowerCase())
   )
+  // 倒序只反转渲染顺序；相邻行的居中标题判断是对称的（前后都要求是分割线），不受影响。
+  const ordered = descending ? [...visible].reverse() : visible
 
   function download() {
     const url = URL.createObjectURL(new Blob([visible.map(entry => entry.text).join('\n')], {type: 'text/plain;charset=utf-8'}))
@@ -240,6 +259,10 @@ export function LogPanel({active = true}: {active?: boolean}) {
         <button className={`icon-button ${search || level !== 'ALL' ? 'filter-active' : ''}`} aria-label={filtersOpen ? ui('log.filtersCollapse') : ui('log.filtersExpand')} title={ui('log.searchAndFilter')} aria-expanded={filtersOpen} aria-controls="log-filters" onClick={() => setFiltersOpen(!filtersOpen)}><Search size={15}/></button>
         <button className="icon-button" onClick={() => setFollow(!follow)} aria-label={follow ? ui('log.pauseFollow') : ui('log.resumeFollow')}>
           {follow ? <Pause size={15} /> : <Play size={15} />}
+        </button>
+        <button className="icon-button" onClick={toggleOrder} aria-label={ui('log.order')} aria-pressed={descending}
+          title={descending ? ui('log.orderDesc') : ui('log.orderAsc')}>
+          <ArrowDownUp size={15} />
         </button>
         <button className="icon-button" onClick={() => setFloor(entries.at(-1)?.id ?? 0)} aria-label={ui('log.clearView')}>
           <Trash2 size={15} />
@@ -262,9 +285,9 @@ export function LogPanel({active = true}: {active?: boolean}) {
       </div>}
       <div className="log-content" ref={scroll} aria-label={ui('log.content')}>
         {visible.length ? (
-          visible.map((entry, index) => {
-            const prev = visible[index - 1]
-            const next = visible[index + 1]
+          ordered.map((entry, index) => {
+            const prev = ordered[index - 1]
+            const next = ordered[index + 1]
             const isCenterByContext = Boolean(
               prev && next &&
               PURE_RULE_RE.test(prev.text.trim()) && prev.text.includes('═') &&
