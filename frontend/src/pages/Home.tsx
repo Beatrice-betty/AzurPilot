@@ -67,7 +67,7 @@ export function Home() {
           {instances.map(item => {
             const task = item.status === 'running' ? item.currentTask ? t(`Task.${item.currentTask}.name`) : ui('home.waitingSchedule') : item.status === 'error' ? ui('status.error') : item.status === 'updating' ? ui('status.updating') : ui('home.notRunning')
             return <Link className="instance-card panel" key={item.name} to={`/i/${item.name}/overview`}>
-              <div className="instance-card-heading"><span className="home-instance-icon"><Server size={20}/></span><StatusBadge status={item.status}/></div>
+              <div className="instance-card-heading"><span className="home-instance-icon"><Server size={20}/></span><StatusBadge status={item.status} simulate/></div>
               <h3>{item.name}</h3>
               <div className="instance-device">{item.server !== 'disabled' && <span>{t(`Emulator.ServerName.${item.server}`)}</span>}<span>{item.serial}</span></div>
               <div className="instance-card-footer"><span>{task}</span><ArrowRight size={17}/></div>

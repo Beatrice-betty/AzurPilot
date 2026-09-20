@@ -6,9 +6,8 @@ import { useApp, useConnection } from '../app/context'
 /**
  * 订阅实例总览数据：连上后拉取一次，之后由 overview 事件增量刷新。
  *
- * 旧版实例页的左列（调度器 + 任务计划）与右栏渲染的是同一份数据，
- * 两处共用本 Hook，避免各自写一遍订阅逻辑。`enabled` 为假时完全不请求，
- * 供只在旧版主题下才需要这份数据的页面使用。
+ * 右栏（调度器 + 任务计划）用它取数；总览页自己取一份并传给页内左列，
+ * 免得同一个页面上请求两次。`enabled` 为假时完全不请求。
  */
 export function useInstanceOverview(instance: string, enabled = true) {
   const connection = useConnection()
