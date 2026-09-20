@@ -7,6 +7,7 @@ import { useApp, useConnection } from '../app/context'
 import { usesLegacyLayout } from '../app/theme'
 import { Empty, ErrorBox, Loading, Modal, PageTitle } from '../components/ui'
 import { LogPanel } from '../components/LogPanel'
+import { MeowfficerScorePanel } from '../components/MeowfficerScorePanel'
 import { FieldInput } from '../components/FieldInput'
 import { RestrictedLuaEditor } from '../components/RestrictedLuaEditor'
 import { ShopStrategyHelp } from '../components/ShopStrategyHelp'
@@ -76,6 +77,8 @@ export function TaskConfig() {
   }).filter(({visible}) => visible.length)
 
   const tool = Object.values(schema?.menu ?? {}).some(group => group.page === 'tool' && group.tasks.includes(task))
+  // 指挥喵评分保留参数卡（评分来源、截图目录等），报告面板挂在参数卡上方。
+  const scorePanel = task === 'MeowfficerScore' ? <MeowfficerScorePanel instance={instance}/> : null
   const showConfigToolbar = task !== 'FleetInfo' && Boolean(groups) && (visibleGroups.length > 0 || Boolean(search))
 
   if (!config) return error ? <ErrorBox message={error} retry={reload} /> : <Loading />
@@ -243,7 +246,7 @@ export function TaskConfig() {
   if (legacy) return <>
     <div className={`task-config-legacy${hasGroups ? '' : ' no-nav'}`}>
       <h1 className="legacy-sr-title">{t(`Task.${task}.name`)}</h1>
-      <div className="task-config-settings">{head}{groupsSection}{toolPanel}</div>
+      <div className="task-config-settings">{head}{scorePanel}{groupsSection}{toolPanel}</div>
       {hasGroups && groupNav}
     </div>
     {modal}
@@ -255,9 +258,8 @@ export function TaskConfig() {
       ? <h1 className="sr-title">{t(`Task.${task}.name`)}</h1>
       : <PageTitle title={t(`Task.${task}.name`)}/>}
     {head}
-    {hasGroups
-      ? <div className="config-layout">{condensed ? <div className="config-side">{groupNav}{configToolbar}</div> : groupNav}{groupCardsBlock}</div>
-      : groupsSection}
+    {scorePanel}
+    {hasGroups ? <div className="config-layout">{groupNav}{groupCardsBlock}</div> : groupsSection}
     {toolPanel}
     {modal}
   </>
