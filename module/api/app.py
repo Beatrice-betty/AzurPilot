@@ -77,7 +77,16 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
     async def health(request):
         return JSONResponse({'status': 'ok', 'protocolVersion': 1})
 
-    routes = [Route('/healthz', health), WebSocketRoute('/api/v1/ws', gateway.endpoint)]
+    async def meowfficer_score_report(request):
+        """指挥喵评分报告（自包含 HTML），供浏览器直接打开查看。"""
+        path = root / 'log' / 'meowfficer_score.html'
+        if not path.is_file():
+            return PlainTextResponse('评分报告尚未生成，请先运行「指挥喵评分」任务。', status_code=404)
+        return FileResponse(path, media_type='text/html', headers={'Cache-Control': 'no-cache'})
+
+    routes = [Route('/healthz', health),
+              Route('/reports/meowfficer_score', meowfficer_score_report),
+              WebSocketRoute('/api/v1/ws', gateway.endpoint)]
     if (dist / 'assets').is_dir():
         routes.append(Mount('/assets', StaticFiles(directory=dist / 'assets')))
     if mount_mcp:

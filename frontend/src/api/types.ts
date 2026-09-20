@@ -35,6 +35,22 @@ export interface StatisticsReport {
   metrics: {label: string; value: number | null; unit: string}[]
   series: StatSeries[]; tables: StatTable[]; notes: string[]
 }
+/** 指挥喵评分的单条天赋。`kind` 为 `special`（彩天赋）时高亮，`inferred` 表示这条由识别推断而来。 */
+export interface MeowfficerTalent { name: string; level?: number; kind?: string; inferred?: boolean }
+/** 指挥喵评分的一条评分口径；`x`/`y` 是两个维度的命中数（加权点制的口径为 null），`primary` 是主口径。 */
+export interface MeowfficerRubric {
+  key?: string; label: string; tier?: string; score?: number
+  x?: number | null; y?: number | null
+  xLabel?: string; yLabel?: string
+  xHits?: string[]; yHits?: string[]; notes?: string[]; source?: string; primary?: boolean
+}
+/** 指挥喵评分里的一只猫。 */
+export interface MeowfficerCat {
+  source?: string; cat: string; tags?: string[]; fixed?: boolean; note?: string; maxed?: boolean
+  pointsSpent?: number; primary?: string; talents?: MeowfficerTalent[]; rubrics?: MeowfficerRubric[]
+}
+/** 「指挥喵评分」任务写入 log/meowfficer_score.json 的结构化结果，报告不存在时后端返回 NOT_FOUND。 */
+export interface MeowfficerScoreReport { instance: string; generatedAt: string; count: number; cats: MeowfficerCat[] }
 export interface DeployField { key: string; type: string; label: string; help: string; value: Value; options: Value[] }
 export interface RemoteAccessStatus { enabled: boolean; state: string; address: string; error: string }
 export interface Settings { groups: {key: string; label: string; fields: DeployField[]}[]; notice: string; demo: boolean; remote?: RemoteAccessStatus }
@@ -70,6 +86,7 @@ export interface Results {
   'statistics.resources': Statistics
   'statistics.report': StatisticsReport
   'statistics.refreshLoot': {refreshed: boolean}
+  'meowfficer.scoreReport': MeowfficerScoreReport
   'settings.get': Settings
   'settings.patch': {updated: string[]}
   'startup.get': {enabled: boolean}
