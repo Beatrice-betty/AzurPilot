@@ -381,7 +381,6 @@ class SSHRemoteAccessProvider(RemoteAccessProvider):
                 self._terminate_process()
                 continue
 
-            success = True
             if status != "success":
                 message = connection_info.get("message", "")
                 self.info.error = message or status or "remote_access_failed"
@@ -389,12 +388,17 @@ class SSHRemoteAccessProvider(RemoteAccessProvider):
                     "Failed to establish remote access, this is the error message "
                     f"from service provider: {message}"
                 )
+                # 失败回包不代表连接建立；回收本次进程后交给外层退避重试。
+                self._terminate_process()
+                self.info.connection_state = "stopped"
+                self.info.address = None
                 new_username = connection_info.get("change_username", None)
                 if new_username:
                     logger.info(f"服务器请求更改用户名，更改为: {new_username}")
                     State.deploy_config.SSHUser = new_username
-                break
+                return
 
+            success = True
             self.info.address = connection_info.get("address")
             self.info.fallback_address = connection_info.get("fallback_address") or self.info.address
             self.info.peer_id = connection_info.get("peer_id")
