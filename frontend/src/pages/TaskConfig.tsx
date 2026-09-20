@@ -165,9 +165,6 @@ export function TaskConfig() {
                   }}
                 />
               )}
-              {shopMode && shopModeError && !edit ? (
-                <div id={`${path}-status`} className="edit-status edit-error" role="alert">{shopModeError}</div>
-              ) : <EditStatus id={path} edit={edit} retry={queue.retry} />}
               {runNow && (
                 <div className="field-actions">
                   <button type="button" className="button subtle icon-only" aria-label={ui('task.runNow')} title={ui('task.runNow')} disabled={connection !== 'ready'}
@@ -178,6 +175,9 @@ export function TaskConfig() {
                     }}><Play size={15}/></button>
                 </div>
               )}
+              {shopMode && shopModeError && !edit ? (
+                <div id={`${path}-status`} className="edit-status edit-error" role="alert">{shopModeError}</div>
+              ) : <EditStatus id={path} edit={edit} retry={queue.retry} />}
             </div>
           </div>
         )
