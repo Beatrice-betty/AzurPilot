@@ -48,6 +48,12 @@ export function TaskConfig() {
     }
   }, [instance, queue])
 
+  // 字段保存成功后用服务端回传的整份配置替换本地副本。
+  useEffect(() => {
+    queue.onSaved = data => setConfig(data as Config)
+    return () => { queue.onSaved = undefined }
+  }, [queue])
+
   useEffect(() => {
     if (connection !== 'ready') return
     let active = true
@@ -283,7 +289,10 @@ export function TaskConfig() {
   if (legacy) return <>
     <div className="task-config-legacy">
       <h1 className="legacy-sr-title">{t(`Task.${task}.name`)}</h1>
-      <div className="task-config-settings" key={task}>{head}{groupsSection}{scorePanel}{toolPanel}</div>
+      <div className="task-config-settings">
+        {/* 换任务时重挂一次，让内容列的淡入重放。 */}
+        <div className="task-config-settings-inner" key={task}>{head}{groupsSection}{scorePanel}{toolPanel}</div>
+      </div>
       {/* 目录是逐页内容，跟着任务换；调度器是常驻的，换任务不重挂。 */}
       <div className="task-config-rail-slot" key={railView === 'directory' ? task : 'scheduler'}>{rail}</div>
     </div>

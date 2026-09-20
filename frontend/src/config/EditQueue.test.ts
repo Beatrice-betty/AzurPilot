@@ -221,3 +221,33 @@ describe('清空时回落到参数默认值', () => {
     expect(prepareValue('', {type: 'input', value: 'text'})).toEqual({payload: ''})
   })
 })
+
+describe('字段保存成功后回传服务端配置', () => {
+  it('把 send 的返回值交给 onSaved，供页面替换本地配置', async () => {
+    const config = {values: {Alas: {Scheduler: {Enable: true}}}}
+    const send = vi.fn().mockResolvedValue(config)
+    const queue = new EditQueue('test', {ready: () => true, send}, storage())
+    const onSaved = vi.fn()
+    queue.onSaved = onSaved
+    queue.change('Alas.Scheduler.Enable', true, true)
+    await queue.settled()
+    expect(onSaved).toHaveBeenCalledWith(config)
+  })
+
+  it('被更新的输入顶掉的旧响应不再回传', async () => {
+    const first = deferred()
+    const send = vi.fn()
+      .mockImplementationOnce(() => first.promise)
+      .mockResolvedValue({values: {}})
+    const queue = new EditQueue('test', {ready: () => true, send}, storage())
+    const onSaved = vi.fn()
+    queue.onSaved = onSaved
+    queue.change('Alas.Scheduler.Enable', true, true)
+    void queue.flush()
+    queue.change('Alas.Scheduler.Enable', false, false)
+    first.resolve()
+    await queue.settled()
+    expect(onSaved).toHaveBeenCalledTimes(1)
+    expect(onSaved).toHaveBeenCalledWith({values: {}})
+  })
+})

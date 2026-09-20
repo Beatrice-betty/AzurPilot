@@ -2,7 +2,9 @@
    余量固定 4px，标签因此几乎占满整条栏高，文字不会被大边框围住。 */
 :root[data-tab-size='md'] {--row-scale: 1; --row-pad: calc(2px + (30px * 1) / 8)}
 :root[data-tab-size='lg'] {--row-scale: 1.24; --row-pad: calc(2px + (30px * 1.24) / 8)}
+:root[data-tab-size='xl'] {--row-scale: 1.55; --row-pad: calc(2px + (30px * 1.55) / 8)}
 :root[data-tab-size='sm'] {--row-scale: .78; --row-pad: calc(2px + (30px * .78) / 8)}
+:root[data-tab-size='xs'] {--row-scale: .62; --row-pad: calc(2px + (30px * .62) / 8)}
 :root {--instance-tab-height: calc(30px * var(--row-scale, 1)); --instance-tab-font: calc(var(--instance-tab-height) * .4); --instance-tab-pad: calc(9px * var(--row-scale, 1)); --instance-tab-max: calc(210px * var(--row-scale, 1)); --instance-tab-icon: calc(14px * var(--row-scale, 1)); --instance-tab-gap: 1px; /* 新前端三个主题的标签页是长椭圆（胶囊）形；旧版主题另有规则把它压回 0。 */ --instance-tab-radius: 999px}
 
 .update-notice.sidebar-update-notice {padding: 4px 8px; border-radius: 999px; background: var(--red); color: #fff; font-size: 10px; font-weight: 750; line-height: 1; flex-shrink: 0}
@@ -104,6 +106,8 @@
 .instance-tab-cell:not(.instance-tab-remove):hover .instance-tab-icon {visibility: hidden}
 .instance-tab-cell:not(.instance-tab-remove):hover .instance-tab-power {display: grid}
 .instance-tab-power {position: absolute; inset: 0; display: none; place-items: center; border-radius: 50%; cursor: pointer; color: var(--accent)}
+/* 启停图标取整格的 72%：与状态图标视觉等重，悬停换图标时尺寸不变。 */
+.instance-tab-power > .lucide {width: 72%; height: 72%}
 .instance-tab-power:hover {color: var(--surface); background: var(--accent)}
 .instance-tab.running .instance-tab-power {color: var(--red)}
 .instance-tab.running .instance-tab-power:hover {color: var(--surface); background: var(--red)}

@@ -126,6 +126,9 @@ export class EditQueue {
     this.publish()
   }
 
+  /** 字段提交成功后收到的服务端配置。 */
+  onSaved?: (data: unknown) => void
+
   change(path: string, value: Value, payload: Value = value, error?: string) {
     this.replace(path, {value, payload, sequence: ++this.sequence, status: error ? 'error' : 'queued', error})
     void this.flush()
@@ -163,9 +166,10 @@ export class EditQueue {
       const [path, edit] = next
       this.replace(path, {...edit, status: 'saving'})
       try {
-        await this.transport.send(path, edit.payload)
+        const response = await this.transport.send(path, edit.payload)
         this.retryDelay = 1000
         if (this.state.edits[path]?.sequence === edit.sequence) {
+          this.onSaved?.(response)
           this.replace(path, {...edit, status: 'saved', readyAt: Date.now()})
           this.schedule()
         }

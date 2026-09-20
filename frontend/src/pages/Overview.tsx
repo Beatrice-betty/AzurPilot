@@ -74,9 +74,12 @@ export function Overview() {
     </LegacyRail>
     <div className="instance-page-main">
       <ResourceCards resources={data.resources} selected={selectedResources}/>
-      {panel === 'stats'
-        ? <div className="instance-panel-stats"><Statistics/></div>
-        : <MonitorPanel instance={instance}/>}
+      {/* 换面板时重挂一次，让内容列的淡入重放。 */}
+      <div className="instance-page-panel" key={panel}>
+        {panel === 'stats'
+          ? <div className="instance-panel-stats"><Statistics/></div>
+          : <MonitorPanel instance={instance}/>}
+      </div>
     </div>
   </div>
 
