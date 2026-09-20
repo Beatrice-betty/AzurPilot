@@ -1,7 +1,7 @@
 import { PasswordInput, Select } from '../components/FormControls'
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent, type MouseEvent, type ChangeEvent } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowRight, CalendarClock, ChartNoAxesCombined, Code2, Compass, GalleryHorizontal, LayoutDashboard, Globe, House, Download, Maximize2, Menu, Minimize2, Palette, PanelTop, Settings2, WifiOff, X } from 'lucide-react'
+import { ArrowRight, CalendarClock, ChartNoAxesCombined, Code2, Compass, GalleryHorizontal, LayoutDashboard, Globe, House, Download, ExternalLink, Maximize2, Menu, Minimize2, Palette, PanelTop, Settings2, WifiOff, X } from 'lucide-react'
 import { api } from '../api/client'
 import { useApp, useConnection } from './context'
 import { ErrorBox, Loading, Modal } from '../components/ui'
@@ -225,7 +225,7 @@ export function App() {
       {/* 旧版把招牌放进顶栏，桌面端这一行隐藏；窄屏侧栏是抽屉，招牌回抽屉里。 */}
       <div className={`sidebar-brand ${legacyShell || legacyHomeShell ? 'legacy-sidebar-actions' : ''}`.trim()}><div className="sidebar-brand-left">{brand}</div><button className="mobile-close icon-button" aria-label={ui('nav.close')} onClick={() => setMobileOpen(false)}><X size={18}/></button></div>
       <nav className="primary-nav" aria-label={ui('nav.primary')}>
-        {instance ? <><NavLink to={`${base}/overview`}><LayoutDashboard size={17}/>{ui('nav.overview')}</NavLink><NavLink to={`${base}/statistics`}><ChartNoAxesCombined size={17}/>{ui('nav.statistics')}</NavLink></> : <><NavLink to="/" end><House size={17}/>{ui('nav.home')}</NavLink><NavLink to="/updater"><Download size={17}/>{ui('nav.updater')}{update.data?.available && <span className="tiny-dot teal"/>}</NavLink><NavLink to="/interface"><Palette size={17}/>{ui('nav.interface')}</NavLink><NavLink to="/remote"><Globe size={17}/>{ui('nav.remote')}</NavLink><NavLink to="/settings"><Settings2 size={17}/>{ui('nav.settings')}</NavLink>{devMode && <NavLink to="/dev"><Code2 size={17}/>{ui('nav.developer')}</NavLink>}</>}
+        {instance ? <><NavLink to={`${base}/overview`}><LayoutDashboard size={17}/>{ui('nav.overview')}</NavLink><NavLink to={`${base}/statistics`}><ChartNoAxesCombined size={17}/>{ui('nav.statistics')}</NavLink></> : <><NavLink to="/" end><House size={17}/>{ui('nav.home')}</NavLink><NavLink to="/updater"><Download size={17}/>{ui('nav.updater')}{update.data?.available && <span className="tiny-dot teal"/>}</NavLink><NavLink to="/interface"><Palette size={17}/>{ui('nav.interface')}</NavLink><NavLink to="/remote"><Globe size={17}/>{ui('nav.remote')}</NavLink><NavLink to="/settings"><Settings2 size={17}/>{ui('nav.settings')}</NavLink><a className="nav-open-source" href="https://github.com/wess09/AzurPilot" target="_blank" rel="noreferrer"><ExternalLink size={17}/>{ui('nav.openSource')}</a>{devMode && <NavLink to="/dev"><Code2 size={17}/>{ui('nav.developer')}</NavLink>}</>}
       </nav>
       {instance && <TaskNav/>}
     </aside>
