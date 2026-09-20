@@ -35,7 +35,7 @@ test('简约首屏仅加载当前主题，五套配色即时生效并记忆', as
   })
   const requests: string[] = []
   page.on('request', request => requests.push(request.url()))
-  await page.goto('/#/settings')
+  await page.goto('/#/interface')
   await expect(page.getByRole('group', {name: '配色方案'})).toBeVisible()
   await expect(page.getByRole('combobox', {name: '自定义背景'})).toHaveCount(0)
   expect(requests.some(url => /ClassicGlass|Wallpaper|\/classic-|\/theme\.css|api\.yppp/.test(url))).toBe(false)
@@ -61,7 +61,7 @@ test('简约首屏仅加载当前主题，五套配色即时生效并记忆', as
 
 test('切换主题卸载旧材质，返回简约后不再发起装饰资源请求', async ({page}) => {
   await page.route('https://api.yppp.net/**', route => route.abort())
-  await page.goto('/#/settings')
+  await page.goto('/#/interface')
   await expect(page.locator('link[data-azurpilot-theme]')).toHaveCount(1)
   await expect(page.locator('.glass-material').first()).toBeVisible()
   await expect(page.getByRole('combobox', {name: '自定义背景'})).toBeVisible()
@@ -154,7 +154,7 @@ test('主题下载未完成时的新选择不会被旧请求覆盖', async ({pag
     await pending
     await route.continue()
   })
-  await page.goto('/#/settings')
+  await page.goto('/#/interface')
   await selectTheme(page, '简约')
   await expect.poll(() => requested).toBe(true)
   await selectTheme(page, '深色')
@@ -172,7 +172,7 @@ test('自动模式实时跟随系统，固定模式和配色预览正确切换',
   await page.emulateMedia({colorScheme: 'dark'})
   const requests: string[] = []
   page.on('request', request => requests.push(request.url()))
-  await page.goto('/#/settings')
+  await page.goto('/#/interface')
   await expect(page.getByRole('combobox', {name: '主题模式'})).toHaveText('自动')
   await expect(page.locator('html')).toHaveAttribute('data-color-mode', 'dark')
   await expect(page.locator('html')).toHaveCSS('color-scheme', 'dark')
@@ -213,7 +213,7 @@ test('自动模式实时跟随系统，固定模式和配色预览正确切换',
 
 test('自定义方案支持创建、校验、浅深通用配色、编辑和删除', async ({page}, testInfo) => {
   await page.addInitScript(() => localStorage.setItem('azurpilot.theme', 'minimal'))
-  await page.goto('/#/settings')
+  await page.goto('/#/interface')
   await selectMode(page, '浅色')
   await page.getByRole('button', {name: '添加自定义配色'}).click()
   let dialog = page.getByRole('dialog')
@@ -260,7 +260,7 @@ test('自定义背景支持 URL 与上传文件并在刷新后恢复', async ({p
     body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'),
   }))
   await page.route('https://api.yppp.net/**', route => route.abort())
-  await page.goto('/#/settings')
+  await page.goto('/#/interface')
 
   const source = page.getByRole('combobox', {name: '自定义背景'})
   await source.click()
