@@ -30,6 +30,9 @@ from module.ui.page import page_campaign_menu, page_coalition, page_event, page_
 from module.war_archives.assets import WAR_ARCHIVES_CAMPAIGN_CHECK
 
 
+EVENT_PT_TASKS = EVENTS + RAIDS + COALITIONS + GEMS_FARMINGS + HOSPITAL
+
+
 class CampaignEvent(CampaignStatus):
     """战役活动管理器。
 
@@ -60,6 +63,19 @@ class CampaignEvent(CampaignStatus):
             logger.info(f'[活动战役] 重置活动时间限制')
             self.config.cross_set(keys='EventGeneral.EventGeneral.TimeLimit', value=DEFAULT_TIME)
 
+    def get_event_pt_limit(self):
+        """返回当前任务适用的 PT 上限；不适用时返回 0，不读取游戏画面。"""
+        # 部分配置可能使用 "100,000" 这种带逗号的格式
+        limit = int(
+            re.sub(r'[,.\'"，。]', '', str(self.config.EventGeneral_PtLimit))
+        )
+        command = self.config.Scheduler_Command
+        if command not in EVENT_PT_TASKS:
+            return 0
+        if command in GEMS_FARMINGS and self.stage_is_main(self.config.Campaign_Name):
+            return 0
+        return limit
+
     def event_pt_limit_triggered(self):
         """
         检查活动 PT 是否达到限制。
@@ -70,17 +86,13 @@ class CampaignEvent(CampaignStatus):
         Pages:
             in: page_event or page_sp
         """
-        # 部分配置可能使用 "100,000" 这种带逗号的格式
-        limit = int(
-            re.sub(r'[,.\'"，。]', '', str(self.config.EventGeneral_PtLimit))
-        )
-        tasks = EVENTS + RAIDS + COALITIONS + GEMS_FARMINGS + HOSPITAL
+        limit = self.get_event_pt_limit()
         command = self.config.Scheduler_Command
         # 主线打捞任务在普通战役页（page_campaign），该页右上角区域并不显示活动 PT。
         # 直接跳过 PT 读取与上限判断，避免把页面其他数字误读成 PT（例如读成 1）。
         if command in GEMS_FARMINGS and self.stage_is_main(self.config.Campaign_Name):
             return False
-        if limit <= 0 or command not in tasks:
+        if limit <= 0:
             self.get_event_pt()
             return False
 
@@ -88,7 +100,7 @@ class CampaignEvent(CampaignStatus):
         if pt >= limit and limit > 0:
             logger.attr('活动PT限制', f'{pt}/{limit}')
             logger.hr(f'达到活动PT上限: {limit}')
-            self._disable_tasks(tasks)
+            self._disable_tasks(EVENT_PT_TASKS)
             return True
         else:
             return False
