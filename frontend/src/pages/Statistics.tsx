@@ -1,7 +1,32 @@
 import { Select } from '../components/FormControls'
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Download, RefreshCw } from 'lucide-react'
+import {
+  Award,
+  Calculator,
+  Cat,
+  CheckCircle2,
+  Clock,
+  Coins,
+  Cpu,
+  Crosshair,
+  Download,
+  Flame,
+  Fuel,
+  Gem,
+  Hourglass,
+  Package,
+  Percent,
+  RefreshCw,
+  RotateCw,
+  ShoppingCart,
+  Sparkles,
+  Swords,
+  Timer,
+  TrendingUp,
+  Zap,
+  type LucideIcon,
+} from 'lucide-react'
 import { api } from '../api/client'
 import type { StatisticsReport } from '../api/types'
 import type { Parameters } from '../api/generated'
@@ -14,6 +39,42 @@ import { LegacyRail } from '../components/LegacyRail'
 import { useInstanceOverview } from '../components/useInstanceOverview'
 import { downloadCsv } from '../components/statisticsData'
 import type { UiKey } from '../i18n'
+
+const metricIcons: Record<string, LucideIcon> = {
+  '战斗次数': Swords,
+  '出击轮数': RotateCw,
+  '出击消耗': Flame,
+  '明石遭遇': Cat,
+  '明石遭遇率': Percent,
+  '塞壬研究装置': Cpu,
+  '装置获取率': Crosshair,
+  '购买行动力': ShoppingCart,
+  '平均每次购买': Calculator,
+  '净行动力': Zap,
+  '循环效率': TrendingUp,
+  '完成委托': CheckCircle2,
+  '钻石': Gem,
+  '心智魔方': Package,
+  '心智单元': Cpu,
+  '石油': Fuel,
+  '物资': Coins,
+  '目标等级': Award,
+  '预估经验效率': TrendingUp,
+  '平均战斗时长': Clock,
+  '平均每轮时长': Hourglass,
+  '短猫平均战斗时长': Cat,
+  '今日战斗': Swords,
+  '今日经验': Sparkles,
+  '今日运行': Timer,
+}
+
+function getMetricIcon(label: string): LucideIcon | undefined {
+  if (metricIcons[label]) return metricIcons[label]
+  for (const [key, icon] of Object.entries(metricIcons)) {
+    if (label.includes(key) || key.includes(label)) return icon
+  }
+  return undefined
+}
 
 const StatisticsChart = lazy(() => import('../components/StatisticsChart').then(module => ({default: module.StatisticsChart})))
 const categories: Record<Category, UiKey> = {resources: 'stats.category.resources', action: 'stats.category.action', opsi: 'stats.category.opsi', commission: 'stats.category.commission', ships: 'stats.category.ships', loot: 'stats.category.loot'}
@@ -97,7 +158,16 @@ export function Statistics() {
     {category === 'ships' && <span>{ui('stats.shipHint')}</span>}
     {category === 'loot' && <span>{ui('stats.lootHint')}</span>}
   </>
-  const dataView = error ? <ErrorBox message={error} retry={() => setRevision(value => value + 1)}/> : !data ? <Loading/> : <div className="statistics-sections">{!!data.metrics.length && <div className="stat-metrics summary-metrics">{data.metrics.map(item => <section key={item.label}><span>{item.label}</span><strong>{item.value == null ? '—' : item.value.toLocaleString(undefined, {maximumFractionDigits: 2})}<small>{item.unit}</small></strong></section>)}</div>}{!!data.series.length && <Suspense fallback={<Loading/>}><StatisticsChart key={category} series={data.series}/></Suspense>}{data.tables.map(table => <section className="panel" key={table.title}><StatisticsTable data={table}/></section>)}</div>
+  const dataView = error ? <ErrorBox message={error} retry={() => setRevision(value => value + 1)}/> : !data ? <Loading/> : <div className="statistics-sections">{!!data.metrics.length && <div className="stat-metrics summary-metrics">{data.metrics.map(item => {
+    const Icon = getMetricIcon(item.label)
+    return <section key={item.label} className="summary-metric-card">
+      <div className="summary-metric-head">
+        <span className="summary-metric-label">{item.label}</span>
+        {Icon && <span className="summary-metric-icon" aria-hidden="true"><Icon size={24} strokeWidth={2}/></span>}
+      </div>
+      <strong>{item.value == null ? '—' : item.value.toLocaleString(undefined, {maximumFractionDigits: 2})}<small>{item.unit}</small></strong>
+    </section>
+  })}</div>}{!!data.series.length && <Suspense fallback={<Loading/>}><StatisticsChart key={category} series={data.series}/></Suspense>}{data.tables.map(table => <section className="panel" key={table.title}><StatisticsTable data={table}/></section>)}</div>
 
   const content = <>
     {condensed
