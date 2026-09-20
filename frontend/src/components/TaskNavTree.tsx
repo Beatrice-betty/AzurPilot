@@ -23,9 +23,17 @@ export function TaskNavTree({ defaultOpenKey }: { defaultOpenKey?: string } = {}
   const [search, setSearch] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [openKeys, setOpenKeys] = useState<string[]>(() => (defaultOpenKey ? [defaultOpenKey] : []))
+  // 手动收起的大类，按页面 key 记；换到别的大类所在页面即失效。
+  const [collapsed, setCollapsed] = useState<{key: string; from: string}>()
 
   function toggle(key: string) {
     setOpenKeys(keys => (keys.includes(key) ? keys.filter(item => item !== key) : [...keys, key]))
+  }
+
+  /** 收起当前所在的大类：收起状态与 openKeys 同时清掉该组。 */
+  function collapseActive(key: string, isCollapsedHere: boolean) {
+    setCollapsed(isCollapsedHere ? undefined : {key, from: location.key})
+    setOpenKeys(keys => keys.filter(item => item !== key))
   }
 
   const keyword = search.trim().toLowerCase()
@@ -55,7 +63,8 @@ export function TaskNavTree({ defaultOpenKey }: { defaultOpenKey?: string } = {}
             const isGroupActive = group.tasks.some(task =>
               location.pathname.endsWith(`/task/${task}`)
             )
-            const isExpanded = Boolean(keyword) || isGroupActive || openKeys.includes(key)
+            const collapsedHere = collapsed?.key === key && collapsed.from === location.key
+            const isExpanded = Boolean(keyword) || (isGroupActive ? !collapsedHere : openKeys.includes(key))
             const GroupIcon = groupIcons[key] ?? Anchor
 
             return (
@@ -69,7 +78,7 @@ export function TaskNavTree({ defaultOpenKey }: { defaultOpenKey?: string } = {}
                   ]
                     .filter(Boolean)
                     .join(' ')}
-                  onClick={() => toggle(key)}
+                  onClick={() => (isGroupActive ? collapseActive(key, collapsedHere) : toggle(key))}
                   aria-expanded={isExpanded}
                   aria-controls={`task-group-${key}`}
                 >

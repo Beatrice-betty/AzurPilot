@@ -128,6 +128,9 @@ body {background-attachment: scroll}
 .primary-nav a, .task-group-button {font-size: 14px; font-weight: 500; min-height: 44px; border-radius: 22px; transition: background-color .2s cubic-bezier(.2, 0, 0, 1), color .2s cubic-bezier(.2, 0, 0, 1)}
 .task-submenu-item {font-size: 13px; min-height: 36px; border-radius: 18px}
 .task-group-button.expanded {border-color: var(--accent)}
+/* 收起后仍然是当前所在的大类：只留文字与图标的换色高亮，不铺展开态底色与边框。 */
+.task-group-button.active:not(.expanded) {color: var(--accent); background: none; border-color: transparent}
+.task-group-button.active:not(.expanded) .task-group-icon {color: var(--accent)}
 .topbar {position: sticky; top: 0; z-index: 80; height: var(--topbar-height); margin: 0; padding: 0 24px}
 .right-rail {top: var(--topbar-height); height: calc(var(--viewport-height) - var(--topbar-height)); z-index: 70}
 .breadcrumb, .breadcrumb .instance-caption strong {font-size: 13px}
@@ -215,7 +218,7 @@ main:focus {outline: none}
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background-color .15s, color .15s;
+  transition: background-color .15s, color .15s, transform .12s cubic-bezier(.2, 0, 0, 1);
 }
 .icon-button:hover:not(:disabled) {
   background: var(--accent-soft);
@@ -232,7 +235,7 @@ main:focus {outline: none}
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: background-color .15s;
+  transition: background-color .15s, transform .12s cubic-bezier(.2, 0, 0, 1);
 }
 .text-button:hover:not(:disabled) {
   background: var(--accent-soft);
@@ -379,6 +382,29 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 .app-shell.legacy-shell > .main-shell > main:has(.instance-page-grid),
 .app-shell.legacy-shell > .main-shell > main:has(.task-config-legacy) {overflow-y: hidden}
 .app-shell.legacy-shell > .main-shell > main > * {flex-shrink: 0}
+/* 旧版两主题的按压反馈：鼠标按下时轻微收缩，主按钮同时收回悬停的上移。 */
+:root[data-theme='legacy-light'] .button,
+:root[data-theme='legacy-dark'] .button {transition: background-color .15s, box-shadow .15s, border-color .15s, color .15s, transform .12s cubic-bezier(.2, 0, 0, 1)}
+:root[data-theme='legacy-light'] .button:active:not(:disabled),
+:root[data-theme='legacy-dark'] .button:active:not(:disabled),
+:root[data-theme='legacy-light'] .icon-button:active:not(:disabled),
+:root[data-theme='legacy-dark'] .icon-button:active:not(:disabled),
+:root[data-theme='legacy-light'] .text-button:active:not(:disabled),
+:root[data-theme='legacy-dark'] .text-button:active:not(:disabled),
+:root[data-theme='legacy-light'] .legacy-stat-title:active,
+:root[data-theme='legacy-dark'] .legacy-stat-title:active {transform: scale(.97)}
+:root[data-theme='legacy-light'] .button.primary:active:not(:disabled),
+:root[data-theme='legacy-dark'] .button.primary:active:not(:disabled) {transform: translateY(0) scale(.97)}
+:root[data-theme='legacy-light'] .toggle:active,
+:root[data-theme='legacy-dark'] .toggle:active {transform: scale(.96)}
+:root[data-theme='legacy-light'] .monitor-segmented button:active,
+:root[data-theme='legacy-dark'] .monitor-segmented button:active {background: var(--accent-soft)}
+/* 旧版外壳下换页时页面内容淡入并轻微上移；动画挂在页面根元素上，子页面互相切换也会重放。 */
+.app-shell.legacy-shell .instance-page-grid,
+.app-shell.legacy-shell .task-config-legacy,
+.app-shell.legacy-shell .statistics-legacy {animation: legacy-page-in .22s cubic-bezier(.22, .61, .36, 1)}
+@keyframes legacy-page-in {from {opacity: 0; transform: translateY(6px)} to {opacity: 1; transform: none}}
+@media (prefers-reduced-motion: reduce) {.app-shell.legacy-shell .instance-page-grid, .app-shell.legacy-shell .task-config-legacy, .app-shell.legacy-shell .statistics-legacy {animation: none}}
 .app-shell.legacy-shell > .main-shell > main > .instance-page-grid,
 .app-shell.legacy-shell > .main-shell > main > .task-config-legacy {flex-shrink: 1; min-height: 0}
 .app-shell.legacy-shell > .right-rail {grid-area: rail}
