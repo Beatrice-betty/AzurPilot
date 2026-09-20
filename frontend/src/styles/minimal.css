@@ -117,6 +117,7 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 .rail-task-item {padding: 10px 8px; border-radius: 6px}
 .rail-task-item:hover {background: var(--surface-muted)}
 .rail-task-item strong {font-size: 12px}
+.rail-task-item small {font-size: 11px}
 .rail-task-item .task-state {font-size: 10px}
 .modal::backdrop {background: color-mix(in srgb, var(--bg) 22%, transparent)}
 .modal {border: 2px solid var(--border)}

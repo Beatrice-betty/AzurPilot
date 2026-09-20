@@ -19,7 +19,8 @@ const taskGroups = [
 /**
  * 任务计划：正在运行 / 待运行 / 等待中三组。
  *
- * 条目只显示任务名与状态 —— 执行时间是调度器的内部计算值，用户看状态就够了。
+ * 条目显示任务名、执行时间与状态徽章。时间只写值不带「执行时间：」前缀，
+ * 运行中的任务同样把时间列出来（只标状态的话就看不出它排在什么时候）。
  * `onNavigate` 供移动端抽屉在点击任务后收起使用，桌面端不传。
  */
 export function TaskQueue({instance, data, onNavigate}: {instance: string; data?: Overview; onNavigate?: () => void}) {
@@ -34,11 +35,17 @@ export function TaskQueue({instance, data, onNavigate}: {instance: string; data?
           <span>{tasks.length}</span>
         </div>
         <div className="rail-queue-body">
-          {tasks.length ? tasks.map(task => <Link key={task.name} className="rail-task-item" to={`/i/${instance}/task/${task.name}`} onClick={onNavigate}>
-            <strong>{t(`Task.${task.name}.name`)}</strong>
-            <span className={`task-state ${task.state}`}><GroupIcon size={12}/>{ui(taskStateLabel[task.state])}</span>
-            <ChevronRight size={13}/>
-          </Link>) : <div className="rail-queue-empty">{ui(group.empty as UiKey)}</div>}
+          {tasks.length ? tasks.map(task => {
+            const nextRun = task.nextRun?.replace('T', ' ').trim()
+            return <Link key={task.name} className="rail-task-item" to={`/i/${instance}/task/${task.name}`} onClick={onNavigate}>
+              <div>
+                <strong>{t(`Task.${task.name}.name`)}</strong>
+                {nextRun && <small>{nextRun}</small>}
+              </div>
+              <span className={`task-state ${task.state}`}><GroupIcon size={12}/>{ui(taskStateLabel[task.state])}</span>
+              <ChevronRight size={13}/>
+            </Link>
+          }) : <div className="rail-queue-empty">{ui(group.empty as UiKey)}</div>}
         </div>
       </section>
     }) : <div className="rail-empty">{ui('scheduler.noEnabled')}</div>}
