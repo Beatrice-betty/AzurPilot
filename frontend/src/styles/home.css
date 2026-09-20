@@ -157,8 +157,8 @@
   .home-deck {color: var(--text); background: var(--surface-muted); text-shadow: none}
   .home-deck-link {border-color: var(--border); background: var(--surface); color: var(--text)}
 }
-[data-theme='minimal'] .home-deck {color: var(--text); background: var(--surface-muted); text-shadow: none}
-[data-theme='minimal'] .main-shell > main:has(> .home-editorial) {min-height: calc(var(--viewport-height) - var(--topbar-height))}
+[data-theme='minimal'] .home-deck, [data-theme='extreme'] .home-deck {color: var(--text); background: var(--surface-muted); text-shadow: none}
+[data-theme='minimal'] .main-shell > main:has(> .home-editorial), [data-theme='extreme'] .main-shell > main:has(> .home-editorial) {min-height: calc(var(--viewport-height) - var(--topbar-height))}
 .head-grid {display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-bottom: 24px}
 .head-card {padding: 22px; display: grid; gap: 15px}
 .head-card > span {display: flex; align-items: center; gap: 8px; color: var(--muted)}

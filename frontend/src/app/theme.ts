@@ -1,5 +1,5 @@
 import { palettes, paletteColors, paletteTokens, readCustomPalettes, type Palette, type ColorMode, type ResolvedMode, type CustomPalette } from './palettes'
-export type Theme = 'light' | 'dark' | 'minimal'
+export type Theme = 'light' | 'dark' | 'minimal' | 'extreme'
   | 'legacy-light' | 'legacy-dark'
 export { palettes } from './palettes'
 export type { Palette, ColorMode, CustomPalette } from './palettes'
@@ -20,7 +20,7 @@ export const usesLegacyShell = (theme: Theme, instance?: string) => Boolean(inst
 /** 是否渲染右栏。旧版主题把调度器与任务计划放进实例页左列，右栏整体让位，否则同一块内容会出现两处。 */
 export const showsRightRail = (theme: Theme, instance?: string) => Boolean(instance) && !usesLegacyLayout(theme)
 
-const VALID_THEMES: readonly string[] = ['light', 'dark', 'minimal',
+const VALID_THEMES: readonly string[] = ['light', 'dark', 'minimal', 'extreme',
   'legacy-light', 'legacy-dark']
 
 export function readThemePreference(): Preference {
@@ -50,10 +50,10 @@ export const subscribeTheme = (listener: () => void) => {
   return () => { listeners.delete(listener) }
 }
 
-/** 只有简约自动模式订阅系统变化；切换为固定模式或经典主题即移除监听。 */
+/** 只有简约与紧凑的自动模式订阅系统变化；切换为固定模式或经典主题即移除监听。 */
 function applyColorMode(next: Preference) {
   const root = document.documentElement
-  const minimal = next.theme === 'minimal'
+  const minimal = next.theme === 'minimal' || next.theme === 'extreme'
   const followSystem = minimal && next.colorMode === 'auto'
   if (!followSystem) {
     systemQuery?.removeEventListener('change', systemModeChanged)
@@ -95,7 +95,7 @@ type Skin = keyof typeof skinLoaders
 
 /** 浅色与深色各自是独立主题值，但共用同一份 CSS：明暗靠 data-theme 选择器切换。 */
 function skinFor(theme: Theme): Skin {
-  if (theme === 'minimal') return 'minimal'
+  if (theme === 'minimal' || theme === 'extreme') return 'minimal'
   if (theme === 'legacy-light' || theme === 'legacy-dark') return 'legacy'
   return 'classic'
 }
