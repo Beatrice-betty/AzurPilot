@@ -292,7 +292,6 @@ input, select, textarea {border-radius: 10px; min-height: 40px; background: var(
 .rail-task-item {grid-template-columns: minmax(0, 1fr) auto 13px; min-height: 58px; margin: 2px 0; padding: 10px 10px 10px 12px; border-radius: 13px}
 .rail-task-item:hover {background: color-mix(in srgb, var(--surface) 86%, transparent)}
 .rail-task-item strong {font-size: 13px; line-height: 1.35}
-.rail-task-item small {margin-top: 3px; font-size: 11px; line-height: 1.35}
 .rail-task-item .task-state {display: inline-flex; align-items: center; gap: 5px; font-size: 10px; padding: 4px 7px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--border) 46%, transparent); background: color-mix(in srgb, var(--surface) 72%, transparent); color: var(--muted); font-weight: 550}
 .rail-task-item .task-state svg {stroke-width: 1.7}
 .rail-queue-group.running .task-state.running {background: color-mix(in srgb, var(--surface) 98%, transparent); color: var(--text); border-color: color-mix(in srgb, var(--border) 72%, transparent)}

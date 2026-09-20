@@ -132,9 +132,8 @@ main {padding: 32px 32px 16px; max-width: 1600px; width: 100%; margin: 0 auto; f
 .rail-task-item:last-child {border-bottom: 0}
 .rail-task-item:hover {color: var(--text)}
 .rail-task-item > div {min-width: 0}
-.rail-task-item strong, .rail-task-item small {display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap}
+.rail-task-item strong {display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap}
 .rail-task-item strong {font-size: 10px; font-weight: 600}
-.rail-task-item small {margin-top: 2px; color: var(--muted); font-size: 9px}
 .rail-task-item .task-state {font-size: 9px; white-space: nowrap}
 .rail-empty {padding: 18px 8px; color: var(--muted); font-size: 10px; text-align: center}
 .mobile-toggle, .mobile-close, .mobile-rail-toggle, .mobile-rail-close {display: none !important}

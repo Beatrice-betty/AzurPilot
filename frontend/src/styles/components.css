@@ -142,9 +142,13 @@
 .field-control > input, .field-control > select, .field-control > textarea {width: 100%; font-size: 13px}
 .field-control textarea {resize: none; overflow-y: hidden; min-height: 0; line-height: 1.9}
 .field-actions {display: flex; justify-content: flex-end; margin-top: 7px}
-/* 控件行内带动作按钮时：整行改成 flex，按钮靠 order 落到输入框左边。 */
+/* 控件行内带动作按钮时：整行改成 flex，顺序由 DOM 决定（控件 → 保存状态 → 动作按钮），
+   状态提示不换行，避免点完按钮后整行上下错位。 */
 .field-control:has(> .field-actions) {display: flex; align-items: center; gap: 7px}
-.field-control > .field-actions {order: -1; margin-top: 0; flex-shrink: 0}
+.field-control:has(> .field-actions) > input,
+.field-control:has(> .field-actions) > select {width: auto; flex: 1; min-width: 0}
+.field-control:has(> .field-actions) > .edit-status {margin-top: 0; flex: 0 0 auto; flex-wrap: nowrap; justify-content: flex-start; white-space: nowrap}
+.field-control > .field-actions {margin-top: 0; flex-shrink: 0}
 /* 纯图标按钮：宽度收成与自身高度相等，不靠固定尺寸。 */
 .field-control > .field-actions .icon-only {aspect-ratio: 1; padding: 0; gap: 0}
 .settings-notice {font-size: 11px; color: var(--muted); line-height: 1.9; margin: 24px 0 16px}

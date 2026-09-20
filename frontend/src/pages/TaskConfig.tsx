@@ -165,6 +165,9 @@ export function TaskConfig() {
                   }}
                 />
               )}
+              {shopMode && shopModeError && !edit ? (
+                <div id={`${path}-status`} className="edit-status edit-error" role="alert">{shopModeError}</div>
+              ) : <EditStatus id={path} edit={edit} retry={queue.retry} />}
               {runNow && (
                 <div className="field-actions">
                   <button type="button" className="button subtle icon-only" aria-label={ui('task.runNow')} title={ui('task.runNow')} disabled={connection !== 'ready'}
@@ -175,16 +178,12 @@ export function TaskConfig() {
                     }}><Play size={15}/></button>
                 </div>
               )}
-              {shopMode && shopModeError && !edit ? (
-                <div id={`${path}-status`} className="edit-status edit-error" role="alert">{shopModeError}</div>
-              ) : <EditStatus id={path} edit={edit} retry={queue.retry} />}
             </div>
           </div>
         )
       })}
     </section>
-  ))}
-    {search && !visibleGroups.length && <Empty icon={<Search size={26} />} title={ui('task.noConfigFound')}>{ui('task.tryOtherKeyword')}</Empty>}
+  ))}    {search && !visibleGroups.length && <Empty icon={<Search size={26} />} title={ui('task.noConfigFound')}>{ui('task.tryOtherKeyword')}</Empty>}
   </>
 
   const hasGroups = task !== 'FleetInfo' && Boolean(groups) && visibleGroups.length > 0
