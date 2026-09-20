@@ -19,12 +19,13 @@ const RESOURCE_PALETTE: Record<string, string> = {
   ap: '#3b82f6', asset: '#6366f1', distance: '#14b8a6', yellow_coins: '#eab308', purple_coins: '#a855f7',
 }
 const DEFAULT_PALETTE = ['#159b88', '#f59e0b', '#0ea5e9', '#ec4899', '#8b5cf6', '#10b981', '#f97316', '#6366f1', '#14b8a6']
+type ChartMode = 'line' | 'candlestick'
 
 function getSeriesColor(key: string, index: number, fallback?: string): string {
   return RESOURCE_PALETTE[key] ?? (index === 0 && fallback ? fallback : DEFAULT_PALETTE[index % DEFAULT_PALETTE.length])
 }
 
-export function StatisticsChart({series, initialMode = 'line'}: {series: StatSeries[]; initialMode?: 'line' | 'candlestick'}) {
+export function StatisticsChart({series, initialMode = 'line'}: {series: StatSeries[]; initialMode?: ChartMode}) {
   const {ui, language, theme} = useApp()
   const [selectedKeys, setSelectedKeys] = useState<string[]>(() => {
     const active = series.find(item => item.points.length)?.key ?? series[0]?.key
@@ -251,7 +252,7 @@ export function StatisticsChart({series, initialMode = 'line'}: {series: StatSer
             aria-label={ui('stats.chartType')}
             value={mode}
             onChange={event => {
-              const nextMode = event.target.value
+              const nextMode: ChartMode = event.target.value === 'candlestick' ? 'candlestick' : 'line'
               setMode(nextMode)
               if (nextMode === 'candlestick' && bucket === 0) {
                 setBucket(60)
