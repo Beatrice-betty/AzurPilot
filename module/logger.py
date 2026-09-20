@@ -400,10 +400,13 @@ os.chdir(os.path.join(os.path.dirname(__file__), '../'))
 pyw_name = os.path.splitext(os.path.basename(sys.argv[0]))[0]
 
 
+def get_log_file_path(name, root='.', day=None):
+    """按完整实例名定位日志，不将下划线当作任务名分隔符。"""
+    return Path(root) / 'log' / f'{day or datetime.date.today()}_{name}.txt'
+
+
 def _set_file_logger(name=pyw_name):
-    if '_' in name:
-        name = name.split('_', 1)[0]
-    log_file = f'./log/{datetime.date.today()}_{name}.txt'
+    log_file = str(get_log_file_path(name))
     try:
         file = logging.FileHandler(log_file, encoding='utf-8')
     except FileNotFoundError:
@@ -418,8 +421,6 @@ def _set_file_logger(name=pyw_name):
 
 
 def set_file_logger(name=pyw_name):
-    if "_" in name:
-        name = name.split("_", 1)[0]
     # Windows 下有 "SyncManager-N:N"、"MainProcess"、"Process-N"、"gui" 四种进程
     # Linux 下没有 "SyncManager" 进程，只有 "MainProcess"
     if os.name == "nt":
