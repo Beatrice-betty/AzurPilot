@@ -118,7 +118,7 @@ class ConfigService:
             return []
         return [{'name': path.stem, 'modified': path.stat().st_mtime}
                 for path in sorted(self.import_directory.glob('*.json'))
-                if not path.is_symlink() and self.is_instance(path)]
+                if accepts_name(path.stem) and not path.is_symlink() and self.is_instance(path)]
 
     def read_import(self, name):
         """读导入目录里的一份配置；与实例名同样用白名单校验，不做任意路径读取。"""
@@ -161,6 +161,8 @@ class ConfigService:
         return {'instance': name, 'revision': revision, 'values': data}
 
     def create(self, name, source=None, import_file=None):
+        # 先归一化，落盘名与返回给客户端的实例名才是同一个。
+        name = validate_name(name)
         with self.lock:
             if import_file:
                 data = self.read_import(import_file)

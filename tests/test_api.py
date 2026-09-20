@@ -58,6 +58,9 @@ class ConfigApiTests(unittest.TestCase):
         self.assertNotIn('link', names)       # 符号链接
         self.assertNotIn('testpilot', names)  # 实例目录里的不会被当作导入源
 
+        # 文件名不合规的不能被列出来：read_import 会拒掉它，列出来就是一个选不了的选项
+        shutil.copyfile(self.configs.directory / 'testpilot.json', imports / 'bad#name.json')
+        self.assertNotIn('bad#name', [entry['name'] for entry in self.configs.importable()])
         # 导入创建：从导入目录取内容写到实例目录，导入源保持不动
         self.configs.create('imported', import_file='shared')
         self.assertIn('imported', self.configs.names())
@@ -111,6 +114,16 @@ class ConfigApiTests(unittest.TestCase):
                      'テスト', 'テスト2', 'アズール', 'ひらがな', 'ｱｽﾞｰﾙ']:
             with self.subTest(name=name):
                 self.configs.path(name, exists=False)
+
+    def test_create_returns_the_normalized_name(self):
+        """首尾空白与尾点会被归一化，返回的实例名要与落盘名一致 —— 客户端拿它做路由。"""
+        for given in ['zztrim ', 'zztrim.', ' zztrim ']:
+            with self.subTest(given=given):
+                (self.configs.directory / 'zztrim.json').unlink(missing_ok=True)
+                result = self.configs.create(given)
+                self.assertEqual('zztrim', result['instance'])
+                self.assertEqual('zztrim', self.configs.get('zztrim')['instance'])
+                (self.configs.directory / 'zztrim.json').unlink(missing_ok=True)
 
     def test_still_rejects_unsafe_names(self):
         for name in ['-测试', '测试#1', '.隐藏', '测试/实例', ' ']:

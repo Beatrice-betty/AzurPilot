@@ -10,6 +10,7 @@ import { InstanceSwitcher } from '../components/InstanceSwitcher'
 import { InstanceTabs } from '../components/InstanceTabs'
 import { RightRail } from '../components/RightRail'
 import { TaskNav } from '../components/TaskNav'
+import { isDesktopDevice } from '../components/TaskNavFlyout'
 import { TaskSwitcher } from '../components/TaskSwitcher'
 import { useUpdater } from './updater'
 import { recordDevLogoClick } from './devMode'
@@ -72,10 +73,11 @@ export function CreateInstance({onClose}: {onClose: () => void}) {
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError('')
     try {
-      await api.request('instances.create', {name, source: source || null, import_file: importFile || null})
+      /* 后端会归一化首尾空白与尾点，导航用返回的规范名。 */
+      const created = await api.request('instances.create', {name, source: source || null, import_file: importFile || null})
       await refresh(); onClose(); notify(ui('instance.created'))
       /* 从总览页发起的创建，落到新实例的运行总览。 */
-      navigate(`/i/${name}/overview`)
+      navigate(`/i/${created.instance}/overview`)
     } catch (error) { setError((error as Error).message) } finally { setBusy(false) }
   }
   return <Modal title={ui('instance.createTitle')} onClose={onClose} cancelGuard={escapesFromPage} onKeyDown={trackEscape}><form onSubmit={submit} className="form-stack">
@@ -159,8 +161,11 @@ export function App() {
     const last = readLastPath()
     if (last === location.pathname) return
     /* 记忆里的实例可能已经被删了，这种情况回主页（新壳之外没有它的位置）。 */
-    const remembered = last?.match(/^\/i\/([^/]+)/)?.[1]
-    if (remembered && !instances.some(item => item.name === remembered)) {
+    const matched = last?.match(/^\/i\/([^/]+)/)?.[1]
+    /* 路由段是百分号编码的，含空格或中文的实例名解码后再与列表比对。 */
+    let remembered
+    try { remembered = matched ? decodeURIComponent(matched) : undefined } catch { remembered = undefined }
+    if (matched && (!remembered || !instances.some(item => item.name === remembered))) {
       navigate('/', {replace: true})
       return
     }
@@ -185,6 +190,8 @@ export function App() {
     : ''
   /* 分页模式把所有实例铺在顶栏一行；原模式仍把实例收在下拉里。两种模式共用这一个开关。 */
   const tabsMode = topbarMode === 'tabs' && instances.length > 0
+  /* 窄屏下 home.css 会把标签条藏起来，此时展示切换器。 */
+  const tabsShown = tabsMode && isDesktopDevice()
   const modeToggle = instances.length === 0 ? null : <button
     type="button"
     className="topbar-mode-toggle icon-button"
@@ -207,10 +214,10 @@ export function App() {
     <GlassMaterial/><button className="mobile-toggle icon-button" aria-label={ui('nav.open')} onClick={() => setMobileOpen(true)}><Menu size={20}/></button>{showRail && <button className="mobile-rail-toggle icon-button" aria-label={railOpen ? ui('nav.closeRail') : ui('nav.openRail')} aria-expanded={railOpen} aria-controls="right-rail-menu" title={railOpen ? ui('nav.closeRail') : ui('nav.openRail')} onClick={() => setRailOpen(open => !open)}><CalendarClock size={18}/></button>}
     {legacyShell || legacyHomeShell
       ? <span className="legacy-topbar-title">{pageTitle}</span>
-      : <div className={`breadcrumb${tabsMode ? ' with-tabs' : ''}`}>{modeToggle}{sizeToggle}<Link to="/">{ui('nav.home')}</Link>{instance ? (tabsMode ? null : <><span>/</span><InstanceSwitcher onCreate={() => setCreating(true)}/></>) : activeSection !== ui('nav.home') && <><span>/</span><strong>{activeSection}</strong></>}{tabsMode && tabStrip}{instance && (currentTask ? <><span>/</span><Link to={`${base}/task/Alas`}>{ui('nav.taskConfig')}</Link><span>/</span><Link className="breadcrumb-current" to={`${base}/task/${currentTask}`}><strong>{t(`Task.${currentTask}.name`)}</strong></Link></> : location.pathname.endsWith('/statistics') && !tabsMode && <><span>/</span><strong>{ui('nav.statistics')}</strong></>)}</div>}
+      : <div className={`breadcrumb${tabsShown ? ' with-tabs' : ''}`}>{modeToggle}{sizeToggle}<Link to="/">{ui('nav.home')}</Link>{instance ? (tabsShown ? null : <><span>/</span><InstanceSwitcher onCreate={() => setCreating(true)}/></>) : activeSection !== ui('nav.home') && <><span>/</span><strong>{activeSection}</strong></>}{tabsShown && tabStrip}{instance && (currentTask ? <><span>/</span><Link to={`${base}/task/Alas`}>{ui('nav.taskConfig')}</Link><span>/</span><Link className="breadcrumb-current" to={`${base}/task/${currentTask}`}><strong>{t(`Task.${currentTask}.name`)}</strong></Link></> : location.pathname.endsWith('/statistics') && !tabsMode && <><span>/</span><strong>{ui('nav.statistics')}</strong></>)}</div>}
   </header>
   // 旧版顶栏只留招牌与居中的页面名，「主页 / 实例 / 任务」这一行落到内容区顶部。
-  const pageNav = <div className="legacy-page-nav"><div className={`breadcrumb${tabsMode ? ' with-tabs' : ''}`}>{modeToggle}{sizeToggle}<Link to="/">{ui('nav.home')}</Link>{tabsMode ? tabStrip : <><span>/</span><InstanceSwitcher onCreate={() => setCreating(true)}/></>}{currentTask && <><span>/</span><TaskSwitcher/></>}</div></div>
+  const pageNav = <div className="legacy-page-nav"><div className={`breadcrumb${tabsShown ? ' with-tabs' : ''}`}>{modeToggle}{sizeToggle}<Link to="/">{ui('nav.home')}</Link>{tabsShown ? tabStrip : <><span>/</span><InstanceSwitcher onCreate={() => setCreating(true)}/></>}{currentTask && <><span>/</span><TaskSwitcher/></>}</div></div>
   return <div className={`app-shell ${showRail ? 'with-rail' : ''} ${legacyShell || legacyHomeShell ? 'legacy-shell' : ''} ${mobileOpen ? 'mobile-open' : ''} ${railOpen ? 'rail-open' : ''}`}>
     <a className="skip-link" href="#main-content" onClick={event => {event.preventDefault(); document.getElementById('main-content')?.focus()}}>{ui('nav.skipContent')}</a>
     {(legacyShell || legacyHomeShell) && topbar}
