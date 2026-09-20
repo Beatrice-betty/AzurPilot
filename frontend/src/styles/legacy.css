@@ -136,6 +136,11 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 /* 内容列的高度自己定（页内两列各自滚），不靠自动最小尺寸撑高，否则会把整壳顶出视口。 */
 .app-shell.legacy-shell > .main-shell > main {min-height: 0; display: flex; flex-direction: column}
 .app-shell.legacy-shell > .right-rail {grid-area: rail}
+/* 顶层页面（主页 / 更新器 / 设置 / 配置管理…）没有页内滚动区：外壳既把这一行裁掉，
+   又没给 main 留滚动容器，长页面就被整段裁掉、页面还滚不动。
+   main 在实例页是 flex 列（页内两列要 flex 撑满），到这里会把普通面板压扁而不是溢出，
+   所以这里同时退回块级布局并补上滚动容器；顶栏与侧栏照旧常驻，与实例页一致。 */
+.app-shell.legacy-home-shell > .main-shell > main {display: block; min-height: 0; overflow-y: auto}
 /* 招牌随顶栏走：顶栏里的那份紧贴左侧，不参与侧栏那套 72px 间距。 */
 .legacy-topbar-brand {height: auto; margin-bottom: 0; padding: 0}
 /* 旧版顶栏的第三列是居中的页面名。 */
