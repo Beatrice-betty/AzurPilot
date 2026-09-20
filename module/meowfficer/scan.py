@@ -23,7 +23,7 @@ import time
 
 import numpy as np
 
-from module.base.button import ButtonGrid
+from module.base.button import Button
 from module.base.timer import Timer
 from module.exception import RequestHumanTakeover
 from module.logger import logger
@@ -33,36 +33,11 @@ from module.meowfficer.score import Talent
 from module.meowfficer.scan_utils import _crop, _mean_diff, parse_level, pick_cat_name, scroll_offset
 from module.meowfficer.score_ocr import recognize
 from module.ui.assets import MEOWFFICER_GOTO_DORMMENU
-
-# 猫窝卡片网格（实机量测）
-MEOWFFICER_CATTERY_GRID = ButtonGrid(
-    origin=(784, 185), delta=(130, 146), button_shape=(80, 80), grid_shape=(4, 3),
-    name='MEOWFFICER_CATTERY_GRID')
-
-# 左下角「当前显示的猫」名字与等级区域。
-# 右边界刻意停在 640：再往右会和右侧天赋面板的左缘（约 690）重叠，
-# 实测会把天赋名（如「不动如山」）读成猫名。
-CURRENT_CAT_AREA = (100, 565, 640, 618)
-# 天赋面板的完整范围（含边距）。识别天赋时只在这一块上跑 OCR：
-# recognize() 会把图放大 3 倍再跑两个变体，整屏 1280×720 要 4 秒左右，
-# 只取面板能省掉约 2/3 的计算量。范围要比面板稍大，别把最下面半截那行切掉。
-TALENT_OCR_AREA = (686, 78, 1279, 615)
-# 猫窝列表面板 / 天赋列表面板：只取面板做画面稳定性比较，避免立绘动画干扰
-CATTERY_PANEL_AREA = (700, 110, 1275, 565)
-TALENT_PANEL_AREA = (690, 90, 1275, 585)
-
-# 「天赋」页签模板匹配的搜索偏移
-TALENT_TAB_OFFSET = 10
-# 单只猫最多滑动几次以抓全天赋
-MAX_TALENT_SWIPES = 4
-# 猫窝一屏可见的内容高度：3 行 × 行距 146。整屏前进才能做到「每只猫只访问一次」，
-# 从而不需要按内容去重（指挥喵可以重名，按内容合并会丢猫）
-CATTERY_SCREEN_HEIGHT = 438
-# 猫窝单次小步滑动距离：实机滚动量约为滑动距离的 1.4~1.5 倍，
-# 所以一屏要滑 3 次左右；这里按**实测位移**累加，不依赖这个倍率
-CATTERY_SWIPE_STEP = 120
-# 两次截图的平均像素差小于该值即认为画面已稳定
-STABLE_TOLERANCE = 3.0
+from module.meowfficer.scan_utils import (CATTERY_PANEL_AREA, CATTERY_SCREEN_HEIGHT, CATTERY_SWIPE_STEP,
+                                          CURRENT_CAT_AREA, INERT_CLICK,
+                                          MAX_TALENT_SWIPES, MEOWFFICER_CATTERY_GRID, MEOWFFICER_PLAY_CONFIRM,
+                                          PLAY_CONFIRM_COUNT, PLAY_CONFIRM_THRESHOLD, STABLE_TOLERANCE,
+                                          TALENT_OCR_AREA, TALENT_PANEL_AREA, TALENT_TAB_OFFSET)
 
 
 class MeowfficerScanner(MeowfficerBase):
@@ -78,6 +53,8 @@ class MeowfficerScanner(MeowfficerBase):
     def __init__(self, config, device=None, task=None):
         super().__init__(config, device, task)
         self.scanned = []
+        # 已经提示过「疑似弹窗挡住页面」（只提示一次，避免刷屏）
+        self._popup_warned = False
 
     # ------------------------------------------------------------------
     # 基础等待
@@ -134,6 +111,61 @@ class MeowfficerScanner(MeowfficerBase):
     # 页面操作
     # ------------------------------------------------------------------
 
+    def _dump_popup_debug(self) -> None:
+        """把当前画面存到 ``log/meowfficer_popup_debug.png``（弹窗关不掉时用来定位）。"""
+        import os
+
+        import cv2
+
+        try:
+            path = os.path.join('log', 'meowfficer_popup_debug.png')
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            cv2.imwrite(path, self.device.image)
+            logger.info(f'[指挥喵-扫描] 现场截图已存到 {path}')
+        except Exception as e:
+            logger.warning(f'[指挥喵-扫描] 现场截图保存失败：{e}')
+
+    def _dismiss_play_popup(self) -> bool:
+        """检测「陪玩」结算弹窗，只提示、**不再自动点击**。
+
+        历史教训：这里原本会自动点右下角「确定」。但实测这个判据在正常画面上并不稳定 ——
+        主界面底部导航、天赋页右下角的猫立绘都可能凑出足够的金色像素；误判后点下去会落到
+        底部导航/别处，把界面带到聊天窗口，再叠加重试还会触发 ALAS 的「同一按钮点击次数
+        过多」保护直接把任务搞崩。连续 4 次实机运行都栽在这里。
+
+        所以现在改成：**导航流程不再自动点它**，只提示用户手点；用户点掉之后循环会自动继续。
+
+        Returns:
+            bool: 恒为 ``False``（不再代替用户点击）。
+        """
+        if not self.image_color_count(MEOWFFICER_PLAY_CONFIRM,
+                                      color=MEOWFFICER_PLAY_CONFIRM.color,
+                                      threshold=PLAY_CONFIRM_THRESHOLD,
+                                      count=PLAY_CONFIRM_COUNT):
+            return False
+        # 只警告一次，避免每轮循环刷屏
+        if not self._popup_warned:
+            self._popup_warned = True
+            logger.warning('[指挥喵-扫描] 疑似「陪玩」结算弹窗挡住了页面：'
+                           '请手动点掉右下角的「确定」，任务会自动继续')
+        return False
+
+    def _looks_like_meowfficer_entry(self) -> bool:
+        """当前画面像不像「指挥喵相关」的页面。
+
+        只用在**盲点之后**做验证：盲点前没法判断是不是主界面，但点完必须能判断
+        有没有真的进到生活区/指挥喵，否则就该收手。
+
+        Returns:
+            bool: 猫窝列表 / 指挥喵页 / 生活区页 任一成立即为 True。
+        """
+        from module.ui.assets import DORMMENU_CHECK, MEOWFFICER_CHECK
+
+        return (self.appear(MEOWFFICER_TALENT_TAB, offset=TALENT_TAB_OFFSET)
+                or self.appear(MEOWFFICER_GOTO_DORMMENU, offset=TALENT_TAB_OFFSET)
+                or self.appear(MEOWFFICER_CHECK, offset=TALENT_TAB_OFFSET)
+                or self.appear(DORMMENU_CHECK, offset=(30, 30)))
+
     def _ensure_cattery(self) -> None:
         """确保停在猫窝列表。
 
@@ -148,13 +180,18 @@ class MeowfficerScanner(MeowfficerBase):
         from module.ui.assets import (DORMMENU_CHECK, DORMMENU_GOTO_MEOWFFICER, MAIN_GOTO_DORMMENU,
                                       MEOWFFICER_CHECK)
 
-        timer = Timer(45, count=60).start()
+        # 给足时间：如果弹出「陪玩」结算弹窗，需要用户手动点掉「确定」，循环会自动继续
+        timer = Timer(120, count=60).start()
         blind_clicks = 0
         self.device.stuck_record_clear()
         with self.device.stuck_timeout_override(image_stuck=180):
             while 1:
                 self.device.screenshot()
-                # 已在猫窝列表：天赋页签可见即代表在列表上
+                # 判定顺序很重要：**先认已知页面，全都认不出来才去猜弹窗**。
+                # 反过来的话，停在天赋页时（猫窝页签不可见）会先跑弹窗判定，
+                # 而天赋页右下角猫的立绘也可能让金色计数超阈值 → 误判成弹窗 →
+                # 点在右下角，实测**会把聊天窗口点开**，然后一路跑偏。
+                # 已在猫窝列表：天赋页签可见即代表在列表上。
                 if self.appear(MEOWFFICER_TALENT_TAB, offset=TALENT_TAB_OFFSET):
                     return
                 # 在指挥喵页的其它视图（天赋/陪玩）。注意不能用 MEOWFFICER_CHECK 判断：
@@ -174,23 +211,46 @@ class MeowfficerScanner(MeowfficerBase):
                         logger.info('[指挥喵-扫描] 从生活区进入指挥喵')
                         time.sleep(1.5)
                         continue
-                elif blind_clicks < 2:
-                    # 页面未知：大概率在主界面，但部分客户端主界面资源与仓库不一致
-                    # （实测 MAIN_GOTO_FLEET 只有 0.24，识别不出来），只能盲点一次底部「生活区」。
-                    # 限制次数，避免在别的页面上乱点。
-                    logger.info('[指挥喵-扫描] 未识别到已知页面，尝试点击底部「生活区」')
-                    self.device.click(MAIN_GOTO_DORMMENU)
+                elif blind_clicks < 1:
+                    # 已知页面都认不出来：先点左侧空白区收起可能开着的侧栏（聊天窗口等）。
+                    # 放在弹窗判定**之前**，因为侧栏比弹窗常见得多，而且这一步对弹窗也无害
+                    # （弹窗是模态的，点在左侧只会落在对话框上）。
                     blind_clicks += 1
+                    logger.info('[指挥喵-扫描] 未识别到已知页面，先点左侧空白区收起侧栏')
+                    self.device.click(Button(area=INERT_CLICK, color=(255, 255, 255),
+                                             button=INERT_CLICK, name='INERT_CLICK'))
+                    time.sleep(1.2)
+                    self.device.screenshot()
+                    if self._looks_like_meowfficer_entry():
+                        continue
+                    # 侧栏收掉了还认不出来，才去猜「陪玩」结算弹窗（它会盖住整页，
+                    # 页签与返回箭头都看不见，所以只能兜底）
+                    if self._dismiss_play_popup():
+                        continue
+                    # 收掉侧栏还是认不出来：再试一次底部「生活区」（部分客户端主界面资源
+                    # 与仓库不一致，没法先判断是不是主界面）。点完必须立刻验证，
+                    # 进不了生活区就报错收手，避免在未知页面上继续乱点。
+                    logger.info('[指挥喵-扫描] 仍未识别，尝试点击底部「生活区」')
+                    self.device.click(MAIN_GOTO_DORMMENU)
                     time.sleep(1.5)
+                    self.device.screenshot()
+                    if not self._looks_like_meowfficer_entry():
+                        logger.warning('[指挥喵-扫描] 点了「生活区」也没进生活区，'
+                                       '说明当前不在主界面，停止盲目点击')
+                        raise RequestHumanTakeover(
+                            '当前页面不是主界面也不是指挥喵页面（点「生活区」没有反应）：'
+                            '请手动打开 生活区 → 指挥喵 后再运行本任务')
                     continue
                 if timer.reached():
+                    self._dump_popup_debug()
                     logger.warning('[指挥喵-扫描] 页面识别情况：'
                                    f'猫窝页签={self.appear(MEOWFFICER_TALENT_TAB, offset=TALENT_TAB_OFFSET)} '
                                    f'返回箭头={self.appear(MEOWFFICER_GOTO_DORMMENU, offset=TALENT_TAB_OFFSET)} '
                                    f'指挥喵页={self.appear(MEOWFFICER_CHECK, offset=TALENT_TAB_OFFSET)} '
                                    f'生活区页={self.appear(DORMMENU_CHECK, offset=(30, 30))}')
                     raise RequestHumanTakeover(
-                        '没能进入「指挥喵」页面：请先在游戏里打开 生活区 → 指挥喵，再运行本任务')
+                        '没能进入「指挥喵」页面：请先在游戏里打开 生活区 → 指挥喵，再运行本任务'
+                        '（现场截图已存到 log/meowfficer_popup_debug.png）')
                 time.sleep(0.5)
 
     def _read_current_cat(self, ocr) -> tuple:
@@ -260,6 +320,11 @@ class MeowfficerScanner(MeowfficerBase):
     def _open_talent(self) -> bool:
         """点开「天赋」页签。"""
         if not self.appear(MEOWFFICER_TALENT_TAB, offset=TALENT_TAB_OFFSET):
+            # 找不到页签多半是被结算弹窗盖住了，点掉再来一次
+            if self._dismiss_play_popup():
+                self.device.screenshot()
+                if self.appear(MEOWFFICER_TALENT_TAB, offset=TALENT_TAB_OFFSET):
+                    return self._open_talent()
             logger.warning('[指挥喵-扫描] 猫窝列表上找不到天赋页签，跳过这只')
             return False
         self.device.stuck_record_clear()
@@ -410,7 +475,8 @@ class MeowfficerScanner(MeowfficerBase):
             passes: 最多翻几屏（每屏 12 张卡片）。
 
         Returns:
-            list[tuple[str, list[Talent]]]: ``(猫名, 天赋列表)``。
+            list[tuple[str, list[Talent], int | None]]: ``(猫名, 天赋列表, 等级)``；
+            等级读不到时为 ``None``。
 
         指挥喵**可以自定义名字**，自定义名甚至可能和天赋名一样（用户就有一只猫叫
         「不动如山」），而且**可以重名**，所以这里刻意**不做任何按内容的去重**：
@@ -437,6 +503,11 @@ class MeowfficerScanner(MeowfficerBase):
                 cat = self._select_card(button, ocr, previous=previous)
                 if cat:
                     previous = cat
+                if not cat and self._dismiss_play_popup():
+                    # 中途弹出的结算弹窗会让猫名读不出来，点掉后再试一次
+                    cat = self._select_card(button, ocr, previous=previous)
+                    if cat:
+                        previous = cat
                 if not cat:
                     logger.warning(f'[指挥喵-扫描] 第 {page} 屏第 {index} 张卡片没读到猫名，跳过')
                     continue
@@ -446,7 +517,7 @@ class MeowfficerScanner(MeowfficerBase):
                     continue
                 # 防串数据：面板切换有一瞬间可能还显示上一只猫的内容，
                 # 用左下角猫名核对，不一致就跳过这只（宁可漏也不要错配）
-                shown, _level = self._read_current_cat(ocr)
+                shown, level = self._read_current_cat(ocr)
                 if shown and shown != cat:
                     logger.warning(f'[指挥喵-扫描] 天赋页显示的是 {shown}，与选中的 {cat} 不一致，跳过')
                     self._back_to_cattery()
@@ -463,7 +534,7 @@ class MeowfficerScanner(MeowfficerBase):
                     continue
 
                 read_in_page += 1
-                self.scanned.append((cat, talents))
+                self.scanned.append((cat, talents, level))
                 logger.attr('[指挥喵-扫描] 已扫描', f'{len(self.scanned)} 只')
 
             logger.info(f'[指挥喵-扫描] 第 {page} 屏结束，读到 {read_in_page} 只，'

@@ -37,6 +37,8 @@ class Router:
             'statistics.refreshLoot': Method(p.InstanceParams, self.refresh_loot, True),
             'statistics.report': Method(p.StatisticsReportParams, self.statistics_report),
             'meowfficer.scoreReport': Method(p.MeowfficerScoreReportParams, self.meowfficer_score_report),
+            'meowfficer.clearReport': Method(p.MeowfficerClearReportParams,
+                                             self.meowfficer_clear_report, True),
             'statistics.resources': Method(p.StatisticsParams, lambda x: runtime.statistics(x.instance, x.days, x.resource)),
             'settings.get': Method(p.Params, self.settings),
             'settings.patch': Method(p.DeployParams, self.save_settings, True),
@@ -75,6 +77,10 @@ class Router:
     def meowfficer_score_report(self, params):
         from module.api.meowfficer_service import report
         return report(self.configs, params.instance, params.limit)
+
+    def meowfficer_clear_report(self, params):
+        from module.api.meowfficer_service import clear
+        return clear(self.configs, params.instance)
 
     def dispatch(self, method, params):
         entry = self.methods.get(method)

@@ -632,11 +632,16 @@ test('指挥喵评分报告面板展示、刷新与空状态', async ({page}) =>
   const weightedAxis = weighted.locator('.meow-axis').last()
   expect(await weightedAxis.locator('.meow-axis-label').evaluate(node => node.getClientRects().length)).toBe(1)
   expect(await weightedAxis.evaluate(node => getComputedStyle(node).alignItems)).toBe('baseline')
-  // 报告面板挂在参数卡上方，但参数卡与「运行工具」入口都必须还在。
+  // 报告面板排在参数卡**下方**、日志**上方**：先看参数与运行入口，再看结果。
   await expect(page.locator('[id="MeowfficerScore.MeowfficerScore.Source"]')).toBeVisible()
   await expect(page.locator('.config-groups')).toContainText('评分来源')
   await expect(page.getByRole('button', {name: '运行工具', exact: true})).toBeVisible()
   await expect(page.getByLabel('日志内容')).toBeVisible()
+  const configBox = await page.locator('.config-groups').boundingBox()
+  const panelBox = await panel.boundingBox()
+  const logBox = await page.locator('.tool-log-panel').boundingBox()
+  expect(panelBox!.y).toBeGreaterThan(configBox!.y)
+  expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(logBox!.y + 1)
   // HTML 报告入口：有数据时给出新窗口链接。
   const reportLink = panel.getByRole('link', {name: '查看完整报告', exact: true})
   await expect(reportLink).toHaveAttribute('href', '/reports/meowfficer_score')

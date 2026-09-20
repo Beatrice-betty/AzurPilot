@@ -383,6 +383,11 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 .app-shell.legacy-shell > .main-shell > main > .instance-page-grid,
 .app-shell.legacy-shell > .main-shell > main > .task-config-legacy {flex-shrink: 1; min-height: 0}
 .app-shell.legacy-shell > .right-rail {grid-area: rail}
+/* 顶层页面（主页 / 更新器 / 设置 / 配置管理…）没有页内滚动区：外壳既把这一行裁掉，
+   又没给 main 留滚动容器，长页面就被整段裁掉、页面还滚不动。
+   main 在实例页是 flex 列（页内两列要 flex 撑满），到这里会把普通面板压扁而不是溢出，
+   所以这里同时退回块级布局并补上滚动容器；顶栏与侧栏照旧常驻，与实例页一致。 */
+.app-shell.legacy-home-shell > .main-shell > main {display: block; min-height: 0; overflow-y: auto}
 /* 招牌随顶栏走：顶栏里的那份紧贴左侧，不参与侧栏那套 72px 间距。 */
 .legacy-topbar-brand {height: auto; margin-bottom: 0; padding: 0}
 /* 旧版顶栏的第三列是居中的页面名。 */
@@ -654,12 +659,21 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
   .instance-page-main {display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto}
   .instance-page-main .resource-grid {margin-bottom: 0}
   /* 搜索框与参数卡同宽，「任务设置和搜索对齐」。 */
-  .instance-page-main .config-toolbar .input-icon,
   .task-config-settings .config-toolbar .input-icon {max-width: none}
   .task-config-settings .config-toolbar {margin-bottom: 0}
-  .instance-page-main .statistics-toolbar-row {display: flex; align-items: center; gap: 12px; flex-wrap: wrap}
-  .instance-page-main .statistics-toolbar-row .statistics-category-control {margin-bottom: 0; flex: 0 0 auto; width: max-content}
-  .instance-page-main .statistics-actions {display: flex; align-items: center; gap: 8px; margin-left: auto}
+  /* 资源统计在旧版下没有左列，整页一条内容带；和 .instance-page-grid 一样撑满 main 的剩余高度。 */
+  .statistics-legacy {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .statistics-legacy .statistics-toolbar-row {display: flex; align-items: center; gap: 12px; flex-wrap: wrap}
+  /* 分段控件按内容自然宽度排，不拉伸：upstream 的紧凑版式靠 offsetWidth 量它的自然宽度。 */
+  .statistics-legacy .statistics-toolbar-row .statistics-category-control {margin-bottom: 0; flex: 0 0 auto; width: max-content}
+  .statistics-legacy .statistics-actions {display: flex; align-items: center; gap: 8px; margin-left: auto}
 
   /* 旧版的任务详细设置：参数卡在左、分组导航在右（旧版是 13rem≈208px 的右列）。
      和总览一样定高 + 内部滚动，顶栏与侧栏才不会跟着滚走。 */
@@ -724,6 +738,9 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 @media (max-width: 950px) {
   /* 窄屏下侧栏与右栏都是抽屉，旧版版式回到共享层的单列流。 */
   .app-shell.legacy-shell {display: block}
+  /* 窄屏没有页内滚动区（下面的定高规则都在 ≥951px 里），
+     外壳再钉死视口加 overflow:hidden 就会把后面的内容整段裁掉、页面还滚不动。 */
+  .app-shell.legacy-shell, .app-shell.legacy-shell > .main-shell {height: auto; overflow: visible}
   .instance-page-grid {display: flex; flex-direction: column; gap: 12px; height: auto}
   .instance-page-rail, .instance-page-main {overflow: visible}
   .task-config-legacy {display: block}

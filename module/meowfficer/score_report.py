@@ -13,7 +13,7 @@
 
 import html
 
-from module.meowfficer.score import RESET_COST
+from module.meowfficer.advice import reset_advice
 
 # 档位关键词 -> 颜色主题，越靠前越优先匹配
 TIER_THEMES = (
@@ -24,6 +24,14 @@ TIER_THEMES = (
 )
 
 LEVEL_MARKS = {1: 'Ⅰ', 2: 'Ⅱ', 3: 'Ⅲ'}
+
+# 洗点推荐的短标签
+_ADVICE_TAGS = {
+    'feed': '建议喂掉',
+    'pending': '先补点',
+    'reroll': '建议洗点',
+    'keep': '建议保留',
+}
 
 STYLE = """
 :root{
@@ -116,6 +124,26 @@ table.mini td.name{font-weight:600}
 .notes li::before{content:'';position:absolute;left:3px;top:9px;width:5px;height:5px;border-radius:50%;
   background:var(--accent);opacity:.75}
 .src{margin-top:12px;color:#6f8098;font-size:11.5px}
+/* ---------- 洗点推荐 ---------- */
+.advice{margin-top:16px;padding:13px 15px;border-radius:10px;border:1px solid var(--line);
+  background:var(--soft)}
+.advice.is-feed{border-color:#5b2b2b;background:#1e1414}
+.advice.is-reroll{border-color:#5a4a22;background:#1f1a10}
+.advice.is-pending{border-color:#274a5c;background:#111c24}
+.advice.is-keep{border-color:#274a35;background:#111e17}
+.advice-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.advice-head strong{font-size:13.5px}
+.advice-tag{font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;
+  border:1px solid var(--line);color:#c2d0e0;white-space:nowrap}
+.advice.is-feed .advice-tag{color:#f87171;border-color:#5b2b2b}
+.advice.is-reroll .advice-tag{color:#fbbf24;border-color:#5a4a22}
+.advice.is-pending .advice-tag{color:#60a5fa;border-color:#274a5c}
+.advice.is-keep .advice-tag{color:#4ade80;border-color:#274a35}
+.advice-reason{margin-top:7px;color:#c2d0e0;font-size:12.6px}
+.advice-cost{margin-top:6px;color:var(--muted);font-size:12px}
+.advice-targets{margin:8px 0 0;padding:0;list-style:none}
+.advice-targets li{position:relative;padding-left:15px;color:#c2d0e0;font-size:12.6px;margin:4px 0}
+.advice-targets li::before{content:'→';position:absolute;left:0;color:var(--accent);opacity:.8}
 .empty{color:var(--muted);font-size:12.5px}
 .foot{margin-top:26px;color:var(--muted);font-size:11.8px;line-height:1.9;
   border-top:1px solid var(--line);padding-top:16px}
@@ -236,6 +264,8 @@ def _cat_card(name: str, result) -> str:
         badges.append('<span class="badge fixed">固定天赋猫</span>')
     if result.maxed:
         badges.append('<span class="badge maxed">成品猫 · 已点过点</span>')
+    if result.level is not None:
+        badges.append(f'<span class="badge">Lv{int(result.level)}</span>')
 
     primary_key = result.primary[0] if result.primary else None
     primary = result.rubrics.get(primary_key)
@@ -257,10 +287,23 @@ def _cat_card(name: str, result) -> str:
     for key in result.primary[1:]:
         parts.append(_rubric_block(result.rubrics[key], False))
 
-    if result.points_spent:
-        parts.append('<ul class="notes"><li>已使用天赋点 '
-                     f'{int(result.points_spent)} 点'
-                     '（重置只回到初始天赋，后天天赋会全部消失）</li></ul>')
+    advice = reset_advice(result)
+    if advice is not None:
+        parts.append(f'<div class="advice is-{advice.verdict}">'
+                     f'<div class="advice-head"><span class="advice-tag">'
+                     f'{_e(_ADVICE_TAGS.get(advice.verdict, "建议"))}</span>'
+                     f'<strong>{_e(advice.headline)}</strong></div>'
+                     f'<div class="advice-reason">{_e(advice.reason)}</div>')
+        if advice.cost is not None:
+            prefix = '推算' if advice.cost_estimated else ''
+            parts.append('<div class="advice-cost">重置成本：'
+                         f'{prefix}已点 {advice.points_spent} 点，约需 {advice.cost} 物资'
+                         '（重置只回到初始天赋，后天天赋会全部消失）</div>')
+        if advice.targets:
+            parts.append('<ul class="advice-targets">'
+                         + ''.join(f'<li>{_e(t)}</li>' for t in advice.targets)
+                         + '</ul>')
+        parts.append('</div>')
     parts.append('</div>')
     return ''.join(parts)
 
@@ -302,6 +345,7 @@ def to_payload(results, generated_at: str = '') -> dict:
                 entry.update({'x': None, 'y': None, 'xHits': [], 'yLabel': '加权命中'})
             rubrics.append(entry)
         rubrics.sort(key=lambda item: (not item['primary'], -item['score']))
+        advice = reset_advice(result)
         cats.append({
             'source': name,
             'cat': result.cat,
@@ -312,7 +356,24 @@ def to_payload(results, generated_at: str = '') -> dict:
             'note': info.get('note') or '',
             'maxed': bool(result.maxed),
             'pointsSpent': result.points_spent,
+            'level': result.level,
             'primary': result.primary[0] if result.primary else None,
+            'advice': None if advice is None else {
+                'verdict': advice.verdict,
+                'headline': advice.headline,
+                'reason': advice.reason,
+                'label': advice.label,
+                'score': advice.score,
+                'tier': advice.tier,
+                'cost': advice.cost,
+                'costEstimated': advice.cost_estimated,
+                'pointsSpent': advice.points_spent,
+                # 成本文案由后端拼好，前端不必为它单独做 i18n
+                'costText': '' if advice.cost is None else (
+                    f'{"推算" if advice.cost_estimated else ""}已点 {advice.points_spent} 点，'
+                    f'约需 {advice.cost} 物资'),
+                'targets': list(advice.targets),
+            },
             'talents': [{'name': t.name, 'level': t.level, 'kind': t.kind,
                          'inferred': bool(getattr(t, 'inferred', False))}
                         for t in result.talents],
@@ -334,6 +395,8 @@ def render_summary(result) -> str:
     tags = '·'.join(str(x) for x in (info.get('rarity'), info.get('faction'),
                                     '/'.join(info.get('types') or []) or None) if x)
     name = result.cat or '未知'
+    if result.level is not None:
+        name += f' Lv{int(result.level)}'
     key = result.primary[0] if result.primary else None
     rubric = result.rubrics.get(key)
     if rubric is None:
@@ -346,6 +409,9 @@ def render_summary(result) -> str:
         parts.append('彩:' + '、'.join(specials))
     if result.maxed:
         parts.append('成品猫')
+    advice = reset_advice(result)
+    if advice is not None:
+        parts.append(f'洗点:{advice.headline}')
     return ' | '.join(parts)
 
 
@@ -357,7 +423,9 @@ def render_text(result) -> str:
         '/'.join(info.get('types') or []) or None,
         info.get('position'), '固定天赋猫' if info.get('fixed') else None,
     ) if x)
-    lines = [f"指挥喵：{result.cat or '（未识别猫名）'}" + (f"（{meta}）" if meta else '')]
+    lines = [f"指挥喵：{result.cat or '（未识别猫名）'}"
+             + (f" Lv{int(result.level)}" if result.level is not None else '')
+             + (f"（{meta}）" if meta else '')]
     if info.get('note'):
         lines.append(f"  攻略点评：{info['note']}")
 
@@ -385,10 +453,17 @@ def render_text(result) -> str:
             lines.append(f'    - {note}')
         lines.append(f'    依据：{r.source}')
 
-    if result.points_spent in RESET_COST:
-        lines.append(f'洗猫：已点 {result.points_spent} 点，重置约需 '
-                     f'{RESET_COST[result.points_spent]} 物资'
-                     '（重置只回到初始天赋，后天天赋会全部消失）')
+    advice = reset_advice(result)
+    if advice is not None:
+        lines.append(f'洗点推荐：{advice.headline}')
+        lines.append(f'    依据：{advice.reason}')
+        if advice.cost is not None:
+            prefix = '推算' if advice.cost_estimated else ''
+            lines.append(f'    重置成本：{prefix}已点 {advice.points_spent} 点，约需 '
+                         f'{advice.cost} 物资'
+                         '（重置只回到初始天赋，后天天赋会全部消失）')
+        for target in advice.targets:
+            lines.append(f'    目标：{target}')
     return '\n'.join(lines)
 
 

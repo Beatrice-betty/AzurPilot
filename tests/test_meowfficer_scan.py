@@ -142,6 +142,10 @@ class _StubScanner(MeowfficerScanner):
         page = self.pages[min(self.page_index, len(self.pages) - 1)]
         return page[index] if index < len(page) else ''
 
+    def _dismiss_play_popup(self):
+        """编排测试不模拟陪玩结算弹窗，桩成「没弹窗」。"""
+        return False
+
     def _open_talent(self):
         return True
 
@@ -217,7 +221,7 @@ class ScanOrchestrationTests(unittest.TestCase):
         scanner = _StubScanner(self._pages(page1, page2),
                                talents_by_cat={k: _talents('天赋') for k in ('猫A', '猫B', '猫C', '猫D')})
         result = scanner.scan_all(passes=2)
-        self.assertEqual([cat for cat, _ in result], ['猫A', '猫B', '猫C', '猫D'])
+        self.assertEqual([cat for cat, _t, _l in result], ['猫A', '猫B', '猫C', '猫D'])
 
     def test_respects_limit(self):
         page1 = ['猫A', '猫B', '猫C'] + [''] * 9
@@ -232,7 +236,7 @@ class ScanOrchestrationTests(unittest.TestCase):
         scanner = _StubScanner(self._pages(page1))
         scanner.talents_pool = [_talents('其徐如林'), _talents('不动如山')]
         result = scanner.scan_all(passes=1)
-        self.assertEqual([cat for cat, _ in result], ['潜艇参谋', '潜艇参谋'])
+        self.assertEqual([cat for cat, _t, _l in result], ['潜艇参谋', '潜艇参谋'])
 
     def test_same_name_identical_talents_are_both_kept(self):
         """完全相同的一对也不合并：指挥喵允许重名，也可能真的天赋一样。"""
@@ -247,19 +251,19 @@ class ScanOrchestrationTests(unittest.TestCase):
         page1 = ['不动如山'] + [''] * 11
         scanner = _StubScanner(self._pages(page1), talents_by_cat={'不动如山': _talents('其徐如林')})
         result = scanner.scan_all(passes=1)
-        self.assertEqual([cat for cat, _ in result], ['不动如山'])
+        self.assertEqual([cat for cat, _t, _l in result], ['不动如山'])
 
     def test_skips_cat_without_talents(self):
         page1 = ['猫A', '猫B'] + [''] * 10
         scanner = _StubScanner(self._pages(page1), talents_by_cat={'猫A': _talents('天赋')})
         result = scanner.scan_all(passes=1)
-        self.assertEqual([cat for cat, _ in result], ['猫A'])
+        self.assertEqual([cat for cat, _t, _l in result], ['猫A'])
 
     def test_unreadable_card_is_skipped(self):
         page1 = ['', '猫A'] + [''] * 10
         scanner = _StubScanner(self._pages(page1), talents_by_cat={'猫A': _talents('天赋')})
         result = scanner.scan_all(passes=1)
-        self.assertEqual([cat for cat, _ in result], ['猫A'])
+        self.assertEqual([cat for cat, _t, _l in result], ['猫A'])
 
     def test_open_talent_failure_does_not_abort(self):
         page1 = ['猫A', '猫B'] + [''] * 10
@@ -274,7 +278,7 @@ class ScanOrchestrationTests(unittest.TestCase):
         # 面板不变化 -> 认为到底
         scanner._swipe_panel = lambda area, distance=150, duration=0.9: None
         result = scanner.scan_all(passes=5)
-        self.assertEqual([cat for cat, _ in result], ['猫A'])
+        self.assertEqual([cat for cat, _t, _l in result], ['猫A'])
 
     def test_reenters_when_back_fails(self):
         page1 = ['猫A'] + [''] * 11
@@ -284,7 +288,7 @@ class ScanOrchestrationTests(unittest.TestCase):
         scanner._ensure_cattery = lambda: calls.append(1)
         result = scanner.scan_all(passes=1)
         # 猫本身仍然入账；_ensure_cattery 被调用两次：进入时一次，返回失败后重进一次
-        self.assertEqual([cat for cat, _ in result], ['猫A'])
+        self.assertEqual([cat for cat, _t, _l in result], ['猫A'])
         self.assertEqual(len(calls), 2)
 
 
@@ -337,8 +341,8 @@ class ScanToReportTests(unittest.TestCase):
         from unittest.mock import patch
 
         results = [
-            ('克雷喵', _talents('狼群之首', '雷击长·潜艇')),
-            ('林德喵', _talents('其徐如林')),
+            ('克雷喵', _talents('狼群之首', '雷击长·潜艇'), 30),
+            ('林德喵', _talents('其徐如林'), 30),
         ]
         task = self._task(results, limit=2)
         with patch('module.meowfficer.scan.MeowfficerScanner', self.scanner_cls):
@@ -365,8 +369,8 @@ class ScanToReportTests(unittest.TestCase):
         from unittest.mock import patch
 
         results = [
-            ('克雷喵', _talents('狼群之首', '雷击长·潜艇')),
-            ('林德喵', _talents('其徐如林', '既定的命运')),
+            ('克雷喵', _talents('狼群之首', '雷击长·潜艇'), 30),
+            ('林德喵', _talents('其徐如林', '既定的命运'), 30),
         ]
         with tempfile.TemporaryDirectory() as folder:
             report = os.path.join(folder, 'meowfficer_score.md')

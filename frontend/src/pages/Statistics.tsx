@@ -35,8 +35,6 @@ import { usesLegacyLayout } from '../app/theme'
 import { ErrorBox, Loading, PageTitle } from '../components/ui'
 import { SegmentedControl } from '../components/SegmentedControl'
 import { StatisticsTable } from '../components/StatisticsTable'
-import { LegacyRail } from '../components/LegacyRail'
-import { useInstanceOverview } from '../components/useInstanceOverview'
 import { downloadCsv } from '../components/statisticsData'
 import type { UiKey } from '../i18n'
 
@@ -83,9 +81,7 @@ type Category = NonNullable<Parameters['statistics.report']['category']>
 export function Statistics() {
   const {ui, theme, language} = useApp()
   const {instance = ''} = useParams()
-  // 旧版主题把左侧那一列让给调度器与任务计划，只有这种版式才需要总览数据。
   const legacy = usesLegacyLayout(theme)
-  const [railData, setRailData] = useInstanceOverview(instance, legacy)
   const [category, setCategory] = useState<Category>('resources')
   const [days, setDays] = useState(7)
   const [month, setMonth] = useState(() => {const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`})
@@ -190,12 +186,11 @@ export function Statistics() {
     {dataView}
   </>
 
-  // 旧版版式：左列调度器与任务计划，右列统计内容；页名由顶栏居中显示。
+  // 旧版版式：整页只放统计内容（不放调度器与任务计划），页名由顶栏居中显示。
   if (legacy) return <>
-    <div className="instance-page-grid">
+    <div className="statistics-legacy">
       <h1 className="legacy-sr-title">{ui('nav.statistics')}</h1>
-      <LegacyRail instance={instance} data={railData} onData={setRailData}/>
-      <div className="instance-page-main">{content}</div>
+      {content}
     </div>
   </>
 
