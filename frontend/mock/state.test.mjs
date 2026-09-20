@@ -140,4 +140,49 @@ end`
       script: 'return shop.plan { candidates = candidates:where(function(item) return math.abs(item.price) > 0 end):take(1) }',
     })).toMatchObject({valid: false, diagnostics: [{code: 'forbidden_call', message: '不允许调用 math.abs'}]})
   })
+
+  it('统计服务提供完整的 9 种资源、5 种大世界趋势及全部分类明细，空实例返回空数据', () => {
+    const {dispatch} = createMockState()
+    const overview = dispatch('overview.get', {instance: 'demo-main'})
+    expect(overview.resources).toHaveLength(12)
+    expect(overview.resources.every(item => item.value != null && item.record !== '2020-01-01 00:00:00')).toBe(true)
+
+    const resources = dispatch('statistics.report', {instance: 'demo-main', category: 'resources', days: 7})
+    expect(resources.series).toHaveLength(9)
+    expect(resources.series[0].label).toBe('石油')
+    expect(resources.series.map(s => s.label)).toEqual(['石油', '物资', '钻石', '心智魔方', '活动 PT', '核心数据', '荣誉勋章', '功勋', '舰队币'])
+    expect(resources.series[0].points).toHaveLength(24)
+
+    const action = dispatch('statistics.report', {instance: 'demo-main', category: 'action', days: 7})
+    expect(action.series).toHaveLength(5)
+    expect(action.series.map(s => s.label)).toEqual(['行动力', '行动力资产', '海里数', '作战补给凭证', '特别兑换凭证'])
+
+    const commission = dispatch('statistics.report', {instance: 'demo-main', category: 'commission'})
+    expect(commission.series).toHaveLength(5)
+    expect(commission.metrics).toHaveLength(6)
+    expect(commission.tables).toHaveLength(2)
+
+    const ships = dispatch('statistics.report', {instance: 'demo-main', category: 'ships'})
+    expect(ships.series).toHaveLength(3)
+    expect(ships.metrics).toHaveLength(8)
+    expect(ships.tables).toHaveLength(1)
+
+    const opsi = dispatch('statistics.report', {instance: 'demo-main', category: 'opsi'})
+    expect(opsi.metrics).toHaveLength(11)
+    expect(opsi.tables).toHaveLength(1)
+
+    const loot = dispatch('statistics.report', {instance: 'demo-main', category: 'loot'})
+    expect(loot.tables).toHaveLength(1)
+    expect(loot.tables[0].columns).toContain('平均黄币/轮')
+
+    const altResources = dispatch('statistics.report', {instance: 'demo-alt', category: 'resources'})
+    expect(altResources.series[0].points).toHaveLength(0)
+    const altLoot = dispatch('statistics.report', {instance: 'demo-alt', category: 'loot'})
+    expect(altLoot.tables[0].rows).toHaveLength(0)
+
+    const longRange = dispatch('statistics.report', {instance: 'demo-main', category: 'resources', days: 365})
+    expect(longRange.series[0].points).toHaveLength(24)
+    const singleResource = dispatch('statistics.resources', {instance: 'demo-main', resource: 'Oil', days: 30})
+    expect(singleResource.points).toHaveLength(24)
+  })
 })

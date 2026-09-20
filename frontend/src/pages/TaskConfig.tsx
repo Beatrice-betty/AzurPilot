@@ -170,12 +170,12 @@ export function TaskConfig() {
               )}
               {runNow && (
                 <div className="field-actions">
-                  <button type="button" className="button subtle" disabled={connection !== 'ready'}
+                  <button type="button" className="button subtle icon-only" aria-label={ui('task.runNow')} title={ui('task.runNow')} disabled={connection !== 'ready'}
                     onClick={() => {
                       // 按钮等同清空该字段：空时间按参数默认值提交，调度器下一轮即把任务视为待运行。
                       const {payload, text, error} = prepareValue('', field)
                       queue.change(path, text ?? '', payload, error)
-                    }}><Play size={15}/>{ui('task.runNow')}</button>
+                    }}><Play size={15}/></button>
                 </div>
               )}
               {shopMode && shopModeError && !edit ? (
@@ -186,11 +186,12 @@ export function TaskConfig() {
         )
       })}
     </section>
-  ))}
-    {search && !visibleGroups.length && <Empty icon={<Search size={26} />} title={ui('task.noConfigFound')}>{ui('task.tryOtherKeyword')}</Empty>}
+  ))}    {search && !visibleGroups.length && <Empty icon={<Search size={26} />} title={ui('task.noConfigFound')}>{ui('task.tryOtherKeyword')}</Empty>}
   </>
 
   const hasGroups = task !== 'FleetInfo' && Boolean(groups) && visibleGroups.length > 0
+  // 只有紧凑主题把搜索框并进左列（跳转栏下方），其余主题保持标题下方的原样。
+  const condensed = theme === 'extreme'
   const groupCardsBlock = <div className="config-groups">{groupCards}</div>
   const groupNav = <nav className="group-nav">
     {visibleGroups.map(({group}) => (
@@ -207,15 +208,18 @@ export function TaskConfig() {
     ))}
   </nav>
 
-  const head = <>
-    {error && <ErrorBox message={error} retry={reload} />}
-    {storageError && <ErrorBox message={storageError} />}
-    {showConfigToolbar && <div className="config-toolbar">
+  // 有分组导航时，搜索框随导航一起放进左列（导航下方）；没有导航时才留在标题下方。
+  const configToolbar = showConfigToolbar && <div className="config-toolbar">
       <div className="input-icon">
         <Search size={17} />
         <input placeholder={ui('task.searchConfigPlaceholder')} aria-label={ui('task.searchConfig')} value={search} onChange={event => setSearch(event.target.value)} />
       </div>
-    </div>}
+    </div>
+
+  const head = <>
+    {error && <ErrorBox message={error} retry={reload} />}
+    {storageError && <ErrorBox message={storageError} />}
+    {(!hasGroups || !condensed) && configToolbar}
   </>
 
   const groupsSection = task === 'FleetInfo' ? (
@@ -248,9 +252,10 @@ export function TaskConfig() {
   </>
 
   return <>
-    <PageTitle
-      title={t(`Task.${task}.name`)}
-    />
+    {/* 紧凑主题下任务名与面包屑末段重复，省掉标题行让内容上移，只留无障碍标题 */}
+    {theme === 'extreme'
+      ? <h1 className="sr-title">{t(`Task.${task}.name`)}</h1>
+      : <PageTitle title={t(`Task.${task}.name`)}/>}
     {head}
     {hasGroups ? <div className="config-layout">{groupNav}{groupCardsBlock}</div> : groupsSection}
     {/* 报告面板放在日志上方：先看完参数与运行入口，再看结果 */}

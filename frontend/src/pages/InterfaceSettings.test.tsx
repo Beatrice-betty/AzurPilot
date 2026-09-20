@@ -85,10 +85,16 @@ describe('界面设置页自定义背景显示逻辑', () => {
     }
   })
 
-  it('主题下拉列出全部五个主题', () => {
+  it('主题下拉列出全部六个主题', () => {
     const html = render('light')
-    for (const label of ['浅色', '深色', '简约', '旧版·浅色', '旧版·深色']) {
+    for (const label of ['浅色', '深色', '简约', '紧凑', '旧版·浅色', '旧版·深色']) {
       expect(html).toContain(label)
     }
+  })
+
+  it('紧凑主题与简约同属朴素外观，渲染配色方案而非自定义背景', () => {
+    const html = render('extreme')
+    expect(html).toContain('配色方案')
+    expect(html).not.toContain('自定义背景')
   })
 })

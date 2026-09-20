@@ -119,31 +119,46 @@
 /* 旧版外壳多出内容区顶部那行导航，页面本身也不靠「视口 − 常量」算高（那常量会漂），
    所以这里改成由上到下逐级撑满，否则整壳会被顶出视口、底部露出接缝。 */
 .app-shell.legacy-shell > .main-shell > main:has(> .home-editorial) {min-height: 0}
-.home-editorial {flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(280px, 38%) minmax(0, 1fr)}
-.home-visual {position: relative; isolation: isolate; min-width: 0; padding: clamp(30px, 4vw, 64px); display: flex; flex-direction: column; justify-content: space-between; color: #fff; text-shadow: 0 2px 18px #000b}
-.home-active .wallpaper::after {content: ''; position: absolute; inset: 0; background: rgb(0 0 0 / .42); pointer-events: none}
-.home-visual-copy {margin: auto 0; padding: 48px 0}
-.home-visual h1 {max-width: 560px; margin: 13px 0 18px; font-size: clamp(38px, 3.8vw, 58px); line-height: .98; letter-spacing: -.055em; overflow-wrap: normal}
-.home-workspace {min-width: 0; padding: clamp(28px, 4vw, 58px); background: var(--surface); color: var(--text)}
-/* 旧版外壳里两列都自己滚（和实例页同一套做法）：不这样，实例行那 120px 的最小高度
-   会把整壳顶出视口，矮窗口下底部就露出接缝。 */
-.app-shell.legacy-shell .home-visual, .app-shell.legacy-shell .home-workspace {min-height: 0; overflow-y: auto}
-.home-workspace-heading {min-height: 72px; padding-bottom: 26px; display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--border)}
-.home-workspace-heading h2 {margin: 0; font-size: clamp(24px, 2.4vw, 32px); letter-spacing: -.7px}
-.home-instance-list {margin-top: 10px}
-.home-instance-row {min-height: 120px; padding: 20px 4px; display: grid; grid-template-columns: minmax(150px, 1.25fr) minmax(100px, .7fr) minmax(120px, .8fr) 36px; align-items: center; gap: 22px; color: var(--text); text-decoration: none; border-bottom: 1px solid var(--border)}
-.home-instance-row:hover .home-instance-arrow {border-color: var(--text); transform: translateX(3px)}
-.home-instance-identity {min-width: 0}
-.home-instance-identity h3 {margin: 0 0 7px; font-size: 18px; font-weight: 680; overflow-wrap: anywhere}
-.instance-device {display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--muted); font-size: 11px; overflow-wrap: anywhere}
+/* 旧版外壳里两列都自己滚（和实例页同一套做法）：不这样，主页内容会把整壳顶出视口，矮窗口下底部就露出接缝。 */
+.app-shell.legacy-shell .home-deck, .app-shell.legacy-shell .home-main {min-height: 0; overflow-y: auto}
+.home-editorial {flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 34%) minmax(0, 1fr)}
+.home-deck {position: relative; min-width: 0; padding: clamp(28px, 3.4vw, 54px); display: flex; flex-direction: column; gap: 26px}
+.home-deck-copy {margin: auto 0; max-width: 34em}
+.home-deck-eyebrow {margin: 0 0 10px; font-size: 12px; font-weight: 650; letter-spacing: .14em; opacity: .74}
+.home-deck-greeting {margin: 0 0 14px; font-size: clamp(30px, 3vw, 42px); line-height: 1.24; font-weight: 700; word-break: keep-all; overflow-wrap: anywhere; text-wrap: balance}
+.home-deck-subtitle {margin: 0; font-size: 13.5px; line-height: 1.8; opacity: .82}
+.home-deck-foot {display: flex; flex-direction: column; gap: 14px; padding-top: 6px}
+.home-stats {display: flex; flex-wrap: wrap; gap: 10px 26px; margin: 0}
+.home-stat {display: flex; align-items: baseline; gap: 8px}
+.home-stat dt {font-size: 12px; opacity: .7}
+.home-stat dd {margin: 0; font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.4px}
+.home-deck-links {display: flex; flex-wrap: wrap; gap: 10px}
+.home-deck-link {display: inline-flex; align-items: center; gap: 7px; padding: 8px 13px; border-radius: 999px; font-size: 12.5px; border: 1px solid var(--border); background: var(--surface); color: var(--text); transition: border-color .15s, color .15s, background-color .15s}
+.home-deck-link:hover {border-color: var(--accent); color: var(--accent)}
+.home-active .wallpaper::after {content: ''; position: absolute; inset: 0; background: linear-gradient(168deg, rgb(0 0 0 / .30), rgb(0 0 0 / .48) 55%, rgb(0 0 0 / .62)); pointer-events: none}.instance-device {display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--muted); font-size: 11px; overflow-wrap: anywhere}
 .instance-device > span:first-child {text-transform: uppercase; flex-shrink: 0}
-.home-instance-row .status {justify-self: start}
-.home-instance-task {min-width: 0; font-size: 12px; font-weight: 650; overflow-wrap: anywhere}
-.home-instance-arrow {width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 50%; transition: border-color .15s, transform .15s}
-.home-instance-empty {width: 100%; min-height: 180px; display: flex; align-items: center; justify-content: center; gap: 12px; border: 1px dashed var(--border); border-radius: 16px; color: var(--accent); background: transparent}
-[data-theme='minimal'] .home-visual {color: var(--text); background: var(--surface-muted); text-shadow: none}
-[data-theme='minimal'] .main-shell > main:has(> .home-editorial) {min-height: calc(var(--viewport-height) - var(--topbar-height))}
-[data-theme='minimal'] .home-visual::before {content: none}
+.home-main {min-width: 0; padding: clamp(26px, 3.2vw, 52px) clamp(26px, 3.6vw, 56px); background: var(--bg); color: var(--text)}
+.home-main-heading {display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding-bottom: 22px; border-bottom: 1px solid var(--border); margin-bottom: 24px}
+.home-main-heading h2 {margin: 0; font-size: clamp(22px, 2.2vw, 30px); letter-spacing: -.6px}
+.home-instance-grid {display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 20px; align-content: start}
+.home-instance-grid .instance-card {display: flex; flex-direction: column; min-width: 0; padding: 24px; color: var(--text); text-decoration: none}
+.home-instance-grid .instance-card-heading {display: flex; align-items: center; justify-content: space-between; gap: 12px}
+.home-instance-grid .home-instance-icon {width: 44px; height: 44px; display: grid; place-items: center; border-radius: 14px}
+.home-instance-grid .instance-card h3 {margin: 22px 0 10px; font-size: 20px; letter-spacing: -.3px; overflow-wrap: anywhere}
+.home-instance-grid .instance-card-footer {margin-top: auto; padding-top: 22px; display: flex; align-items: center; justify-content: space-between; gap: 12px}
+.home-instance-grid .instance-card-footer > span {font-size: 12px; font-weight: 650; min-width: 0; overflow-wrap: anywhere}
+.home-instance-grid .instance-card-footer > svg {background: var(--accent-soft); border-radius: 50%; box-sizing: content-box; padding: 7px}
+.home-instance-empty {grid-column: 1 / -1; width: 100%; min-height: 180px; display: flex; align-items: center; justify-content: center; gap: 12px; border: 1px dashed var(--border); border-radius: 16px; color: var(--accent); background: transparent; font-size: 14px}
+.home-instance-empty:hover {border-color: var(--accent)}
+[data-theme='light'] .home-deck, [data-theme='dark'] .home-deck {color: #fff; text-shadow: 0 2px 18px rgb(0 0 0 / .45)}
+[data-theme='light'] .home-deck-link, [data-theme='dark'] .home-deck-link {border-color: rgb(255 255 255 / .42); background: rgb(255 255 255 / .14); color: #fff; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px)}
+[data-theme='light'] .home-deck-link:hover, [data-theme='dark'] .home-deck-link:hover {border-color: rgb(255 255 255 / .78); background: rgb(255 255 255 / .24); color: #fff}
+@media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+  .home-deck {color: var(--text); background: var(--surface-muted); text-shadow: none}
+  .home-deck-link {border-color: var(--border); background: var(--surface); color: var(--text)}
+}
+[data-theme='minimal'] .home-deck, [data-theme='extreme'] .home-deck {color: var(--text); background: var(--surface-muted); text-shadow: none}
+[data-theme='minimal'] .main-shell > main:has(> .home-editorial), [data-theme='extreme'] .main-shell > main:has(> .home-editorial) {min-height: calc(var(--viewport-height) - var(--topbar-height))}
 .head-grid {display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-bottom: 24px}
 .head-card {padding: 22px; display: grid; gap: 15px}
 .head-card > span {display: flex; align-items: center; gap: 8px; color: var(--muted)}
@@ -180,20 +195,17 @@
   .commit-row {padding: 16px; gap: 10px}
   .commit-pagination {padding: 16px; gap: 8px}
   .home-editorial {grid-template-columns: 1fr}
-  .home-visual {min-height: 430px; padding: 32px}
-  .home-visual-copy {padding: 58px 0}
-  .home-visual h1 {font-size: clamp(40px, 10vw, 64px)}
-  .home-workspace {padding: 30px 26px}
+  .home-deck {min-height: 248px; padding: 26px 30px}
+  .home-deck-greeting {font-size: clamp(28px, 7vw, 40px)}
+  .home-main {padding: 30px 26px}
 }
 
 @media (max-width: 620px) {
-  .home-visual {min-height: 380px; padding: 26px 22px}
-  .home-visual-copy {padding: 42px 0}
-  .home-workspace {padding: 26px 20px}
-  .home-workspace-heading {align-items: flex-start; flex-direction: column}
-  .home-instance-row {grid-template-columns: minmax(0, 1fr) 36px; gap: 13px; padding: 22px 2px}
-  .home-instance-row .status, .home-instance-task {grid-column: 1}
-  .home-instance-arrow {grid-column: 2; grid-row: 1 / 4}
+  .home-deck {min-height: 210px; padding: 22px 20px; gap: 16px}
+  .home-deck-eyebrow, .home-deck-subtitle {display: none}
+  .home-main {padding: 24px 18px}
+  .home-main-heading {align-items: flex-start; flex-direction: column; gap: 14px}
+  .home-instance-grid {gap: 16px}
 }
 
 /* 旧版外壳里，内容区那两列（`.instance-page-grid` / `.task-config-legacy`）的高度预算也要跟着这一行走，

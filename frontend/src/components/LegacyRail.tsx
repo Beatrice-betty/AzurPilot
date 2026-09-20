@@ -8,8 +8,9 @@ import { TaskQueue } from './TaskQueue'
 /**
  * 旧版实例页的左列：调度器 + 任务计划。
  *
- * 旧 WebUI 把这两块放在页面左列，所以总览、任务配置、资源统计共用同一列，
- * 右栏在旧版主题下不再渲染（见 app/theme.ts 的 showsRightRail）。
+ * 旧 WebUI 把这两块放在页面左列，只有总览页用得上 —— 任务详细设置与资源统计
+ * 各自按旧版排版（前者参数卡 + 右列锚点导航，后者整页一条内容带）。
+ * 右栏在旧版主题下不渲染（见 app/theme.ts 的 showsRightRail）。
  * `children` 插在调度器与任务计划之间，供总览页放「统计界面」入口。
  */
 export function LegacyRail({instance, data, onData, children}: {instance: string; data?: Overview; onData: (data: Overview) => void; children?: ReactNode}) {

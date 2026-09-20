@@ -42,7 +42,8 @@ test('新建实例使用真实 API，移动端无横向溢出', async ({page}) =
   const name = `ui_${Date.now()}`
   await page.getByLabel('实例名称').fill(name)
   await page.getByRole('dialog').getByRole('button', {name: '创建实例', exact: true}).click()
-  await expect(page.locator('[id="Alas.Emulator.Serial"]')).toBeVisible()
+  await expect(page).toHaveURL(new RegExp(`/i/${name}/overview$`))
+  await expect(page.locator('.overview-page')).toBeVisible()
   await page.setViewportSize({width: 390, height: 844})
   await page.getByRole('button', {name: '打开导航'}).click()
   await page.locator('.primary-nav a[href$="/overview"]').click()
