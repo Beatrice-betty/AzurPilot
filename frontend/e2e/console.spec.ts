@@ -68,7 +68,7 @@ test('断线后自动恢复，保留未保存草稿', async ({page}) => {
   expect(sockets.length).toBeGreaterThan(1)
   await expect(serial).toHaveValue('keep-draft')
   await page.locator('.breadcrumb').getByRole('link', {name: '主页', exact: true}).click()
-  await page.locator('.primary-nav').getByRole('link', {name: '系统设置'}).click()
+  await page.locator('.primary-nav').getByRole('link', {name: '界面设置'}).click()
   await page.getByRole('combobox', {name: '界面主题', exact: true}).click()
   await page.getByRole('option', {name: '深色', exact: true}).click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
