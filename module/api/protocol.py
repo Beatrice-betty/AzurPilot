@@ -97,6 +97,12 @@ class StatisticsReportParams(InstanceParams):
     period: Literal['day', 'week', 'month'] = 'month'
 
 
+class MeowfficerScoreReportParams(InstanceParams):
+    """指挥喵评分报告的只读查询。"""
+
+    limit: StrictInt = Field(default=100, ge=1, le=500)
+
+
 class DeployParams(Params):
     values: dict[str, Any]
 

@@ -599,3 +599,45 @@ test('Logo 旁更新提示、完整提交分页、获取和应用更新', async 
   await page.goto('/#/updater')
   await page.screenshot({path: 'test-results/updater-dark.png'})
 })
+
+test('指挥喵评分报告面板展示、刷新与空状态', async ({page}) => {
+  const errors: string[] = []
+  page.on('pageerror', error => errors.push(error.message))
+  await page.goto('/#/i/demo-main/task/MeowfficerScore')
+  const panel = page.locator('.meow-panel')
+  await expect(panel).toBeVisible()
+  await expect(panel.locator('.meow-summary')).toContainText('共 2 只')
+  await expect(panel).toContainText('克雷喵')
+  await expect(panel.locator('.meow-card').first().locator('.meow-tier').first()).toHaveText('准毕业')
+  await expect(panel).toContainText('x + y = 1 + 6.0')
+  await expect(panel.locator('.meow-talent.is-special').first()).toBeVisible()
+  await expect(panel.locator('.meow-talent.is-inferred').first()).toBeVisible()
+  await expect(panel).toContainText('评分口径来自公开攻略')
+  await expect(panel.locator('details.meow-others').first()).toBeVisible()
+  // 加权点制的雷暴口径不给 x/y：不渲染公式，改用后端给的 yLabel 说明命中行。
+  const weighted = panel.locator('.meow-card').nth(1)
+  await expect(weighted).toContainText('雷暴猫')
+  await expect(weighted).toContainText('加权命中')
+  await expect(weighted.locator('.meow-formula')).toHaveCount(0)
+  // 自定义 yLabel 不能折行，且要与命中标签同一基线。
+  const weightedAxis = weighted.locator('.meow-axis').last()
+  expect(await weightedAxis.locator('.meow-axis-label').evaluate(node => node.getClientRects().length)).toBe(1)
+  expect(await weightedAxis.evaluate(node => getComputedStyle(node).alignItems)).toBe('baseline')
+  // 报告面板挂在参数卡上方，但参数卡与「运行工具」入口都必须还在。
+  await expect(page.locator('[id="MeowfficerScore.MeowfficerScore.Source"]')).toBeVisible()
+  await expect(page.locator('.config-groups')).toContainText('评分来源')
+  await expect(page.getByRole('button', {name: '运行工具', exact: true})).toBeVisible()
+  await expect(page.getByLabel('日志内容')).toBeVisible()
+  // HTML 报告入口：有数据时给出新窗口链接。
+  const reportLink = panel.getByRole('link', {name: '查看完整报告', exact: true})
+  await expect(reportLink).toHaveAttribute('href', '/reports/meowfficer_score')
+  await expect(reportLink).toHaveAttribute('target', '_blank')
+  await panel.getByRole('button', {name: '刷新', exact: true}).click()
+  await expect(panel).toContainText('克雷喵')
+  await page.screenshot({path: 'test-results/meowfficer-score.png', fullPage: true, animations: 'disabled'})
+  // 未跑过任务时后端返回 NOT_FOUND，页面显示空状态而不是错误，也不给报告入口（会 404）。
+  await page.goto('/#/i/demo-alt/task/MeowfficerScore')
+  await expect(page.locator('.meow-panel')).toContainText('还没跑过评分任务')
+  await expect(page.locator('.meow-panel').getByRole('link', {name: '查看完整报告', exact: true})).toHaveCount(0)
+  expect(errors).toEqual([])
+})

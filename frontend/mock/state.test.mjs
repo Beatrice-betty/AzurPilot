@@ -72,6 +72,21 @@ describe('前端模拟服务', () => {
     expect(dispatch('preview.capture', {instance: 'demo-main'})).toEqual(frame)
   })
 
+  it('指挥喵评分报告按机器共享，demo-alt 用来验证未跑过任务的空状态', () => {
+    const {dispatch} = createMockState()
+    const result = dispatch('meowfficer.scoreReport', {instance: 'demo-main'})
+    expect(result.instance).toBe('demo-main')
+    expect(result.count).toBe(result.cats.length)
+    expect(result.cats[0]).toMatchObject({cat: '克雷喵', primary: 'submarine'})
+    expect(result.cats[0].rubrics[0]).toMatchObject({key: 'submarine', primary: true})
+    // 雷暴是加权点制，与真实后端一致：x/y 为 null，用 yLabel 说明这一行的语义。
+    expect(result.cats[1]).toMatchObject({cat: '海伦娜喵', primary: 'torpedo'})
+    expect(result.cats[1].rubrics[0]).toMatchObject({key: 'torpedo', x: null, y: null, yLabel: '加权命中'})
+    // limit 取最新的若干只，但示例数据不足时仍返回全部。
+    expect(dispatch('meowfficer.scoreReport', {instance: 'demo-main', limit: 1}).cats).toHaveLength(1)
+    expect(() => dispatch('meowfficer.scoreReport', {instance: 'demo-alt'})).toThrow(/尚未生成/)
+  })
+
   it('高级商店策略校验不写配置，最终高级模式必须保留有效脚本', () => {
     const {dispatch} = createMockState()
     const initial = dispatch('config.get', {instance: 'demo-main'})
