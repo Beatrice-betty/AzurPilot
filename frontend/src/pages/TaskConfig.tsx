@@ -131,6 +131,8 @@ export function TaskConfig() {
                 {readonly && <span className="small-label">{ui('task.readonly')}</span>}
               </label>
               {help && help !== 'help' && help !== arg && <p>{help.replace(/<[^>]*>/g, '')}</p>}
+              {/* 多行控件的提示跟标题同一行，浮在它右端。 */}
+              {isMultiline && <EditStatus id={path} edit={edit} retry={queue.retry} queue={queue} />}
             </div>
             <div className="field-control">
               {field.type === 'storage' ? (
@@ -185,9 +187,9 @@ export function TaskConfig() {
                     }}><Play size={15}/></button>
                 </div>
               )}
-              {shopMode && shopModeError && !edit ? (
+              {!isMultiline && (shopMode && shopModeError && !edit ? (
                 <div id={`${path}-status`} className="edit-status edit-error" role="alert">{shopModeError}</div>
-              ) : <EditStatus id={path} edit={edit} retry={queue.retry} />}
+              ) : <EditStatus id={path} edit={edit} retry={queue.retry} queue={queue} />)}
             </div>
           </div>
         )
@@ -224,13 +226,12 @@ export function TaskConfig() {
     aria-label={railView === 'scheduler' ? ui('nav.railDirectory') : ui('nav.railScheduler')}
     title={railView === 'scheduler' ? ui('nav.railDirectory') : ui('nav.railScheduler')}
     onClick={() => setRailView(railView === 'scheduler' ? 'directory' : 'scheduler')}
-  >{railView === 'scheduler' ? <ListTree size={16}/> : <CalendarClock size={16}/>}</button>
+  >{railView === 'scheduler' ? <CalendarClock size={17}/> : <ListTree size={17}/>}</button>
 
   const rail = <aside className={`task-config-rail is-${railView}`} aria-label={railView === 'scheduler' ? ui('scheduler.rail') : ui('task.groupNav')}>
-    <div className="task-rail-heading">{railToggle}</div>
     {railView === 'scheduler'
       ? <div className="task-rail-scheduler">
-          <SchedulerWidget instance={instance} data={railData} onData={setRailData}/>
+          <SchedulerWidget instance={instance} data={railData} onData={setRailData} action={railToggle}/>
           <section className="rail-schedule" aria-label={ui('scheduler.plan')}>
             <div className="rail-section-heading">
               <div><Clock3 size={15}/><span>{ui('scheduler.plan')}</span></div>
@@ -239,7 +240,12 @@ export function TaskConfig() {
             <TaskQueue instance={instance} data={railData}/>
           </section>
         </div>
-      : groupNav}
+      : <div className="task-rail-directory">
+          <div className="rail-section-heading">
+            <div>{railToggle}<span>{ui('task.groupNav')}</span></div>
+          </div>
+          {groupNav}
+        </div>}
   </aside>
 
   const configToolbar = showConfigToolbar && <div className="config-toolbar">

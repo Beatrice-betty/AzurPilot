@@ -30,11 +30,11 @@ describe('即时配置队列', () => {
     // 这一条刚标成已保存，还在最短停留期内，所以此刻不清；停留过了才清。
     queue.reconcile(queue.confirmed())
     expect(queue.getSnapshot().edits.serial).toBeDefined()
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    await new Promise(resolve => setTimeout(resolve, 2000))
     expect(queue.getSnapshot().edits.serial).toBeUndefined()
   })
 
-  it('回执比最短停留更快时，已保存再留一会儿才消失', async () => {
+  it('停手后才显示「已保存」，显示够时长才消失', async () => {
     const send = vi.fn().mockResolvedValue(undefined)
     vi.useFakeTimers()
     vi.setSystemTime(1_000_000)
@@ -43,13 +43,27 @@ describe('即时配置队列', () => {
     await queue.settled()
     expect(queue.getSnapshot().edits.serial.status).toBe('saved')
 
-    // 回执马上就到：这时才过了 100ms，不该把「已保存」立刻抹掉。
+    // 静默期内不显示。
     await vi.advanceTimersByTimeAsync(100)
+    expect(queue.savedVisible(queue.getSnapshot().edits.serial)).toBe(false)
     const cf = queue.confirmed()
     queue.reconcile(cf)
+    // 回执未过静默期：留在快照里。
     expect(queue.getSnapshot().edits.serial).toBeDefined()
+    expect(queue.savedVisible(queue.getSnapshot().edits.serial)).toBe(false)
 
+    // 静默期内继续输入：显示时刻随之顺延。
+    await vi.advanceTimersByTimeAsync(400)
+    queue.change('serial', 'edited again')
+    await queue.settled()
+    await vi.advanceTimersByTimeAsync(400)
+    expect(queue.savedVisible(queue.getSnapshot().edits.serial)).toBe(false)
+
+    // 静默期满：转为显示。
     await vi.advanceTimersByTimeAsync(1000)
+    expect(queue.savedVisible(queue.getSnapshot().edits.serial)).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(2000)
     expect(queue.getSnapshot().edits.serial).toBeUndefined()
   })
 

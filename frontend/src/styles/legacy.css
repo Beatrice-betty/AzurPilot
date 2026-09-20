@@ -686,19 +686,36 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
     display: grid;
     flex: 1 1 auto;
     height: calc(var(--viewport-height) - var(--topbar-height) - 2 * var(--row-pad, 4px) - var(--legacy-page-nav-height, 42px) - 64px);
-    grid-template-columns: minmax(0, 1fr) 208px;
+    /* 右列宽度取自新版右栏的契约变量，与断点同步收放。 */
+    grid-template-columns: minmax(0, 1fr) min(268px, var(--right-rail-width));
     gap: 22px;
     align-items: stretch;
   }
   /* 右列换成外层容器后，行数预算归它管，这里改用普通列；高度吃满网格行。 */
   .task-config-rail {display: flex; flex-direction: column; gap: 10px; min-height: 0; max-height: 100%}
-  .task-rail-heading {display: flex; justify-content: flex-end; flex-shrink: 0}
-  .task-rail-heading .task-rail-toggle {color: var(--muted)}
-  .task-rail-heading .task-rail-toggle:hover {color: var(--accent); background: var(--accent-soft)}
-  .task-config-rail .group-nav {position: static; top: auto; max-height: none; border-left: 0; padding-left: 0; min-height: 0; overflow-y: auto}
-  .task-rail-scheduler {display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto}
-  .task-rail-scheduler .scheduler-widget {margin: 0}
-  .task-rail-scheduler .rail-task-list {flex: 1 1 0; min-height: 0; overflow-y: auto}
+  /* 切换按钮即各视图标题左侧的图标，两态共用同一坐标与尺寸。 */
+  .task-rail-toggle {display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; margin-right: 1px; border: 0; background: none; color: var(--muted); cursor: pointer; flex-shrink: 0}
+  .task-rail-toggle:hover {color: var(--accent)}
+  /* 两个视图的标题行共用同一套字号、图标与间距。 */
+  .task-rail-scheduler .scheduler-widget-heading, .task-rail-directory .rail-section-heading {margin-bottom: 13px; color: var(--text)}
+  .task-rail-scheduler .scheduler-widget-heading > div, .task-rail-directory .rail-section-heading > div {gap: 7px; font-size: 12px; font-weight: 650; color: var(--text)}
+  /* 调度块的外边距归零，内边距与目录卡片一致。 */
+  /* 整列面板即一张卡片，内部层次靠分隔线而非嵌套卡片。 */
+  .task-rail-scheduler {border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 16px 14px}
+  .task-rail-scheduler .scheduler-widget {margin: 0; padding: 0; border: 0; background: none; box-shadow: none; flex-shrink: 0}
+  .task-rail-scheduler .rail-schedule {border-top: 1px solid var(--border); padding-top: 14px; margin-top: 4px}
+  /* 高度逐层传递：滚动只放在最外层，内层任务列表随内容撑开。 */
+  .task-rail-scheduler {flex: 1 1 auto; display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto}
+  .task-rail-scheduler .rail-schedule {flex: 0 0 auto; min-height: 0; margin: 0; border-top: 0; padding: 0}
+  .task-rail-scheduler .rail-task-list {flex: 0 0 auto; min-height: 0}
+  .task-rail-directory {flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 16px 14px}
+  .task-rail-directory .rail-section-heading {justify-content: space-between}
+  .task-rail-directory .group-nav {flex: 1 1 auto}
+  /* 切视图时按方向滑入并淡入。 */
+  .task-rail-scheduler, .task-rail-directory {animation: rail-view-in .26s cubic-bezier(.22, .61, .36, 1)}
+  .task-rail-scheduler {animation-name: rail-view-in-right}
+  .task-rail-directory {animation-name: rail-view-in-left}
+  @media (prefers-reduced-motion: reduce) {.task-rail-scheduler, .task-rail-directory {animation: none}}
   .task-config-settings {min-width: 0; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px}
   .task-config-legacy .group-nav {max-height: 100%}
   /* 参数列自己滚，锚点跳转不需要再给吸顶的顶栏留出 72px。 */
@@ -777,3 +794,6 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 
 /* 按下「立刻运行」时底色与字色互换，与按钮的缩放动画叠加。 */
 .field-control > .field-actions .icon-only:hover:active:not(:disabled) {background: var(--theme-accent); color: var(--theme-on-accent)}
+
+@keyframes rail-view-in-right {from {opacity: 0; transform: translateX(7px)} to {opacity: 1; transform: none}}
+@keyframes rail-view-in-left {from {opacity: 0; transform: translateX(-7px)} to {opacity: 1; transform: none}}
