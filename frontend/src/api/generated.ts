@@ -19,6 +19,7 @@ export interface Parameters {
   "statistics.refreshLoot": { instance: string }
   "statistics.report": { instance: string; category?: "resources" | "action" | "opsi" | "commission" | "ships" | "loot"; month?: string | null; days?: number; period?: "day" | "week" | "month" }
   "meowfficer.scoreReport": { instance: string; limit?: number }
+  "meowfficer.clearReport": { instance: string }
   "statistics.resources": { instance: string; days?: number; resource?: "Oil" | "Coin" | "Gem" | "Cube" | "Pt" | "ActionPoint" | "Core" | "Medal" | "Merit" | "GuildCoin" | "YellowCoin" | "PurpleCoin" }
   "settings.get": Record<string, never>
   "settings.patch": { values: Record<string, unknown> }

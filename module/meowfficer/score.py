@@ -274,6 +274,7 @@ class ScoreResult:
     primary: list[str] = field(default_factory=list)
     maxed: bool = False
     points_spent: int | None = None
+    level: int | None = None
 
 
 def _find(talents: list[Talent], line: str) -> Talent | None:
@@ -434,13 +435,14 @@ _SCORERS = {
 
 
 def evaluate(talents: list[str] | list[Talent], cat: str | None = None,
-             points_spent: int | None = None) -> ScoreResult:
+             points_spent: int | None = None, level: int | None = None) -> ScoreResult:
     """对一组天赋打分。
 
     Args:
         talents: 天赋名列表，或已解析的 :class:`Talent` 列表。
         cat: 指挥喵名字，用于挑选适用口径并带上攻略点评。
         points_spent: 已使用的天赋点数，给出洗猫成本参考。
+        level: 指挥喵等级；取图方式读不到时为 ``None``（报告里就不显示等级）。
 
     Returns:
         :class:`ScoreResult`，含四套口径的结果与「主口径」排序。
@@ -464,4 +466,4 @@ def evaluate(talents: list[str] | list[Talent], cat: str | None = None,
         talents=resolved, cat=cat_name, cat_info=cat_info, rubrics=rubrics,
         primary=primary,
         maxed=any(t.level >= 3 for t in resolved),  # 初始天赋最高只有 2 级
-        points_spent=points_spent)
+        points_spent=points_spent, level=level)

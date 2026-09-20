@@ -324,10 +324,12 @@ class MeowfficerScore:
                            '请确认游戏停留在「指挥喵 - 猫窝」页面后重试')
             return
 
-        for cat, talents in scanned:
-            result = evaluate(talents, cat=cat)
+        for cat, talents, level in scanned:
+            result = evaluate(talents, cat=cat, level=level)
             rubric = result.rubrics[result.primary[0]] if result.primary else None
             logger.attr(f'{cat} 猫名', result.cat or '未知')
+            if level is not None:
+                logger.attr(f'{cat} 等级', f'Lv{level}')
             if rubric is not None:
                 logger.attr(f'{cat} 评分', f'{rubric.label} {rubric.tier} {rubric.score100}/100')
             self.results.append((cat, result))

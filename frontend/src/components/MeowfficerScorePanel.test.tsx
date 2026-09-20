@@ -14,6 +14,7 @@ const report: MeowfficerScoreReport = {
   instance: 'test', generatedAt: '2026-09-20 11:44:26', count: 1,
   cats: [{
     source: 'shot_0.png', cat: '克雷喵', tags: ['SSR', '铁血'], fixed: true, maxed: true, pointsSpent: 6,
+    level: 30,
     note: '<b>初始池小</b>、最好毕业',
     talents: [
       {name: '狼群之首', level: 1, kind: 'special'},
@@ -25,6 +26,14 @@ const report: MeowfficerScoreReport = {
         source: '28法则执行篇·潜艇猫', primary: true},
       {key: 'low_cost', label: '低耗猫', tier: '不适合低耗', score: 35, x: 0, y: 2, xHits: [], yHits: [], primary: false},
     ],
+    advice: {
+      verdict: 'reroll', headline: '建议洗点，别直接喂',
+      reason: '主口径「潜艇猫」45/100（过渡可用）。已经投入过 6 点天赋，直接喂掉这些投入就一起没了',
+      label: '潜艇猫', score: 45, tier: '过渡可用',
+      cost: 12000, costEstimated: true, pointsSpent: 6,
+      costText: '推算已点 6 点，约需 12000 物资',
+      targets: ['优先补：侵略如火', '普通位可补：新晋指挥官·潜艇'],
+    },
   }],
 }
 
@@ -53,6 +62,7 @@ describe('指挥喵评分面板', () => {
     expect(html).toContain('已满级')
     expect(html).toContain('已指定')
     expect(html).toContain('来源截图：shot_0.png')
+    expect(html).toContain('Lv30')
   })
 
   it('彩天赋高亮、推断天赋标注，其余口径折叠展示', () => {
@@ -69,5 +79,22 @@ describe('指挥喵评分面板', () => {
     const html = render(report)
     expect(html).toContain('&lt;b&gt;初始池小&lt;/b&gt;')
     expect(html).not.toContain('<b>')
+  })
+
+  it('渲染洗点推荐：结论、成本与建议补的天赋，并按 verdict 上色', () => {
+    const html = render(report)
+    expect(html).toContain('meow-advice is-reroll')
+    expect(html).toContain('建议洗点，别直接喂')
+    expect(html).toContain('推算已点 6 点，约需 12000 物资')
+    expect(html).toContain('优先补：侵略如火')
+    expect(html).toContain('普通位可补：新晋指挥官·潜艇')
+  })
+
+  it('没有推荐时整个区块不渲染', () => {
+    const withoutAdvice: MeowfficerScoreReport = {
+      ...report,
+      cats: [{...report.cats[0], advice: null}],
+    }
+    expect(render(withoutAdvice)).not.toContain('meow-advice')
   })
 })
