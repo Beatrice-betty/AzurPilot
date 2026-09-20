@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, ExternalLink, Plus, Server } from 'lucide-react'
+import { ArrowRight, ExternalLink, History, Plus, Server } from 'lucide-react'
 import { useApp, useConnection } from '../app/context'
+import type { Theme } from '../app/theme'
 import type { UiTranslator } from '../i18n'
 import { CreateInstance } from '../app/App'
 import { StatusBadge } from '../components/ui'
+
+/** 「切换旧版界面」快捷按钮用：恢复目标限定在现代主题里，避免来回落到别的档位。 */
+const MODERN_THEMES: readonly string[] = ['light', 'dark', 'minimal']
 
 function getGreeting(ui: UiTranslator): string {
   const hour = new Date().getHours()
@@ -14,7 +18,7 @@ function getGreeting(ui: UiTranslator): string {
 }
 
 export function Home() {
-  const {instances, t, ui} = useApp()
+  const {instances, t, ui, theme, setTheme, resolvedMode} = useApp()
   const connection = useConnection()
   const [creating, setCreating] = useState(false)
   useEffect(() => {
@@ -23,6 +27,17 @@ export function Home() {
   }, [])
   const running = instances.filter(item => item.status === 'running').length
   const errored = instances.filter(item => item.status === 'error').length
+  const legacyUi = theme === 'legacy-light' || theme === 'legacy-dark'
+  function toggleLegacyUi() {
+    if (!legacyUi) {
+      try { localStorage.setItem('azurpilot.theme-before-legacy', theme) } catch { /* 存储不可用时仍可切换。 */ }
+      setTheme(resolvedMode === 'dark' ? 'legacy-dark' : 'legacy-light')
+      return
+    }
+    let previous: string | null = null
+    try { previous = localStorage.getItem('azurpilot.theme-before-legacy') } catch { /* 同上。 */ }
+    setTheme(previous !== null && MODERN_THEMES.includes(previous) ? previous as Theme : resolvedMode === 'dark' ? 'dark' : 'light')
+  }
   return <>
     <div className="home-editorial">
       <aside className="home-deck">
@@ -39,6 +54,7 @@ export function Home() {
           </dl>
           <div className="home-deck-links">
             <a className="home-deck-link" href="https://github.com/wess09/AzurPilot" target="_blank" rel="noreferrer"><ExternalLink size={14}/>{ui('home.openSource')}</a>
+            <button type="button" className="home-deck-link home-legacy-toggle" onClick={toggleLegacyUi}><History size={14}/>{ui(legacyUi ? 'home.modernUi' : 'home.legacyUi')}</button>
           </div>
         </div>
       </aside>
