@@ -420,33 +420,30 @@ def _set_file_logger(name=pyw_name):
     logger.log_file = log_file
 
 
-def set_file_logger(name=pyw_name):
-    # Windows 下有 "SyncManager-N:N"、"MainProcess"、"Process-N"、"gui" 四种进程
-    # Linux 下没有 "SyncManager" 进程，只有 "MainProcess"
-    if os.name == "nt":
-        # Windows 下这些进程无需保存日志文件
-        processes = ["SyncManager-", "MainProcess", "Process-"]
+def set_file_logger(name=None):
+    """绑定完整实例名；只有自动 GUI 日志按 Windows 进程身份过滤。"""
+    automatic = name is None
+    if automatic:
+        name = pyw_name
+    pname = name
+    if os.name == "nt" and automatic and name == "gui":
         pname = multiprocessing.current_process().name.replace(":", "_")
-        # 每个进程在 AzurPilot 启动时只应调用一次。
-        if any(isinstance(hdlr, RichTimedRotatingHandler) for hdlr in logger.handlers):
+        if pname == "MainProcess" or pname.startswith(("SyncManager-", "Process-")):
             return
-    else:
-        processes = []
-        pname = name
-        for hdlr in logger.handlers:
-            if isinstance(hdlr, RichTimedRotatingHandler):
-                # 每个进程在 AzurPilot 启动时只应调用一次。
-                if hdlr.pname == name:
-                    return
-                else:
-                    logger.handlers = [h for h in logger.handlers if not isinstance(
-                        h, (logging.FileHandler, RichTimedRotatingHandler, RichFileHandler))]
-    
+
     log_dir = Path("./log")
     log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir.joinpath(f"{pname}.txt" if name == "gui" else f"{name}.txt")
-    if any(p in log_file.name for p in processes):
-        return
+    log_file = log_dir.joinpath(f"{pname}.txt")
+    for hdlr in logger.handlers:
+        if isinstance(hdlr, RichTimedRotatingHandler) and Path(hdlr.baseFilename) == log_file.resolve():
+            return
+    # 自动日志之后可能才确定实例身份；切换时关闭旧文件，避免继续写入其他实例。
+    for hdlr in logger.handlers[:]:
+        if isinstance(hdlr, (logging.FileHandler, RichTimedRotatingHandler, RichFileHandler)):
+            logger.removeHandler(hdlr)
+            if isinstance(hdlr, RichTimedRotatingHandler):
+                hdlr.richd.console.file.close()
+            hdlr.close()
 
     hdlr = RichTimedRotatingHandler(
         pname=name,
