@@ -354,7 +354,8 @@ class EquipmentCodeHandler(StorageHandler):
 
     def _code_apply(self, code=None):
         for _ in range(5):
-            self._code_preview_clear()
+            if not self._code_preview_clear():
+                continue
             if code is not None and code != EMPTY_CODE:
                 success = self._code_input(code)
                 if not success:
