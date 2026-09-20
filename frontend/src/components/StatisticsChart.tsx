@@ -24,15 +24,15 @@ function getSeriesColor(key: string, index: number, fallback?: string): string {
   return RESOURCE_PALETTE[key] ?? (index === 0 && fallback ? fallback : DEFAULT_PALETTE[index % DEFAULT_PALETTE.length])
 }
 
-export function StatisticsChart({series}: {series: StatSeries[]}) {
+export function StatisticsChart({series, initialMode = 'line'}: {series: StatSeries[]; initialMode?: 'line' | 'candlestick'}) {
   const {ui, language, theme} = useApp()
   const [selectedKeys, setSelectedKeys] = useState<string[]>(() => {
     const active = series.find(item => item.points.length)?.key ?? series[0]?.key
     return active ? [active] : []
   })
-  const [mode, setMode] = useState('line')
+  const [mode, setMode] = useState(initialMode)
   const [axisMode, setAxisMode] = useState<'separate' | 'unified'>('separate')
-  const [bucket, setBucket] = useState(0)
+  const [bucket, setBucket] = useState(initialMode === 'candlestick' ? 60 : 0)
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [expanded, setExpanded] = useState(false)
@@ -66,11 +66,12 @@ export function StatisticsChart({series}: {series: StatSeries[]}) {
 
   const isSingle = selectedSeries.length === 1
   const isCandlestick = mode === 'candlestick'
+  const effectiveBucket = isCandlestick && bucket === 0 ? 60 : bucket
 
   const seriesData = useMemo(() => {
     return selectedSeries.map((s, index) => {
       const points = s.points.filter(point => (!from || point.time.replace(' ', 'T') >= from) && (!to || point.time.replace(' ', 'T') <= `${to}:59.999`))
-      const buckets = aggregatePoints(points, bucket || (isCandlestick ? 60 : 0))
+      const buckets = aggregatePoints(points, effectiveBucket)
       const values = points.map(p => p.value)
       return {
         series: s, points, buckets, values,
@@ -82,7 +83,7 @@ export function StatisticsChart({series}: {series: StatSeries[]}) {
         index,
       }
     })
-  }, [selectedSeries, from, to, bucket, isCandlestick])
+  }, [selectedSeries, from, to, effectiveBucket])
 
   const categoryTimes = useMemo(() => {
     if (!isCandlestick) return []
@@ -246,7 +247,17 @@ export function StatisticsChart({series}: {series: StatSeries[]}) {
       <div className="statistics-controls">
         <label>
           {ui('stats.chart')}
-          <Select aria-label={ui('stats.chartType')} value={mode} onChange={event => setMode(event.target.value)}>
+          <Select
+            aria-label={ui('stats.chartType')}
+            value={mode}
+            onChange={event => {
+              const nextMode = event.target.value
+              setMode(nextMode)
+              if (nextMode === 'candlestick' && bucket === 0) {
+                setBucket(60)
+              }
+            }}
+          >
             <option value="line">{ui('stats.line')}</option>
             <option value="candlestick">{isSingle ? ui('stats.candlestick') : ui('stats.candlestickOverlay')}</option>
           </Select>
@@ -264,8 +275,8 @@ export function StatisticsChart({series}: {series: StatSeries[]}) {
 
         <label>
           {ui('stats.bucket')}
-          <Select aria-label={ui('stats.bucket')} value={bucket} onChange={event => setBucket(Number(event.target.value))}>
-            <option value={0}>{isCandlestick ? ui('stats.hourly') : ui('stats.eachRecord')}</option>
+          <Select aria-label={ui('stats.bucket')} value={effectiveBucket} onChange={event => setBucket(Number(event.target.value))}>
+            {!isCandlestick && <option value={0}>{ui('stats.eachRecord')}</option>}
             <option value={5}>{ui('stats.fiveMinutes')}</option>
             <option value={60}>{ui('stats.hourly')}</option>
             <option value={1440}>{ui('stats.daily')}</option>

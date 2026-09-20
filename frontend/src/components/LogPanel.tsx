@@ -1,5 +1,5 @@
 import { Select } from './FormControls'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { ArrowDownUp, Download, Pause, Play, Search, Terminal, Trash2 } from 'lucide-react'
 import { api } from '../api/client'
@@ -230,10 +230,12 @@ export function LogPanel({active = true}: {active?: boolean}) {
     })
   }), [instance])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!active || !follow || !scroll.current) return
-    // 倒序时最新的在顶部，跟随就要贴顶；正序时才滚到底。
-    scroll.current.scrollTop = descending ? 0 : scroll.current.scrollHeight
+    const container = scroll.current
+    // 在 DOM 更新后、浏览器绘制前同步完成跟随，避免新日志先闪现在可视区外。
+    // scrollTo 明确作用于日志容器，不会像尾部元素的 scrollIntoView 那样误滚动整个页面。
+    container.scrollTo({top: descending ? 0 : container.scrollHeight})
   }, [entries, follow, active, descending])
 
   const visible = entries.filter(entry =>
