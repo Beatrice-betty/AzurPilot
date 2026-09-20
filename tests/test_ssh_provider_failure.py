@@ -39,24 +39,60 @@ class SshProviderFailureTests(unittest.TestCase):
         first = self.process(b'{"status":"fail","change_username":"replacement"}')
         second = self.process(b'{"status":"success","address":"ready"}')
         attempts = []
+        targets = []
 
         def start(**kwargs):
             process = (first, second)[len(attempts)]
             attempts.append(process)
+            targets.append(kwargs)
             provider.process = process
             if process is second:
                 provider.stop_event.set()
             return process
 
-        settings = SimpleNamespace(SSHUser='original')
+        settings = SimpleNamespace(SSHUser='original', SSHServer='primary.example:2022', WebuiPort=22267)
         with patch.object(provider, '_start_ssh_process', side_effect=start), \
                 patch.object(provider.stop_event, 'wait', return_value=False) as retry_wait, \
-                patch.object(remote_access.threading, 'Thread'), \
+                patch.object(remote_access.threading, 'Thread') as thread, \
+                patch.object(remote_access, '_local_host', return_value='127.0.0.1'), \
                 patch.object(State, '_deploy_config_', settings, create=True):
-            provider._thread_main()
+            provider.start()
+            invocation = thread.call_args.kwargs
+            invocation['target'](**invocation['kwargs'])
         self.assertEqual(settings.SSHUser, 'replacement')
         self.assertEqual(len(attempts), 2)
+        self.assertEqual(targets, [
+            dict(local_host='127.0.0.1', local_port=22267, server='original@primary.example',
+                 server_port=2022, remote_port='/'),
+            dict(local_host='127.0.0.1', local_port=22267, server='replacement@primary.example',
+                 server_port=2022, remote_port='/'),
+        ])
         first.kill.assert_called_once_with()
         first.wait.assert_called_once_with(timeout=3)
         retry_wait.assert_called_once_with(remote_access.SSH_RECONNECT_DELAY)
         self.assertEqual(provider.info.error, '')
+
+    def test_explicit_server_survives_retry_without_a_valid_username_change(self):
+        for change in (b'', b',"change_username":""', b',"change_username":123'):
+            with self.subTest(change=change):
+                provider = remote_access.SSHRemoteAccessProvider()
+                first = self.process(b'{"status":"fail"' + change + b'}')
+                second = self.process(b'{"status":"success","address":"ready"}')
+                targets = []
+
+                def start(**kwargs):
+                    process = (first, second)[len(targets)]
+                    targets.append(kwargs['server'])
+                    provider.process = process
+                    if process is second:
+                        provider.stop_event.set()
+                    return process
+
+                settings = SimpleNamespace(SSHUser='unrelated-config-user')
+                with patch.object(provider, '_start_ssh_process', side_effect=start), \
+                        patch.object(provider.stop_event, 'wait', return_value=False), \
+                        patch.object(remote_access.threading, 'Thread'), \
+                        patch.object(State, '_deploy_config_', settings, create=True):
+                    provider._thread_main(server='explicit@custom.example', server_port=2200)
+                self.assertEqual(targets, ['explicit@custom.example', 'explicit@custom.example'])
+                self.assertEqual(settings.SSHUser, 'unrelated-config-user')

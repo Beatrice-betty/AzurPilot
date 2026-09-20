@@ -310,7 +310,8 @@ class SSHRemoteAccessProvider(RemoteAccessProvider):
         server_port=1022,
         remote_port="/",
         setup_timeout=60,
-    ) -> None:
+    ) -> Optional[str]:
+        """运行一次连接；仅服务要求改名时返回下一轮应使用的用户名。"""
         primary_user, primary_host = server.rsplit("@", 1) if "@" in server else ("", server)
         current_server = server
         current_port = server_port
@@ -393,9 +394,10 @@ class SSHRemoteAccessProvider(RemoteAccessProvider):
                 self.info.connection_state = "stopped"
                 self.info.address = None
                 new_username = connection_info.get("change_username", None)
-                if new_username:
+                if isinstance(new_username, str) and new_username:
                     logger.info(f"服务器请求更改用户名，更改为: {new_username}")
                     State.deploy_config.SSHUser = new_username
+                    return new_username
                 return
 
             success = True
@@ -462,7 +464,11 @@ class SSHRemoteAccessProvider(RemoteAccessProvider):
         reconnect_delay = SSH_RECONNECT_DELAY
         while not self.stop_event.is_set():
             try:
-                self._run(**kwargs)
+                new_username = self._run(**kwargs)
+                if isinstance(new_username, str) and new_username:
+                    # 只响应服务明确要求的改名；保留调用方指定的服务器和端口。
+                    host = kwargs.get("server", "app.pywebio.online").rsplit("@", 1)[-1]
+                    kwargs["server"] = f"{new_username}@{host}"
             except KeyboardInterrupt:
                 break
             except Exception as e:
