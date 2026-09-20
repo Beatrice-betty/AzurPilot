@@ -267,7 +267,13 @@ MCP 复用 WebUI 的密码（`--key` / `config/deploy.yaml` 的 `Password`），
 - [GitHub 仓库](https://github.com/wess09/AzurPilot) — 源码、Issue、Pull Request
 - [QQ 交流群](https://join.nanoda.work/#/) — 碧蓝航线自动化社区交流
 - [AzurLaneAutoScript 上游项目](https://github.com/LmeSzinc/AzurLaneAutoScript) — ALAS 原版
+
+### 衍生项目与友链
+
 - [AzurPilot 树莓派版](https://github.com/nnieie/AzurPilot) — 面向树莓派 / Termux 真机的 AzurPilot CN 部署版
+- [AzurPilot-private-Ru](https://github.com/AliceLiddell01/AzurPilot-private-Ru) — 个人俄语版本，提供可控更新、透明启动并精简外部网络依赖
+- [PerseusAutoScript](https://github.com/lajiovo/PerseusAutoScript) — 面向 AzurPilot 的综合运维工具库（后台静默控制、闭环自愈与多端推送）
+- [AzurRem](https://github.com/syyxl3111/AzurRem) — AzurPilot 原生安卓客户端（Kotlin + Jetpack Compose 重写，附带 PC 网关）
 
 ## 开发与贡献
 
