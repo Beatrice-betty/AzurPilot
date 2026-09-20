@@ -246,6 +246,7 @@
 .meow-flag {font-size: 9px; padding: 2px 7px; border-radius: 5px; border: 1px solid var(--border); color: var(--muted); font-weight: 400}
 .meow-flag.is-maxed {border-color: #d9b25a55; background: #d9b25a14; color: #a8811f}
 .meow-flag.is-fixed {border-color: #3b82f655; background: #3b82f614; color: #2f74d0}
+.meow-flag.is-level {border-color: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--accent); font-variant-numeric: tabular-nums}
 .meow-tier {display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px; font-size: 10px; font-weight: 600; white-space: nowrap; background: var(--surface-muted); color: var(--muted)}
 .meow-tier.is-perfect {background: #d9b25a22; color: #a8811f}
 .meow-tier.is-near {background: #3b82f61a; color: #2f74d0}
@@ -296,5 +297,18 @@
 .meow-others[open] > summary > svg {transform: rotate(180deg)}
 .meow-others-body {display: grid; gap: 10px; padding: 0 16px 14px}
 .meow-card-foot {display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 10px 16px; border-top: 1px solid var(--border); font-size: 10px; color: var(--muted)}
+/* 洗点推荐：配色由后端 verdict 决定，四种结论一眼可分 */
+.meow-advice {margin: 0 16px 12px; padding: 10px 13px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-muted)}
+.meow-advice.is-feed {border-color: color-mix(in srgb, var(--red) 42%, transparent); background: color-mix(in srgb, var(--red) 7%, transparent)}
+.meow-advice.is-reroll {border-color: color-mix(in srgb, #d9a441 46%, transparent); background: color-mix(in srgb, #d9a441 9%, transparent)}
+.meow-advice.is-pending {border-color: color-mix(in srgb, var(--accent) 42%, transparent); background: color-mix(in srgb, var(--accent) 7%, transparent)}
+.meow-advice.is-keep {border-color: color-mix(in srgb, #3fa86a 42%, transparent); background: color-mix(in srgb, #3fa86a 7%, transparent)}
+.meow-advice-head {display: flex; align-items: center; gap: 7px; font-size: 12px}
+.meow-advice-head svg {flex: 0 0 auto; opacity: .85}
+.meow-advice-reason {margin: 6px 0 0; font-size: 11px; color: var(--muted); line-height: 1.6}
+.meow-advice-cost {margin: 5px 0 0; font-size: 11px; color: var(--muted)}
+.meow-advice-targets {margin: 6px 0 0; padding: 0; list-style: none}
+.meow-advice-targets li {position: relative; padding-left: 13px; font-size: 11px; color: var(--text); margin: 3px 0}
+.meow-advice-targets li::before {content: '→'; position: absolute; left: 0; color: var(--accent); opacity: .8}
 .meow-shot {font-family: "Cascadia Code", "Consolas", "Microsoft YaHei", monospace; overflow-wrap: anywhere}
 @media (max-width: 700px) {.meow-cats {padding: 12px}.meow-axis-label {flex-basis: 100%}.meow-card-score {width: 100%; justify-content: flex-start}}

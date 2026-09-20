@@ -44,10 +44,19 @@ export interface MeowfficerRubric {
   xLabel?: string; yLabel?: string
   xHits?: string[]; yHits?: string[]; notes?: string[]; source?: string; primary?: boolean
 }
+/** 洗点推荐：verdict 决定配色，文案由后端给出（口径/成本也一并算好）。 */
+export interface MeowfficerAdvice {
+  verdict: string; headline: string; reason: string
+  label?: string; score?: number; tier?: string
+  cost?: number | null; costEstimated?: boolean; pointsSpent?: number; costText?: string
+  targets?: string[]
+}
 /** 指挥喵评分里的一只猫。 */
 export interface MeowfficerCat {
   source?: string; cat: string; tags?: string[]; fixed?: boolean; note?: string; maxed?: boolean
+  level?: number | null
   pointsSpent?: number; primary?: string; talents?: MeowfficerTalent[]; rubrics?: MeowfficerRubric[]
+  advice?: MeowfficerAdvice | null
 }
 /** 「指挥喵评分」任务写入 log/meowfficer_score.json 的结构化结果，报告不存在时后端返回 NOT_FOUND。 */
 export interface MeowfficerScoreReport { instance: string; generatedAt: string; count: number; cats: MeowfficerCat[] }
@@ -87,6 +96,7 @@ export interface Results {
   'statistics.report': StatisticsReport
   'statistics.refreshLoot': {refreshed: boolean}
   'meowfficer.scoreReport': MeowfficerScoreReport
+  'meowfficer.clearReport': {cleared: boolean; removed: string[]}
   'settings.get': Settings
   'settings.patch': {updated: string[]}
   'startup.get': {enabled: boolean}

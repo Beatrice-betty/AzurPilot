@@ -103,6 +103,10 @@ class MeowfficerScoreReportParams(InstanceParams):
     limit: StrictInt = Field(default=100, ge=1, le=500)
 
 
+class MeowfficerClearReportParams(InstanceParams):
+    """清空指挥喵评分报告（删掉 json / md / html 三份产物）。"""
+
+
 class DeployParams(Params):
     values: dict[str, Any]
 

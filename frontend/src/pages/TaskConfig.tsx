@@ -241,7 +241,7 @@ export function TaskConfig() {
   if (legacy) return <>
     <div className={`task-config-legacy${hasGroups ? '' : ' no-nav'}`}>
       <h1 className="legacy-sr-title">{t(`Task.${task}.name`)}</h1>
-      <div className="task-config-settings">{head}{scorePanel}{groupsSection}{toolPanel}</div>
+      <div className="task-config-settings">{head}{groupsSection}{scorePanel}{toolPanel}</div>
       {hasGroups && groupNav}
     </div>
     {modal}
@@ -252,8 +252,9 @@ export function TaskConfig() {
       title={t(`Task.${task}.name`)}
     />
     {head}
-    {scorePanel}
     {hasGroups ? <div className="config-layout">{groupNav}{groupCardsBlock}</div> : groupsSection}
+    {/* 报告面板放在日志上方：先看完参数与运行入口，再看结果 */}
+    {scorePanel}
     {toolPanel}
     {modal}
   </>

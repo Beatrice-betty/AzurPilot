@@ -45,3 +45,34 @@ def report(configs, instance, limit=100):
     cats = [cat for cat in data['cats'] if isinstance(cat, dict)][-int(limit):]
     return {'instance': instance, 'generatedAt': str(data.get('generatedAt', '')),
             'count': len(cats), 'cats': cats}
+
+
+def clear(configs, instance):
+    """清空指挥喵评分报告。
+
+    三份产物（json / md / html）一起删：面板回到「还没跑过任务」的空状态，
+    同时避免「查看完整报告」链接指向一个已经被删掉的文件。
+
+    Args:
+        configs (ConfigService): 配置服务，用于实例白名单校验与仓库根定位。
+        instance (str): 实例名，仅用于校验（报告按机器共享）。
+
+    Returns:
+        dict: ``{'cleared': bool, 'removed': [文件名, ...]}``；本来就没有报告时
+        ``cleared`` 为 ``False``（重复点清空不算错误）。
+
+    Raises:
+        ApiError: 文件存在但删不掉（例如被占用）时抛出。
+    """
+    configs.path(instance)
+    base = report_path(configs.root)
+    removed = []
+    for path in (base, base.with_suffix('.md'), base.with_suffix('.html')):
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise ApiError('INTERNAL', f'评分报告删除失败：{exc}') from exc
+        removed.append(path.name)
+    return {'cleared': bool(removed), 'removed': removed}

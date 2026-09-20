@@ -386,6 +386,31 @@ class TestMeowfficerScoreApi(unittest.TestCase):
             report(self.configs, 'testpilot')
         self.assertEqual(ctx.exception.code, 'NOT_FOUND')
 
+    def test_clear_removes_all_three_products(self):
+        """清空要连 md / html 一起删，否则「查看完整报告」链接会指向不存在的文件。"""
+        from module.api.meowfficer_service import clear, report_path
+
+        base = report_path(self.root)
+        base.parent.mkdir(parents=True, exist_ok=True)
+        for path in (base, base.with_suffix('.md'), base.with_suffix('.html')):
+            path.write_text('x', encoding='utf-8')
+
+        result = clear(self.configs, 'testpilot')
+
+        self.assertTrue(result['cleared'])
+        self.assertCountEqual(result['removed'],
+                              ['meowfficer_score.json', 'meowfficer_score.md', 'meowfficer_score.html'])
+        for path in (base, base.with_suffix('.md'), base.with_suffix('.html')):
+            self.assertFalse(path.exists(), f'{path.name} 应该被删掉')
+
+    def test_clear_without_report_is_not_an_error(self):
+        """重复点清空不该报错。"""
+        from module.api.meowfficer_service import clear
+
+        result = clear(self.configs, 'testpilot')
+        self.assertFalse(result['cleared'])
+        self.assertEqual(result['removed'], [])
+
     def test_invalid_instance_is_rejected(self):
         from module.api.meowfficer_service import report
         from module.api.protocol import ApiError
@@ -425,6 +450,34 @@ class TestMeowfficerScoreApi(unittest.TestCase):
         # 只读：DEMO 模式下也能查询，不会被 READ_ONLY 拦掉
         self.assertFalse(entry.mutates)
         self.assertIs(entry.params, p.MeowfficerScoreReportParams)
+
+    def test_clear_method_is_registered_and_marked_mutating(self):
+        """清空是写操作：方法名要能被分发到，而且 DEMO 模式必须拦得住。"""
+        from module.api import protocol as p
+        from module.api.router import Router
+
+        router = Router(self.configs, None)
+        entry = router.methods.get('meowfficer.clearReport')
+        self.assertIsNotNone(entry, '前端调的就是 meowfficer.clearReport，名字必须一致')
+        self.assertTrue(entry.mutates, '删除产物算写操作，演示模式要拦住')
+        self.assertIs(entry.params, p.MeowfficerClearReportParams)
+
+    def test_dispatch_clear_actually_deletes(self):
+        """走一次真正的分发，确认「未知 API 方法」不会出现。"""
+        import json
+
+        from module.api.meowfficer_service import report_path
+        from module.api.router import Router
+
+        base = report_path(self.root)
+        base.parent.mkdir(parents=True, exist_ok=True)
+        base.write_text(json.dumps({'generatedAt': 'x', 'count': 0, 'cats': []}),
+                        encoding='utf-8')
+
+        result = Router(self.configs, None).dispatch('meowfficer.clearReport', {'instance': 'testpilot'})
+
+        self.assertTrue(result['cleared'])
+        self.assertFalse(base.exists())
 
 
 if __name__ == '__main__':
