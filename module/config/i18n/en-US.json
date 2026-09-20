@@ -1941,7 +1941,7 @@
     },
     "TimeLimit": {
       "name": "Event time limit",
-      "help": "When local time exceeds the given value, all event tasks are disabled. '2020-01-01 00:00:00' means no limit. Timer resets after triggering once.\nAfter setting, prevents forgetting to close tasks after an event ends."
+      "help": "When local time exceeds the given value, all event tasks are disabled. '2023-01-01 00:00:00' means no limit. Timer resets after triggering once.\nAfter setting, prevents forgetting to close tasks after an event ends."
     }
   },
   "TaskBalancer": {
