@@ -55,6 +55,8 @@ class ConfigModel:
     SSHUser: Optional[str] = None
     SSHServer: Optional[str] = None
     SSHExecutable: Optional[str] = None
+    AllowedRedirectHosts: Optional[str] = None
+    MaxRedirects: int = 2
     SignalingServer: Optional[str] = None
     StunServers: Optional[str] = '["stun:stun.l.google.com:19302"]'
     TurnServers: Optional[str] = None
