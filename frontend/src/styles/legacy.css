@@ -406,28 +406,33 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
   --tab-strip-bg: #1e2029;
 }
 
-/* 强制重写：覆盖 home.css 中 :root[data-tab-size] 注入的 padding-block: 4px，确保标签栏绝对贴底 */
+/* 导航条基础排版：必须严格垂直居中（align-items: center），上下内边距归零，
+   彻底根除图标与文字沉在底部“往下掉”的问题，保证下拉菜单与常规导航绝对居中 */
 :root[data-tab-size] .app-shell.legacy-shell .legacy-page-nav,
 :root[data-theme='legacy-light'] .legacy-page-nav,
 :root[data-theme='legacy-dark'] .legacy-page-nav,
 .app-shell.legacy-shell .legacy-page-nav {
   height: 40px !important;
-  padding-top: 6px !important;
-  padding-bottom: 0 !important;
-  padding-left: 16px !important;
-  padding-right: 16px !important;
+  padding: 0 16px !important;
   display: flex !important;
-  align-items: flex-end !important;
-  background: var(--tab-strip-bg, #e6ebf2) !important;
+  align-items: center !important;
+  background: var(--surface) !important;
   border-bottom: 1px solid var(--border) !important;
   box-sizing: border-box !important;
 }
 .legacy-page-nav .instance-picker {margin: 0}
 
+/* 仅在平铺标签页模式（存在 .instance-tabs）时呈现浅灰蓝浏览器槽道底色，下拉模式保持常规纯白背景 */
+:root[data-theme='legacy-light'] .legacy-page-nav:has(.instance-tabs),
+:root[data-theme='legacy-dark'] .legacy-page-nav:has(.instance-tabs),
+.app-shell.legacy-shell .legacy-page-nav:has(.instance-tabs) {
+  background: var(--tab-strip-bg, #e6ebf2) !important;
+}
+
 :root[data-tab-size] .app-shell.legacy-shell .legacy-page-nav .breadcrumb,
 .app-shell.legacy-shell .legacy-page-nav .breadcrumb {
   display: flex !important;
-  align-items: flex-end !important;
+  align-items: center !important;
   height: 100% !important;
   gap: 8px !important;
 }
@@ -443,7 +448,7 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
   font-size: 12px;
   font-weight: 500;
   transition: all .15s ease;
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 .legacy-page-nav .breadcrumb > a:hover {
   background: color-mix(in srgb, var(--surface) 50%, transparent);
@@ -453,13 +458,14 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 .legacy-page-nav .topbar-mode-toggle,
 .legacy-page-nav .topbar-tab-size {
   align-self: center;
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 
-/* 标签列表轨道必须绝对贴底 */
+/* 标签列表轨道：仅有标签页存在时，轨道自身撑满高度并下沉贴底，左侧主页/图标仍严格垂直居中 */
 :root[data-theme='legacy-light'] .instance-tabs,
 :root[data-theme='legacy-dark'] .instance-tabs,
 .app-shell.legacy-shell .instance-tabs {
+  align-self: stretch !important;
   display: flex !important;
   align-items: flex-end !important;
   gap: 0 !important;
