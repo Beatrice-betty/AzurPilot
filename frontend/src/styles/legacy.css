@@ -198,7 +198,7 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
   .task-config-settings .config-toolbar .input-icon {max-width: none}
   .task-config-settings .config-toolbar {margin-bottom: 0}
   .instance-page-main .statistics-toolbar-row {display: flex; align-items: center; gap: 12px; flex-wrap: wrap}
-  .instance-page-main .statistics-toolbar-row .statistics-category-control {margin-bottom: 0; flex: 1; min-width: 0}
+  .instance-page-main .statistics-toolbar-row .statistics-category-control {margin-bottom: 0; flex: 0 0 auto; width: max-content}
   .instance-page-main .statistics-actions {display: flex; align-items: center; gap: 8px; margin-left: auto}
 
   /* 旧版的任务详细设置：参数卡在左、分组导航在右（旧版是 13rem≈208px 的右列）。
