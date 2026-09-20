@@ -59,14 +59,14 @@ export class EditQueue {
       .filter(([, edit]) => edit.status === 'saved').map(([path, edit]) => [path, edit.sequence]))
   }
 
-  /** 提交刚成功、静默期未满：此刻不显示任何保存结果。 */
+  /** 提交刚成功、静默期未满：此刻不呈现保存结果。 */
   private idle(edit: Edit) {
-    return edit.status !== 'saved' || Date.now() - (edit.readyAt ?? 0) < SAVED_QUIET_MS
+    return edit.status === 'saved' && Date.now() - (edit.readyAt ?? 0) < SAVED_QUIET_MS
   }
 
-  /** 「已保存」是否可以呈现给用户。 */
+  /** 当前状态是否可以呈现给用户。静默期只作用于已保存。 */
   savedVisible(edit: Edit) {
-    return !this.idle(edit)
+    return !this.idle(edit) || edit.status !== 'saved'
   }
 
 

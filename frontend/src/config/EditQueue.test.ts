@@ -168,6 +168,21 @@ describe('即时配置队列', () => {
     expect(send).toHaveBeenCalledWith('serial', 'retained')
     expect(queue.getSnapshot().storageError).toBe(translateCurrentUi('edit.draftPersistError'))
   })
+
+  it('等待连接、保存中与错误状态不经过静默期，立即可见', async () => {
+    vi.useFakeTimers()
+    const pending = deferred()
+    const queue = new EditQueue('test', {ready: () => true, send: () => pending.promise})
+    queue.change('serial', 'edited')
+    await vi.advanceTimersByTimeAsync(50)
+    expect(queue.getSnapshot().edits.serial.status).not.toBe('saved')
+    expect(queue.savedVisible(queue.getSnapshot().edits.serial)).toBe(true)
+
+    pending.reject(new Error('连接失败'))
+    await queue.settled().catch(() => undefined)
+    expect(queue.getSnapshot().edits.serial.status).toBe('error')
+    expect(queue.savedVisible(queue.getSnapshot().edits.serial)).toBe(true)
+  })
 })
 
 describe('保留数值输入原文', () => {
