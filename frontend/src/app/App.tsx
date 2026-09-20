@@ -244,7 +244,8 @@ export function App() {
       {instance && <TaskNav/>}
     </aside>
     <div className="main-shell">{!legacyShell && !legacyHomeShell && topbar}
-      {(legacyShell || legacyHomeShell) && !PRIMARY_NAV_PATHS.includes(location.pathname) && pageNav}
+      {/* 旧版外壳多一行：实例标签条在里面，点标签就能带着当前页型切实例。其它主题此行不开。 */}
+      {usesLegacyLayout(theme) && (legacyShell || legacyHomeShell) ? pageNav : null}
       {connection !== 'ready' && <div className="connection-banner" role="status"><WifiOff size={16}/>{ui('connection.connecting')}</div>}
       <main id="main-content" tabIndex={-1}>{!schema || ((instance || location.pathname === '/') && !instancesLoaded) ? <Loading/> : !instance || current ? <Outlet context={update} key={instance ?? 'home'}/> : <Loading/>}</main>
     </div>

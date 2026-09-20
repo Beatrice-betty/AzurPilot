@@ -9,7 +9,11 @@ export interface Edit {
   status: 'queued' | 'saving' | 'saved' | 'error'
   error?: string
   retryable?: boolean
+  savedAt?: number
 }
+
+/** 已保存状态的最短停留：回执比这更快时也要让用户看清这一次保存完成了。 */
+const SAVED_HOLD_MS = 600
 export interface EditSnapshot { edits: Record<string, Edit>; storageError: string }
 interface Transport {
   ready: () => boolean
@@ -51,14 +55,36 @@ export class EditQueue {
       .filter(([, edit]) => edit.status === 'saved').map(([path, edit]) => [path, edit.sequence]))
   }
 
+
   /** 只清理由读取前已确认的覆盖值，读取期间的新输入和回执仍由队列保护。 */
   reconcile(confirmed: Record<string, number>) {
     const edits = {...this.state.edits}
+    const pending: Array<{path: string; sequence: number; edit: Edit}> = []
     for (const [path, sequence] of Object.entries(confirmed)) {
-      if (edits[path]?.status === 'saved' && edits[path].sequence === sequence) delete edits[path]
+      const edit = edits[path]
+      if (edit?.status !== 'saved' || edit.sequence !== sequence) continue
+      delete edits[path]
+      pending.push({path, sequence, edit})
     }
     this.state = {...this.state, edits}
     this.publish()
+    // 回执来得比最短停留快时，把这一条先留在快照里，到点再清。
+    for (const {path, sequence, edit} of pending) this.holdSaved(path, sequence, edit)
+  }
+
+  /** 回执来得快时把「已保存」再留一会儿；否则状态一闪而过，看着像抽了一下。 */
+  private holdSaved(path: string, sequence: number, edit: Edit) {
+    const rest = SAVED_HOLD_MS - (Date.now() - (edit.savedAt ?? 0))
+    if (rest <= 0) return
+    this.state = {...this.state, edits: {...this.state.edits, [path]: edit}}
+    this.publish()
+    setTimeout(() => {
+      if (this.state.edits[path]?.sequence !== sequence) return
+      const edits = {...this.state.edits}
+      delete edits[path]
+      this.state = {...this.state, edits}
+      this.publish()
+    }, rest)
   }
 
   private publish() {
@@ -117,7 +143,7 @@ export class EditQueue {
       try {
         await this.transport.send(path, edit.payload)
         this.retryDelay = 1000
-        if (this.state.edits[path]?.sequence === edit.sequence) this.replace(path, {...edit, status: 'saved'})
+        if (this.state.edits[path]?.sequence === edit.sequence) this.replace(path, {...edit, status: 'saved', savedAt: Date.now()})
       } catch (error) {
         const permanent = error instanceof ApiError && ['INVALID_PARAMS', 'READ_ONLY', 'NOT_FOUND', 'CONFIG_INVALID'].includes(error.code)
         if (this.state.edits[path]?.sequence === edit.sequence) {

@@ -690,7 +690,15 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
     gap: 22px;
     align-items: stretch;
   }
-  .task-config-legacy.no-nav {grid-template-columns: minmax(0, 1fr)}
+  /* 右列换成外层容器后，行数预算归它管，这里改用普通列；高度吃满网格行。 */
+  .task-config-rail {display: flex; flex-direction: column; gap: 10px; min-height: 0; max-height: 100%}
+  .task-rail-heading {display: flex; justify-content: flex-end; flex-shrink: 0}
+  .task-rail-heading .task-rail-toggle {color: var(--muted)}
+  .task-rail-heading .task-rail-toggle:hover {color: var(--accent); background: var(--accent-soft)}
+  .task-config-rail .group-nav {position: static; top: auto; max-height: none; border-left: 0; padding-left: 0; min-height: 0; overflow-y: auto}
+  .task-rail-scheduler {display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto}
+  .task-rail-scheduler .scheduler-widget {margin: 0}
+  .task-rail-scheduler .rail-task-list {flex: 1 1 0; min-height: 0; overflow-y: auto}
   .task-config-settings {min-width: 0; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px}
   .task-config-legacy .group-nav {max-height: 100%}
   /* 参数列自己滚，锚点跳转不需要再给吸顶的顶栏留出 72px。 */

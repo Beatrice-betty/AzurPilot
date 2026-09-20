@@ -27,7 +27,29 @@ describe('即时配置队列', () => {
     await queue.settled()
     queue.reconcile(confirmed)
     expect(queue.getSnapshot().edits.serial.value).toBe('during-read')
+    // 这一条刚标成已保存，还在最短停留期内，所以此刻不清；停留过了才清。
     queue.reconcile(queue.confirmed())
+    expect(queue.getSnapshot().edits.serial).toBeDefined()
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    expect(queue.getSnapshot().edits.serial).toBeUndefined()
+  })
+
+  it('回执比最短停留更快时，已保存再留一会儿才消失', async () => {
+    const send = vi.fn().mockResolvedValue(undefined)
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000_000)
+    const queue = new EditQueue('test', {ready: () => true, send}, storage())
+    queue.change('serial', 'edited')
+    await queue.settled()
+    expect(queue.getSnapshot().edits.serial.status).toBe('saved')
+
+    // 回执马上就到：这时才过了 100ms，不该把「已保存」立刻抹掉。
+    await vi.advanceTimersByTimeAsync(100)
+    const cf = queue.confirmed()
+    queue.reconcile(cf)
+    expect(queue.getSnapshot().edits.serial).toBeDefined()
+
+    await vi.advanceTimersByTimeAsync(1000)
     expect(queue.getSnapshot().edits.serial).toBeUndefined()
   })
 
