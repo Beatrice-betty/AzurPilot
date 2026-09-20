@@ -1,23 +1,70 @@
 import { PasswordInput, Select } from '../components/FormControls'
-import { useEffect, useState, type FormEvent, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent, type MouseEvent, type ChangeEvent } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowRight, CalendarClock, ChartNoAxesCombined, Code2, Compass, LayoutDashboard, Globe, House, Download, Menu, Palette, Settings2, WifiOff, X } from 'lucide-react'
+import { ArrowRight, CalendarClock, ChartNoAxesCombined, Code2, Compass, GalleryHorizontal, LayoutDashboard, Globe, House, Download, Maximize2, Menu, Minimize2, Palette, PanelTop, Settings2, WifiOff, X } from 'lucide-react'
 import { api } from '../api/client'
 import { useApp, useConnection } from './context'
 import { ErrorBox, Loading, Modal } from '../components/ui'
 import { GlassMaterial } from '../components/GlassMaterial'
 import { InstanceSwitcher } from '../components/InstanceSwitcher'
+import { InstanceTabs } from '../components/InstanceTabs'
 import { RightRail } from '../components/RightRail'
 import { TaskNav } from '../components/TaskNav'
 import { TaskSwitcher } from '../components/TaskSwitcher'
 import { useUpdater } from './updater'
 import { recordDevLogoClick } from './devMode'
-import { usesLegacyShell, showsRightRail } from './theme'
+import { usesLegacyLayout, usesLegacyShell, showsRightRail } from './theme'
+import { cycleTabSize, readLastPath, readTabSize, readTopbarMode, setTopbarMode, subscribeTopbarMode, writeLastInstance, writeLastPath } from './topbarPrefs'
 import { INSTANCE_NAME_PATTERN } from './instanceName'
+
 
 export function CreateInstance({onClose}: {onClose: () => void}) {
   const [name, setName] = useState('')
   const [source, setSource] = useState('')
+  const [importFile, setImportFile] = useState('')
+  /* 导入候选按需拉取：点「导入配置」时才取，不在 dialog 打开时打接口。 */
+  const [importState, setImportState] = useState<{loading: boolean; items: Array<{name: string; modified: number}>}>({loading: false, items: []})
+  async function pickImport() {
+    setImportState({loading: true, items: importState.items})
+    try {
+      const items = await api.request('instances.importable', {})
+      setImportState({loading: false, items})
+    } catch (error) { setImportState({loading: false, items: []}); setError((error as Error).message) }
+  }
+
+  /* 弹窗自己按 Esc 时，页面先收到 keydown Escape 再收到 <dialog> 的 cancel；原生文件选择器
+     被取消时只送来 cancel，没有 keydown。cancelGuard 靠「这次 cancel 之前见过 Esc 吗」区分两者。 */
+  const escapePressed = useRef(false)
+  function escapesFromPage() {
+    const pressed = escapePressed.current
+    escapePressed.current = false
+    return pressed
+  }
+  /* 非 Esc 的按键说明上一次 cancel 已经收尾。 */
+  function trackEscape(event: KeyboardEvent) {
+    escapePressed.current = event.key === 'Escape'
+  }
+  /* 上传本机配置文件：读文件文本后上传，浏览器只给内容、给不了服务器路径。 */
+  async function uploadImport(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.target
+    const file = input.files?.[0]
+    input.value = ''
+    if (!file) return
+    const stem = file.name.replace(/\.json$/i, '')
+    setImportState({loading: true, items: importState.items})
+    try {
+      await api.request('instances.importConfig', {name: stem, content: await file.text()})
+      const items = await api.request('instances.importable', {})
+      setImportState({loading: false, items})
+      chooseImport(stem)
+    } catch (error) { setImportState({loading: false, items: importState.items}); setError((error as Error).message) }
+  }
+  /* 两处选择互斥：导入来的配置与「初始配置」二选一。 */
+  function chooseImport(chosen: string) {
+    setImportFile(chosen)
+    if (chosen) setSource('')
+    setName(current => current || chosen)
+  }
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const {instances, refresh, notify, ui} = useApp()
@@ -25,15 +72,19 @@ export function CreateInstance({onClose}: {onClose: () => void}) {
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError('')
     try {
-      await api.request('instances.create', {name, source: source || null})
+      await api.request('instances.create', {name, source: source || null, import_file: importFile || null})
       await refresh(); onClose(); notify(ui('instance.created'))
-      navigate(`/i/${name}/task/Alas`)
+      /* 从总览页发起的创建，落到新实例的运行总览。 */
+      navigate(`/i/${name}/overview`)
     } catch (error) { setError((error as Error).message) } finally { setBusy(false) }
   }
-  return <Modal title={ui('instance.createTitle')} onClose={onClose}><form onSubmit={submit} className="form-stack">
+  return <Modal title={ui('instance.createTitle')} onClose={onClose} cancelGuard={escapesFromPage} onKeyDown={trackEscape}><form onSubmit={submit} className="form-stack">
     <p className="muted">{ui('instance.createHint')}</p>
+    <label className="button secondary file-button" htmlFor="instance-import-file">{ui('instance.importPick')}<input id="instance-import-file" type="file" accept="application/json,.json" onChange={uploadImport}/></label>
+    <button type="button" className="button secondary" disabled={importState.loading} onClick={pickImport}>{importState.loading ? ui('instance.importLoading') : ui('instance.importConfig')}</button>
+    {importState.items.length > 0 && <label>{ui('instance.importSelect')}<Select value={importFile} onChange={event => chooseImport(event.target.value)}><option value="">{ui('instance.defaultConfig')}</option>{importState.items.map(item => <option key={item.name} value={item.name}>{item.name}</option>)}</Select><span className="muted">{ui('instance.importHint')}</span></label>}
     <label>{ui('instance.name')}<input autoFocus required pattern={INSTANCE_NAME_PATTERN} value={name} onChange={event => setName(event.target.value)} placeholder={ui('instance.namePlaceholder')} maxLength={64}/></label>
-    <label>{ui('instance.initialConfig')}<Select value={source} onChange={event => setSource(event.target.value)}><option value="">{ui('instance.defaultConfig')}</option>{instances.map(item => <option key={item.name}>{item.name}</option>)}</Select></label>
+    <label>{ui('instance.initialConfig')}<Select value={source} onChange={event => {setSource(event.target.value); setImportFile('')}}><option value="">{ui('instance.defaultConfig')}</option>{instances.map(item => <option key={item.name}>{item.name}</option>)}</Select></label>
     {error && <ErrorBox message={error}/>}
     <button className="button primary" disabled={busy}>{busy ? ui('instance.creating') : ui('instance.create')}<ArrowRight size={16}/></button>
   </form></Modal>
@@ -70,6 +121,11 @@ export function App() {
   const [creating, setCreating] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [railOpen, setRailOpen] = useState(false)
+  const topbarMode = useSyncExternalStore(subscribeTopbarMode, readTopbarMode)
+  const tabSize = useSyncExternalStore(subscribeTopbarMode, readTabSize)
+  /* 只区分「全新打开」与「刷新 / 后退前进」：前者才回上次选中的实例。
+     刷新时地址栏已经是用户要停留的页面，写进去就不再改。 */
+  const freshOpen = useRef((performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type === 'navigate')
   const update = useUpdater()
   const current = instances.find(item => item.name === instance)
   const base = instance ? `/i/${instance}` : ''
@@ -88,6 +144,28 @@ export function App() {
       navigate('/', {replace: true})
     }
   }, [connection, instances, instance, navigate, instancesLoaded])
+  useEffect(() => {
+    if (instance && instances.some(item => item.name === instance)) writeLastInstance(instance)
+  }, [instance, instances])
+  /* 记的是「页面」而不是「实例」：上次停在主页就回主页，停在哪个实例就回哪个实例。 */
+  /* 写记忆要等「回原处」跑完：挂载时 location.pathname 还是 `/`，那时写会盖掉要恢复的页面。 */
+  useEffect(() => {
+    if (freshOpen.current) return
+    writeLastPath(location.pathname)
+  }, [location.pathname])
+  useEffect(() => {
+    if (!freshOpen.current || !instancesLoaded) return
+    freshOpen.current = false
+    const last = readLastPath()
+    if (last === location.pathname) return
+    /* 记忆里的实例可能已经被删了，这种情况回主页（新壳之外没有它的位置）。 */
+    const remembered = last?.match(/^\/i\/([^/]+)/)?.[1]
+    if (remembered && !instances.some(item => item.name === remembered)) {
+      navigate('/', {replace: true})
+      return
+    }
+    if (last) navigate(last, {replace: true})
+  }, [instancesLoaded, instances, navigate])
   useEffect(() => { setMobileOpen(false); setRailOpen(false) }, [location.pathname])
   useEffect(() => {
     if (connection !== 'ready') return
@@ -96,6 +174,8 @@ export function App() {
   if (connection === 'auth') return <Login/>
   // 旧版主题下点进实例后，外壳回到「顶栏跨全宽 + 单列侧栏」；主页视图一律沿用新版外壳。
   const legacyShell = usesLegacyShell(theme, instance)
+  /* 主页也补上内容区顶部那条装饰条（旧版主题下它本来只在实例页出现），条上写「主页」。 */
+  const legacyHomeShell = location.pathname === '/' && usesLegacyLayout(theme) && instances.length > 0
   // 旧版把调度器与任务计划放进实例页左列，右栏整体让位，否则同一块内容会出现两处。
   const showRail = showsRightRail(theme, instance)
   const brand = <><Link to="/" className="brand-title" aria-label={`AzurPilot ${ui('nav.home')}`}><img src={`${import.meta.env.BASE_URL}azurpilot.svg`} alt="" className="brand-logo" onClick={handleBrandLogoClick}/><span>AzurPilot</span></Link>{update.data?.available && <Link className="update-notice sidebar-update-notice" to="/updater" aria-label={ui('nav.newVersion')} title={ui('nav.newVersion')}><span>{ui('nav.newBadge')}</span></Link>}</>
@@ -103,28 +183,47 @@ export function App() {
   const pageTitle = instance
     ? currentTask ? t(`Task.${currentTask}.name`) : location.pathname.endsWith('/statistics') ? ui('nav.statistics') : ui('nav.overview')
     : ''
+  /* 分页模式把所有实例铺在顶栏一行；原模式仍把实例收在下拉里。两种模式共用这一个开关。 */
+  const tabsMode = topbarMode === 'tabs' && instances.length > 0
+  const modeToggle = instances.length === 0 ? null : <button
+    type="button"
+    className="topbar-mode-toggle icon-button"
+    aria-label={tabsMode ? ui('nav.listMode') : ui('nav.tabsMode')}
+    title={tabsMode ? ui('nav.listMode') : ui('nav.tabsMode')}
+    aria-pressed={tabsMode}
+    onClick={() => setTopbarMode(tabsMode ? 'dropdown' : 'tabs')}
+  >{tabsMode ? <PanelTop size={17}/> : <GalleryHorizontal size={17}/>}</button>
+  /* 缩放只作用在标签页自身（顶栏高度由各主题定死）：中 → 大 → 小 循环。 */
+  const sizeToggle = instances.length === 0 ? null : <button
+    type="button"
+    className="topbar-tab-size icon-button"
+    aria-label={ui('nav.tabSize')}
+    title={`${ui('nav.tabSize')} · ${tabSize}`}
+    onClick={() => cycleTabSize(tabSize)}
+  >{tabSize === 'lg' ? <Minimize2 size={17}/> : <Maximize2 size={17}/>}</button>
+  const tabStrip = <InstanceTabs onCreate={() => setCreating(true)}/>
   const topbar = <header className="topbar">
-    {legacyShell && <div className="sidebar-brand legacy-topbar-brand"><div className="sidebar-brand-left">{brand}</div></div>}
+    {(legacyShell || legacyHomeShell) && <div className="sidebar-brand legacy-topbar-brand"><div className="sidebar-brand-left">{brand}</div></div>}
     <GlassMaterial/><button className="mobile-toggle icon-button" aria-label={ui('nav.open')} onClick={() => setMobileOpen(true)}><Menu size={20}/></button>{showRail && <button className="mobile-rail-toggle icon-button" aria-label={railOpen ? ui('nav.closeRail') : ui('nav.openRail')} aria-expanded={railOpen} aria-controls="right-rail-menu" title={railOpen ? ui('nav.closeRail') : ui('nav.openRail')} onClick={() => setRailOpen(open => !open)}><CalendarClock size={18}/></button>}
-    {legacyShell
+    {legacyShell || legacyHomeShell
       ? <span className="legacy-topbar-title">{pageTitle}</span>
-      : <div className="breadcrumb"><Link to="/">{ui('nav.home')}</Link>{instance ? <><span>/</span><InstanceSwitcher onCreate={() => setCreating(true)}/>{currentTask ? <><span>/</span><Link to={`${base}/task/Alas`}>{ui('nav.taskConfig')}</Link><span>/</span><Link className="breadcrumb-current" to={`${base}/task/${currentTask}`}><strong>{t(`Task.${currentTask}.name`)}</strong></Link></> : location.pathname.endsWith('/statistics') && <><span>/</span><strong>{ui('nav.statistics')}</strong></>}</> : activeSection !== ui('nav.home') && <><span>/</span><strong>{activeSection}</strong></>}</div>}
+      : <div className={`breadcrumb${tabsMode ? ' with-tabs' : ''}`}>{modeToggle}{sizeToggle}<Link to="/">{ui('nav.home')}</Link>{instance ? (tabsMode ? null : <><span>/</span><InstanceSwitcher onCreate={() => setCreating(true)}/></>) : activeSection !== ui('nav.home') && <><span>/</span><strong>{activeSection}</strong></>}{tabsMode && tabStrip}{instance && (currentTask ? <><span>/</span><Link to={`${base}/task/Alas`}>{ui('nav.taskConfig')}</Link><span>/</span><Link className="breadcrumb-current" to={`${base}/task/${currentTask}`}><strong>{t(`Task.${currentTask}.name`)}</strong></Link></> : location.pathname.endsWith('/statistics') && !tabsMode && <><span>/</span><strong>{ui('nav.statistics')}</strong></>)}</div>}
   </header>
   // 旧版顶栏只留招牌与居中的页面名，「主页 / 实例 / 任务」这一行落到内容区顶部。
-  const pageNav = <div className="legacy-page-nav"><div className="breadcrumb"><Link to="/">{ui('nav.home')}</Link><span>/</span><InstanceSwitcher onCreate={() => setCreating(true)}/>{currentTask && <><span>/</span><TaskSwitcher/></>}</div></div>
-  return <div className={`app-shell ${showRail ? 'with-rail' : ''} ${legacyShell ? 'legacy-shell' : ''} ${mobileOpen ? 'mobile-open' : ''} ${railOpen ? 'rail-open' : ''}`}>
+  const pageNav = <div className="legacy-page-nav"><div className={`breadcrumb${tabsMode ? ' with-tabs' : ''}`}>{modeToggle}{sizeToggle}<Link to="/">{ui('nav.home')}</Link>{tabsMode ? tabStrip : <><span>/</span><InstanceSwitcher onCreate={() => setCreating(true)}/></>}{currentTask && <><span>/</span><TaskSwitcher/></>}</div></div>
+  return <div className={`app-shell ${showRail ? 'with-rail' : ''} ${legacyShell || legacyHomeShell ? 'legacy-shell' : ''} ${mobileOpen ? 'mobile-open' : ''} ${railOpen ? 'rail-open' : ''}`}>
     <a className="skip-link" href="#main-content" onClick={event => {event.preventDefault(); document.getElementById('main-content')?.focus()}}>{ui('nav.skipContent')}</a>
-    {legacyShell && topbar}
+    {(legacyShell || legacyHomeShell) && topbar}
     <aside className="sidebar">
       {/* 旧版把招牌放进顶栏，桌面端这一行隐藏；窄屏侧栏是抽屉，招牌回抽屉里。 */}
-      <div className={`sidebar-brand ${legacyShell ? 'legacy-sidebar-actions' : ''}`.trim()}><div className="sidebar-brand-left">{brand}</div><button className="mobile-close icon-button" aria-label={ui('nav.close')} onClick={() => setMobileOpen(false)}><X size={18}/></button></div>
+      <div className={`sidebar-brand ${legacyShell || legacyHomeShell ? 'legacy-sidebar-actions' : ''}`.trim()}><div className="sidebar-brand-left">{brand}</div><button className="mobile-close icon-button" aria-label={ui('nav.close')} onClick={() => setMobileOpen(false)}><X size={18}/></button></div>
       <nav className="primary-nav" aria-label={ui('nav.primary')}>
         {instance ? <><NavLink to={`${base}/overview`}><LayoutDashboard size={17}/>{ui('nav.overview')}</NavLink><NavLink to={`${base}/statistics`}><ChartNoAxesCombined size={17}/>{ui('nav.statistics')}</NavLink></> : <><NavLink to="/" end><House size={17}/>{ui('nav.home')}</NavLink><NavLink to="/updater"><Download size={17}/>{ui('nav.updater')}{update.data?.available && <span className="tiny-dot teal"/>}</NavLink><NavLink to="/interface"><Palette size={17}/>{ui('nav.interface')}</NavLink><NavLink to="/remote"><Globe size={17}/>{ui('nav.remote')}</NavLink><NavLink to="/settings"><Settings2 size={17}/>{ui('nav.settings')}</NavLink>{devMode && <NavLink to="/dev"><Code2 size={17}/>{ui('nav.developer')}</NavLink>}</>}
       </nav>
       {instance && <TaskNav/>}
     </aside>
-    <div className="main-shell">{!legacyShell && topbar}
-      {legacyShell && pageNav}
+    <div className="main-shell">{!legacyShell && !legacyHomeShell && topbar}
+      {(legacyShell || legacyHomeShell) && pageNav}
       {connection !== 'ready' && <div className="connection-banner" role="status"><WifiOff size={16}/>{ui('connection.connecting')}</div>}
       <main id="main-content" tabIndex={-1}>{!schema || ((instance || location.pathname === '/') && !instancesLoaded) ? <Loading/> : !instance || current ? <Outlet context={update} key={instance ?? 'home'}/> : <Loading/>}</main>
     </div>

@@ -55,6 +55,8 @@ export interface Results {
   'schema.get': Schema
   'instances.list': Instance[]
   'instances.create': Config
+  'instances.importable': Array<{name: string; modified: number}>
+  'instances.importConfig': {name: string}
   'instances.delete': {deleted: string}
   'config.get': Config
   'config.patch': Config

@@ -63,12 +63,60 @@
             ],
             "default": null,
             "title": "Source"
+          },
+          "import_file": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Import File"
           }
         },
         "required": [
           "name"
         ],
         "title": "CreateParams",
+        "type": "object"
+      }
+    },
+    "instances.importable": {
+      "mutates": false,
+      "params": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "Params",
+        "type": "object"
+      }
+    },
+    "instances.importConfig": {
+      "mutates": true,
+      "params": {
+        "additionalProperties": false,
+        "description": "上传一份配置文件到导入目录，供创建实例时选用。",
+        "properties": {
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "content": {
+            "maxLength": 2000000,
+            "minLength": 2,
+            "title": "Content",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "content"
+        ],
+        "title": "ImportParams",
         "type": "object"
       }
     },

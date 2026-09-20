@@ -3,7 +3,9 @@ export interface Parameters {
   "system.ping": Record<string, never>
   "schema.get": { language?: "zh-CN" | "zh-MIAO" | "en-US" | "ja-JP" | "zh-TW" }
   "instances.list": Record<string, never>
-  "instances.create": { name: string; source?: string | null }
+  "instances.create": { name: string; source?: string | null; import_file?: string | null }
+  "instances.importable": Record<string, never>
+  "instances.importConfig": { name: string; content: string }
   "instances.delete": { instance: string; revision: string }
   "config.get": { instance: string }
   "config.patch": { instance: string; revision?: string | null; changes: Array<{ path: string; value: unknown }> }

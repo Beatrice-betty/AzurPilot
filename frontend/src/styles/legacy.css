@@ -67,7 +67,9 @@ body {background-attachment: scroll}
 .topbar {position: sticky; top: 0; z-index: 80; height: var(--topbar-height); margin: 0; padding: 0 24px}
 .right-rail {top: var(--topbar-height); height: calc(var(--viewport-height) - var(--topbar-height)); z-index: 70}
 .breadcrumb, .breadcrumb .instance-caption strong {font-size: 13px}
-main {padding: 40px 28px 24px}
+/* 上内边距归零：旧版内容区顶部那条「主页 / 实例」行已经和下方留出了距离，再加 24px 就成了
+   「主页文字底到容器顶边框」上那段多余空隙（实测从 7px 变成 36.8px），按用户要求消掉。 */
+main {padding: 0 28px 24px}
 main:focus {outline: none}
 .page-title h1 {font-size: clamp(24px, 2.4vw, 32px); letter-spacing: -.6px; overflow-wrap: anywhere}
 .home-intro {padding: 8px 0 24px}
@@ -110,11 +112,19 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 .app-shell.legacy-shell {
   /* 旧版文字菜单宽 12rem(16px 基准)=192px；本仓库根字号是 14px，所以直接写像素。 */
   --sidebar-width: 192px;
-  /* 内容区顶部那行「主页 / 实例 / 任务」，算进页内两列的高度预算里。 */
-  --legacy-page-nav-height: 42px;
+  /* 内容区顶部那行「主页 / 实例 / 任务」，算进页内两列的高度预算里；
+     分页模式下这行会被放缩，所以取值与它的实际高度同源，不能写死。 */
+  --legacy-page-nav-height: var(--instance-page-nav-height, 42px);
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-  grid-template-rows: auto 1fr;
+  /* 行高的隐含最小值是 auto，内容算高了会把整壳顶出视口、页面就能滚；钳成 0 让内容自己滚。 */
+  grid-template-rows: auto minmax(0, 1fr);
   grid-template-areas: 'topbar topbar' 'sidebar main';
+  /* 光是 minmax(0, 1fr) 还不够：外壳不裁剪时网格会按内容测量，行照样被撑高、整壳溢出视口。
+     裁掉溢出后这一行才真正只占「视口 − 顶栏」，多出来的部分由各列自己滚。 */
+  overflow: hidden;
+  /* 基类的 .app-shell 只给了 min-height，网格就会跟着内容长到视口之外。
+     钉成正好一屏，内容多出来的部分交给内部滚动。 */
+  height: var(--viewport-height);
 }
 .app-shell.legacy-shell.with-rail {
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--right-rail-width);
@@ -122,7 +132,9 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 }
 .app-shell.legacy-shell > .topbar {grid-area: topbar; width: auto}
 .app-shell.legacy-shell > .sidebar {grid-area: sidebar}
-.app-shell.legacy-shell > .main-shell {grid-area: main}
+.app-shell.legacy-shell > .main-shell {grid-area: main; min-height: 0; overflow: hidden}
+/* 内容列的高度自己定（页内两列各自滚），不靠自动最小尺寸撑高，否则会把整壳顶出视口。 */
+.app-shell.legacy-shell > .main-shell > main {min-height: 0; display: flex; flex-direction: column}
 .app-shell.legacy-shell > .right-rail {grid-area: rail}
 /* 招牌随顶栏走：顶栏里的那份紧贴左侧，不参与侧栏那套 72px 间距。 */
 .legacy-topbar-brand {height: auto; margin-bottom: 0; padding: 0}
@@ -163,10 +175,15 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
      所以左列由各页面自己渲染（LegacyRail），不是外壳的一列。 */
   .instance-page-grid {
     display: grid;
+    /* 用 flex 撑满 main 的剩余高度，不再按「视口 − 顶栏 − 页内行 − 常量」推算：
+       那个常量会随着顶栏与页内行的实际高度漂移，容器底边就跟着上下跳。
+       上面 main 与 .legacy-shell 已逐级撑满，所以不靠百分比高度也不会把整壳顶高。 */
+    /* 基准写 0 而不是 auto：auto 会以内容高度为基准把容器撑到内容那么高。 */
+    flex: 1 1 0;
+    min-height: 0;
     grid-template-columns: minmax(16rem, 20rem) minmax(24rem, 1fr);
     gap: 14px;
     align-items: stretch;
-    height: calc(var(--viewport-height) - var(--topbar-height) - var(--legacy-page-nav-height, 0px) - 64px);
   }
   /* 两列各自滚动；左列的队列列表不再自己开一层滚动区。 */
   .instance-page-rail {display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto}
@@ -188,10 +205,11 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
      和总览一样定高 + 内部滚动，顶栏与侧栏才不会跟着滚走。 */
   .task-config-legacy {
     display: grid;
+    flex: 1 1 auto;
+    height: calc(var(--viewport-height) - var(--topbar-height) - 2 * var(--row-pad, 4px) - var(--legacy-page-nav-height, 42px) - 64px);
     grid-template-columns: minmax(0, 1fr) 208px;
     gap: 22px;
     align-items: stretch;
-    height: calc(var(--viewport-height) - var(--topbar-height) - var(--legacy-page-nav-height, 0px) - 64px);
   }
   .task-config-legacy.no-nav {grid-template-columns: minmax(0, 1fr)}
   .task-config-settings {min-width: 0; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px}

@@ -28,22 +28,25 @@ describe('前端模拟服务', () => {
     expect(dispatch('instances.list').map(item => item.name)).toEqual(['first'])
     expect(createMockState({empty: true}).dispatch('instances.list')).toEqual([])
   })
-  it('实例名允许汉字，仍拒绝非法首字符与路径分隔符', () => {
+  it('实例名允许汉字与数字，仍拒绝路径字符与保留名', () => {
     const {dispatch} = createMockState({empty: true})
-    for (const name of ['测试', '测试实例', 'alas测试', '测试-2']) dispatch('instances.create', {name})
-    expect(dispatch('instances.list').map(item => item.name)).toEqual(['测试', '测试实例', 'alas测试', '测试-2'])
-    for (const name of ['1测试', '-测试', '测试/实例', '测试.1', '测 试', '测试#1'])
+    const allowed = ['测试', '测试实例', 'alas测试', '测试-2', '2ap', 'zz.v2', 'ap 2', '测 试']
+    for (const name of allowed) dispatch('instances.create', {name})
+    expect(dispatch('instances.list').map(item => item.name)).toEqual(allowed)
+    for (const name of ['-测试', '测 试/实例', '测试#1', 'template', 'template.fpy', '.隐藏'])
       expect(() => dispatch('instances.create', {name})).toThrow(/无效/)
   })
   it('实例名规则与前端共享常量保持一致', () => {
-    // instanceName.ts 是纯 JS 语法，剥掉 export 后可直接求值，避免两处规则各自漂移。
+    // instanceName.ts 是纯 JS 语法，剥掉每处 export 后可直接求值，两份规则共用同一来源。
     const source = readFileSync(new URL('../src/app/instanceName.ts', import.meta.url), 'utf8')
-    const {INSTANCE_NAME_PATTERN} = new Function(`${source.replace('export const', 'const')}\nreturn {INSTANCE_NAME_PATTERN}`)()
+    const {INSTANCE_NAME_PATTERN} = new Function(`${source.replaceAll('export const', 'const')}\nreturn {INSTANCE_NAME_PATTERN}`)()
     const app = new RegExp(`^(?:${INSTANCE_NAME_PATTERN})$`, 'v')
     const line = readFileSync(new URL('./state.mjs', import.meta.url), 'utf8').split('\n').find(text => text.includes('.test(params.name) ||'))
     const mock = new RegExp(line.match(/!\/(\^[^/]+)\//)[1])
     const names = ['测试', '测试实例', 'alas测试', '測試', '测试-2', 'a', 'A1_b-c', 'x'.repeat(64),
-      '1测试', '-测试', '测试/实例', '测试\\实例', '测试.1', '测 试', '测试#1', '', 'x'.repeat(65), 'テスト', '..']
+      '2ap', '1测试', '12zz', 'zz.v2', 'ap 2', '测试.1', 'テスト', 'ひらがな', 'ｱｽﾞｰﾙ',
+      '-测试', '测试/实例', '测试\\实例', '测 试', '.隐藏', '测试#1', '', 'x'.repeat(65), '..',
+      '../template', 'a/b', 'template', 'template.fpy', 'CON', 'c:foo', 'a*b']
     for (const name of names) expect(mock.test(name), name).toBe(app.test(name))
   })
   it('总览投影保留行动力总值', () => {

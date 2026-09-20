@@ -41,6 +41,14 @@ class InstanceParams(Params):
 class CreateParams(Params):
     name: StrictStr = Field(min_length=1, max_length=64)
     source: StrictStr | None = None
+    import_file: StrictStr | None = None
+
+
+class ImportParams(Params):
+    """上传一份配置文件到导入目录，供创建实例时选用。"""
+
+    name: StrictStr = Field(min_length=1, max_length=64)
+    content: StrictStr = Field(min_length=2, max_length=2_000_000)
 
 
 class TaskParams(InstanceParams):
