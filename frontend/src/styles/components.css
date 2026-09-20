@@ -142,6 +142,11 @@
 .field-control > input, .field-control > select, .field-control > textarea {width: 100%; font-size: 13px}
 .field-control textarea {resize: none; overflow-y: hidden; min-height: 0; line-height: 1.9}
 .field-actions {display: flex; justify-content: flex-end; margin-top: 7px}
+/* 控件行内带动作按钮时：整行改成 flex，按钮靠 order 落到输入框左边。 */
+.field-control:has(> .field-actions) {display: flex; align-items: center; gap: 7px}
+.field-control > .field-actions {order: -1; margin-top: 0; flex-shrink: 0}
+/* 纯图标按钮：宽度收成与自身高度相等，不靠固定尺寸。 */
+.field-control > .field-actions .icon-only {aspect-ratio: 1; padding: 0; gap: 0}
 .settings-notice {font-size: 11px; color: var(--muted); line-height: 1.9; margin: 24px 0 16px}
 .panel-note {font-size: 10px; color: var(--muted); padding: 13px 20px; border-top: 1px solid var(--border)}
 .chart-panel .empty {height: 350px}

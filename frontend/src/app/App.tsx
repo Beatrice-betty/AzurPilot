@@ -18,6 +18,8 @@ import { usesLegacyLayout, usesLegacyShell, showsRightRail } from './theme'
 import { cycleTabSize, readLastPath, readTabSize, readTopbarMode, setTopbarMode, subscribeTopbarMode, writeLastInstance, writeLastPath } from './topbarPrefs'
 import { INSTANCE_NAME_PATTERN } from './instanceName'
 
+/* 旧版外壳下也要显示居中页名的顶层路由。 */
+const PRIMARY_NAV_PATHS = ['/updater', '/interface', '/remote', '/settings', '/dev']
 
 export function CreateInstance({onClose}: {onClose: () => void}) {
   const [name, setName] = useState('')
@@ -76,8 +78,8 @@ export function CreateInstance({onClose}: {onClose: () => void}) {
       /* 后端会归一化首尾空白与尾点，导航用返回的规范名。 */
       const created = await api.request('instances.create', {name, source: source || null, import_file: importFile || null})
       await refresh(); onClose(); notify(ui('instance.created'))
-      /* 新建的实例还没有配置，落到它的任务配置页。 */
-      navigate(`/i/${created.instance}/task/Alas`)
+      /* 从总览页发起的创建留在总览页：新实例的运行总览。 */
+      navigate(`/i/${created.instance}/overview`)
     } catch (error) { setError((error as Error).message) } finally { setBusy(false) }
   }
   return <Modal title={ui('instance.createTitle')} onClose={onClose} cancelGuard={escapesFromPage} onKeyDown={trackEscape}><form onSubmit={submit} className="form-stack">
@@ -171,6 +173,8 @@ export function App() {
     }
     if (last) navigate(last, {replace: true})
   }, [instancesLoaded, instances, navigate])
+  /* 点导航里当前页的链接不产生 pathname 变化，抽屉得自己关。 */
+  const closeDrawer = () => setMobileOpen(false)
   useEffect(() => { setMobileOpen(false); setRailOpen(false) }, [location.pathname])
   useEffect(() => {
     if (connection !== 'ready') return
@@ -179,15 +183,15 @@ export function App() {
   if (connection === 'auth') return <Login/>
   // 旧版主题下点进实例后，外壳回到「顶栏跨全宽 + 单列侧栏」；主页视图一律沿用新版外壳。
   const legacyShell = usesLegacyShell(theme, instance)
-  /* 主页也补上内容区顶部那条装饰条（旧版主题下它本来只在实例页出现），条上写「主页」。 */
-  const legacyHomeShell = location.pathname === '/' && usesLegacyLayout(theme) && instances.length > 0
+  /* 主页与五个二级菜单也走旧版外壳：它们没有实例内容，顶栏只写居中的页名。 */
+  const legacyHomeShell = (location.pathname === '/' || PRIMARY_NAV_PATHS.includes(location.pathname)) && usesLegacyLayout(theme) && instancesLoaded
   // 旧版把调度器与任务计划放进实例页左列，右栏整体让位，否则同一块内容会出现两处。
   const showRail = showsRightRail(theme, instance)
   const brand = <><Link to="/" className="brand-title" aria-label={`AzurPilot ${ui('nav.home')}`}><img src={`${import.meta.env.BASE_URL}azurpilot.svg`} alt="" className="brand-logo" onClick={handleBrandLogoClick}/><span>AzurPilot</span></Link>{update.data?.available && <Link className="update-notice sidebar-update-notice" to="/updater" aria-label={ui('nav.newVersion')} title={ui('nav.newVersion')}><span>{ui('nav.newBadge')}</span></Link>}</>
-  // 旧版顶栏的第三列是居中的页面名，面包屑里的页名会被它取代。
+  // 旧版顶栏的第三列是居中的页面名：实例页写任务名，无实例时写导航项名。
   const pageTitle = instance
     ? currentTask ? t(`Task.${currentTask}.name`) : location.pathname.endsWith('/statistics') ? ui('nav.statistics') : ui('nav.overview')
-    : ''
+    : activeSection
   /* 分页模式把所有实例铺在顶栏一行；原模式仍把实例收在下拉里。两种模式共用这一个开关。 */
   const tabsMode = topbarMode === 'tabs' && instances.length > 0
   /* 窄屏下 home.css 会把标签条藏起来，此时展示切换器。 */
@@ -225,12 +229,12 @@ export function App() {
       {/* 旧版把招牌放进顶栏，桌面端这一行隐藏；窄屏侧栏是抽屉，招牌回抽屉里。 */}
       <div className={`sidebar-brand ${legacyShell || legacyHomeShell ? 'legacy-sidebar-actions' : ''}`.trim()}><div className="sidebar-brand-left">{brand}</div><button className="mobile-close icon-button" aria-label={ui('nav.close')} onClick={() => setMobileOpen(false)}><X size={18}/></button></div>
       <nav className="primary-nav" aria-label={ui('nav.primary')}>
-        {instance ? <><NavLink to={`${base}/overview`}><LayoutDashboard size={17}/>{ui('nav.overview')}</NavLink><NavLink to={`${base}/statistics`}><ChartNoAxesCombined size={17}/>{ui('nav.statistics')}</NavLink></> : <><NavLink to="/" end><House size={17}/>{ui('nav.home')}</NavLink><NavLink to="/updater"><Download size={17}/>{ui('nav.updater')}{update.data?.available && <span className="tiny-dot teal"/>}</NavLink><NavLink to="/interface"><Palette size={17}/>{ui('nav.interface')}</NavLink><NavLink to="/remote"><Globe size={17}/>{ui('nav.remote')}</NavLink><NavLink to="/settings"><Settings2 size={17}/>{ui('nav.settings')}</NavLink><a className="nav-open-source" href="https://github.com/wess09/AzurPilot" target="_blank" rel="noreferrer"><ExternalLink size={17}/>{ui('nav.openSource')}</a>{devMode && <NavLink to="/dev"><Code2 size={17}/>{ui('nav.developer')}</NavLink>}</>}
+        {instance ? <><NavLink to={`${base}/overview`} onClick={closeDrawer}><LayoutDashboard size={17}/>{ui('nav.overview')}</NavLink><NavLink to={`${base}/statistics`} onClick={closeDrawer}><ChartNoAxesCombined size={17}/>{ui('nav.statistics')}</NavLink></> : <><NavLink to="/" end onClick={closeDrawer}><House size={17}/>{ui('nav.home')}</NavLink><NavLink to="/updater" onClick={closeDrawer}><Download size={17}/>{ui('nav.updater')}{update.data?.available && <span className="tiny-dot teal"/>}</NavLink><NavLink to="/interface" onClick={closeDrawer}><Palette size={17}/>{ui('nav.interface')}</NavLink><NavLink to="/remote" onClick={closeDrawer}><Globe size={17}/>{ui('nav.remote')}</NavLink><NavLink to="/settings" onClick={closeDrawer}><Settings2 size={17}/>{ui('nav.settings')}</NavLink><a className="nav-open-source" href="https://github.com/wess09/AzurPilot" target="_blank" rel="noreferrer"><ExternalLink size={17}/>{ui('nav.openSource')}</a>{devMode && <NavLink to="/dev" onClick={closeDrawer}><Code2 size={17}/>{ui('nav.developer')}</NavLink>}</>}
       </nav>
       {instance && <TaskNav/>}
     </aside>
     <div className="main-shell">{!legacyShell && !legacyHomeShell && topbar}
-      {(legacyShell || legacyHomeShell) && pageNav}
+      {(legacyShell || legacyHomeShell) && !PRIMARY_NAV_PATHS.includes(location.pathname) && pageNav}
       {connection !== 'ready' && <div className="connection-banner" role="status"><WifiOff size={16}/>{ui('connection.connecting')}</div>}
       <main id="main-content" tabIndex={-1}>{!schema || ((instance || location.pathname === '/') && !instancesLoaded) ? <Loading/> : !instance || current ? <Outlet context={update} key={instance ?? 'home'}/> : <Loading/>}</main>
     </div>

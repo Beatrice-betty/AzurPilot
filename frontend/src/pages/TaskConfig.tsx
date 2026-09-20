@@ -167,12 +167,12 @@ export function TaskConfig() {
               )}
               {runNow && (
                 <div className="field-actions">
-                  <button type="button" className="button subtle" disabled={connection !== 'ready'}
+                  <button type="button" className="button subtle icon-only" aria-label={ui('task.runNow')} title={ui('task.runNow')} disabled={connection !== 'ready'}
                     onClick={() => {
                       // 按钮等同清空该字段：空时间按参数默认值提交，调度器下一轮即把任务视为待运行。
                       const {payload, text, error} = prepareValue('', field)
                       queue.change(path, text ?? '', payload, error)
-                    }}><Play size={15}/>{ui('task.runNow')}</button>
+                    }}><Play size={15}/></button>
                 </div>
               )}
               {shopMode && shopModeError && !edit ? (
