@@ -23,6 +23,7 @@ from dataclasses import asdict
 import numpy as np
 import cv2
 
+from deploy.atomic import atomic_replace
 from module.base.utils import area_pad, save_image
 from module.logger import logger
 from module.statistics.drop_cleanup import cleanup_drop_screenshots_if_due
@@ -290,7 +291,7 @@ class AzurStats:
                 temporary = stream.name
                 np.savetxt(stream, data, delimiter=',', header=','.join(AzurStats.meowofficer_farming_labels),
                            comments='', fmt='%f')
-            os.replace(temporary, path)
+            atomic_replace(temporary, path)
         finally:
             if temporary and os.path.exists(temporary):
                 os.unlink(temporary)

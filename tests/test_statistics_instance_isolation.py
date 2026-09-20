@@ -17,6 +17,8 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 
+from deploy import atomic
+
 
 GENRE = 'opsi_meowfficer_farming'
 OLD_SCHEMA = '''CREATE TABLE opsi_items (
@@ -259,6 +261,28 @@ class TestStatisticsInstanceIsolation(unittest.TestCase):
             self.stats.get_meowofficer_farming(instance='account_a')
         self.assertEqual(observed, [100])
         self.assertEqual(self.rows('account_a')[0][2:4], [2.0, 200.0])
+
+    def test_windows_reader_releases_cache_before_replacement_retry(self):
+        self.record('account_a', 100)
+        self.stats._insert_local_opsi_items([item_row('account_a', 300, imgid='new-image')])
+        replace = atomic.os.replace
+        attempts = 0
+
+        def replace_after_reader_closes(source, destination):
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise PermissionError('模拟另一进程仍在读取缓存')
+            return replace(source, destination)
+
+        with patch.object(atomic, 'IS_WINDOWS', True), \
+                patch.object(atomic.os, 'replace', side_effect=replace_after_reader_closes), \
+                patch.object(atomic.time, 'sleep') as sleep:
+            self.stats.get_meowofficer_farming(instance='account_a')
+        self.assertEqual(attempts, 2)
+        sleep.assert_called_once()
+        self.assertEqual(self.rows('account_a')[0][2:4], [2.0, 200.0])
+        self.assertEqual(list(Path(self.directory).glob('.meow-*.tmp')), [])
 
     def stop_process(self, process):
         if process.is_alive():
