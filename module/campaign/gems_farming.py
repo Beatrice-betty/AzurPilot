@@ -699,7 +699,7 @@ class GemsFarming(FleetSelectionMixin, CampaignRun, FleetEquipment, GemsEquipmen
             initial_check = False
             is_limit = self.config.StopCondition_RunCount
             try:
-                super().run(name=name, folder=folder, total=total)
+                super().run(name=name, folder=folder, mode=mode, total=total)
             except CampaignEnd as e:
                 if e.args[0] == 'Emotion control':
                     self._trigger_emotion = True

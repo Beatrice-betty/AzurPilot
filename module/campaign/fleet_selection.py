@@ -84,7 +84,7 @@ class FleetSelectionMixin:
         """
         if self.appear(FLEET_PREPARATION, offset=(20, 50)):
             return
-        self.campaign.ensure_campaign_ui(self.stage)
+        self.campaign.ensure_campaign_ui(self.stage, mode=self.campaign.config.Campaign_Mode)
         self.ui_click(
             click_button=self.campaign.ENTRANCE,
             appear_button=BACK_ARROW,
@@ -94,10 +94,13 @@ class FleetSelectionMixin:
         while 1:
             self.device.screenshot()
 
-            if self.appear_then_click(MAP_PREPARATION, interval=1):
-                continue
-            if self.appear_then_click(MAP_PREPARATION_HARD, interval=1):
-                continue
+            # 首次换船可能早于 enter_map，需用地图配置确认准备页难度，
+            # 避免从共用的 A/C、B/D 入口进入普通舰队后按困难布局换船。
+            if self.campaign.handle_map_mode_switch(self.campaign.config.Campaign_Mode):
+                if self.appear_then_click(MAP_PREPARATION, interval=1):
+                    continue
+                if self.appear_then_click(MAP_PREPARATION_HARD, interval=1):
+                    continue
 
             if self.handle_retirement():
                 continue

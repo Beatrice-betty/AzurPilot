@@ -273,12 +273,13 @@ class FleetInteractionTest(unittest.TestCase):
             instance.stage = 'campaign_2_1'
             instance.campaign.ENTRANCE = object()
             instance.campaign.ensure_campaign_ui = Mock()
+            instance.campaign.handle_map_mode_switch = Mock(return_value=True)
             instance.ui_click = Mock()
             instance.appear = Mock(side_effect=[False, True])
             instance.appear_then_click = Mock(side_effect=[False, False, False, False, True, False, False, False])
             instance.handle_retirement = Mock(side_effect=[True, False, False])
             instance._fleet_detail_enter_hard(1)
-            instance.campaign.ensure_campaign_ui.assert_called_once_with('campaign_2_1')
+            instance.campaign.ensure_campaign_ui.assert_called_once_with('campaign_2_1', mode='normal')
             self.assertEqual(3, instance.device.screenshot.call_count)
             self.assertEqual(2, instance.appear_then_click.call_args_list.count(call(instance.campaign.ENTRANCE, interval=2)))
 
