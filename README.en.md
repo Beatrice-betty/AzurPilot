@@ -17,9 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="https://deepwiki.com/wess09/AzurPilot">
-    <img src="https://deepwiki.com/badge.svg" alt="DeepWiki" height="22">
-  </a>
+  <a href="https://deepwiki.com/wess09/AzurPilot"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
 <p align="center">
