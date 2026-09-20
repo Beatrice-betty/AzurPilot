@@ -30,12 +30,14 @@
   --theme-glass-shadow: none; --theme-material-filter: none; --theme-chrome-filter: none;
   --theme-popover-filter: none; --theme-overlay-filter: none; --theme-overlay: color-mix(in srgb, var(--bg) 30%, transparent);
 
-  /* 契约层 —— 形状与阴影：旧版圆角明显小于新版 */
-  --theme-radius-control: 4px; --theme-radius-button: 100px; --theme-radius-panel: 6px;
-  --theme-radius-card: 6px; --theme-radius-popover: 6px; --theme-radius-pill: 999px;
-  --theme-shadow-panel: 0 1px 2px rgb(0 0 0 / .1); --theme-shadow-popover: 0 2px 8px rgb(0 0 0 / .18);
-  --theme-shadow-modal: 0 2px 12px rgb(0 0 0 / .22); --theme-shadow-floating: 0 1px 2px rgb(0 0 0 / .1);
-  --theme-shadow-hover: 0 2px 6px rgb(0 0 0 / .14);
+  /* 契约层 —— 形状与阴影：遵循 Material Design 3 (MD3) 规范 */
+  --theme-radius-control: 8px; --theme-radius-button: 20px; --theme-radius-panel: 16px;
+  --theme-radius-card: 12px; --theme-radius-popover: 12px; --theme-radius-modal: 28px; --theme-radius-pill: 999px;
+  --theme-shadow-panel: 0 1px 2px rgb(0 0 0 / .05);
+  --theme-shadow-popover: 0 4px 12px rgb(0 0 0 / .08);
+  --theme-shadow-modal: 0 8px 24px rgb(0 0 0 / .12);
+  --theme-shadow-floating: 0 2px 6px rgb(0 0 0 / .08);
+  --theme-shadow-hover: 0 2px 8px rgb(0 0 0 / .08);
 
   /* 契约层 —— 导航：选中/悬停统一用浅靛紫底 + 深靛紫字 */
   --theme-nav-text: var(--text); --theme-nav-icon: #2c2c2c;
@@ -101,9 +103,11 @@
   --theme-toggle-off: #938f99; --theme-toggle-on: #7a77bb; --theme-toggle-knob: #ffffff;
   --theme-segment-indicator: #3e3b6a;
   --theme-selection: #3e3b6a; --theme-scrollbar-thumb: #5a5e66;
-  --theme-shadow-panel: 0 1px 2px rgb(0 0 0 / .3); --theme-shadow-popover: 0 4px 14px rgb(0 0 0 / .5);
-  --theme-shadow-modal: 0 6px 24px rgb(0 0 0 / .55); --theme-shadow-floating: 0 1px 2px rgb(0 0 0 / .3);
-  --theme-shadow-hover: 0 2px 8px rgb(0 0 0 / .4);
+  --theme-shadow-panel: 0 1px 2px rgb(0 0 0 / .2);
+  --theme-shadow-popover: 0 4px 12px rgb(0 0 0 / .25);
+  --theme-shadow-modal: 0 8px 24px rgb(0 0 0 / .35);
+  --theme-shadow-floating: 0 2px 6px rgb(0 0 0 / .2);
+  --theme-shadow-hover: 0 2px 8px rgb(0 0 0 / .25);
   --theme-log-null: #c9a7f0; --theme-log-search: #72551a;
   --theme-instance-icon-bg: #7a77bb;
 }

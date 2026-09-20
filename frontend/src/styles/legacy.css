@@ -12,33 +12,98 @@
 @import './forms.css';
 @import './legacy-fonts.css';
 
-/* 旧版输入框是「只有下划线」的样式：聚焦靠底边框变色，不加光圈也不加投影。 */
+/* MD3 输入框：底部强调指示线与浅色容器背景，聚焦时底线加粗变主色 */
 :root {--form-shadow: none}
 input:where(:not([type='checkbox']):not([type='radio']):not([type='range'])),
 textarea, .select-trigger, .input-icon {
   border: 0;
   border-bottom: 1px solid var(--theme-input-border);
+  border-radius: 4px 4px 0 0;
   background: var(--theme-input-bg);
+  transition: border-bottom-color .2s cubic-bezier(.2, 0, 0, 1), background-color .2s cubic-bezier(.2, 0, 0, 1);
 }
 input:focus, textarea:focus,
 .select-trigger:focus-visible, .select-trigger[aria-expanded='true'], .input-icon:focus-within {
   background: var(--accent-soft);
   border-bottom: 2px solid var(--theme-focus);
   box-shadow: none;
+  outline: none;
+}
+input[aria-invalid='true'], textarea[aria-invalid='true'], .select-trigger[aria-invalid='true'] {
+  border-bottom: 2px solid var(--red);
+  background: color-mix(in srgb, var(--red) 6%, var(--theme-input-bg));
 }
 
-/* MD3 开关：32px 胶囊轨道 + 圆形滑块；选中换主色，按下时滑块加宽。
-   forms.css 只在简约主题里补 ::before 的 content/position，这里必须自带。 */
-.toggle {position: relative; padding: 0 6px}
-.toggle::before {content: ''; position: absolute; border: 2px solid var(--theme-toggle-off); background: var(--surface)}
-.toggle > span {width: 16px; height: 16px; background: var(--theme-toggle-off); box-shadow: none}
-.toggle, .toggle::before, .toggle > span {transition: all .2s cubic-bezier(.2, 0, 0, 1)}
-.toggle.on::before {background: var(--theme-toggle-on); border-color: var(--theme-toggle-on)}
-.toggle.on > span {width: 20px; height: 20px; background: var(--theme-toggle-knob); transform: translateX(20px)}
-.toggle:active:not(:disabled) > span {width: 24px}
-.toggle.on:active:not(:disabled) > span {transform: translateX(16px)}
-.toggle:disabled::before {background: var(--surface-muted)}
-.toggle:disabled > span {background: var(--theme-toggle-off)}
+/* MD3 开关：52×32px 胶囊轨道 + 16px/24px 圆形滑块；未选中带 outline，选中换主色并放大滑块。 */
+.toggle {
+  position: relative;
+  width: 52px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  background: transparent;
+  cursor: pointer;
+}
+.toggle::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 2px solid var(--theme-toggle-off);
+  background: var(--surface-muted);
+  box-sizing: border-box;
+  transition: all .2s cubic-bezier(.2, 0, 0, 1);
+}
+.toggle > span {
+  position: relative;
+  z-index: 1;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--theme-toggle-off);
+  box-shadow: none;
+  transform: translateX(8px);
+  transition: all .2s cubic-bezier(.2, 0, 0, 1);
+}
+.toggle.on::before {
+  background: var(--theme-toggle-on);
+  border-color: var(--theme-toggle-on);
+}
+.toggle.on > span {
+  width: 24px;
+  height: 24px;
+  background: var(--theme-toggle-knob);
+  transform: translateX(24px);
+}
+.toggle:active:not(:disabled) > span {
+  width: 28px;
+}
+.toggle:not(.on):active:not(:disabled) > span {
+  transform: translateX(6px);
+}
+.toggle.on:active:not(:disabled) > span {
+  transform: translateX(20px);
+}
+.toggle:disabled {
+  opacity: .38;
+  cursor: not-allowed;
+}
+.toggle:disabled::before {
+  background: transparent;
+  border-color: var(--theme-toggle-off);
+}
+.toggle:disabled > span {
+  background: var(--theme-toggle-off);
+}
+.toggle.on:disabled::before {
+  background: var(--theme-toggle-off);
+  border-color: transparent;
+}
+.toggle.on:disabled > span {
+  background: var(--surface);
+}
 
 /* 旧版浅色/深色没有自定义背景图，壁纸层不挂载；首页指挥台改用实色底，避免白字落在浅色背景上。 */
 :root[data-theme='legacy-light'] .home-deck,
@@ -61,8 +126,8 @@ body {background-attachment: scroll}
 .brand-title {font-size: 22px}
 .brand-mark {color: var(--secondary)}
 .sidebar-label, .sidebar-label button {color: var(--muted)}
-.primary-nav a, .task-group-button {font-size: 13px; min-height: 42px}
-.task-submenu-item {font-size: 13px; min-height: 38px}
+.primary-nav a, .task-group-button {font-size: 14px; font-weight: 500; min-height: 44px; border-radius: 22px; transition: background-color .2s cubic-bezier(.2, 0, 0, 1), color .2s cubic-bezier(.2, 0, 0, 1)}
+.task-submenu-item {font-size: 13px; min-height: 36px; border-radius: 18px}
 .task-group-button.expanded {border-color: var(--accent)}
 .topbar {position: sticky; top: 0; z-index: 80; height: var(--topbar-height); margin: 0; padding: 0 24px}
 .right-rail {top: var(--topbar-height); height: calc(var(--viewport-height) - var(--topbar-height)); z-index: 70}
@@ -81,24 +146,200 @@ main:focus {outline: none}
 .home-summary strong {color: var(--text); font-size: 20px; font-variant-numeric: tabular-nums}
 .title-actions {position: relative; gap: 8px; padding: 4px}
 .panel-heading h2 {font-size: 15px}
-.panel-heading > div > svg, .eyebrow, .home-summary svg {color: var(--secondary)}
 .panel, .resource-card, .summary-metrics section, .instance-card {border-radius: var(--theme-radius-panel)}
-.button {font-size: 13px; font-weight: 600}
-.button.primary:hover:not(:disabled) {transform: none}
-.button.danger.subtle {border-color: var(--red)}
-.button.danger:not(.subtle), .toast.error {color: var(--theme-on-danger)}
-.icon-button {width: 36px; height: 36px; border-radius: 6px}
-.text-button {font-size: 12px; min-height: 36px}
-input:focus, textarea:focus, .select-trigger:focus-visible, .select-trigger[aria-expanded='true'], .yaml-editor:focus-within, .input-icon:focus-within, .nav-search:focus-within {
-  outline: 2px solid var(--accent); outline-offset: 2px;
+
+/* MD3 按钮规范：高度 40px，全胶囊圆角 20px，文字 14px Medium，标准状态层 */
+.button {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: .1px;
+  height: 40px;
+  min-height: 40px;
+  border-radius: var(--theme-radius-button, 20px);
+  padding: 0 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  box-sizing: border-box;
+  transition: background-color .2s cubic-bezier(.2, 0, 0, 1), box-shadow .2s cubic-bezier(.2, 0, 0, 1), border-color .2s cubic-bezier(.2, 0, 0, 1), color .2s cubic-bezier(.2, 0, 0, 1);
+}
+.button:has(> svg) {padding: 0 16px}
+.button.primary {
+  background: var(--theme-primary-bg);
+  color: var(--theme-on-accent);
+  box-shadow: var(--theme-shadow-panel);
+}
+.button.primary:hover:not(:disabled) {
+  transform: none;
+  background: var(--theme-primary-hover);
+  box-shadow: var(--theme-shadow-hover);
+}
+.button.secondary {
+  background: transparent;
+  color: var(--accent);
+  border-color: var(--border);
+  box-shadow: none;
+}
+.button.secondary:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.button.subtle:not(.danger) {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: transparent;
+  box-shadow: none;
+}
+.button.subtle:not(.danger):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 20%, var(--accent-soft));
+}
+.button.danger {
+  background: var(--red);
+  color: var(--theme-on-danger);
+  border-color: transparent;
+}
+.button.danger.subtle {
+  background: var(--theme-danger-soft);
+  color: var(--red);
+  border-color: transparent;
+}
+.button.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--red) 85%, black);
+}
+.icon-button {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color .15s, color .15s;
+}
+.icon-button:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.text-button {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .1px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 18px;
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color .15s;
+}
+.text-button:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+.yaml-editor:focus-within, .nav-search:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .input-icon > input:focus, .nav-search input:focus {outline: none}
-/* 禁用状态使用实色而非整层透明，保留标签和图标的可读性。 */
 button:disabled, input:disabled, textarea:disabled, select:disabled, .select-trigger:disabled,
 .checkbox-control:has(:disabled), .select-option[aria-disabled='true'] {opacity: 1; color: var(--muted)}
-.button:disabled {background: var(--surface-muted); border-color: var(--border)}
-.input-icon, .scheduler-widget, .schedule-summary, .count-badge, .nav-search {background: var(--surface-muted)}
-.status, .task-state {border-radius: 4px}
+.button:disabled {background: var(--surface-muted); border-color: var(--border); box-shadow: none}
+.input-icon, .schedule-summary, .count-badge, .nav-search {background: var(--surface-muted)}
+.status, .task-state {border-radius: 8px; font-weight: 500}
+
+.scheduler-widget {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--theme-radius-panel, 16px);
+  padding: 16px 18px;
+}
+.scheduler-widget-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.scheduler-widget-heading > div {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.scheduler-widget-heading > div > svg {
+  color: var(--accent);
+}
+.scheduler-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  line-height: 1.3;
+}
+.scheduler-status svg {
+  flex-shrink: 0;
+}
+.scheduler-status.running {
+  background: var(--theme-success-soft);
+  color: var(--theme-success);
+  border-color: color-mix(in srgb, var(--theme-success) 24%, transparent);
+  font-weight: 600;
+}
+.scheduler-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.scheduler-stats > div {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  box-sizing: border-box;
+  transition: border-color .15s ease, background-color .15s ease;
+}
+.scheduler-stats > div:hover {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+}
+.scheduler-stats span {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.scheduler-stats strong {
+  display: block;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.scheduler-toggle {
+  width: 100%;
+  min-height: 40px;
+  height: 40px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: .1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
 .resource-foot > svg, .resource-editor-grip {color: var(--muted)}
 .resource-editor-card, .resource-picker {background: var(--surface); border-color: var(--border)}
 .resource-editor-card.dragging {opacity: 1; border-color: var(--accent); transform: none; background: var(--accent-soft)}
@@ -131,10 +372,15 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
   grid-template-areas: 'topbar topbar topbar' 'sidebar main rail';
 }
 .app-shell.legacy-shell > .topbar {grid-area: topbar; width: auto}
-.app-shell.legacy-shell > .sidebar {grid-area: sidebar}
-.app-shell.legacy-shell > .main-shell {grid-area: main; min-height: 0; overflow: hidden}
-/* 内容列的高度自己定（页内两列各自滚），不靠自动最小尺寸撑高，否则会把整壳顶出视口。 */
-.app-shell.legacy-shell > .main-shell > main {min-height: 0; display: flex; flex-direction: column}
+.app-shell.legacy-shell > .sidebar {grid-area: sidebar; padding-top: 12px}
+.app-shell.legacy-shell > .main-shell {grid-area: main; min-height: 0; overflow: hidden; display: flex; flex-direction: column}
+/* 内容列的高度：非实例页（如 /dev、设置）由 main 自身滚动并防止卡片挤压，实例页由内部两列各自滚。 */
+.app-shell.legacy-shell > .main-shell > main {min-height: 0; flex: 1 1 0; display: flex; flex-direction: column; overflow-y: auto}
+.app-shell.legacy-shell > .main-shell > main:has(.instance-page-grid),
+.app-shell.legacy-shell > .main-shell > main:has(.task-config-legacy) {overflow-y: hidden}
+.app-shell.legacy-shell > .main-shell > main > * {flex-shrink: 0}
+.app-shell.legacy-shell > .main-shell > main > .instance-page-grid,
+.app-shell.legacy-shell > .main-shell > main > .task-config-legacy {flex-shrink: 1; min-height: 0}
 .app-shell.legacy-shell > .right-rail {grid-area: rail}
 /* 招牌随顶栏走：顶栏里的那份紧贴左侧，不参与侧栏那套 72px 间距。 */
 .legacy-topbar-brand {height: auto; margin-bottom: 0; padding: 0}
@@ -169,6 +415,7 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
   .legacy-topbar-title {position: absolute; left: 50%; transform: translateX(-50%); max-width: min(30rem, 38%); flex: 0 0 auto}
   .app-shell.legacy-shell > .sidebar,
   .app-shell.legacy-shell > .right-rail {top: var(--topbar-height); height: calc(var(--viewport-height) - var(--topbar-height))}
+  .app-shell.legacy-shell > .sidebar {padding-top: 14px}
   .app-shell.legacy-shell .legacy-sidebar-actions {display: none}
 
   /* 旧版实例页：左列调度器与任务计划，右列页面内容。总览与资源统计共用这一套，
@@ -225,11 +472,12 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 .monitor-panel .log-toolbar {display: flex; align-items: center; margin-left: auto; gap: 4px}
 .monitor-panel .log-panel {border: 0; border-radius: 0}
 .monitor-panel .log-content {font-size: 12px; line-height: 1.8; background: var(--surface)}
-.log-filters {background: var(--surface-muted)}
-.monitor-segmented {display: inline-flex; align-items: center; gap: 3px; padding: 3px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-muted); max-width: 100%; overflow-x: auto}
-.monitor-segmented button {display: inline-flex; align-items: center; justify-content: center; gap: 7px; flex-shrink: 0; min-height: 34px; padding: 6px 12px; border: 0; border-radius: 4px; color: var(--muted); font-size: 13px; white-space: nowrap}
-.monitor-segmented button[aria-selected='true'] {background: var(--accent); color: var(--theme-on-accent)}
+.monitor-segmented {display: inline-flex; align-items: center; gap: 0; padding: 0; border: 1px solid var(--border); border-radius: 20px; background: transparent; max-width: 100%; overflow: hidden}
+.monitor-segmented button {display: inline-flex; align-items: center; justify-content: center; gap: 7px; flex-shrink: 0; min-height: 36px; padding: 6px 16px; border: 0; border-right: 1px solid var(--border); border-radius: 0; color: var(--muted); font-size: 13px; font-weight: 500; white-space: nowrap; transition: background-color .15s, color .15s}
+.monitor-segmented button:last-child {border-right: 0}
+.monitor-segmented button[aria-selected='true'] {background: var(--accent-soft); color: var(--accent)}
 .monitor-segmented button:focus-visible {outline-offset: -2px}
+.checkbox-mark input[type='checkbox'] {border-radius: 2px}
 .statistics-category-control {margin-bottom: 20px}
 .log-rule .rule-bar {opacity: 1; background: var(--border)}
 .log-rule.rule-double .rule-bar {opacity: 1; border-color: var(--border)}
@@ -248,9 +496,18 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 .rail-task-item:hover {background: var(--surface-muted)}
 .rail-task-item strong {font-size: 12px}
 .rail-task-item small {font-size: 11px}
-.rail-task-item .task-state {font-size: 10px}
-.modal {border: 1px solid var(--border)}
-.toast {border: 1px solid var(--border)}
+.modal {
+  border: 0;
+  border-radius: var(--theme-radius-modal, 28px);
+  padding: 24px;
+  background: var(--surface);
+  box-shadow: var(--theme-shadow-modal);
+}
+.toast {
+  border: 0;
+  border-radius: 8px;
+  box-shadow: var(--theme-shadow-popover);
+}
 @media (max-width: 950px) {
   /* 窄屏下侧栏与右栏都是抽屉，旧版版式回到共享层的单列流。 */
   .app-shell.legacy-shell {display: block}
