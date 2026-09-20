@@ -206,7 +206,8 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
     overflow-y: auto;
   }
   .statistics-legacy .statistics-toolbar-row {display: flex; align-items: center; gap: 12px; flex-wrap: wrap}
-  .statistics-legacy .statistics-toolbar-row .statistics-category-control {margin-bottom: 0; flex: 1; min-width: 0}
+  /* 分段控件按内容自然宽度排，不拉伸：upstream 的紧凑版式靠 offsetWidth 量它的自然宽度。 */
+  .statistics-legacy .statistics-toolbar-row .statistics-category-control {margin-bottom: 0; flex: 0 0 auto; width: max-content}
   .statistics-legacy .statistics-actions {display: flex; align-items: center; gap: 8px; margin-left: auto}
 
   /* 旧版的任务详细设置：参数卡在左、分组导航在右（旧版是 13rem≈208px 的右列）。

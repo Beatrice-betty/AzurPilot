@@ -297,6 +297,38 @@ export function createMockState({empty = false} = {}) {
         return {instance: name, image: `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`, capturedAt: get(name).previewAt ?? null}
       }
       case 'statistics.refreshLoot': return {refreshed: true}
+      case 'meowfficer.scoreReport': {
+        // demo-alt 用来验证「还没跑过评分任务」的空状态，其余实例都给一份示例报告。
+        if (name === 'demo-alt') fail('NOT_FOUND', '评分报告尚未生成，请先在「工具Plus → 指挥喵评分」运行一次任务')
+        const cats = [{
+          source: 'shot_0.png', cat: '克雷喵', tags: ['SSR', '铁血', '潜艇', '司令'], fixed: false,
+          note: '指定潜艇司令，狩猎范围+1；初始池小、最好毕业', maxed: true, pointsSpent: 6, primary: 'submarine',
+          talents: [
+            {name: '狼群之首', level: 1, kind: 'special', inferred: false},
+            {name: '雷击长·潜艇', level: 3, kind: 'normal', inferred: false},
+            {name: '装填新手·潜艇', level: 3, kind: 'normal', inferred: true},
+          ],
+          rubrics: [
+            {key: 'submarine', label: '潜艇猫', tier: '准毕业', score: 100, x: 1, y: 6.0,
+              xHits: ['狼群之首 Lv1'], yHits: ['新人雷击士·潜艇 Lv3', '装填新手·潜艇 Lv3'],
+              notes: ['缺 侵略如火：两者是潜艇口径里唯一的两个一档输出彩'],
+              source: '28法则执行篇·潜艇猫；详细上手攻略·潜艇喵', primary: true},
+            {key: 'low_cost', label: '低耗猫', tier: '不适合低耗', score: 35, x: 0, y: 2.0,
+              xHits: [], yHits: ['装填新手·潜艇 Lv3'], notes: [], source: '28法则执行篇·低耗猫', primary: false},
+          ],
+        }, {
+          source: 'shot_1.png', cat: '海伦娜喵', tags: ['SSR', '白鹰', '轻巡'], fixed: true,
+          note: '辅助输出向，主口径取雷暴', maxed: false, pointsSpent: 3, primary: 'torpedo',
+          talents: [{name: '一骑当千', level: 3, kind: 'special', inferred: false}],
+          rubrics: [
+            // 雷暴口径是加权点制：与真实后端一致地给出 null 的 x/y 与语义标签
+            {key: 'torpedo', label: '雷暴猫', tier: '雷暴优秀', score: 88, x: null, y: null,
+              xHits: [], yHits: ['一骑当千 Lv3', '雷击长·轻巡 Lv3'], yLabel: '加权命中',
+              notes: ['适合雷暴队当输出小猫'], source: '28法则执行篇·雷暴猫', primary: true},
+          ],
+        }]
+        return {instance: name, generatedAt: timestamp(new Date()), count: cats.length, cats: cats.slice(-(params.limit ?? 100))}
+      }
       case 'statistics.report': {
         const resourceLabels = {Oil: '石油', Coin: '物资', Gem: '钻石', Cube: '心智魔方'}
         const actionLabels = {ActionPoint: '行动力', YellowCoin: '作战补给凭证', PurpleCoin: '特别兑换凭证'}

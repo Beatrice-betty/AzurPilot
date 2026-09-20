@@ -25,10 +25,11 @@ export function InterfaceSettings() {
               <option value="minimal">{ui('settings.themeMinimal')}</option>
               <option value="legacy-light">{ui('settings.themeLegacyLight')}</option>
               <option value="legacy-dark">{ui('settings.themeLegacyDark')}</option>
+              <option value="extreme">{ui('settings.themeExtreme')}</option>
             </Select>
           </div>
         </div>
-        {theme === 'minimal' && <ThemePreferences/>}
+        {(theme === 'minimal' || theme === 'extreme') && <ThemePreferences/>}
         {usesMaterial(theme) && <BackgroundPreferences/>}
         <div className="field-row">
           <div className="field-label">

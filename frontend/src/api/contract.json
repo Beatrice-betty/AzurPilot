@@ -475,6 +475,33 @@
         "type": "object"
       }
     },
+    "meowfficer.scoreReport": {
+      "mutates": false,
+      "params": {
+        "additionalProperties": false,
+        "description": "指挥喵评分报告的只读查询。",
+        "properties": {
+          "instance": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Instance",
+            "type": "string"
+          },
+          "limit": {
+            "default": 100,
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "instance"
+        ],
+        "title": "MeowfficerScoreReportParams",
+        "type": "object"
+      }
+    },
     "statistics.resources": {
       "mutates": false,
       "params": {
