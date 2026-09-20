@@ -246,7 +246,7 @@ export function createMockState({empty = false} = {}) {
       case 'schema.get': return {args, menu, translations: locales[params.language]}
       case 'instances.list': return [...instances].map(([name, item]) => ({name, status: item.status, currentTask: item.status === 'running' ? 'Commission' : null, serial: item.values.Alas.Emulator.Serial, server: item.values.Alas.Emulator.ServerName}))
       case 'instances.create': {
-        if (!/^[A-Za-z\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff][A-Za-z0-9_\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\-]{0,63}$/.test(params.name) || /^(template|deploy|backup|con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(params.name)) fail('INVALID_PARAMS', '实例名称无效')
+        if (!/^[A-Za-z0-9\u3041-\u3096\u30a1-\u30fa\u30fc\u31f0-\u31ff\uff66-\uff9f\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff][A-Za-z0-9_. \u3041-\u3096\u30a1-\u30fa\u30fc\u31f0-\u31ff\uff66-\uff9f\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\-]{0,63}$/.test(params.name) || /^(template|deploy|backup|con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i.test(params.name)) fail('INVALID_PARAMS', '实例名称无效')
         if ([...instances.keys()].some(name => name.toLowerCase() === params.name.toLowerCase())) fail('ALREADY_EXISTS', '同名实例已存在')
         add(params.name, params.source ? get(params.source).values : template)
         return snapshot(params.name)

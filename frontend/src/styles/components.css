@@ -108,7 +108,7 @@
 .toast {position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); z-index: 100; max-width: 90vw; padding: 14px 23px; border-radius: 9px; color: white; background: #1c7466; box-shadow: 0 5px 25px #102b4e30; font-size: 12px}
 .toast.error {background: #a45159}
 .modal {background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 14px; padding: 24px; width: 440px; max-width: calc(100vw / var(--ui-scale) - 30px); box-shadow: 0 20px 80px #132b4830}
-.modal::backdrop {background: #13233070; backdrop-filter: blur(3px)}
+.modal::backdrop {background: #1323301a}
 .modal .panel-heading {padding: 0 0 17px; margin-bottom: 18px}
 .modal > p {line-height: 1.9; margin-bottom: 20px; color: var(--muted)}
 .form-stack {display: flex; flex-direction: column; gap: 19px}

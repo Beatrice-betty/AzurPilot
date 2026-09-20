@@ -28,7 +28,7 @@
   --theme-warning: #805a14; --theme-warning-soft: #faf0d6; --theme-info: var(--secondary);
   --theme-sidebar: var(--surface); --theme-glass: var(--surface); --theme-glass-edge: var(--border);
   --theme-glass-shadow: none; --theme-material-filter: none; --theme-chrome-filter: none;
-  --theme-popover-filter: none; --theme-overlay-filter: none; --theme-overlay: var(--bg);
+  --theme-popover-filter: none; --theme-overlay-filter: none; --theme-overlay: color-mix(in srgb, var(--bg) 30%, transparent);
 
   /* 契约层 —— 形状与阴影：旧版圆角明显小于新版 */
   --theme-radius-control: 4px; --theme-radius-button: 100px; --theme-radius-panel: 6px;
@@ -88,7 +88,7 @@
   --theme-danger-soft: #4a2c30;
   --theme-on-danger: #282a2f;
   --theme-warning: #e7c078; --theme-warning-soft: #403723;
-  --theme-overlay: rgb(0 0 0 / .45);
+  --theme-overlay: color-mix(in srgb, var(--bg) 30%, transparent);
 
   /* 深色下选中菜单改用中靛紫底 + 浅靛紫字 */
   --theme-nav-icon: #dfdcfb;

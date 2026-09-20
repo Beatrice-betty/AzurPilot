@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useRef, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
 import { AlertCircle, LoaderCircle, X } from 'lucide-react'
 import { GlassMaterial } from './GlassMaterial'
 import type { Status } from '../api/types'
@@ -20,11 +20,13 @@ export function ErrorBox({message, retry}: {message: string; retry?: () => void}
   const {ui} = useApp()
   return <div role="alert" className="error-box"><AlertCircle size={18}/><span>{message}</span>{retry && <button onClick={retry}>{ui('common.retry')}</button>}</div>
 }
-export function Modal({title, children, onClose, className = ''}: {title: string; children: ReactNode; onClose: () => void; className?: string}) {
+export function Modal({title, children, onClose, className = '', cancelGuard, onKeyDown}: {title: string; children: ReactNode; onClose: () => void; className?: string; cancelGuard?: () => boolean; onKeyDown?: (event: KeyboardEvent<HTMLDialogElement>) => void}) {
   const ref = useRef<HTMLDialogElement>(null)
   const {ui} = useApp()
   useEffect(() => { ref.current?.showModal(); return () => ref.current?.close() }, [])
-  return <dialog ref={ref} onCancel={onClose} className={`modal ${className}`.trim()}>
+  /* cancelGuard 可以在这一次 cancel 不该关弹窗时把它吃下来；keydown 挂在 dialog 上，
+     焦点落在标题栏关闭按钮时也收得到。 */
+  return <dialog ref={ref} onKeyDown={onKeyDown} onCancel={event => {if (cancelGuard?.()) event.preventDefault(); else onClose()}} className={`modal ${className}`.trim()}>
     <div className="panel-heading"><h2>{title}</h2><button className="icon-button" aria-label={ui('common.close')} onClick={onClose}><X size={20}/></button></div>
     {children}
   </dialog>
