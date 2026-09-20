@@ -1,31 +1,13 @@
-import { useEffect, useState } from 'react'
 import { Clock3, X } from 'lucide-react'
-import { api } from '../api/client'
-import type { Overview } from '../api/types'
-import { useApp, useConnection } from '../app/context'
+import { useApp } from '../app/context'
+import { useInstanceOverview } from './useInstanceOverview'
 import { SchedulerWidget } from './SchedulerWidget'
 import { TaskQueue } from './TaskQueue'
 
-/** 右侧栏：调度器与任务计划。旧版主题的总览页改用页内两列，本组件只在其余页面渲染。 */
+/** 右侧栏：调度器与任务计划。旧版主题改用页内左列承载，本组件只在其余主题渲染。 */
 export function RightRail({instance, onMobileClose}: {instance: string; onMobileClose: () => void}) {
-  const connection = useConnection()
-  const {notify, ui} = useApp()
-  const [data, setData] = useState<Overview>()
-
-  useEffect(() => {
-    if (connection !== 'ready') return
-    let active = true
-    void api.request('overview.get', {instance})
-      .then(value => { if (active) setData(value) })
-      .catch(error => notify((error as Error).message, true))
-    return () => { active = false }
-  }, [connection, instance, notify])
-
-  useEffect(() => api.onEvent(event => {
-    if (event.topic !== 'overview') return
-    const next = event.data as Overview
-    if (next.instance === instance) setData(next)
-  }), [instance])
+  const {ui} = useApp()
+  const [data, setData] = useInstanceOverview(instance)
 
   return <aside className="right-rail" id="right-rail-menu" aria-label={ui('scheduler.rail')}>
     <div className="right-rail-header">
