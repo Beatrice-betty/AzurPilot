@@ -3661,7 +3661,9 @@
       "MaxImages": 50,
       "ReportPath": "./log/meowfficer_score.md",
       "DeviceShots": 1,
-      "DeviceInterval": 2
+      "DeviceInterval": 2,
+      "ScanLimit": 0,
+      "ScanPasses": 12
     },
     "Storage": {
       "Storage": {}

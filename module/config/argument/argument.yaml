@@ -2160,7 +2160,7 @@ EmulatorManager:
 MeowfficerScore:
   Source:
     value: screenshot
-    option: [screenshot, device]
+    option: [screenshot, device, scan]
   Folder:
     value: ./screenshots/meowfficer_talent
   MaxImages:
@@ -2174,6 +2174,12 @@ MeowfficerScore:
   DeviceInterval:
     value: 2
     validate: [0, 60]
+  ScanLimit:
+    value: 0
+    validate: [0, 999]
+  ScanPasses:
+    value: 12
+    validate: [1, 60]
 OpsiSimulatorParameters:
   Samples: 100000
   Draw:

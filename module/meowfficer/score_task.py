@@ -1,13 +1,16 @@
 """指挥喵天赋评分工具（工具Plus）。
 
-两种模式：
+三种模式：
 
 - ``screenshot``：扫描本地截图目录，逐张识别天赋并评分（默认）。
   可以直接指向 ``DropRecord_MeowfficerTalent`` 落盘的天赋截图，或自己的截图目录。
 - ``device``：截图当前设备画面并评分，适合手动逐只翻猫时连续跑。
+- ``scan``：自动遍历猫窝列表，逐只选中猫、打开天赋页截图识别，覆盖全部已拥有的猫。
+  页面操作在 :mod:`module.meowfficer.scan` 里，本模块只负责评分与报告。
 
-本任务**不操作游戏、不做页面导航**，因此按 ``module/daemon/ocr_benchmark.py`` 的形态
-自写 ``__init__`` 而不继承 ``ModuleBase``，也就没有强制状态循环的约束。
+前两种模式**不操作游戏、不做页面导航**，因此按 ``module/daemon/ocr_benchmark.py`` 的形态
+自写 ``__init__`` 而不继承 ``ModuleBase``，也就没有强制状态循环的约束；``scan`` 模式
+的页面操作全部委托给 :class:`~module.meowfficer.scan.MeowfficerScanner`，同样不引入继承。
 
 评分口径来自公开攻略（详见 :mod:`module.meowfficer.score`），不是游戏官方数值。
 """
@@ -298,6 +301,37 @@ class MeowfficerScore:
         except Exception as e:
             logger.warning(f'[指挥喵-评分] HTML/JSON 报告写入失败：{e}')
 
+    def _run_scan(self):
+        """``scan`` 模式：自动遍历猫窝，逐只读取天赋并评分。
+
+        页面操作全部交给 :class:`~module.meowfficer.scan.MeowfficerScanner`，
+        这里只把每只猫的天赋送去评分并记录结果。
+        """
+        if self.device is None:
+            raise RequestHumanTakeover(
+                'scan 模式需要连接设备：请确认模拟器已启动且 ADB 可连，'
+                '或把「评分来源」改成「本地截图」')
+
+        from module.meowfficer.scan import MeowfficerScanner
+
+        limit = max(0, int(self._cfg('ScanLimit', 0) or 0))
+        passes = max(1, int(self._cfg('ScanPasses', 12) or 12))
+
+        scanner = MeowfficerScanner(self.config, self.device)
+        scanned = scanner.scan_all(limit=limit, passes=passes)
+        if not scanned:
+            logger.warning('[指挥喵-评分] 扫描没有拿到任何指挥喵，'
+                           '请确认游戏停留在「指挥喵 - 猫窝」页面后重试')
+            return
+
+        for cat, talents in scanned:
+            result = evaluate(talents, cat=cat)
+            rubric = result.rubrics[result.primary[0]] if result.primary else None
+            logger.attr(f'{cat} 猫名', result.cat or '未知')
+            if rubric is not None:
+                logger.attr(f'{cat} 评分', f'{rubric.label} {rubric.tier} {rubric.score100}/100')
+            self.results.append((cat, result))
+
     def run(self):
         """任务入口。
 
@@ -311,6 +345,8 @@ class MeowfficerScore:
 
         if source == 'device':
             self._run_device()
+        elif source == 'scan':
+            self._run_scan()
         else:
             self._run_screenshots()
 

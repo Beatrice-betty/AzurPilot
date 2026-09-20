@@ -6299,9 +6299,10 @@
     },
     "Source": {
       "name": "Score Source",
-      "help": "Local screenshots: scan a folder in batch; Auto follow: keep capturing and score whenever a new talent panel shows up - just flip cats in game",
+      "help": "Local screenshots: scan a folder in batch; Auto follow: keep capturing and score whenever a new talent panel shows up - just flip cats in game; Scan all: walks the cattery list and reads every cat's talents (drives the game automatically, CN client only)",
       "screenshot": "Local screenshots",
-      "device": "Auto follow current screen"
+      "device": "Auto follow current screen",
+      "scan": "Scan all meowfficers"
     },
     "Folder": {
       "name": "Screenshot Folder",
@@ -6322,6 +6323,14 @@
     "DeviceInterval": {
       "name": "Follow poll interval",
       "help": "Seconds between captures in auto follow; unchanged screens skip recognition"
+    },
+    "ScanLimit": {
+      "name": "Max cats to scan",
+      "help": "How many cats to scan at most in scan-all mode; 0 means no limit"
+    },
+    "ScanPasses": {
+      "name": "Max list pages",
+      "help": "How many pages of the cattery list to walk in scan-all mode (12 cats per page); stops early at the end of the list"
     }
   },
   "OpsiSimulatorParameters": {

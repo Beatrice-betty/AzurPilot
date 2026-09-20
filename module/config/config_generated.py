@@ -1080,12 +1080,14 @@ class GeneratedConfig:
     EmulatorManager_RemoteStopCommand = None
 
     # 配置组 `MeowfficerScore`
-    MeowfficerScore_Source = 'screenshot'  # screenshot, device
+    MeowfficerScore_Source = 'screenshot'  # screenshot, device, scan
     MeowfficerScore_Folder = './screenshots/meowfficer_talent'
     MeowfficerScore_MaxImages = 50
     MeowfficerScore_ReportPath = './log/meowfficer_score.md'
     MeowfficerScore_DeviceShots = 1
     MeowfficerScore_DeviceInterval = 2
+    MeowfficerScore_ScanLimit = 0
+    MeowfficerScore_ScanPasses = 12
 
     # 配置组 `OpsiSimulatorParameters`
     OpsiSimulatorParameters_Samples = 100000
