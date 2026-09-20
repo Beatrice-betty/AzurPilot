@@ -76,8 +76,8 @@ export function CreateInstance({onClose}: {onClose: () => void}) {
       /* 后端会归一化首尾空白与尾点，导航用返回的规范名。 */
       const created = await api.request('instances.create', {name, source: source || null, import_file: importFile || null})
       await refresh(); onClose(); notify(ui('instance.created'))
-      /* 从总览页发起的创建，落到新实例的运行总览。 */
-      navigate(`/i/${created.instance}/overview`)
+      /* 新建的实例还没有配置，落到它的任务配置页。 */
+      navigate(`/i/${created.instance}/task/Alas`)
     } catch (error) { setError((error as Error).message) } finally { setBusy(false) }
   }
   return <Modal title={ui('instance.createTitle')} onClose={onClose} cancelGuard={escapesFromPage} onKeyDown={trackEscape}><form onSubmit={submit} className="form-stack">
