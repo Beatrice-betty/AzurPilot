@@ -51,18 +51,26 @@ class CampaignEvent(CampaignStatus):
                 self.config.cross_set(keys=f'{task}.Campaign.Name', value='2-4')
                 self.config.cross_set(keys=f'{task}.Campaign.Event', value='campaign_main')
 
-    def _disable_tasks(self, tasks):
+    def _disable_tasks(self, tasks, *, pt_limit=False):
         """
         禁用指定任务列表中的任务。
 
         Args:
             tasks (list[str]): 任务名称列表。
+            pt_limit (bool): PT 达标时停止三油活动任务并保留关卡，不回退主线。
         """
+        farming_to_reset = []
         with self.config.multi_set():
             # 禁用普通活动任务
             for task in tasks:
                 if task in GEMS_FARMINGS:
-                    continue
+                    if not pt_limit or task != 'ThreeOilLowCost':
+                        farming_to_reset.append(task)
+                        continue
+                    # 主线三油不参与活动 PT 收尾；活动三油按普通活动任务禁用。
+                    name = self.config.cross_get(keys=f'{task}.Campaign.Name', default='2-4')
+                    if self.stage_is_main(name):
+                        continue
                 keys = f'{task}.Scheduler.Enable'
                 logger.info(f'[活动战役] 禁用任务 `{task}`')
                 self.config.cross_set(keys=keys, value=False)
@@ -72,7 +80,7 @@ class CampaignEvent(CampaignStatus):
                 self.config.cross_set(keys=keys, value=False)
 
             # 重置 GemsFarming
-            self._reset_gems_farming(tasks)
+            self._reset_gems_farming(farming_to_reset)
 
             logger.info(f'[活动战役] 重置活动时间限制')
             self.config.cross_set(keys='EventGeneral.EventGeneral.TimeLimit', value=DEFAULT_TIME)
@@ -105,7 +113,7 @@ class CampaignEvent(CampaignStatus):
         if pt >= limit and limit > 0:
             logger.attr('活动PT限制', f'{pt}/{limit}')
             logger.hr(f'达到活动PT上限: {limit}')
-            self._disable_tasks(tasks)
+            self._disable_tasks(tasks, pt_limit=True)
             return True
         else:
             return False
