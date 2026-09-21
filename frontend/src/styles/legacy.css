@@ -615,39 +615,6 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
   color: var(--text);
 }
 
-/* 新建标签按钮：轻量圆角微按钮，贴在标签右侧 */
-:root[data-theme='legacy-light'] .instance-tab-create,
-:root[data-theme='legacy-dark'] .instance-tab-create,
-.app-shell.legacy-shell .instance-tab-create {
-  /* 尺寸与标签页同源，五档缩放时按钮与标签的高度比恒定 —— 新版主题用的是同一个变量。 */
-  width: var(--instance-tab-height);
-  height: var(--instance-tab-height);
-  margin-left: calc(10px * var(--row-scale, 1));
-  /* 居中：按钮与标签页等高，按下的背景块正好落在标签条内。 */
-  align-self: center;
-  border: none !important;
-  border-radius: var(--theme-radius-control);
-  background: transparent !important;
-  color: var(--muted);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background-color .15s ease, color .15s ease;
-}
-:root[data-theme='legacy-light'] .instance-tab-create:hover,
-:root[data-theme='legacy-dark'] .instance-tab-create:hover,
-.app-shell.legacy-shell .instance-tab-create:hover {
-  background: color-mix(in srgb, var(--surface) 60%, transparent) !important;
-  color: var(--text);
-  border: none !important;
-}
-:root[data-theme='legacy-light'] .instance-tab-create:active,
-:root[data-theme='legacy-dark'] .instance-tab-create:active,
-.app-shell.legacy-shell .instance-tab-create:active {
-  background: color-mix(in srgb, var(--text) 15%, transparent) !important;
-}
-
 /* 侧栏任务菜单：分组展开后具体任务往下列（旧版树状格式）。 */
 .task-group-button:hover .task-group-arrow {transform: none}
 .task-group-button.expanded .task-group-arrow {color: var(--accent); transform: rotate(180deg)}
