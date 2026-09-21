@@ -223,12 +223,25 @@ export function StatisticsChart({series, tables = [], heading = true, expanded =
       }, true)
     }
 
+    const container = element.current
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) {
+        event.stopPropagation()
+      }
+    }
+    container.addEventListener('wheel', onWheel, {capture: true, passive: true})
+
     render()
     const observer = new ResizeObserver(() => chart.resize())
     observer.observe(element.current)
     const themeObserver = new MutationObserver(render)
     themeObserver.observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme', 'data-palette', 'data-color-mode', 'style']})
-    return () => { observer.disconnect(); themeObserver.disconnect(); chart.dispose() }
+    return () => {
+      container.removeEventListener('wheel', onWheel, {capture: true})
+      observer.disconnect()
+      themeObserver.disconnect()
+      chart.dispose()
+    }
   }, [seriesData, hasPoints, isCandlestick, axisMode, isSingle, selectedSeries, categoryTimes, language, ui, theme])
 
   const mergedRows = useMemo(() => {
