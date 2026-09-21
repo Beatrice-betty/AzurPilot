@@ -37,19 +37,19 @@ AzurPilot 是面向安卓模拟器的碧蓝航线自动化框架，支持 CN/EN/
 
 ## 按任务查阅
 
-先定位相关实现；需要背景时再打开对应文档。小范围文案或局部修改不要求通读架构。`.agent/` 包含历史分析，目录、依赖和行为以当前代码、清单及 CI 为准；其中旧流程或固定格式要求与本文件冲突时，以本文件为准。
+先定位相关实现；需要背景时再打开对应文档。小范围文案或局部修改不要求通读架构。模块文档位于 [docs/modules/](docs/modules/README.md)（按模块职责组织的 20 节标准文档，入口见其索引）；目录、依赖和行为以当前代码、清单及 CI 为准。`.agent/` 仅存历史分析，已由 docs/modules/ 取代；其中旧流程或固定格式要求与本文件冲突时，以本文件为准。
 
 | 涉及的工作 | 实现与参考入口 |
 | --- | --- |
-| 服务边界、跨模块改动 | [.agent/ARCHITECTURE.md](.agent/ARCHITECTURE.md)、[.agent/MODULE-MAP.md](.agent/MODULE-MAP.md) |
-| 调度、失败恢复、任务派发 | `alas.py`、`module/runtime/`、[.agent/ENTRY-ALAS.md](.agent/ENTRY-ALAS.md) |
-| 配置定义、迁移、热重载 | `module/config/`、[.agent/CONFIG.md](.agent/CONFIG.md)，以及下方配置生成约束 |
-| WebUI、接口、运行进程 | `gui.py`、`module/api/`、`module/runtime/`、[frontend/README.md](frontend/README.md)、[frontend/API.md](frontend/API.md) |
-| MCP 集成 | `mcp_server_sse.py`、[.agent/ENTRY-MCP-SERVER.md](.agent/ENTRY-MCP-SERVER.md) |
-| 游戏页面、弹窗、识别资源 | [.agent/UI.md](.agent/UI.md)、[.agent/HANDLER.md](.agent/HANDLER.md)、[.agent/BASE.md](.agent/BASE.md) |
-| 设备、截图或 OCR | [.agent/DEVICE.md](.agent/DEVICE.md)、[.agent/OCR.md](.agent/OCR.md) |
-| 战斗、地图、活动适配 | `campaign/` 下相近关卡、[.agent/CAMPAIGN.md](.agent/CAMPAIGN.md)、[.agent/COMBAT.md](.agent/COMBAT.md)、[.agent/MAP-DETECTION.md](.agent/MAP-DETECTION.md) |
-| 大世界或具体游戏功能 | [.agent/OS-SYSTEM.md](.agent/OS-SYSTEM.md)、[.agent/GAME-FUNCTIONS.md](.agent/GAME-FUNCTIONS.md) |
+| 服务边界、跨模块改动 | [目录与任务映射](docs/modules/overview/directory-map.md)、[编码规范与设计模式](docs/modules/overview/conventions.md)、[调度器](docs/modules/entry/alas.md) |
+| 调度、失败恢复、任务派发 | `alas.py`、[调度器](docs/modules/entry/alas.md)、[运行时服务](docs/modules/webui/runtime.md) |
+| 配置定义、迁移、热重载 | `module/config/`、[配置系统](docs/modules/config.md)，以及下方配置生成约束 |
+| WebUI、接口、运行进程 | `gui.py`、[WebUI 总览](docs/modules/webui/index.md)、[API 服务](docs/modules/webui/api.md)、[运行时服务](docs/modules/webui/runtime.md)、[frontend/README.md](frontend/README.md)、[frontend/API.md](frontend/API.md) |
+| MCP 集成 | `mcp_server_sse.py`、[MCP SSE 服务器](docs/modules/entry/mcp-server.md) |
+| 游戏页面、弹窗、识别资源 | [UI 导航](docs/modules/ui.md)、[处理器层](docs/modules/handler.md)、[基础层](docs/modules/base/index.md) |
+| 设备、截图或 OCR | [设备层](docs/modules/device.md)、[OCR 系统](docs/modules/ocr.md) |
+| 战斗、地图、活动适配 | `campaign/` 下相近关卡、[战役执行](docs/modules/campaign.md)、[战斗系统](docs/modules/combat.md)、[地图系统与检测](docs/modules/map.md) |
+| 大世界或具体游戏功能 | [大世界核心](docs/modules/os/index.md)、[大世界辅助模块](docs/modules/os/auxiliary.md)、[其他游戏功能](docs/modules/game/misc.md) |
 | 构建、部署或 CI | `deploy/`、[.github/workflows/ci.yml](.github/workflows/ci.yml) |
 
 ## 游戏交互约束
