@@ -66,13 +66,42 @@
 :root[data-theme='extreme'] .statistics-actions {display:flex;align-items:center;gap:8px}
 :root[data-theme='extreme'] .statistics-inline-control {display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted);white-space:nowrap}
 :root[data-theme='extreme'] .statistics-inline-control select,:root[data-theme='extreme'] .statistics-inline-control input {max-width:200px;min-height:var(--form-height)}
+/* 控件名收进提示：工具栏只留当前值，鼠标移入或键盘聚焦时把名称浮在控件下方。
+   文字仍渲染在 DOM 里（.statistics-inline-label），只是紧凑主题不占位，其它主题照旧。 */
+:root[data-theme='extreme'] .statistics-inline-label {display:none}
+:root[data-theme='extreme'] .statistics-inline-control {position:relative}
+:root[data-theme='extreme'] .statistics-inline-control[data-tip]:not([data-tip='']):hover::after,
+:root[data-theme='extreme'] .statistics-inline-control[data-tip]:not([data-tip='']):focus-within::after {
+  content:attr(data-tip);position:absolute;left:50%;top:calc(100% + 6px);transform:translateX(-50%);
+  padding:3px 8px;background:var(--text);color:var(--surface);font-size:11px;line-height:1.6;
+  white-space:nowrap;pointer-events:none;z-index:40;
+}
+/* 图表设置行挪到图表下方后由它收尾：紧凑主题把内边距压到与面板一致的尺度。 */
+:root[data-theme='extreme'] .statistics-controls {padding:10px 12px;gap:12px;border-top:1px solid var(--border)}
+:root[data-theme='extreme'] .statistics-controls label {gap:4px}
+:root[data-theme='extreme'] .statistics-controls select,:root[data-theme='extreme'] .statistics-controls input {min-height:var(--form-height)}
+/* 数值区（单指标一行 / 多指标卡片）：这两块原本按简约尺度写死，多选指标后一片卡片
+   又高又散。紧凑主题收紧内边距、列宽与字号，并保持直角。 */
+:root[data-theme='extreme'] .stat-metrics {padding:8px 12px;gap:12px}
+:root[data-theme='extreme'] .stat-metrics span {margin-bottom:4px}
+:root[data-theme='extreme'] .stat-metrics strong {font-size:18px}
+:root[data-theme='extreme'] .stat-multi-metrics {grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:8px;padding:8px 12px}
+:root[data-theme='extreme'] .stat-metric-card {padding:8px 10px;gap:6px;border-radius:0}
+:root[data-theme='extreme'] .stat-metric-header {font-size:12px;gap:6px}
+:root[data-theme='extreme'] .stat-metric-body {gap:4px 8px;font-size:11px}
+:root[data-theme='extreme'] .stat-metric-body span {font-size:10px;margin-bottom:2px}
+:root[data-theme='extreme'] .stat-metric-body strong {font-size:14px}
 .sr-title {position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .date-input-wrap {position:relative;display:inline-flex;align-items:center;width:100%;max-width:200px}.date-input-wrap input {width:100%}.date-empty {color:transparent}.date-empty::-webkit-datetime-edit {color:transparent}.date-empty::-webkit-calendar-picker-indicator {opacity:1}.date-input-placeholder {position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;font-size:11px;user-select:none;font-variant-numeric:tabular-nums;letter-spacing:0.5px}
 /* main 是 flex 列，页面才能用 flex 把空白填满；block 父级下的 flex 属性一律无效。 */
 main {display:flex;flex-direction:column;min-height:0}
 /* 统计区吃掉剩余高度；收缩下限是内容高，否则被压到容器高时，面板的 overflow: hidden 会切掉图表与控件行。 */
 /* 统计区定高、内部伸缩，最后一行分到剩余空间，图表高度即由它决定。 */
-.statistics-sections {display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:20px;flex:1 1 0;min-height:0}.statistics-note {padding:13px 17px;background:var(--surface);border-left:3px solid #159b88;border-radius:5px;font-size:12px;line-height:1.8;color:var(--muted);margin:0}
+/* gap 会让「没有指标卡片」的分类在底部空出 20px：sections 里只剩图表面板一个子元素时，
+   grid 仍为不存在的第二行保留间距。改成把间距挂到指标卡片的下外边距上 ——
+   只有真有上下两块时才出现，单块时铺满到底。 */
+.statistics-sections {display:grid;grid-template-rows:auto minmax(0,1fr);gap:0;flex:1 1 0;min-height:0}
+.statistics-sections > .stat-metrics {margin-bottom:20px}.statistics-note {padding:13px 17px;background:var(--surface);border-left:3px solid #159b88;border-radius:5px;font-size:12px;line-height:1.8;color:var(--muted);margin:0}
 .stat-metrics {display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:16px;padding:20px 22px}.stat-metrics span {display:block;color:var(--muted);font-size:11px;margin-bottom:10px}.stat-metrics strong {display:block;font-size:23px;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.stat-metrics small {font-size:11px;font-weight:400;margin-left:6px;color:var(--muted)}.summary-metrics {padding:0;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}.summary-metrics section {padding:20px;background:var(--surface);border:1px solid var(--border);border-radius:12px}
 .summary-metric-card {transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
 .summary-metric-card:hover {border-color:color-mix(in srgb,var(--accent) 35%,var(--border));box-shadow:0 4px 16px #0000000a}
@@ -102,11 +131,11 @@ main {display:flex;flex-direction:column;min-height:0}
 .stat-metric-body strong.positive {color:#10b981}
 .stat-metric-body strong.negative {color:#ef4444}
 .stat-metric-body strong.neutral {color:var(--text)}
-/* 图表占满面板剩余高度；放不下时退到最小高度，由面板滚动。 */
+/* 图表占满面板剩余高度；高度由组件实算（面板可视高度 − 上方内容），所以这里不参与伸缩。 */
 .statistics-chart {display: flex; flex-direction: column; min-height: 0; overflow-y: auto}
-.statistics-chart > .chart-canvas {flex: 1 0 auto; height: 100%; min-height: 240px; width: 100%}
+.statistics-chart > .chart-canvas {flex: 0 0 auto; min-height: 240px; width: 100%}
 /* 表格与图表同处一列时，只有图表参与伸缩。 */
-.statistics-chart > .panel-heading, .statistics-chart > .statistics-metrics-container, .statistics-chart > .panel-note, .statistics-chart > .statistics-table {flex-shrink: 0}
+.statistics-chart > .panel-heading, .statistics-chart > .statistics-metrics-container, .statistics-chart > .statistics-controls, .statistics-chart > .panel-note, .statistics-chart > .statistics-table {flex-shrink: 0}
 .chart-expanded {position:fixed;inset:20px;z-index:100;overflow:auto;background:var(--surface);box-shadow:0 0 0 50px #0008}.chart-expanded .chart-canvas {flex: none; height:55vh}
 /* 放大视图铺满窗口后，右上角是 Electron 的窗口控制按钮，会压住「收起图表」；
    同时面板自身可滚动，滚动后标题行会滚出视口。右侧让开按钮宽度并让它吸顶。

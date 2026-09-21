@@ -9,6 +9,7 @@ import { GlassMaterial } from '../components/GlassMaterial'
 import { InstanceSwitcher } from '../components/InstanceSwitcher'
 import { InstanceTabs } from '../components/InstanceTabs'
 import { RightRail } from '../components/RightRail'
+import { CompactScrollbars } from '../components/CompactScrollbars'
 import { TaskNav } from '../components/TaskNav'
 import { isDesktopDevice } from '../components/TaskNavFlyout'
 import { TaskSwitcher } from '../components/TaskSwitcher'
@@ -121,7 +122,7 @@ export function NavigationMark() {
 
 export function App() {
   const connection = useConnection()
-  const {instancesLoaded, instances, schema, t, ui, notify, previewEnabled, devMode, setDevMode, theme} = useApp()
+  const {instancesLoaded, instances, schema, t, ui, notify, previewEnabled, devMode, setDevMode, theme, compactRailSide} = useApp()
   /* 开发者工具的模拟状态：只影响实例状态徽章与更新角标。 */
   const devOverride = useDevOverride()
   const {instance} = useParams()
@@ -192,6 +193,9 @@ export function App() {
   const legacyHomeShell = (location.pathname === '/' || PRIMARY_NAV_PATHS.includes(location.pathname)) && usesLegacyLayout(theme) && instancesLoaded
   // 旧版把调度器与任务计划放进实例页左列，右栏整体让位，否则同一块内容会出现两处。
   const showRail = showsRightRail(theme, instance)
+  /* 紧凑主题可把调度与任务计划栏换到内容区左侧。换位走 DOM 顺序而不是 CSS order，
+     键盘 Tab 的顺序才会跟看到的顺序一致；列宽与顶栏跨栏方向由 compact.css 按同一偏好调整。 */
+  const railFirst = theme === 'extreme' && compactRailSide === 'left'
   // 开发者工具可以预览「有可用更新」的角标，这里统一算一次。
   const updateAvailable = Boolean(update.data?.available) || devOverride.updatePreview
   const brand = <><Link to="/" className="brand-title" aria-label={`AzurPilot ${ui('nav.home')}`}><img src={`${import.meta.env.BASE_URL}azurpilot.svg`} alt="" className="brand-logo" onClick={handleBrandLogoClick}/><span>AzurPilot</span></Link>{updateAvailable && <Link className="update-notice sidebar-update-notice" to="/updater" aria-label={ui('nav.newVersion')} title={ui('nav.newVersion')}><span>{ui('nav.newBadge')}</span></Link>}</>
@@ -243,13 +247,15 @@ export function App() {
       </nav>
       {instance && <TaskNav/>}
     </aside>
+    {railFirst && instance && showRail && <RightRail instance={instance} onMobileClose={() => setRailOpen(false)}/>}
     <div className="main-shell">{!legacyShell && !legacyHomeShell && topbar}
       {/* 旧版外壳多一行：实例标签条在里面，点标签就能带着当前页型切实例。其它主题此行不开。 */}
       {usesLegacyLayout(theme) && (legacyShell || legacyHomeShell) ? pageNav : null}
       {connection !== 'ready' && <div className="connection-banner" role="status"><WifiOff size={16}/>{ui('connection.connecting')}</div>}
       <main id="main-content" tabIndex={-1}>{!schema || ((instance || location.pathname === '/') && !instancesLoaded) ? <Loading/> : !instance || current ? <Outlet context={update} key={instance ?? 'home'}/> : <Loading/>}</main>
     </div>
-    {instance && showRail && <RightRail instance={instance} onMobileClose={() => setRailOpen(false)}/>}
+    {!railFirst && instance && showRail && <RightRail instance={instance} onMobileClose={() => setRailOpen(false)}/>}
+    <CompactScrollbars/>
     {creating && <CreateInstance onClose={() => setCreating(false)}/>}
   </div>
 }
