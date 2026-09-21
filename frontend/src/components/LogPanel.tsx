@@ -85,16 +85,17 @@ function renderSearchHighlights(text: string, searchLower: string, keyPrefix: st
   return <span key={keyPrefix}>{nodes}</span>
 }
 
-export function LogLine({entry, search, isCenter}: {entry: LogEntry; search: string; isCenter?: boolean}) {
+export function LogLine({entry, search, isCenter, fresh}: {entry: LogEntry; search: string; isCenter?: boolean; fresh?: boolean}) {
   const rawText = entry.text.replace(/[\r\n]+$/, '')
   const trimmed = rawText.trim()
+  const freshClass = fresh ? ' motion-enter' : ''
 
   // 1. 判断是否为纯分割线 (Pure Rule)
   const isPureRule = PURE_RULE_RE.test(trimmed)
   if (isPureRule) {
     const char = trimmed.includes('═') ? '═' : '─'
     return (
-      <div className={`log-rule ${char === '═' ? 'rule-double' : 'rule-single'}`}>
+      <div className={`log-rule ${char === '═' ? 'rule-double' : 'rule-single'}${freshClass}`}>
         <span className="rule-bar" />
         <span className="rule-bar" />
       </div>
@@ -107,7 +108,7 @@ export function LogLine({entry, search, isCenter}: {entry: LogEntry; search: str
     const title = ruleMatch[1].trim()
     const char = trimmed.includes('═') ? '═' : '─'
     return (
-      <div className={`log-rule ${char === '═' ? 'rule-double' : 'rule-single'}`}>
+      <div className={`log-rule ${char === '═' ? 'rule-double' : 'rule-single'}${freshClass}`}>
         <span className="rule-bar" />
         <span className="rule-title">{highlightText(title, search)}</span>
         <span className="rule-bar" />
@@ -121,7 +122,7 @@ export function LogLine({entry, search, isCenter}: {entry: LogEntry; search: str
     const [, levelStr, dateStr, timeStr, messageStr] = logMatch
     const levelKey = levelStr.toLowerCase()
     return (
-      <div className={`log-line log-entry-line level-${levelKey}`}>
+      <div className={`log-line log-entry-line level-${levelKey}${freshClass}`}>
         <span className={`log-lvl lvl-${levelKey}`}>{levelStr}</span>
         <span className="log-ts">{dateStr ? `${dateStr} ` : ''}{timeStr}</span>
         <span className="log-divider">│</span>
@@ -142,7 +143,7 @@ export function LogLine({entry, search, isCenter}: {entry: LogEntry; search: str
   if (shouldCenter) {
     const title = trimmed
     return (
-      <div className="log-line log-entry-line log-center-title">
+      <div className={`log-line log-entry-line log-center-title${freshClass}`}>
         <span className="center-title-text">{highlightText(title, search)}</span>
       </div>
     )
@@ -150,7 +151,7 @@ export function LogLine({entry, search, isCenter}: {entry: LogEntry; search: str
 
   // 5. 其他非标准行或多行 Traceback
   return (
-    <div className={`log-line log-entry-line log-raw level-${entry.level.toLowerCase()}`}>
+    <div className={`log-line log-entry-line log-raw level-${entry.level.toLowerCase()}${freshClass}`}>
       <span className="log-msg">{highlightText(rawText, search)}</span>
     </div>
   )
@@ -183,6 +184,8 @@ export function LogPanel({active = true}: {active?: boolean}) {
   const connection = useConnection()
   const {notify, ui} = useApp()
   const scroll = useRef<HTMLDivElement>(null)
+  /* 已渲染到的最大日志 id：大于它的增量行做入场动画（初始加载不播）。 */
+  const freshFrom = useRef<number | null>(null)
 
   useEffect(() => {
     setLevel(loadLogLevel(instance))
@@ -229,6 +232,10 @@ export function LogPanel({active = true}: {active?: boolean}) {
       return [...byId.values()].sort((a, b) => a.id - b.id).slice(-400)
     })
   }), [instance])
+
+  useLayoutEffect(() => {
+    freshFrom.current = entries.at(-1)?.id ?? null
+  }, [entries])
 
   useLayoutEffect(() => {
     if (!active || !follow || !scroll.current) return
@@ -303,6 +310,7 @@ export function LogPanel({active = true}: {active?: boolean}) {
                 entry={entry}
                 search={search}
                 isCenter={isCenterByContext}
+                fresh={freshFrom.current !== null && entry.id > freshFrom.current}
               />
             )
           })

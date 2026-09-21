@@ -1,0 +1,163 @@
+/* ============================================================================
+   motion.css —— AzurPilot 全站动效系统（当前维护者方言的“收敛 + 编排”层）
+   由各皮肤（classic / minimal / legacy）在自身条目之后引入，确保覆盖同级规则。
+   纪律：
+   - 只动 transform / opacity / 颜色；不新增 blur 层；
+   - 不改 DOM 结构（:has(> …) 选择器依赖直接子级）；
+   - 全部动画在 prefers-reduced-motion: reduce 下由 tokens.css 的全局开关关闭。
+   ============================================================================ */
+
+:root {
+  /* 时长（5 档，映射现存 .12s/.15s/.18s/.2s/.22s/.24s/.26s） */
+  --dur-1: 120ms;   /* 瞬时反馈：按压、hover 变色 */
+  --dur-2: 160ms;   /* 微交互：图标按钮、toggle、导航项 */
+  --dur-3: 200ms;   /* 标准 UI 变化：菜单、分段滑块、弹窗 */
+  --dur-4: 260ms;   /* 结构性变化：抽屉、右栏、折叠展开、列表入场 */
+  --dur-5: 320ms;   /* 页面级转场：路由切换、大面板 */
+  --dur-pulse: 1800ms;
+  --dur-spin: 1200ms;
+
+  /* 缓动 */
+  --ease-standard: cubic-bezier(.2, 0, 0, 1);        /* 维护者主缓动（现状 13 处） */
+  --ease-decelerate: cubic-bezier(.22, .61, .36, 1); /* 入场（现状 5 处，含 legacy-page-in） */
+  --ease-emphasized: cubic-bezier(.16, 1, .3, 1);    /* 页面级转场（近似 easeOutExpo） */
+  --ease-accelerate: cubic-bezier(.4, 0, 1, 1);      /* 出场 */
+  --ease-spring: var(--ease-decelerate);             /* 兜底；下面的 linear() 为真弹簧 */
+
+  /* 位移与缩放 */
+  --shift-page: 8px;      /* 页面级横向位移 */
+  --shift-page-y: 6px;    /* 页面级纵向位移 */
+  --shift-entry: 8px;     /* 列表/卡片入场位移 */
+  --press-scale: .97;
+  --scale-modal: .97;
+}
+
+/* 真·弹簧：stiffness 360 / damping 28 / mass 1 → 过冲约 1.5%，沉降 320ms。
+   仅用于单元素（toast/按压回弹），不进列表。 */
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    --ease-spring: linear(
+      0.0278 4.17%, 0.0976 8.33%, 0.1928 12.5%, 0.3004 16.67%, 0.4107 20.83%,
+      0.5171 25%, 0.6151 29.17%, 0.7022 33.33%, 0.7771 37.5%, 0.8396 41.67%,
+      0.8903 45.83%, 0.9302 50%, 0.9604 54.17%, 0.9825 58.33%, 0.9978 62.5%,
+      1.0075 66.67%, 1.013 70.83%, 1.0152 75%, 1.015 79.17%, 1.0132 83.33%,
+      1.0104 87.5%, 1.0071 91.67%, 1.0035 95.83%, 1 100%
+    );
+  }
+}
+
+/* 各主题的转场“方言”微调：紧凑更短，简约无位移，旧版保持接近现状 */
+:root[data-theme='extreme'] { --shift-page: 6px; --shift-page-y: 4px; --motion-page-dur: var(--dur-3) }
+:root[data-theme='minimal'] { --shift-page: 0px; --shift-page-y: 3px; --motion-page-dur: var(--dur-2) }
+:root[data-theme='legacy-light'], :root[data-theme='legacy-dark'] { --shift-page: 7px; --shift-page-y: 5px; --motion-page-dur: var(--dur-4) }
+:root { --motion-page-dur: var(--dur-5) }
+
+/* ============================================================================
+   1 · 页面转场（由 usePageMotion 给 #main-content 挂类触发；首屏与同路径不播）
+   ============================================================================ */
+@keyframes motion-page-forward { from { opacity: 0; transform: translateX(var(--shift-page)) } to { opacity: 1; transform: none } }
+@keyframes motion-page-back { from { opacity: 0; transform: translateX(calc(-1 * var(--shift-page))) } to { opacity: 1; transform: none } }
+@keyframes motion-page-fade { from { opacity: 0; transform: translateY(var(--shift-page-y)) } to { opacity: 1; transform: none } }
+
+main#main-content.motion-nav-forward { animation: motion-page-forward var(--motion-page-dur) var(--ease-emphasized) both }
+main#main-content.motion-nav-back { animation: motion-page-back var(--motion-page-dur) var(--ease-emphasized) both }
+main#main-content.motion-nav-fade { animation: motion-page-fade var(--motion-page-dur) var(--ease-decelerate) both }
+
+/* 转场期间 main 会短暂移出视口边界（±8px）：横向 clip 防止出现瞬时横向滚动条。
+   overflow-x: clip 不创建滚动容器，不影响 sticky 与固定定位后代（弹窗/浮层不被裁切）。 */
+.main-shell { overflow-x: clip }
+
+/* ============================================================================
+   2 · 抽屉与右栏：视觉不变、性能修复（left/right → transform，避免逐帧重排）
+   ============================================================================ */
+@media (max-width: 950px) {
+  .sidebar {
+    left: 0;
+    transform: translateX(-230px);
+    visibility: hidden;
+    transition: transform var(--dur-4) var(--ease-decelerate), visibility var(--dur-4) allow-discrete;
+    will-change: transform;
+  }
+  .mobile-open .sidebar { left: 0; transform: none; visibility: visible }
+
+  .right-rail {
+    right: 0;
+    opacity: 0;
+    transform: translateX(100%);
+    visibility: hidden;
+    transition: transform var(--dur-4) var(--ease-decelerate), opacity var(--dur-4) var(--ease-standard), visibility var(--dur-4) allow-discrete;
+    will-change: transform;
+  }
+  .rail-open .right-rail { transform: none; opacity: 1; visibility: visible }
+}
+
+/* ============================================================================
+   3 · 弹窗 / 浮层入场（原生 <dialog>，[open] 切换即自动重播）
+   ============================================================================ */
+@keyframes motion-modal-in { from { opacity: 0; transform: translateY(6px) scale(var(--scale-modal)) } to { opacity: 1; transform: none } }
+@keyframes motion-backdrop-in { from { opacity: 0 } to { opacity: 1 } }
+
+dialog.modal[open] { animation: motion-modal-in var(--dur-3) var(--ease-emphasized) both }
+dialog.modal[open]::backdrop { animation: motion-backdrop-in var(--dur-3) var(--ease-standard) both }
+
+/* ============================================================================
+   4 · 按压反馈（配合 components.css 中 .button/.icon-button 过渡补充 transform）
+   ============================================================================ */
+.button:active:not(:disabled),
+.icon-button:active:not(:disabled),
+.text-button:active { transform: scale(var(--press-scale)) }
+
+/* ============================================================================
+   5 · 主页编排：左列文案 → 统计 → 卡片逐个浮现（错峰 40ms，区间 0-320ms）
+   ============================================================================ */
+@keyframes motion-fade-up { from { opacity: 0; transform: translateY(var(--shift-entry)) } to { opacity: 1; transform: none } }
+
+.home-deck-copy > *, .home-main-heading { animation: motion-fade-up var(--dur-4) var(--ease-decelerate) both }
+.home-deck-copy > :nth-child(2) { animation-delay: 40ms }
+.home-deck-copy > :nth-child(3) { animation-delay: 80ms }
+.home-deck-foot { animation: motion-fade-up var(--dur-4) var(--ease-decelerate) both; animation-delay: 120ms }
+
+.home-instance-grid > * { animation: motion-fade-up var(--dur-4) var(--ease-decelerate) both }
+.home-instance-grid > :nth-child(1) { animation-delay: 40ms }
+.home-instance-grid > :nth-child(2) { animation-delay: 80ms }
+.home-instance-grid > :nth-child(3) { animation-delay: 120ms }
+.home-instance-grid > :nth-child(4) { animation-delay: 160ms }
+.home-instance-grid > :nth-child(5) { animation-delay: 200ms }
+.home-instance-grid > :nth-child(6) { animation-delay: 240ms }
+.home-instance-grid > :nth-child(7) { animation-delay: 280ms }
+.home-instance-grid > :nth-child(8) { animation-delay: 320ms }
+.home-instance-grid > :nth-child(n+9) { animation-delay: 360ms }
+
+/* ============================================================================
+   6 · 日志新行入场（LogPanel 给增量行挂 .motion-enter；初始加载不播）
+   ============================================================================ */
+@keyframes motion-log-in { from { opacity: 0; transform: translateY(2px) } to { opacity: 1; transform: none } }
+.log-line.motion-enter { animation: motion-log-in var(--dur-2) var(--ease-decelerate) both }
+
+/* ============================================================================
+   7 · 顶栏“光随鼠标”掠光（仅材质主题；由 useGlassPointerLight 写入 --mx/--my）
+   ============================================================================ */
+:root[data-theme='light'] .topbar::after,
+:root[data-theme='dark'] .topbar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    260px circle at var(--mx, 30%) var(--my, 30%),
+    rgb(255 255 255 / .14),
+    rgb(255 255 255 / .05) 45%,
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity var(--dur-4) var(--ease-standard);
+}
+:root[data-theme='light'] .topbar:hover::after,
+:root[data-theme='dark'] .topbar:hover::after { opacity: 1 }
+
+/* ============================================================================
+   8 · 杂项：任务列表 / 队列的入场沿用现有 keyframes，仅把“双击叠动”交给
+   motion-gate（见 usePageMotion 的实现说明），此处不引入额外规则。
+   ============================================================================ */
