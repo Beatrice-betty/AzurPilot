@@ -246,6 +246,22 @@ class Session:
                         self.cache[topic] = 'INTERNAL_ERROR'
                         await self.event('subscription.error', {'topic': topic, 'instance': subscription.instance,
                                                                'code': 'INTERNAL_ERROR', 'message': '订阅暂时不可用，请检查服务日志'})
+            if subscription.instance and (time.monotonic() - self.topic_seen.get('statistics', 0)) >= 1:
+                self.topic_seen['statistics'] = time.monotonic()
+                try:
+                    from module.api.statistics_service import get_statistics_fingerprint
+                    stats_fp = await asyncio.to_thread(get_statistics_fingerprint, subscription.instance)
+                    if subscription is self.subscription:
+                        old_fp = self.cache.get('statistics')
+                        if old_fp is not None and old_fp != stats_fp:
+                            self.cache['statistics'] = stats_fp
+                            await self.event('statistics', {'instance': subscription.instance, 'updatedAt': time.time()})
+                        elif old_fp is None:
+                            self.cache['statistics'] = stats_fp
+                except (WebSocketDisconnect, asyncio.CancelledError):
+                    raise
+                except Exception:
+                    pass
 
     async def preview_producer(self):
         """收到新帧即推送；慢浏览器合并为最新帧，不产生截图请求。"""

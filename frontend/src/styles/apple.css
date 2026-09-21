@@ -26,11 +26,13 @@ body {background: var(--bg); background-attachment: fixed}
 
 /* 兼容前缀必须先于标准属性，避免生产压缩后只保留 WebKit 的模糊声明。 */
 /* 左侧栏贴住视口边缘；PC 保留右栏占位，顶栏跨过右栏一直贯穿到屏幕右缘。 */
-.app-shell {padding: 0; gap: 14px; align-items: start}
+.app-shell {padding: 0; gap: 14px}
 .app-shell.with-rail {grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--right-rail-width)}
 .sidebar {
+  position: sticky;
   top: 0;
   height: var(--viewport-height);
+  align-self: stretch;
   background: var(--glass-tint);
   -webkit-backdrop-filter: blur(24px) saturate(130%);
   backdrop-filter: blur(24px) saturate(130%);
@@ -45,6 +47,7 @@ body {background: var(--bg); background-attachment: fixed}
   position: sticky;
   top: 56px;
   height: calc(var(--viewport-height) - 56px);
+  align-self: stretch;
   background: var(--glass-tint);
   -webkit-backdrop-filter: blur(24px) saturate(130%);
   backdrop-filter: blur(24px) saturate(130%);

@@ -128,11 +128,19 @@ export function StatisticsChart({series, tables = [], heading = true, expanded =
   }, [isCandlestick, seriesData])
 
   const hasPoints = seriesData.some(item => item.points.length > 0)
+  useEffect(() => {
+    const el = element.current
+    return () => {
+      if (el) echarts.getInstanceByDom(el)?.dispose()
+    }
+  }, [])
+
   const single = seriesData[0]
 
   useEffect(() => {
     if (!element.current || !hasPoints) return
-    const chart = echarts.init(element.current, undefined, {locale: language.startsWith('zh') ? 'ZH' : 'EN'})
+    const container = element.current
+    const chart = echarts.getInstanceByDom(container) ?? echarts.init(container, undefined, {locale: language.startsWith('zh') ? 'ZH' : 'EN'})
 
     function render() {
       const colors = getComputedStyle(document.documentElement)
@@ -223,7 +231,6 @@ export function StatisticsChart({series, tables = [], heading = true, expanded =
       }, true)
     }
 
-    const container = element.current
     const onWheel = (event: WheelEvent) => {
       if (!event.ctrlKey && !event.metaKey) {
         event.stopPropagation()
@@ -240,7 +247,6 @@ export function StatisticsChart({series, tables = [], heading = true, expanded =
       container.removeEventListener('wheel', onWheel, {capture: true})
       observer.disconnect()
       themeObserver.disconnect()
-      chart.dispose()
     }
   }, [seriesData, hasPoints, isCandlestick, axisMode, isSingle, selectedSeries, categoryTimes, language, ui, theme])
 

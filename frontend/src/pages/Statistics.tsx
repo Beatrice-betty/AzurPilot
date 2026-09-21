@@ -107,6 +107,41 @@ export function Statistics() {
     void api.request('statistics.report', {instance, category, days, month, period}).then(value => {if (active) setData(value)}).catch(error => {if (active) setError(error.message)})
     return () => {active = false}
   }, [instance, category, days, month, period, connection, revision])
+
+  // 静默更新：后端数据更新推送到前端时平滑更新图表与指标，避免 Loading 闪烁
+  const silentRefresh = useCallback(() => {
+    if (connection !== 'ready') return
+    void api.request('statistics.report', {instance, category, days, month, period})
+      .then(value => {
+        setData(value)
+      })
+      .catch(() => {
+        // 静默更新失败时不影响当前已展示视图
+      })
+  }, [connection, instance, category, days, month, period])
+
+  useEffect(() => {
+    if (connection !== 'ready') return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const triggerUpdate = () => {
+      clearTimeout(timer)
+      timer = setTimeout(silentRefresh, 300)
+    }
+
+    return api.onEvent(event => {
+      if (event.topic === 'statistics') {
+        const payload = event.data as {instance?: string} | undefined
+        if (!payload?.instance || payload.instance === instance) {
+          triggerUpdate()
+        }
+      } else if (event.topic === 'overview') {
+        const payload = event.data as {instance?: string} | undefined
+        if (payload?.instance === instance) {
+          triggerUpdate()
+        }
+      }
+    })
+  }, [connection, instance, silentRefresh])
   // 分段控件可见时记录它的自然宽度；隐藏后 clientWidth 为 0，沿用上次的值避免来回抖动。
   // 除工具栏与右侧控件外还要观察分段控件自身：切换语言会改变标签文字宽度，
   // 此时工具栏宽度没变，只有控件自己的尺寸变了。
