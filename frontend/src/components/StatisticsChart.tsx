@@ -66,12 +66,18 @@ export function StatisticsChart({series, tables = [], heading = true, expanded =
     const panel = canvas?.closest<HTMLElement>('.statistics-chart')
     if (!canvas || !panel) return
     const resize = () => {
-      let used = 0
+      let above = 0
       for (const child of panel.children) {
         if (child === canvas) break
-        used += child.getBoundingClientRect().height
+        above += child.getBoundingClientRect().height
       }
-      canvas.style.height = `${Math.max(240, panel.clientHeight - used)}px`
+      const panelBefore = panel.clientHeight
+      const canvasBefore = canvas.getBoundingClientRect().height
+      const next = Math.max(240, panelBefore - above)
+      if (Math.abs(next - canvasBefore) < 1) return
+      canvas.style.height = `${next}px`
+      /* 面板跟着长高，说明它的高度由内容决定，此时写高会无限增高，于是退回原高度。 */
+      if (panel.clientHeight > panelBefore + 1) canvas.style.height = `${canvasBefore}px`
     }
     resize()
     /* 面板高度、上方内容高度（换语言会让芯片换行）变化时都要重算。 */

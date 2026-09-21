@@ -615,6 +615,41 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
   color: var(--text);
 }
 
+/* 新建标签按钮：静态只有加号，悬停现出虚线圆圈，按下时圆圈与图标一起放缩。 */
+:root[data-theme='legacy-light'] .instance-tab-create,
+:root[data-theme='legacy-dark'] .instance-tab-create,
+.app-shell.legacy-shell .instance-tab-create {
+  width: calc(var(--instance-tab-height) * .85);
+  height: calc(var(--instance-tab-height) * .85);
+  border-color: transparent;
+  transition: color .15s ease, border-color .15s ease, transform .15s ease;
+}
+:root[data-theme='legacy-light'] .instance-tab-create > .lucide,
+:root[data-theme='legacy-dark'] .instance-tab-create > .lucide,
+.app-shell.legacy-shell .instance-tab-create > .lucide {
+  transition: transform .15s ease;
+}
+:root[data-theme='legacy-light'] .instance-tab-create:hover,
+:root[data-theme='legacy-dark'] .instance-tab-create:hover,
+.app-shell.legacy-shell .instance-tab-create:hover {
+  border-color: var(--accent);
+}
+:root[data-theme='legacy-light'] .instance-tab-create:hover > .lucide,
+:root[data-theme='legacy-dark'] .instance-tab-create:hover > .lucide,
+.app-shell.legacy-shell .instance-tab-create:hover > .lucide {
+  transform: scale(1.12);
+}
+:root[data-theme='legacy-light'] .instance-tab-create:active,
+:root[data-theme='legacy-dark'] .instance-tab-create:active,
+.app-shell.legacy-shell .instance-tab-create:active {
+  border-color: var(--accent);
+  transform: scale(.9);
+}
+:root[data-theme='legacy-light'] .instance-tab-create:active > .lucide,
+:root[data-theme='legacy-dark'] .instance-tab-create:active > .lucide,
+.app-shell.legacy-shell .instance-tab-create:active > .lucide {
+  transform: scale(.86);
+}
 /* 侧栏任务菜单：分组展开后具体任务往下列（旧版树状格式）。 */
 .task-group-button:hover .task-group-arrow {transform: none}
 .task-group-button.expanded .task-group-arrow {color: var(--accent); transform: rotate(180deg)}

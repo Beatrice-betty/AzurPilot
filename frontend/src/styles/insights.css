@@ -106,9 +106,9 @@ main {display:flex;flex-direction:column;min-height:0}
 /* gap 会让「没有指标卡片」的分类在底部空出 20px：sections 里只剩图表面板一个子元素时，
    grid 仍为不存在的第二行保留间距。改成把间距挂到指标卡片的下外边距上 ——
    只有真有上下两块时才出现，单块时铺满到底。 */
-/* 末行 minmax(0,1fr) 只在有第二块时才分到高度；flex-basis 取 auto 而非 0：
-   内容比视口高时停在内容高上让页面去滚，取 0 会被压到内容高以下并被 overflow 截掉。 */
-.statistics-sections {display:grid;grid-template-rows:auto minmax(0,1fr);gap:0;flex:1 0 auto;min-height:0}
+/* 末行 minmax(0,1fr) 只在有第二块时才分到高度。basis 取 0 让容器高度确定：
+   面板高度若由内容决定，图表高度的计算会自指。 */
+.statistics-sections {display:grid;grid-template-rows:auto minmax(0,1fr);gap:0;flex:1 1 0;min-height:0}
 .statistics-sections > .stat-metrics {margin-bottom:20px}.statistics-note {padding:13px 17px;background:var(--surface);border-left:3px solid #159b88;border-radius:5px;font-size:12px;line-height:1.8;color:var(--muted);margin:0}
 .stat-metrics {display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:16px;padding:20px 22px}.stat-metrics span {display:block;color:var(--muted);font-size:11px;margin-bottom:10px}.stat-metrics strong {display:block;font-size:23px;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.stat-metrics small {font-size:11px;font-weight:400;margin-left:6px;color:var(--muted)}.summary-metrics {padding:0;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}.summary-metrics section {padding:20px;background:var(--surface);border:1px solid var(--border);border-radius:12px}
 .summary-metric-card {transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
