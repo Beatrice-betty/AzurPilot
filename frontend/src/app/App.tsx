@@ -1,5 +1,5 @@
 import { PasswordInput, Select } from '../components/FormControls'
-import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent, type MouseEvent, type ChangeEvent } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type MouseEvent, type ChangeEvent } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArrowRight, CalendarClock, ChartNoAxesCombined, Code2, Compass, FileJson, GalleryHorizontal, LayoutDashboard, Globe, House, Download, ExternalLink, Maximize2, Menu, Minimize2, Palette, PanelTop, Settings2, WifiOff, X } from 'lucide-react'
 import { api } from '../api/client'
@@ -39,18 +39,6 @@ export function CreateInstance({onClose, startWithImport = false}: {onClose: () 
   /* 从「配置管理 → 导入配置」进来时，直接把可导入的配置文件列出来。 */
   useEffect(() => { if (startWithImport) void pickImport() }, [])
 
-  /* 弹窗自己按 Esc 时，页面先收到 keydown Escape 再收到 <dialog> 的 cancel；原生文件选择器
-     被取消时只送来 cancel，没有 keydown。cancelGuard 靠「这次 cancel 之前见过 Esc 吗」区分两者。 */
-  const escapePressed = useRef(false)
-  function escapesFromPage() {
-    const pressed = escapePressed.current
-    escapePressed.current = false
-    return pressed
-  }
-  /* 非 Esc 的按键说明上一次 cancel 已经收尾。 */
-  function trackEscape(event: KeyboardEvent) {
-    escapePressed.current = event.key === 'Escape'
-  }
   /* 上传本机配置文件：读文件文本后上传，浏览器只给内容、给不了服务器路径。 */
   async function uploadImport(event: ChangeEvent<HTMLInputElement>) {
     const input = event.target
@@ -86,7 +74,7 @@ export function CreateInstance({onClose, startWithImport = false}: {onClose: () 
       navigate(`/i/${created.instance}/overview`)
     } catch (error) { setError((error as Error).message) } finally { setBusy(false) }
   }
-  return <Modal title={ui('instance.createTitle')} onClose={onClose} cancelGuard={escapesFromPage} onKeyDown={trackEscape}><form onSubmit={submit} className="form-stack">
+  return <Modal title={ui('instance.createTitle')} onClose={onClose}><form onSubmit={submit} className="form-stack">
     <p className="muted">{ui('instance.createHint')}</p>
     <label className="button secondary file-button" htmlFor="instance-import-file">{ui('instance.importPick')}<input id="instance-import-file" type="file" accept="application/json,.json" onChange={uploadImport}/></label>
     <button type="button" className="button secondary" disabled={importState.loading} onClick={pickImport}>{importState.loading ? ui('instance.importLoading') : ui('instance.importConfig')}</button>
