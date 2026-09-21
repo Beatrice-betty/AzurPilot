@@ -11,8 +11,10 @@ from tests.test_farming_combat_config import make_config
 
 
 class CampaignPtContinueTests(unittest.TestCase):
-    def make_runner(self, task='ThreeOilLowCost', limit=93100, stage='C2', gain=100, achievement='non_stop'):
-        config = make_config(task, Campaign={'Name': stage, 'Event': 'event_20260908_cn'})
+    def make_runner(self, task='ThreeOilLowCost', limit=93100, stage='C2', gain=100, achievement='non_stop',
+                    fallback=0):
+        config = make_config(task, Campaign={'Name': stage, 'Event': 'event_20260908_cn'},
+                             GemsFarming={'EventFallbackStage': fallback})
         config.override(EventGeneral_PtLimit=limit, EventGeneral_TimeLimit=DEFAULT_TIME,
                         StopCondition_MapAchievement=achievement, TaskBalancer_Enable=False)
         config.task_switched = Mock(return_value=False)
@@ -82,6 +84,18 @@ class CampaignPtContinueTests(unittest.TestCase):
         self.assertEqual(state['runs'], 2)
         self.assertEqual(trace, ['navigate', ('pt', 93060), 'battle', 'navigate', ('pt', 93070), 'battle'])
         self.assertNotIn('ThreeOilLowCost.Scheduler.Enable', runner.config.modified)
+
+    def test_pt_fallback_ends_event_run_before_next_dispatch(self):
+        for task in ('ThreeOilLowCost', 'GemsFarming'):
+            with self.subTest(task=task):
+                runner, state, trace = self.make_runner(task=task, fallback='7-2')
+                self.run_twice(runner)
+                self.assertEqual(state['runs'], 1)
+                self.assertEqual(trace, ['navigate', ('pt', 93060), 'battle', 'navigate', ('pt', 93160)])
+                self.assertEqual(runner.config.modified[f'{task}.Campaign.Name'], '7-2')
+                self.assertEqual(runner.config.modified[f'{task}.Campaign.Event'], 'campaign_main')
+                self.assertNotIn(f'{task}.Scheduler.Enable', runner.config.modified)
+                runner.campaign.ensure_auto_search_exit.assert_called_once_with()
 
     def test_no_pt_limit_retains_direct_continue(self):
         for limit in (0, -1):
