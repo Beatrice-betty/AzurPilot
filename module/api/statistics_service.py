@@ -58,7 +58,7 @@ def refresh_loot(configs, instance):
     configs.path(instance)
     from module.statistics.azurstats import AzurStats
     with _loot_lock:
-        AzurStats.get_meowofficer_farming()
+        AzurStats.get_meowofficer_farming(instance=instance)
     return {'refreshed': True}
 
 
@@ -216,9 +216,10 @@ def report(configs, instance, category, month, days, period):
         from module.statistics.azurstats import AzurStats
         rows = []
         with _loot_lock:
-            cached = AzurStats.load_meowofficer_farming()
+            cached = AzurStats.load_meowofficer_farming(instance=instance)
         for row in cached:
             if row[2] > 0:
                 rows.append([int(row[0]), datetime.fromtimestamp(row[1]).isoformat(sep=' '), float(row[2]), *[round(float(value), 4) for value in row[3:]]])
         result['tables'].append(table('短猫掉落收益', AzurStats.meowofficer_farming_labels, rows))
+        result['notes'].append('仅统计当前实例的掉落；旧记录缺少实例信息，作为历史共享数据保留，不计入当前实例。')
     return result
