@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
@@ -490,6 +490,32 @@ class LogCursorTests(unittest.TestCase):
             self.assertEqual(1, len(second['entries']))
             self.assertEqual('ERROR', second['entries'][0]['level'])
             self.assertEqual([], runtime.logs('test', second['cursor'])['entries'])
+
+
+
+class ProducerCadenceTests(unittest.IsolatedAsyncioTestCase):
+    """推送循环按主题分频：日志要即时，重主题不能用同一节奏轮询。"""
+
+    async def test_logs_are_polled_far_more_often_than_heavy_topics(self):
+        counts = {'logs': 0, 'overview': 0, 'instances': 0}
+        runtime = SimpleNamespace(
+            logs=lambda instance, after: counts.__setitem__('logs', counts['logs'] + 1) or {'instance': instance, 'cursor': 0, 'reset': False, 'entries': []},
+            overview=lambda instance: counts.__setitem__('overview', counts['overview'] + 1) or {'instance': instance},
+            instances=lambda: counts.__setitem__('instances', counts['instances'] + 1) or [],
+        )
+        session = Session(SimpleNamespace(router=SimpleNamespace(runtime=runtime), workers=asyncio.Semaphore(1)), ws=None, local=True)
+        session.subscription = SimpleNamespace(topics=['logs', 'overview', 'instances'], instance='testpilot')
+        session.event = AsyncMock()
+        task = asyncio.create_task(session.producer())
+        await asyncio.sleep(1.2)
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        # 日志每轮都查，重主题各按自己的间隔；不钉具体次数，只要求量级差距。
+        self.assertGreater(counts['logs'], counts['overview'])
+        self.assertGreater(counts['logs'], counts['instances'])
+        self.assertGreater(counts['logs'], 2)
+        self.assertGreater(counts['instances'], 0, '重主题也必须被轮询到')
 
 
 if __name__ == '__main__':

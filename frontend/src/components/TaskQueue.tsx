@@ -21,6 +21,9 @@ const taskGroups = [
  *  动画没停时也能读到真实位置。 */
 export type Box = {left: number; top: number}
 
+/** 条目位置与尺寸。条目被移除后，靠它才能在原地画出一份等大的副本。 */
+export type Placement = Box & {width: number; height: number}
+
 /** 一次渲染前后同一条目发生位移时的起止偏移；不足 1px 的抖动不算移动。
  *  返回空表示不必为这条播动画。 */
 export function movedBy(before: Box | undefined, after: Box) {
@@ -39,48 +42,110 @@ export function movedBy(before: Box | undefined, after: Box) {
  * `onNavigate` 供移动端抽屉在点击任务后收起使用，桌面端不传。
  *
  * 三组同处一个容器，条目在组间移动时能被测到位置变化并连续平移过去。
- * 被新条目推下去的那些同样在这个容器里，所以推挤也是连续的。
- * 新加入的条目淡入，其余条目按测到的位移平移。
+ * 组的高度用补间兑现，离开的条目在原地收缩塌陷，插入的条目自中心放大。
  */
 export function TaskQueue({instance, data, onNavigate}: {instance: string; data?: Overview; onNavigate?: () => void}) {
   const {t, ui} = useApp()
-  const positions = useRef(new Map<string, Box>())
+  const positions = useRef(new Map<string, Placement>())
   const known = useRef(new Set<string>())
   const list = useRef<HTMLDivElement>(null)
-  const arrived = useRef(new Set<string>())
+  const heights = useRef(new Map<string, number>())
+  const snapshots = useRef(new Map<string, HTMLElement>())
+  const synced = useRef(false)
+  const host = useRef<HTMLDivElement | null>(null)
 
   useLayoutEffect(() => {
     const container = list.current
     if (!container) return
-    const previous = positions.current
-    const next = new Map<string, Box>()
-    const moving: {element: HTMLElement; dx: number; dy: number}[] = []
+    // 容器被换掉时，先前的记账对新节点作废，重新建基准。
+    const fresh = !synced.current || host.current !== container
+    synced.current = true
+    host.current = container
+    if (fresh) {
+      known.current.clear()
+      heights.current.clear()
+    }
+    const previous = fresh ? new Map<string, Placement>() : positions.current
+    const next = new Map<string, Placement>()
+    const moving: {element: HTMLElement; state: string; dx: number; dy: number}[] = []
+    const arrived: HTMLElement[] = []
+    const bodies: HTMLElement[] = []
+    // 条目只在列表内部移动，位移不会超过列表自身尺寸。
+    const span = {w: container.offsetWidth, h: container.offsetHeight}
     for (const body of container.querySelectorAll<HTMLElement>('.rail-queue-body')) {
+      bodies.push(body)
       const state = body.closest('.rail-queue-group')!.className.split(' ').pop()!
       for (const element of body.querySelectorAll<HTMLElement>('[data-task]')) {
         // 键带上组名：同一条目换组后是另一个节点，位置按组分别记账。
         const key = `${state}/${element.dataset.task}`
-        const after = {left: element.offsetLeft, top: element.offsetTop}
+        const after = {left: element.offsetLeft, top: element.offsetTop, width: element.offsetWidth, height: element.offsetHeight}
+        // 这一轮结束后元素可能已被移除，动画要用它当替身。
+        snapshots.current.set(key, element.cloneNode(true) as HTMLElement)
         next.set(key, after)
         const shift = movedBy(previous.get(key), after)
-        if (shift) moving.push({element, ...shift})
+        if (shift && Math.abs(shift.dx) <= span.w && Math.abs(shift.dy) <= span.h) moving.push({element, state, ...shift})
       }
     }
-    // 这一轮记下的键并进档案，跨渲染累计。
-    arrived.current = new Set([...next.keys()].filter(key => !known.current.has(key)))
+    const departed: {key: string; box: Placement}[] = []
+    for (const [key, box] of previous) {
+      if (!next.has(key)) departed.push({key, box})
+    }
+    for (const element of container.querySelectorAll<HTMLElement>('[data-task]')) {
+      const state = element.closest('.rail-queue-group')!.className.split(' ').pop()!
+      if (!known.current.has(`${state}/${element.dataset.task}`)) arrived.push(element)
+    }
     for (const key of next.keys()) known.current.add(key)
+    // 首次记录只建立基准，不播动画。
     positions.current = next
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    for (const {element, dx, dy} of moving) {
+    // 正在塌陷的分组只播塌陷动画。
+    const collapsing = new Set(departed.map(({key}) => key.split('/')[0]))
+    if (fresh || matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    // 组的挤压缩放：高度骤变会让下方内容瞬移，补间后容器不再跳。
+    for (const body of bodies) {
+      const state = body.closest('.rail-queue-group')!.className.split(' ').pop()!
+      const target = body.offsetHeight
+      const seen = heights.current.get(state)
+      // 动画中途量到的 offsetHeight 是中间值，取两者较大者当起点。
+      const from = seen === undefined ? undefined : Math.max(seen, target)
+      heights.current.set(state, target)
+      if (from === undefined || from === target || collapsing.has(state)) continue
+      body.animate([{height: `${from}px`}, {height: `${target}px`}], {duration: 260, easing: 'cubic-bezier(.22, .61, .36, 1)'})
+    }
+    for (const {element, state, dx, dy} of moving) {
+      if (collapsing.has(state)) continue
       element.animate(
         [{transform: `translate(${dx}px, ${dy}px)`}, {transform: 'none'}],
         {duration: 320, easing: 'cubic-bezier(.22, .61, .36, 1)'},
       )
     }
+    // 插入：在腾出的空位中心自小放大。
+    for (const element of arrived) {
+      element.animate(
+        [{opacity: 0, transform: 'scale(.72)'}, {opacity: 1, transform: 'none'}],
+        {duration: 260, easing: 'cubic-bezier(.22, .61, .36, 1)'},
+      )
+    }
+    // 移除：把副本送回原位收缩塌陷；它塌掉的就是腾出的那段高度。
+    for (const {key} of departed) {
+      const source = snapshots.current.get(key)
+      const state = key.split('/')[0]
+      const body = container.querySelector<HTMLElement>(`.rail-queue-group.${state} .rail-queue-body`)
+      const target = heights.current.get(state)
+      if (!source || !body || target === undefined) continue
+      const gap = Number.parseFloat(getComputedStyle(body).rowGap) || 0
+      // 这一组的高度由「目标值 + 离场条目」收缩到目标值。
+      body.animate([{height: `${target + source.offsetHeight + gap}px`}, {height: `${target}px`}], {duration: 260, easing: 'cubic-bezier(.22, .61, .36, 1)'})
+      source.style.pointerEvents = 'none'
+      body.appendChild(source)
+      const animation = source.animate(
+        [{opacity: 1, transform: 'scale(1)', height: `${source.offsetHeight}px`, marginBottom: `${gap}px`, offset: 0},
+         {opacity: 0, transform: 'scale(.86)', height: `${source.offsetHeight}px`, marginBottom: `${gap}px`, offset: .4},
+         {opacity: 0, transform: 'scale(.86)', height: '0px', marginBottom: '0px', offset: 1}],
+        {duration: 260, easing: 'cubic-bezier(.22, .61, .36, 1)'},
+      )
+      animation.finished.then(() => source.remove()).catch(() => source.remove())
+    }
   })
-
-  // 同一轮进来的多条依次错开，避免叠在一起看不出是几条。
-  let arrival = -1
 
   return <div className="rail-task-list" ref={list}>
     {data?.tasks.length ? taskGroups.map(group => {
@@ -94,11 +159,7 @@ export function TaskQueue({instance, data, onNavigate}: {instance: string; data?
         <div className="rail-queue-body">
           {tasks.length ? tasks.map(task => {
             const nextRun = task.nextRun?.replace('T', ' ').trim()
-            // backwards 让起始帧只覆盖延迟期，动画本身不带 fill。
-            const style = arrived.current.has(`${group.state}/${task.name}`)
-              ? {animation: `rail-task-in .26s cubic-bezier(.22, .61, .36, 1) ${arrival++ * 45}ms backwards`}
-              : undefined
-            return <Link key={task.name} data-task={task.name} className="rail-task-item" style={style}
+            return <Link key={task.name} data-task={task.name} className="rail-task-item"
                          to={`/i/${instance}/task/${task.name}`} onClick={onNavigate}>
               <div>
                 <strong>{t(`Task.${task.name}.name`)}</strong>

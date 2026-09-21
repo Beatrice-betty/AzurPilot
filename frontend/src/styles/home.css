@@ -74,12 +74,10 @@
 :root[data-tab-size] .app-shell .breadcrumb .topbar-actions:has(> .topbar-actions-buttons:hover) .topbar-actions-buttons > *,
 :root[data-tab-size] .app-shell .breadcrumb .topbar-actions:has(:focus-visible) .topbar-actions-buttons > * {visibility: visible; pointer-events: auto}
 .instance-tab .lucide {width: var(--instance-tab-icon); height: var(--instance-tab-icon)}
-/* 「主页」的文字与它右侧的分隔线跟整行同一比例；字号不只在分页模式生效，
-   否则切模式时「主页」会忽大忽小 —— 与原模式 / 分页模式无关。 */
-/* 「主页」是纯文字链接，默认命中区只有文字那么大（实测 24×16）；给足内边距，
-   让它占满整条行高，整块都可点。 */
-.breadcrumb > a {font-size: var(--instance-tab-font); display: inline-flex; align-items: center; padding: 10px calc(var(--instance-tab-pad) * .6)}
-.breadcrumb > a:hover {color: var(--accent); background: var(--accent-soft); border-radius: var(--theme-radius-control)}
+/* 「主页」的文字与它右侧的分隔线跟整行同一比例；字号不只在分页模式生效。
+   它是纯文字链接，默认命中区只有文字那么大，给足内边距让它占满整条行高。 */
+.breadcrumb .topbar-actions > a {font-size: var(--instance-tab-font); display: inline-flex; align-items: center; padding: 10px calc(var(--instance-tab-pad) * .6)}
+.breadcrumb .topbar-actions > a:hover {color: var(--accent); background: var(--accent-soft); border-radius: var(--theme-radius-control)}
 
 /* 分页模式：实例平铺成一行标签页。留给标签的宽度有下限，所以「主页」与会收缩的页名要能截断，
    而不是把标签挤没。 */
@@ -98,16 +96,17 @@
 .instance-tab-create {flex-shrink: 0; align-self: center; width: var(--instance-tab-height); height: var(--instance-tab-height); padding: 0; display: grid; place-items: center; border: 1px dashed var(--border); border-radius: 999px; color: var(--muted); transition: color .15s, border-color .15s}
 .instance-tab-create:hover {color: var(--accent); border-color: var(--accent)}
 
-/* 标签页里的两格控件位置：左格放状态与启停钮，右格放删除钮，两格同宽，切换时不改标签页宽度。 */
-.instance-tab-cell {position: relative; display: inline-flex; flex-shrink: 0; width: var(--instance-tab-icon); height: var(--instance-tab-icon)}
+/* 标签页里的两格控件位置：左格放状态与启停钮，右格放删除钮。格子有定宽，悬停切换图标不改标签宽度。
+   左格比状态图标小一圈：只缩可点范围，悬停换上的启停钮不会反比状态图标大一级。 */
+.instance-tab-cell {position: relative; display: inline-flex; flex-shrink: 0; width: calc(var(--instance-tab-icon) * 6 / 7); height: calc(var(--instance-tab-icon) * 6 / 7)}
 .instance-tab-icon {flex-shrink: 0}
 
 /* 左格：平时是状态图标，鼠标压在这一格上时换成启停钮。 */
 .instance-tab-cell:not(.instance-tab-remove):hover .instance-tab-icon {visibility: hidden}
 .instance-tab-cell:not(.instance-tab-remove):hover .instance-tab-power {display: grid}
 .instance-tab-power {position: absolute; inset: 0; display: none; place-items: center; border-radius: 50%; cursor: pointer; color: var(--accent)}
-/* 启停图标取整格的 72%：与状态图标视觉等重，悬停换图标时尺寸不变。 */
-.instance-tab-power > .lucide {width: 72%; height: 72%}
+/* 启停图标取状态图标的 72%：尺寸不跟着格子走，只缩格子时图标仍是原来的大小。 */
+.instance-tab-power > .lucide {width: calc(var(--instance-tab-icon) * .72); height: calc(var(--instance-tab-icon) * .72)}
 .instance-tab-power:hover {color: var(--surface); background: var(--accent)}
 .instance-tab.running .instance-tab-power {color: var(--red)}
 .instance-tab.running .instance-tab-power:hover {color: var(--surface); background: var(--red)}

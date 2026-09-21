@@ -403,10 +403,15 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 .app-shell.legacy-shell .instance-page-grid,
 .app-shell.legacy-shell .statistics-legacy,
 .app-shell.legacy-shell .task-config-settings-inner,
-.app-shell.legacy-shell .instance-page-panel,
 .app-shell.legacy-shell .task-config-rail-slot .task-rail-directory {animation: legacy-page-in .22s cubic-bezier(.22, .61, .36, 1)}
 @keyframes legacy-page-in {from {opacity: 0; transform: translateY(6px)} to {opacity: 1; transform: none}}
-@media (prefers-reduced-motion: reduce) {.app-shell.legacy-shell .instance-page-grid, .app-shell.legacy-shell .statistics-legacy, .app-shell.legacy-shell .task-config-settings-inner, .app-shell.legacy-shell .instance-page-panel, .app-shell.legacy-shell .task-config-rail-slot .task-rail-directory {animation: none}}
+/* 总览页在两个视图间切换：面板用自己的动画，按切换方向从上方或下方滑入。 */
+.app-shell.legacy-shell .instance-page-panel {animation: none}
+.app-shell.legacy-shell .instance-page-panel.panel-drop {animation: panel-drop .24s cubic-bezier(.22, .61, .36, 1)}
+.app-shell.legacy-shell .instance-page-panel.panel-rise {animation: panel-rise .24s cubic-bezier(.22, .61, .36, 1)}
+@keyframes panel-drop {from {opacity: 0; transform: translateY(-6px)} to {opacity: 1; transform: none}}
+@keyframes panel-rise {from {opacity: 0; transform: translateY(6px)} to {opacity: 1; transform: none}}
+@media (prefers-reduced-motion: reduce) {.app-shell.legacy-shell .instance-page-grid, .app-shell.legacy-shell .statistics-legacy, .app-shell.legacy-shell .task-config-settings-inner, .app-shell.legacy-shell .instance-page-panel, .app-shell.legacy-shell .instance-page-panel.panel-drop, .app-shell.legacy-shell .instance-page-panel.panel-rise, .app-shell.legacy-shell .task-config-rail-slot .task-rail-directory {animation: none}}
 .app-shell.legacy-shell > .main-shell > main > .instance-page-grid,
 .app-shell.legacy-shell > .main-shell > main > .task-config-legacy {flex-shrink: 1; min-height: 0}
 .app-shell.legacy-shell > .right-rail {grid-area: rail}
@@ -694,9 +699,10 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
   /* 右栏那套边距会让调度器与任务计划比同列其他卡片窄，这里清零让三块左右对齐。 */
   .instance-page-rail .scheduler-widget {margin: 0}
   .instance-page-rail .rail-schedule {padding: 12px 0 0}
-  .instance-page-main {display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto}
+  /* 右栏不滚，滚动交给面板：滚动条只在面板内出现与消失，同列的资源卡片宽度不变。 */
+  .instance-page-main {display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: hidden}
   .instance-page-main .resource-grid {margin-bottom: 0}
-  .instance-page-panel {display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0}
+  .instance-page-panel {display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow-y: auto}
   /* 搜索框与参数卡同宽，「任务设置和搜索对齐」。 */
   .task-config-settings .config-toolbar .input-icon {max-width: none}
   .task-config-settings .config-toolbar {margin-bottom: 0}
@@ -792,8 +798,6 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 .rail-queue-body {padding: 4px}
 .rail-queue-empty {padding: 14px 12px; color: var(--muted); font-size: 12px; line-height: 1.6}
 .rail-task-item {padding: 10px 8px; border-radius: 4px}
-/* 条目进场动画：由脚本按「首次出现」挂到条目自身，动画名在这里定义。 */
-@keyframes rail-task-in {from {opacity: 0; translate: 0 -6px}}
 .rail-task-item:hover {background: var(--surface-muted)}
 .rail-task-item strong {font-size: 12px}
 .rail-task-item small {font-size: 11px}

@@ -15,6 +15,10 @@ from module.api.protocol import ApiError, AuthParams, Request, SubscribeParams, 
 from module.logger import logger
 from module.runtime.password_utils import REMOTE_ACCESS_HEADER, is_local_client
 
+# 各主题的轮询间隔（秒）。日志要即时，取数要重读配置文件与遍历实例，放开节奏会持续占用工作线程。
+TOPIC_INTERVAL = {'logs': 0.1, 'overview': 1, 'instances': 2}
+TICK = min(TOPIC_INTERVAL.values())
+
 
 class Gateway:
     def __init__(self, router, password):
@@ -79,6 +83,7 @@ class Session:
         self.log_cursor = 0
         self.window = time.monotonic()
         self.requests = 0
+        self.topic_seen = {}
         self.preview_changed = asyncio.Event()
         self.preview_pending = None
 
@@ -170,6 +175,7 @@ class Session:
                     self.subscription = subscription
                     self.cache.clear()
                     self.log_cursor = 0
+                    self.topic_seen.clear()
                     self.preview_changed.set()
                     result = {'topics': subscription.topics, 'instance': subscription.instance}
                 else:
@@ -195,7 +201,7 @@ class Session:
 
     async def producer(self):
         while True:
-            await asyncio.sleep(2)
+            await asyncio.sleep(TICK)
             if not self.authorized:
                 continue
             subscription = self.subscription
@@ -204,6 +210,9 @@ class Session:
                 try:
                     if topic == 'preview':
                         continue
+                    if (now := time.monotonic()) - self.topic_seen.get(topic, 0) < TOPIC_INTERVAL.get(topic, 2):
+                        continue
+                    self.topic_seen[topic] = now
                     if topic == 'instances':
                         action = runtime.instances
                     elif topic == 'overview':
