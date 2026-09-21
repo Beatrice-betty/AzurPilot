@@ -53,6 +53,7 @@ function contextWith(theme: Theme): AppContextValue {
     setTheme: () => {},
     colorMode: 'auto', resolvedMode: 'light', setColorMode: () => {},
     customPalettes: [], saveCustomPalette: () => {}, deleteCustomPalette: () => {},
+    compactRailSide: 'right', setCompactRailSide: () => {}, compactRailWidth: 244, setCompactRailWidth: () => {},
     palette: 'ocean',
     setPalette: () => {},
     language: 'zh-CN',
