@@ -8,12 +8,13 @@
    ============================================================================ */
 
 :root {
-  /* 时长（5 档，映射现存 .12s/.15s/.18s/.2s/.22s/.24s/.26s） */
-  --dur-1: 120ms;   /* 瞬时反馈：按压、hover 变色 */
-  --dur-2: 160ms;   /* 微交互：图标按钮、toggle、导航项 */
-  --dur-3: 200ms;   /* 标准 UI 变化：菜单、分段滑块、弹窗 */
-  --dur-4: 260ms;   /* 结构性变化：抽屉、右栏、折叠展开、列表入场 */
-  --dur-5: 320ms;   /* 页面级转场：路由切换、大面板 */
+  /* 时长（5 档，映射现存 .12s/.15s/.18s/.2s/.22s/.24s/.26s）
+     统一乘全局倍率 --motion-speed（开发者工具「动效控制台」可切换；默认 1）。 */
+  --dur-1: calc(120ms * var(--motion-speed, 1));   /* 瞬时反馈：按压、hover 变色 */
+  --dur-2: calc(160ms * var(--motion-speed, 1));   /* 微交互：图标按钮、toggle、导航项 */
+  --dur-3: calc(200ms * var(--motion-speed, 1));   /* 标准 UI 变化：菜单、分段滑块、弹窗 */
+  --dur-4: calc(260ms * var(--motion-speed, 1));   /* 结构性变化：抽屉、右栏、折叠展开、列表入场 */
+  --dur-5: calc(320ms * var(--motion-speed, 1));   /* 页面级转场：路由切换、大面板 */
   --dur-pulse: 1800ms;
   --dur-spin: 1200ms;
 
@@ -44,6 +45,24 @@
       1.0104 87.5%, 1.0071 91.67%, 1.0035 95.83%, 1 100%
     );
   }
+}
+
+/* 力度档位（开发者工具「动效控制台」可切换；默认标准＝PR 取值） */
+:root[data-motion-strength='strong'] {
+  --shift-page: 12px;
+  --shift-page-y: 9px;
+  --shift-entry: 12px;
+  --dur-4: calc(300ms * var(--motion-speed, 1));
+  --dur-5: calc(380ms * var(--motion-speed, 1));
+  --scale-modal: .95;
+}
+
+/* 减少动效的模拟开关（开发者工具；与系统开关同等效力） */
+:root[data-motion-reduced] *,
+:root[data-motion-reduced] *::before,
+:root[data-motion-reduced] *::after {
+  animation: none !important;
+  transition: none !important;
 }
 
 /* 各主题的转场“方言”微调：紧凑更短，简约无位移，旧版保持接近现状 */

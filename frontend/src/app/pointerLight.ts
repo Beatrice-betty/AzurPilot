@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useApp } from './context'
 import { usesMaterial } from './theme'
+import { motionReducedActive } from './motionPrefs'
 
 /** 顶栏「光随鼠标」掠光：一帧最多写一次 CSS 变量（绝不做 setState），
  *  由 motion.css 的 .topbar::after 消费 --mx/--my。
@@ -10,7 +11,7 @@ export function useGlassPointerLight() {
   const enabled = usesMaterial(theme)
   useEffect(() => {
     if (!enabled) return
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    if (motionReducedActive()) return
     if (!window.matchMedia('(pointer: fine)').matches) return
     let raf = 0
     let x = 0.5

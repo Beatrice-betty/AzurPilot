@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
+import { motionReducedActive, motionSpeedValue } from './motionPrefs'
 
 export type NavDirection = 'forward' | 'back' | 'fade'
 
@@ -40,9 +41,25 @@ const DIRECTION_CLASS: Record<NavDirection, string> = {
   fade: 'motion-nav-fade',
 }
 
+const ALL_CLASSES = ['motion-nav-forward', 'motion-nav-back', 'motion-nav-fade']
+
+/** 最近一次播放的转场类；供开发者工具「重播页面转场」使用。 */
+let lastTransitionClass: string | null = null
+
+/** 重播最近一次页面转场（开发者工具用；与正常播放同一套类与时长）。 */
+export function replayLastPageTransition() {
+  const target = document.getElementById('main-content')
+  if (!target || !lastTransitionClass) return
+  if (motionReducedActive()) return
+  target.classList.remove(...ALL_CLASSES)
+  void target.offsetWidth
+  target.classList.add(lastTransitionClass)
+  window.setTimeout(() => target.classList.remove(lastTransitionClass!), 480 * motionSpeedValue())
+}
+
 /** 给 #main-content 挂页面转场类（motion.css 中消费）。
  *  - 首屏挂载与同路径不播；
- *  - 减弱动效环境直接跳过（与全站 reduced-motion 守卫一致）；
+ *  - 系统「减少动效」或调试模拟开启时直接跳过；
  *  - 用 useLayoutEffect 在绘制前挂类，避免「先渲染终态再跳回起点」的闪帧。 */
 export function usePageMotion() {
   const location = useLocation()
@@ -54,9 +71,10 @@ export function usePageMotion() {
     const before = previous.current
     previous.current = pathname
     if (!target || before === null || before === pathname) return
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    if (motionReducedActive()) return
     const className = DIRECTION_CLASS[routeDirection(before, pathname)]
-    target.classList.remove('motion-nav-forward', 'motion-nav-back', 'motion-nav-fade')
+    lastTransitionClass = className
+    target.classList.remove(...ALL_CLASSES)
     // 强制重排：快速连续导航时也要重新触发同一动画。
     void target.offsetWidth
     target.classList.add(className)
@@ -64,6 +82,6 @@ export function usePageMotion() {
     cleanupTimer.current = window.setTimeout(() => {
       target.classList.remove(className)
       cleanupTimer.current = null
-    }, 480)
+    }, 480 * motionSpeedValue())
   }, [location.pathname])
 }
