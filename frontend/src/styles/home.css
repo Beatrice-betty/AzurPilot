@@ -93,8 +93,12 @@
 .instance-tab:hover {color: var(--accent); background: var(--accent-soft); border-color: var(--border); border-bottom: 0}
 .instance-tab-name {font-size: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap}
 /* 尺寸与标签页同高，并自己垂直居中：标签条是 stretch 对齐，不写 align-self 这个圆钮会顶对齐。 */
-.instance-tab-create {flex-shrink: 0; align-self: center; width: var(--instance-tab-height); height: var(--instance-tab-height); padding: 0; display: grid; place-items: center; border: 1px dashed var(--border); border-radius: 999px; color: var(--muted); transition: color .15s, border-color .15s}
+.instance-tab-create {flex-shrink: 0; align-self: center; box-sizing: border-box; width: var(--instance-tab-height); height: var(--instance-tab-height); padding: 0; display: grid; place-items: center; border: 1px dashed var(--border); border-radius: 999px; color: var(--muted); transition: color .15s, border-color .15s}
 .instance-tab-create:hover {color: var(--accent); border-color: var(--accent)}
+/* 「+」图标由 JSX 给固定尺寸，这里按标签图标变量覆盖，否则五档缩放时图标不动。 */
+.instance-tab-create > .lucide {width: calc(var(--instance-tab-icon) * .72); height: calc(var(--instance-tab-icon) * .72)}
+/* 按压反馈与主题里其它按钮同一写法（见 apple.css 的 .button:active）；两个创建入口共用。 */
+.instance-tab-create:active:not(:disabled), .instance-create:active:not(:disabled) {filter: brightness(.94)}
 
 /* 标签页里的两格控件位置：左格放状态与启停钮，右格放删除钮。格子有定宽，悬停切换图标不改标签宽度。
    左格比状态图标小一圈：只缩可点范围，悬停换上的启停钮不会反比状态图标大一级。 */

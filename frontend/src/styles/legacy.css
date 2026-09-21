@@ -619,13 +619,14 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 :root[data-theme='legacy-light'] .instance-tab-create,
 :root[data-theme='legacy-dark'] .instance-tab-create,
 .app-shell.legacy-shell .instance-tab-create {
-  width: 26px;
-  height: 26px;
-  margin-left: 10px;
-  margin-bottom: 4px;
-  align-self: flex-end;
+  /* 尺寸与标签页同源，五档缩放时按钮与标签的高度比恒定 —— 新版主题用的是同一个变量。 */
+  width: var(--instance-tab-height);
+  height: var(--instance-tab-height);
+  margin-left: calc(10px * var(--row-scale, 1));
+  /* 居中：按钮与标签页等高，按下的背景块正好落在标签条内。 */
+  align-self: center;
   border: none !important;
-  border-radius: 6px;
+  border-radius: var(--theme-radius-control);
   background: transparent !important;
   color: var(--muted);
   display: inline-flex;
