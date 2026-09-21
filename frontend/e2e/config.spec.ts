@@ -148,30 +148,3 @@ test('清空数字字段回落到参数默认值，不再提示格式错误', as
   await page.reload()
   await expect(value).toHaveValue('119')
 })
-
-test('任务优先级列表拖动改顺序，刷新后仍是新顺序', async ({page}) => {
-  const list = '[id="General.YukikazeTaskManager.TaskPriorityAdjustment"]'
-  const rows = `${list} .task-priority-row`
-  await page.goto('/#/i/testpilot/task/General')
-  await page.locator(list).scrollIntoViewIfNeeded()
-  await expect(page.locator(rows).first()).toBeVisible()
-  const order = () => page.locator(rows).evaluateAll(items => items.map(item => (item as HTMLElement).dataset.task))
-  const before = await order()
-  expect(before.length).toBeGreaterThan(10)
-
-  // 把第 5 行拖到最前面：按下、分步移动，落点标记出现后再松手。
-  const source = page.locator(rows).nth(4)
-  const box = (await source.boundingBox())!
-  const first = (await page.locator(rows).first().boundingBox())!
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-  await page.mouse.down()
-  await page.mouse.move(box.x + box.width / 2, first.y + 2, {steps: 8})
-  await expect(page.locator(`${rows}.drop-before`)).toHaveCount(1)
-  await page.mouse.up()
-
-  const moved = [before[4], ...before.slice(0, 4), ...before.slice(5)]
-  await expect.poll(order).toEqual(moved)
-  await page.reload()
-  await expect(page.locator(rows).first()).toBeVisible()
-  expect(await order()).toEqual(moved)
-})

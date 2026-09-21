@@ -32,7 +32,6 @@ export function FieldInput({id, value, onChange, type, options, disabled, label,
       {options.map(option => <option value={JSON.stringify(option)} key={JSON.stringify(option)}>{translateOption?.(option) ?? String(option)}</option>)}
     </Select>
   }
-  // 任务优先级在任务参数页由 TaskPriorityField 接管（可拖动排序），这里保留纯文本框作为其他入口的回退。
   if (type === 'textarea' || type === 'task_priority') return <AutoTextarea id={id} value={String(value ?? '')} disabled={disabled} label={label} invalid={invalid} onChange={onChange}/>
   const isNumber = typeof value === 'number' || ['int', 'number', 'float'].includes(type ?? '')
   const Input = type === 'password' ? PasswordInput : 'input'
