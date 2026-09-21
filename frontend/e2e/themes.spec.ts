@@ -85,6 +85,24 @@ test('切换主题卸载旧材质，返回简约后不再发起装饰资源请�
   expect(requests.some(url => /ClassicGlass|Wallpaper|\/classic-|\/theme\.css|api\.yppp/.test(url))).toBe(false)
 })
 
+test('玻璃主题长页面滚动时两侧栏保持贴合视口', async ({page}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('azurpilot.theme', 'dark')
+    localStorage.setItem('azurpilot.dev-mode', '1')
+  })
+  await page.goto('/#/i/testpilot/task/Alas')
+  await expect(page.locator('.right-rail')).toBeVisible()
+
+  await page.evaluate(() => scrollTo(0, 500))
+  await expect.poll(() => page.evaluate(() => scrollY)).toBe(500)
+
+  const sidebar = (await page.locator('.sidebar').boundingBox())!
+  const rail = (await page.locator('.right-rail').boundingBox())!
+  expect(Math.round(sidebar.y)).toBe(0)
+  expect(Math.round(sidebar.height)).toBe(1100)
+  expect(Math.round(rail.y + rail.height)).toBe(1100)
+})
+
 test('简约总览、弹窗、控件和移动端导航均使用实色', async ({page}, testInfo) => {
   await page.addInitScript(() => {
     localStorage.setItem('azurpilot.theme', 'minimal')

@@ -90,9 +90,9 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 .chart-expanded {inset: 0; border-radius: 0; z-index: 150}
 @media (min-width: 951px) {
   /* 外壳给确定高度，内层 height:100% 才解析得到；只设 min-height 时整条链按内容长。 */
-  .app-shell {height: var(--viewport-height)}
+  .app-shell:has(.overview-page) {height: var(--viewport-height)}
   /* 网格项的最小尺寸默认取内容高，归零后才受外壳高度约束。 */
-  .main-shell {min-height: 0}
+  .app-shell:has(.overview-page) .main-shell {min-height: 0}
   /* 同浅色 / 深色：高度取父级。 */
   .overview-page {flex: 0 0 auto; height: 100%; min-height: 0}
   .overview-main {flex: 19; margin-bottom: 0}

@@ -26,13 +26,11 @@ body {background: var(--bg); background-attachment: fixed}
 
 /* 兼容前缀必须先于标准属性，避免生产压缩后只保留 WebKit 的模糊声明。 */
 /* 左侧栏贴住视口边缘；PC 保留右栏占位，顶栏跨过右栏一直贯穿到屏幕右缘。 */
-.app-shell {padding: 0; gap: 14px}
+.app-shell {padding: 0; gap: 14px; align-items: start}
 .app-shell.with-rail {grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--right-rail-width)}
 .sidebar {
-  position: sticky;
   top: 0;
   height: var(--viewport-height);
-  align-self: stretch;
   background: var(--glass-tint);
   -webkit-backdrop-filter: blur(24px) saturate(130%);
   backdrop-filter: blur(24px) saturate(130%);
@@ -47,7 +45,6 @@ body {background: var(--bg); background-attachment: fixed}
   position: sticky;
   top: 56px;
   height: calc(var(--viewport-height) - 56px);
-  align-self: stretch;
   background: var(--glass-tint);
   -webkit-backdrop-filter: blur(24px) saturate(130%);
   backdrop-filter: blur(24px) saturate(130%);
@@ -191,9 +188,9 @@ main:focus {outline: none}
 .schedule-panel {height: 700px}
 @media (min-width: 951px) {
   /* 外壳给确定高度，内层 height:100% 才解析得到；只设 min-height 时整条链按内容长。 */
-  .app-shell {height: var(--viewport-height)}
+  .app-shell:has(.overview-page) {height: var(--viewport-height)}
   /* 网格项的最小尺寸默认取内容高，归零后才受外壳高度约束。 */
-  .main-shell {min-height: 0}
+  .app-shell:has(.overview-page) .main-shell {min-height: 0}
   /* 与 .overview-main 同高：内容超出时压缩日志栏而不是顶高面板。 */
   .monitor-panel {height: auto; min-height: 0}
 }

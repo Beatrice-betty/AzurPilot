@@ -18,9 +18,9 @@
   /* 高度取父级 100%：自算高度对不上 main 的内边距与页标题外边距，底部会空一截；
      flex-basis 会盖过 height，所以这一项不能参与伸缩。 */
   /* 外壳给确定高度，内层 height:100% 才解析得到；只设 min-height 时整条链按内容长。 */
-  .app-shell {height: var(--viewport-height)}
+  .app-shell:has(.overview-page) {height: var(--viewport-height)}
   /* 网格项的最小尺寸默认取内容高，归零后才受外壳高度约束。 */
-  .main-shell {min-height: 0}
+  .app-shell:has(.overview-page) .main-shell {min-height: 0}
   /* 高度取父级 100%：外壳没给确定高度时它会退化成 auto。flex-basis 会盖过 height，所以不参与伸缩。 */
   .overview-page {display:flex;flex-direction:column;flex:0 0 auto;height:100%;min-height:0;width:100%}
   /* 与 .overview-main 同高：内容超出时压缩日志栏而不是顶高面板。 */
