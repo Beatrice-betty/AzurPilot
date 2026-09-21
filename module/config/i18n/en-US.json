@@ -1111,7 +1111,7 @@
     },
     "TaskPriorityAdjustment": {
       "name": "Task priority adjustment",
-      "help": "Drag task rows to adjust scheduler priority. Tasks closer to the top run first. New tasks are automatically inserted into suitable positions according to the built-in default priority."
+      "help": "Enter task names in order from top to bottom; tasks closer to the top run first. One task per line, or separate them with >. New tasks are automatically inserted into suitable positions according to the built-in default priority."
     }
   },
   "OneClickRetire": {
