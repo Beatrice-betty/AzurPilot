@@ -23,9 +23,7 @@
   .app-shell:has(.overview-page) .main-shell {min-height: 0}
   /* 高度取父级 100%：外壳没给确定高度时它会退化成 auto。flex-basis 会盖过 height，所以不参与伸缩。 */
   .overview-page {display:flex;flex-direction:column;flex:0 0 auto;height:100%;min-height:0;width:100%}
-  /* flex-basis 取 auto 而非 0：内容超出时停在自己的内容高上，让页面去滚；
-     取 0 是允许压到内容高以下，而压缩出去的部分会被 overflow 截掉、页面又
-     不留可滚动高度，那部分内容就再也够不着了。 */
+  /* 停在自己的内容高上、让页面去滚：压到内容高以下会被 overflow 截掉，且没有可滚高度够回去。 */
   .monitor-panel {flex:1 0 auto;height:auto;min-height:0}
   .overview-main {margin-bottom:-10px}
 }

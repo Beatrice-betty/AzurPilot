@@ -24,6 +24,19 @@ export type Box = {left: number; top: number}
 /** 条目位置与尺寸。条目被移除后，靠它才能在原地画出一份等大的副本。 */
 export type Placement = Box & {width: number; height: number}
 
+/** 条目在文档里的布局坐标：沿 offsetParent 链累加到 body，
+ *  谁当 offsetParent 都得到同一套数值；动画未结束时读到的仍是真实落点。 */
+function documentBox(node: HTMLElement) {
+  let left = 0
+  let top = 0
+  for (let step: HTMLElement | null = node; step; step = step.offsetParent as HTMLElement | null) {
+    left += step.offsetLeft
+    top += step.offsetTop
+    if (step === document.body) break
+  }
+  return {left, top}
+}
+
 /** 一次渲染前后同一条目发生位移时的起止偏移；不足 1px 的抖动不算移动。
  *  返回空表示不必为这条播动画。 */
 export function movedBy(before: Box | undefined, after: Box) {
@@ -72,13 +85,16 @@ export function TaskQueue({instance, data, onNavigate}: {instance: string; data?
     const bodies: HTMLElement[] = []
     // 条目只在列表内部移动，位移不会超过列表自身尺寸。
     const span = {w: container.offsetWidth, h: container.offsetHeight}
+    // 减去容器自身的位置，条目坐标即与容器相对，整页位移不会算成条目在动。
+    const origin = documentBox(container)
     for (const body of container.querySelectorAll<HTMLElement>('.rail-queue-body')) {
       bodies.push(body)
       const state = body.closest('.rail-queue-group')!.className.split(' ').pop()!
       for (const element of body.querySelectorAll<HTMLElement>('[data-task]')) {
         // 键带上组名：同一条目换组后是另一个节点，位置按组分别记账。
         const key = `${state}/${element.dataset.task}`
-        const after = {left: element.offsetLeft, top: element.offsetTop, width: element.offsetWidth, height: element.offsetHeight}
+        const box = documentBox(element)
+        const after = {left: box.left - origin.left, top: box.top - origin.top, width: element.offsetWidth, height: element.offsetHeight}
         // 这一轮结束后元素可能已被移除，动画要用它当替身。
         snapshots.current.set(key, element.cloneNode(true) as HTMLElement)
         next.set(key, after)

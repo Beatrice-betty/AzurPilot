@@ -64,14 +64,15 @@ export function CreateInstance({onClose, startWithImport = false}: {onClose: () 
   const [error, setError] = useState('')
   const {instances, refresh, notify, ui} = useApp()
   const navigate = useNavigate()
+  const location = useLocation()
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError('')
     try {
       /* 后端会归一化首尾空白与尾点，导航用返回的规范名。 */
       const created = await api.request('instances.create', {name, source: source || null, import_file: importFile || null})
       await refresh(); onClose(); notify(ui('instance.created'))
-      /* 从总览页发起的创建留在总览页：新实例的运行总览。 */
-      navigate(`/i/${created.instance}/overview`)
+      /* 新实例落在发起创建时所在的分区，从总览页创建就停在总览。 */
+      navigate(`/i/${created.instance}/${location.pathname.split('/').slice(3).join('/') || 'overview'}`)
     } catch (error) { setError((error as Error).message) } finally { setBusy(false) }
   }
   return <Modal title={ui('instance.createTitle')} onClose={onClose}><form onSubmit={submit} className="form-stack">

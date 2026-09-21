@@ -270,7 +270,7 @@ export function TaskConfig() {
   const groupsSection = task === 'FleetInfo' ? (
     <FleetInfo value={config.values.FleetInfo?.FleetInfo?.Result} />
   ) : !hasGroups ? (
-    (search || !tool) && <Empty icon={<Settings2 size={30} />} title={ui('task.noConfig')}>
+    (search || !tool) && <Empty icon={<Settings2 size={30} />} title={ui(search ? 'task.noConfigFound' : 'task.noConfig')}>
       {search ? ui('task.tryOtherKeyword') : ui('task.viewRelated')}
     </Empty>
   ) : groupCardsBlock
