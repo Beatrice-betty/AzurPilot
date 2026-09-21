@@ -133,7 +133,8 @@ flowchart TD
     O -- events.subscribe --> Q[原子替换订阅 清空缓存]
     O -- 其他 --> R[Semaphore(8) + to_thread 走 dispatch]
     P & Q & R --> S[response/failure 入发送队列] --> K
-    F -.-> T[producer 按 TICK 采样订阅<br/>logs 0.1s/overview 1s/instances 2s<br/>指纹未变不推送]
+    F -.-> T[producer 分频采样重主题<br/>overview 1s/instances 2s<br/>指纹未变不推送]
+    F -.-> V[log_producer 监听日志到达通知<br/>历史批量初始化/新增逐条推送]
     F -.-> U[preview_producer 事件驱动<br/>新帧即推送, 慢客户端只留最新帧]
 ```
 
@@ -143,7 +144,7 @@ flowchart TD
 2. **认证判定**：`Session.authorized = 本机直连 or 密码为空`。本机判定由 `is_local_client` 完成：来源地址、Host 头、Origin 三者都必须是 `127.0.0.1/::1/localhost`，且未命中远程访问隧道标记头 `x-azurpilot-remote-access`（隧道流量同样来自回环，靠标记头区分）。
 3. **登录退避**：`auth.login` 用 `secrets.compare_digest` 比对；失败按来源 IP 记数，锁定 `min(60, 次数×2)` 秒。
 4. **业务执行**：除 `auth.login` 与 `events.subscribe` 外，所有方法经 `asyncio.to_thread` 在工作线程执行（阻塞 IO 不阻塞事件循环），`Semaphore(8)` 限制全局并发。
-5. **订阅采样**：`producer` 以各 topic 间隔（`TOPIC_INTERVAL`：logs 0.1s、overview 1s、instances 2s；TICK 为最小值）轮询快照，序列化指纹与上次相同则跳过；`preview` 不轮询，由 worker 截图事件驱动（见第 8 节）。用户切换实例时，旧订阅尚未完成的采样结果按对象身份比对丢弃。
+5. **订阅推送**：`producer` 只以各 topic 间隔（overview 1s、instances 2s）采样重主题，序列化指纹与上次相同则跳过。日志与截图都不轮询：worker 日志队列每接收一条日志就通过 `log_hub` 唤醒 `log_producer`，截图继续由 `preview` hub 唤醒。用户切换实例时，旧订阅尚未完成的结果按对象身份比对丢弃。
 6. **发送**：所有出站消息经单条发送队列；事件按实际发送顺序获得单调递增 `seq`。`send_json` 带 10 秒超时，写死循环即断开。
 
 ## 7. 调用关系
@@ -176,7 +177,7 @@ flowchart TD
         → config/*.json（事务锁 + 原子写）或 ProcessManager 状态
         → response/failure 信封 → 发送队列 → writer → 浏览器
 
-订阅路径（instances/overview/logs，按 topic 间隔 0.1/1/2 秒轮询）
+订阅路径（instances/overview，按 topic 间隔 2/1 秒轮询）
   producer → RuntimeService 读取 → JSON 序列化指纹
         → 与 cache 不同才 event(seq++) → 发送队列 → 浏览器
 
@@ -188,8 +189,10 @@ flowchart TD
 
 日志路径
   worker 进程日志队列 → ProcessManager.renderables（ring buffer）
+        → log_hub 逐条通知 Session.log_producer
         → RuntimeService.logs 按对象身份找增量 → rich Console 渲染纯文本
-        → Session.log_cursor 记账 → 客户端游标落后则返回 reset
+        → 历史批量初始化、新增逐条推送 → Session.log_cursor 记账
+        → 客户端游标落后则返回 reset
 ```
 
 预览链路是**纯被动**的：API 层任何接口都不会启动截图任务，没有新帧时前端拿到的就是上一帧及其采集时间。这保证了「看一眼截图」永远不消耗设备资源。
@@ -266,7 +269,7 @@ API 模块自身的行为参数来自部署配置 `config/deploy.yaml`（经 `St
 
 一个 uvicorn 事件循环承载全部会话；阻塞操作一律离开事件循环：
 
-- **Session 的四个 asyncio 任务**（`run()` 启动）：`reader`（收请求）、`writer`（发消息）、`producer`（订阅采样，间隔随 topic 0.1/1/2 秒）、`preview_producer`（截图推送）。任一任务结束即触发全会话收尾；收尾用 `anyio.CancelScope(shield=True)` 屏蔽外层取消，保证归还连接计数前收发任务真正结束——ASGI 服务器可能在客户端退出时取消整个会话作用域。
+- **Session 的五个 asyncio 任务**（`run()` 启动）：`reader`（收请求）、`writer`（发消息）、`producer`（overview/instances 分频采样）、`log_producer`（日志到达即推送）、`preview_producer`（截图推送）。任一任务结束即触发全会话收尾；收尾用 `anyio.CancelScope(shield=True)` 屏蔽外层取消，保证归还连接计数前收发任务真正结束——ASGI 服务器可能在客户端退出时取消整个会话作用域。
 - **业务线程**：`asyncio.to_thread` 派发，`Gateway.workers = Semaphore(8)` 同时约束 dispatch 与订阅采样的并发总量，防止一次大批量统计查询耗尽默认线程池。
 - **跨进程写保护**：`ConfigService.patch/delete` 持有 `self.lock`（RLock）+ `config_transaction` 文件锁（`.json.lock`，msvcrt/fcntl，等待上限 15 秒），与核心运行器的配置写回互斥。
 - **实例生命周期锁**：`start/stop/delete` 全部走 `ProcessManager._get_lifecycle_lock(instance)`，与 worker 线程内的状态变更互斥。
@@ -343,7 +346,7 @@ lifespan 关闭（顺序有讲究，测试固化）：
 
 - 所有防护计数（32 连接、30 req/s、退避表）都是**进程内**的；uvicorn 多 worker 部署会绕过它们（当前 gui.py 只跑单 worker，单进程假设成立）。
 - 登录退避按来源 IP 记录，NAT 出口后的多用户共享同一个退避桶。
-- 订阅采样是「读全量 + 指纹比对」，实例很多时每次采样都要读所有配置文件；无增量读取。
+- overview/instances 订阅采样是「读全量 + 指纹比对」，实例很多时每次采样都要读配置文件；日志使用独立增量游标，不受此限制。
 - meowfficer_service 的错误码用 `'INTERNAL'` 而非 `INTERNAL_ERROR`，与协议层兜底码不一致；前端错误映射需注意。
 - `frontend/API.md` 列出的 `DEVICE_UNAVAILABLE` 错误码在 module/api 源码中不存在，属于文档先行或历史遗留。
 - 预览链路每实例只保留一帧，无法回看历史画面；完整视频回放不在设计目标内。
