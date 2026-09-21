@@ -16,6 +16,7 @@ import { StorageField } from '../components/StorageField'
 import { SchedulerWidget } from '../components/SchedulerWidget'
 import { TaskQueue } from '../components/TaskQueue'
 import { useInstanceOverview } from '../components/useInstanceOverview'
+import { TaskPriorityField } from '../components/TaskPriorityField'
 import { editor, prepareValue } from '../config/editors'
 import { EditStatus } from '../components/EditStatus'
 import { isFieldVisible } from './configVisibility'
@@ -143,6 +144,16 @@ export function TaskConfig() {
             <div className="field-control">
               {field.type === 'storage' ? (
                 <StorageField value={value} disabled={false} onClear={() => queue.change(path, {})} />
+              ) : field.type === 'task_priority' ? (
+                <TaskPriorityField
+                  id={path}
+                  value={String(value ?? '')}
+                  fallback={String(field.value ?? '')}
+                  disabled={readonly}
+                  invalid={edit?.status === 'error'}
+                  label={label}
+                  onChange={next => queue.change(path, next)}
+                />
               ) : restrictedLua ? (
                 <RestrictedLuaEditor
                   id={path}
