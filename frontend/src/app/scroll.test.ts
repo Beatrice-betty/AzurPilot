@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest'
-import { easeOutCubic, scrollTargetTop } from './scroll'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { animateScrollTop, easeOutCubic, scrollTargetTop } from './scroll'
+
+afterEach(() => vi.unstubAllGlobals())
 
 describe('easeOutCubic', () => {
   it('端点精确、前段快后段慢', () => {
@@ -21,5 +23,20 @@ describe('scrollTargetTop', () => {
   })
   it('容器不可滚动时归零', () => {
     expect(scrollTargetTop(0, 0, 500, 0, -50)).toBe(0)
+  })
+})
+
+describe('animateScrollTop', () => {
+  it('同一容器开始新滚动时取消上一帧任务', () => {
+    let nextFrame = 1
+    const cancelled: number[] = []
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => nextFrame++))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn((frame: number) => cancelled.push(frame)))
+    const container = Object.assign(new EventTarget(), {scrollTop: 0}) as HTMLElement
+
+    animateScrollTop(container, 100, 280)
+    animateScrollTop(container, 200, 280)
+
+    expect(cancelled).toEqual([1])
   })
 })

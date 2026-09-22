@@ -51,6 +51,7 @@ export function DevControls() {
   const [throwing, setThrowing] = useState(false)
   const override = useDevOverride()
   const motionPrefs = useSyncExternalStore(subscribeMotionPrefs, readMotionPrefs)
+  const motionAvailable = theme !== 'minimal' && theme !== 'extreme'
   const statusLabel = override.status ? ui(STATUS_LABELS[override.status]) : ''
 
   function disableDevMode() {
@@ -127,25 +128,25 @@ export function DevControls() {
       <div className="dev-control-block">
         <div className="dev-control-label"><strong>{ui('developer.motionSpeed')}</strong><span>{ui('developer.motionSpeedHint')}</span></div>
         <div className="dev-button-row">
-          {([[1, '1×'], [2, '0.5×'], [4, '0.25×']] as const).map(([value, label]) => <button key={value} type="button" className="button secondary" aria-pressed={motionPrefs.speed === value} onClick={() => setMotionSpeed(value)}>{label}</button>)}
+          {([[1, '1×'], [2, '0.5×'], [4, '0.25×']] as const).map(([value, label]) => <button key={value} type="button" className="button secondary" disabled={!motionAvailable} aria-pressed={motionPrefs.speed === value} onClick={() => setMotionSpeed(value)}>{label}</button>)}
         </div>
       </div>
       <div className="dev-control-block">
         <div className="dev-control-label"><strong>{ui('developer.motionStrength')}</strong></div>
         <div className="dev-button-row">
-          <button type="button" className="button secondary" aria-pressed={motionPrefs.strength === 'standard'} onClick={() => setMotionStrength('standard')}>{ui('developer.motionStandard')}</button>
-          <button type="button" className="button secondary" aria-pressed={motionPrefs.strength === 'strong'} onClick={() => setMotionStrength('strong')}>{ui('developer.motionStrong')}</button>
+          <button type="button" className="button secondary" disabled={!motionAvailable} aria-pressed={motionPrefs.strength === 'standard'} onClick={() => setMotionStrength('standard')}>{ui('developer.motionStandard')}</button>
+          <button type="button" className="button secondary" disabled={!motionAvailable} aria-pressed={motionPrefs.strength === 'strong'} onClick={() => setMotionStrength('strong')}>{ui('developer.motionStrong')}</button>
         </div>
       </div>
       <div className="dev-control-block">
         <div className="dev-control-label"><strong>{ui('developer.motionReduced')}</strong></div>
         <div className="dev-button-row">
           <button type="button" className="button secondary" aria-pressed={motionPrefs.reduced} onClick={() => setMotionReduced(!motionPrefs.reduced)}>{ui('developer.motionReducedToggle')}</button>
-          <button type="button" className="button secondary" onClick={() => replayLastPageTransition()}>{ui('developer.motionReplay')}</button>
+          <button type="button" className="button secondary" disabled={!motionAvailable} onClick={() => replayLastPageTransition()}>{ui('developer.motionReplay')}</button>
           <button type="button" className="button secondary" onClick={() => resetMotionPrefs()}>{ui('developer.motionReset')}</button>
         </div>
       </div>
-      <p className="dev-hint">{ui('developer.motionHint')}</p>
+      <p className="dev-hint">{ui(motionAvailable ? 'developer.motionHint' : 'developer.motionUnavailable')}</p>
     </section>
 
     <section className="panel config-group">

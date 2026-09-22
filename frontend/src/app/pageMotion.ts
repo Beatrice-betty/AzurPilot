@@ -45,16 +45,30 @@ const ALL_CLASSES = ['motion-nav-forward', 'motion-nav-back', 'motion-nav-fade']
 
 /** 最近一次播放的转场类；供开发者工具「重播页面转场」使用。 */
 let lastTransitionClass: string | null = null
+let cleanupTimer: number | null = null
+
+function stopTransition(target: HTMLElement) {
+  if (cleanupTimer !== null) window.clearTimeout(cleanupTimer)
+  cleanupTimer = null
+  target.classList.remove(...ALL_CLASSES)
+}
+
+function playTransition(target: HTMLElement, className: string) {
+  stopTransition(target)
+  void target.offsetWidth
+  target.classList.add(className)
+  cleanupTimer = window.setTimeout(() => {
+    target.classList.remove(className)
+    cleanupTimer = null
+  }, 480 * motionSpeedValue())
+}
 
 /** 重播最近一次页面转场（开发者工具用；与正常播放同一套类与时长）。 */
 export function replayLastPageTransition() {
   const target = document.getElementById('main-content')
   if (!target || !lastTransitionClass) return
   if (motionReducedActive()) return
-  target.classList.remove(...ALL_CLASSES)
-  void target.offsetWidth
-  target.classList.add(lastTransitionClass)
-  window.setTimeout(() => target.classList.remove(lastTransitionClass!), 480 * motionSpeedValue())
+  playTransition(target, lastTransitionClass)
 }
 
 /** 给 #main-content 挂页面转场类（motion.css 中消费）。
@@ -64,7 +78,6 @@ export function replayLastPageTransition() {
 export function usePageMotion() {
   const location = useLocation()
   const previous = useRef<string | null>(null)
-  const cleanupTimer = useRef<number | null>(null)
   useLayoutEffect(() => {
     const pathname = location.pathname
     const target = document.getElementById('main-content')
@@ -74,14 +87,7 @@ export function usePageMotion() {
     if (motionReducedActive()) return
     const className = DIRECTION_CLASS[routeDirection(before, pathname)]
     lastTransitionClass = className
-    target.classList.remove(...ALL_CLASSES)
-    // 强制重排：快速连续导航时也要重新触发同一动画。
-    void target.offsetWidth
-    target.classList.add(className)
-    if (cleanupTimer.current !== null) window.clearTimeout(cleanupTimer.current)
-    cleanupTimer.current = window.setTimeout(() => {
-      target.classList.remove(className)
-      cleanupTimer.current = null
-    }, 480 * motionSpeedValue())
+    playTransition(target, className)
+    return () => stopTransition(target)
   }, [location.pathname])
 }
