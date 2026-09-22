@@ -23,18 +23,17 @@ describe('资源卡片', () => {
     expect(original).toEqual(['Oil', 'Coin', 'Gem', 'Cube'])
   })
 
-  it('将当前行动力与总行动力以斜线分隔并使用相同字号', () => {
+  it('行动力与石油一致，以小字后缀显示总量', () => {
     const html = renderResources([{name: 'ActionPoint', label: '行动力', value: 101, total: 1301, record: '2026-09-16 12:00:00'}])
 
     expect(html).toContain('<span>行动力</span>')
-    expect(html).toContain('<span>101/1,301</span>')
-    expect(html).not.toContain('<small>')
+    expect(html).toContain('<span>101</span><small>/ 1,301</small>')
   })
 
   it.each([101, 0])('总行动力与当前行动力相等时仍显示完整数值：%s', value => {
     const html = renderResources([{name: 'ActionPoint', label: '行动力', value, total: value, record: '2026-09-16 12:00:00'}])
 
-    expect(html).toContain(`<span>${value}/${value}</span>`)
+    expect(html).toContain(`<span>${value}</span><small>/ ${value}</small>`)
   })
 
   it.each([undefined, 0, 100, NaN, Infinity])('总行动力缺失或异常时回退到当前行动力：%s', total => {

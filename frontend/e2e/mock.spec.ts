@@ -53,8 +53,8 @@ test('总览三态、资源搭配记忆、日志与被动截图切换', async ({
   await expect(page.locator('.resource-card').first()).toContainText('行动力')
   const actionPoint = page.locator('.resource-card').filter({hasText: '行动力'})
   await expect(actionPoint.locator('.resource-heading')).toHaveText('行动力')
-  await expect(actionPoint.locator('.resource-value')).toHaveText('101/1,301')
-  await expect(actionPoint.locator('.resource-value > small')).toHaveCount(0)
+  await expect(actionPoint.locator('.resource-value')).toHaveText('101/ 1,301')
+  await expect(actionPoint.locator('.resource-value small')).toHaveText('/ 1,301')
   await page.reload()
   await expect(page.locator('.resource-card')).toHaveCount(5)
   await page.getByRole('button', {name: '启动调度器', exact: true}).click()
@@ -80,6 +80,47 @@ test('总览三态、资源搭配记忆、日志与被动截图切换', async ({
   await page.goto('/#/i/demo-main/task/Main')
   await expect(page.locator('[id="Main.Emotion.Fleet1Record"]')).toHaveValue('2026-09-12 23:45:12.123456')
   await expect(page.locator('[id="Main.Emotion.Fleet1Record"]')).toHaveAttribute('readonly', '')
+})
+
+test('资源数值按可用宽度缩放并保持当前值与上限在同一行', async ({page}) => {
+  const errors: string[] = []
+  page.on('pageerror', error => errors.push(error.message))
+  await page.addInitScript(() => {
+    localStorage.setItem('azurpilot.resources.demo-main', JSON.stringify(['Oil', 'Coin', 'Gem', 'Cube', 'Pt', 'ActionPoint', 'YellowCoin', 'PurpleCoin', 'Core', 'Medal', 'Merit', 'GuildCoin']))
+    if (!localStorage.getItem('azurpilot.theme')) localStorage.setItem('azurpilot.theme', 'legacy-light')
+  })
+  await page.setViewportSize({width: 1996, height: 900})
+  await page.goto('/#/i/demo-main/overview')
+  const values = page.locator('.resource-value')
+  await expect(values).toHaveCount(12)
+  const coin = page.locator('.resource-card').filter({hasText: '物资'}).locator('.resource-value-content')
+  await expect(coin).toHaveText('186,420/ 600,000')
+  const assertFits = async () => {
+    await expect.poll(() => values.evaluateAll(elements => elements.every(element => {
+      const content = element.querySelector('.resource-value-content')!
+      const primary = content.querySelector('span')!
+      const suffix = content.querySelector('small')
+      const box = content.getBoundingClientRect()
+      return box.width <= element.clientWidth + .5
+        && (!suffix || (suffix.getClientRects().length === 1
+          && suffix.getBoundingClientRect().top < primary.getBoundingClientRect().bottom
+          && parseFloat(getComputedStyle(suffix).fontSize) < parseFloat(getComputedStyle(primary).fontSize)))
+    }))).toBe(true)
+  }
+  await assertFits()
+  await expect.poll(() => coin.evaluate(element => parseFloat(getComputedStyle(element).fontSize) < parseFloat(getComputedStyle(element.parentElement!).fontSize))).toBe(true)
+  await page.locator('.resource-grid').screenshot({path: 'test-results/resource-values-desktop.png'})
+  await page.setViewportSize({width: 390, height: 844})
+  await page.evaluate(() => localStorage.setItem('azurpilot.theme', 'light'))
+  await page.reload()
+  await expect(values).toHaveCount(12)
+  await assertFits()
+  await page.locator('.resource-grid').screenshot({path: 'test-results/resource-values-mobile.png'})
+  // 宽度恢复后应还原主题字号，避免只缩小不放大。
+  await page.setViewportSize({width: 3000, height: 1000})
+  await assertFits()
+  await expect.poll(() => coin.evaluate(element => getComputedStyle(element).fontSize === getComputedStyle(element.parentElement!).fontSize)).toBe(true)
+  expect(errors).toEqual([])
 })
 
 test('任务二级菜单通过顶层浮层覆盖资源卡片', async ({page}) => {

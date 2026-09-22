@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { Box, GripVertical, Plus, X } from 'lucide-react'
 import type { Resource } from '../api/types'
 import { useApp } from '../app/context'
@@ -38,6 +38,42 @@ export function moveResourceKey(keys: string[], fromKey: string, toKey: string):
   return next
 }
 
+function ResourceValue({value, suffix}: {value: string; suffix?: string}) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLSpanElement>(null)
+
+  useLayoutEffect(() => {
+    const container = containerRef.current
+    const content = contentRef.current
+    if (!container || !content) return
+    const fit = () => {
+      const available = container.clientWidth
+      if (!available) return
+      // 先恢复主题字号测量，宽度增加或数字变短后也能恢复正常大小。
+      content.style.fontSize = '1em'
+      const natural = content.getBoundingClientRect().width
+      if (natural > available) content.style.fontSize = `${Math.max(0, available - 1) / natural}em`
+    }
+    fit()
+    let frame = 0
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(fit)
+    })
+    observer.observe(container)
+    // 字体加载和主题切换也可能改变文字宽度。
+    observer.observe(content)
+    return () => {
+      observer.disconnect()
+      cancelAnimationFrame(frame)
+    }
+  }, [value, suffix])
+
+  return <div className="resource-value" ref={containerRef}>
+    <span className="resource-value-content" ref={contentRef}><span>{value}</span>{suffix && <small>/ {suffix}</small>}</span>
+  </div>
+}
+
 export function ResourceCards({resources, selected}: {resources: Resource[]; selected: string[]}) {
   const {ui} = useApp()
   return <div className="resource-grid">{selected.map((key, index) => {
@@ -50,13 +86,11 @@ export function ResourceCards({resources, selected}: {resources: Resource[]; sel
       const showLimit = typeof limit === 'number' && limit > 0
       const showTotal = !!recorded && !showLimit && resource?.name === 'ActionPoint' && typeof resource.value === 'number' && typeof total === 'number' && Number.isFinite(total) && total >= resource.value
       const value = resource?.value
-      const displayValue = recorded && value != null ? `${value.toLocaleString()}${showTotal ? `/${total.toLocaleString()}` : ''}` : '—'
+      const displayValue = recorded && value != null ? value.toLocaleString() : '—'
+      const suffix = recorded && showLimit ? limit.toLocaleString() : showTotal ? total.toLocaleString() : undefined
       return <section key={key} className={`resource-card resource-${index % 4}`}>
         <div className="resource-heading"><span>{label}</span><div className="resource-image-wrap"><ResourceIcon resourceKey={key} size={32}/></div></div>
-        <div className="resource-value">
-          <span>{displayValue}</span>
-          {recorded && showLimit && <small>/ {limit.toLocaleString()}</small>}
-        </div>
+        <ResourceValue value={displayValue} suffix={suffix}/>
         <div className="resource-foot">{recorded ? ui('resource.recordedAt', {time: resource.record?.replace('T', ' ').slice(5, 19) ?? ''}) : ui('resource.waitingSync')}</div>
       </section>
     })}</div>
