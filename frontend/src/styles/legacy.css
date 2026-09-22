@@ -862,3 +862,9 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 .app-shell.legacy-shell .group-nav {scrollbar-width: none}
 .app-shell.legacy-shell .task-nav::-webkit-scrollbar,
 .app-shell.legacy-shell .group-nav::-webkit-scrollbar {width: 0}
+
+/* 调度栏视图下的容器与其中的任务列表不显示滚动条。 */
+.app-shell.legacy-shell .task-rail-scheduler,
+.app-shell.legacy-shell .rail-task-list {scrollbar-width: none}
+.app-shell.legacy-shell .task-rail-scheduler::-webkit-scrollbar,
+.app-shell.legacy-shell .rail-task-list::-webkit-scrollbar {width: 0}

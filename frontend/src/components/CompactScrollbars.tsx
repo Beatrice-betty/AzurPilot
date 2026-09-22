@@ -7,7 +7,7 @@ const RAIL_WIDTH = 12
 /** 缩略条的最短长度，内容很长时也要抓得住。 */
 const MIN_THUMB = 36
 /** 任务设置列表、侧栏与调度器栏不出浮层轨道，这几处不显示滚动条。 */
-const NO_RAIL = '.task-config-settings, .task-config-rail, .task-nav, .group-nav, .sidebar, .rail-task-list'
+const NO_RAIL = '.task-config-settings, .task-config-rail, .task-nav, .group-nav, .sidebar, .rail-task-list, .task-rail-scheduler'
 
 const scrollable = (element: HTMLElement) => element.scrollHeight > element.clientHeight + 1
 
