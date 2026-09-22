@@ -164,11 +164,19 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
   const dragAnchorRef = useRef<{key: string; card: HTMLElement; pointerX: number; pointerY: number; movedX: number; movedY: number; left: number; top: number} | null>(null)
   const releasedKeyRef = useRef<string | null>(null)
   const pickerDragRef = useRef<string | null>(null)
+  const pickerStartRef = useRef<{card: HTMLButtonElement; x: number; y: number} | null>(null)
+  const pickerGridRef = useRef<HTMLDivElement | null>(null)
+  const pickerSlotsRef = useRef<{key: string; left: number; top: number; right: number; bottom: number}[]>([])
+  const pickerRectsRef = useRef<Map<string, {left: number; top: number}>>(new Map())
+  const pickerFramesRef = useRef<number[]>([])
+  const pickerOrderRef = useRef<string[] | null>(null)
+  const [pickerOrder, setPickerOrder] = useState<string[] | null>(null)
   const slotsRef = useRef<{key: string; left: number; top: number; right: number; bottom: number}[]>([])
   const rectsRef = useRef<Map<string, {left: number; top: number}>>(new Map())
   const framesRef = useRef<number[]>([])
   const available = resources.filter(resource => !selected.includes(resource.name))
   const displayed = dragOrder ?? selected
+  const pickerSequence = pickerOrder ?? available.map(item => item.name)
 
   function captureRects() {
     const rects = new Map<string, DOMRect>()
@@ -233,7 +241,41 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
     }))
   }, [dragOrder])
 
+  /* 换位用 FLIP：重排后先把卡片移回原位，下一帧再放开，位移走独立的 translate 属性。
+     被拖动的卡片不参与换位动画，跟手位移由指针直接驱动。 */
+  useLayoutEffect(() => {
+    if (!pickerOrder) return
+    const before = pickerRectsRef.current
+    const moved: HTMLElement[] = []
+    pickerGridRef.current?.querySelectorAll<HTMLElement>('[data-resource-key]').forEach(card => {
+      if (card.dataset.resourceKey === pickerDragRef.current) return
+      const previous = before.get(card.dataset.resourceKey ?? '')
+      if (!previous) return
+      const dx = previous.left - card.offsetLeft
+      const dy = previous.top - card.offsetTop
+      if (!dx && !dy) return
+      card.style.transition = 'none'
+      card.style.translate = `${dx}px ${dy}px`
+      moved.push(card)
+    })
+    pickerRectsRef.current = capturePickerLayout()
+    if (!moved.length) return
+    pickerFramesRef.current.push(requestAnimationFrame(() => {
+      pickerFramesRef.current.push(requestAnimationFrame(() => {
+        moved.forEach(card => {
+          card.style.transition = ''
+          card.style.translate = 'none'
+          card.addEventListener('transitionend', event => {
+            if (event.propertyName === 'translate' && card.style.translate === 'none') card.style.translate = ''
+          }, {once: true})
+        })
+      }))
+    }))
+  }, [pickerOrder])
+
   useEffect(() => () => {
+    pickerFramesRef.current.forEach(cancelAnimationFrame)
+    pickerFramesRef.current = []
     framesRef.current.forEach(cancelAnimationFrame)
     framesRef.current = []
   }, [])
@@ -243,12 +285,33 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
     if (dragOrder && dragOrder.length === selected.length && dragOrder.every((key, index) => key === selected[index])) setDragOrder(null)
   }, [dragOrder, selected])
 
+  /* 未展示区与显示区同构：按下量一次布局与槽位，重排后按同一份快照算反向位移。 */
+  function capturePickerLayout() {
+    const layout = new Map<string, {left: number; top: number}>()
+    pickerGridRef.current?.querySelectorAll<HTMLElement>('[data-resource-key]').forEach(card => {
+      layout.set(card.dataset.resourceKey ?? '', {left: card.offsetLeft, top: card.offsetTop})
+    })
+    return layout
+  }
+  function capturePickerSlots() {
+    return [...pickerGridRef.current?.querySelectorAll<HTMLElement>('[data-resource-key]') ?? []].map(card => {
+      const rect = card.getBoundingClientRect()
+      return {key: card.dataset.resourceKey ?? '', left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom}
+    })
+  }
+
   function add(key: string) {
     if (!selected.includes(key)) onChange([...selected, key])
   }
   function remove(key: string) {
     onChange(selected.filter(item => item !== key))
   }
+  /* 落点判定按目标区域的矩形，不受指针下压着的被拖卡片影响。 */
+  function inRect(element: Element, x: number, y: number) {
+    const rect = element.getBoundingClientRect()
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+  }
+
   function finishDrag(pointerId: number, apply: boolean) {
     if (dragPointerRef.current !== pointerId) return
     const next = dragOrderRef.current
@@ -270,7 +333,8 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
     setDraggingKey(null)
     if (apply) {
       /* 松手落在未展示区，这张卡就此移出仪表盘；其余情况按拖动后的顺序提交。 */
-      const dropped = anchor && document.elementFromPoint(anchor.movedX, anchor.movedY)?.closest('.resource-picker')
+      const picker = editorRef.current?.parentElement?.querySelector('.resource-picker')
+      const dropped = !!(anchor && picker && inRect(picker, anchor.movedX, anchor.movedY))
       if (dropped) { remove(anchor.key); setDragOrder(null) }
       else if (next && next.some((key, index) => key !== selected[index])) onChange(next)
     } else setDragOrder(null)
@@ -328,15 +392,42 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
       })}
       <button type="button" className={`resource-editor-card resource-editor-add${pickerOpen ? ' open' : ''}`} onClick={() => setPickerOpen(open => !open)}><span className="resource-editor-add-icon"><Plus size={18}/></span><span>{ui('resource.addCard')}</span></button>
     </div>
-    {pickerOpen && <div className="resource-picker">{available.length ? <div className="resource-picker-grid">{available.map(resource => {
+    {pickerOpen && <div className="resource-picker">{available.length ? <div className="resource-picker-grid" ref={pickerGridRef}>{pickerSequence.map(key => { const resource = available.find(item => item.name === key); if (!resource) return null
       const labelKey = resourceLabels[resource.name]
       const label = labelKey ? ui(labelKey) : resource.label ?? resource.name
-      return <button type="button" key={resource.name} className="resource-editor-card resource-picker-card" onPointerDown={event => { if (event.button !== 0) return
-            event.currentTarget.setPointerCapture(event.pointerId)
-            pickerDragRef.current = resource.name }}
+      return <button type="button" key={resource.name} className="resource-editor-card resource-picker-card" data-resource-key={resource.name} onPointerDown={event => { if (event.button !== 0) return
+          event.currentTarget.setPointerCapture(event.pointerId)
+          pickerDragRef.current = resource.name
+          pickerStartRef.current = {card: event.currentTarget, x: event.clientX, y: event.clientY}
+          const order = available.map(item => item.name)
+          pickerRectsRef.current = capturePickerLayout()
+          pickerSlotsRef.current = capturePickerSlots()
+          pickerOrderRef.current = order
+          setPickerOrder(order) }}
+          onPointerMove={event => { const start = pickerStartRef.current
+            if (!start || pickerDragRef.current !== resource.name) return
+            start.card.style.transition = 'none'
+            start.card.style.translate = `${event.clientX - start.x}px ${event.clientY - start.y}px`
+            const order = pickerOrderRef.current
+            const index = pickerSlotsRef.current.findIndex(slot => event.clientX >= slot.left && event.clientX <= slot.right && event.clientY >= slot.top && event.clientY <= slot.bottom)
+            const target = index < 0 || !order ? undefined : order[index]
+            if (!order || !target) return
+            const next = moveResourceKey(order, resource.name, target)
+            if (next === order) return
+            pickerOrderRef.current = next
+            setPickerOrder(next) }}
           /* 从「未展示」拖进已展示区，等于把这张卡加回来。 */
-          onPointerUp={event => { const key = pickerDragRef.current; pickerDragRef.current = null
-            if (key && document.elementFromPoint(event.clientX, event.clientY)?.closest(".resource-card-editor")) add(key) }}
+          onPointerUp={event => { const start = pickerStartRef.current
+            const key = pickerDragRef.current
+            pickerDragRef.current = null
+            pickerStartRef.current = null
+            /* 交回过渡，卡片滑回原位。 */
+            if (start) {start.card.style.transition = ''; start.card.style.translate = ''}
+            pickerOrderRef.current = null
+            pickerSlotsRef.current = []
+            setPickerOrder(null)
+            const editor = editorRef.current
+            if (key && editor && inRect(editor, event.clientX, event.clientY)) add(key) }}
           onClick={() => add(resource.name)}><span className="resource-editor-icon resource-editor-icon-image"><ResourceIcon resourceKey={resource.name} size={28}/></span><span>{label}</span><Plus size={15}/></button>
     })}</div> : <div className="resource-picker-empty">{ui('resource.allAdded')}</div>}</div>}
   </div>

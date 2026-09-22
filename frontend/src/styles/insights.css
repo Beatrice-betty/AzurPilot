@@ -147,6 +147,7 @@
 .resource-grid.resource-fit {display:grid}
 /* 卡片适应把网格切成多列，合并卡片仍占满整行。 */
 .resource-grid.resource-fit .resource-merged {grid-column:1/-1}
+.resource-grid.resource-fit .resource-merged {display:grid}
 /* 紧凑视图：只收紧间距与内边距；旧版主题有更具体的规则，仍按主题的紧凑度走。 */
 .resource-grid.resource-dense {gap:4px;margin-bottom:6px}
 .resource-grid.resource-dense .resource-card {padding:4px 11px 3px}
@@ -162,7 +163,7 @@
 :root .resource-grid.resource-fit-text .resource-foot {font-size:clamp(12px,5.6cqw,14px)}
 /* 通用卡片：内部条目沿用资源卡自身的排版，仅由外层容器统一描边。 */
 .resource-grid .resource-merged {flex:1 1 100%;display:flex;flex-wrap:wrap;gap:8px;box-shadow:var(--shadow)}
-.resource-merged .resource-merged-item {flex:1 1 var(--resource-card-min);min-width:0;border:0;background:transparent;box-shadow:none}
+.resource-merged .resource-merged-item {flex:1 1 var(--resource-card-min);min-width:0;border:0;background:transparent;box-shadow:none;backdrop-filter:none}
 /* 仪表盘设置弹窗内的开关行：弹窗比设置页窄，用紧凑排法。 */
 .dashboard-options {display:flex;flex-direction:column}
 .dashboard-option {display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid color-mix(in srgb,var(--border) 70%,transparent)}
