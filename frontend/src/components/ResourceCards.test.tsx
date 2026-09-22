@@ -5,10 +5,10 @@ import type { Resource } from '../api/types'
 import { translateUi } from '../i18n'
 import { moveResourceKey, ResourceCards } from './ResourceCards'
 
-function renderResources(resources: Resource[]) {
+function renderResources(resources: Resource[], selected = ['ActionPoint']) {
   return renderToStaticMarkup(
     <AppContext.Provider value={{ui: (key, params) => translateUi('zh-CN', key, params)} as AppContextValue}>
-      <ResourceCards resources={resources} selected={['ActionPoint']}/>
+      <ResourceCards resources={resources} selected={selected}/>
     </AppContext.Provider>,
   )
 }
@@ -23,20 +23,40 @@ describe('资源卡片', () => {
     expect(original).toEqual(['Oil', 'Coin', 'Gem', 'Cube'])
   })
 
-  it('行动力没有上限时显示不同的总行动力', () => {
+  it('将当前行动力与总行动力以斜线分隔并使用相同字号', () => {
     const html = renderResources([{name: 'ActionPoint', label: '行动力', value: 101, total: 1301, record: '2026-09-16 12:00:00'}])
 
-    expect(html).toContain('101')
-    expect(html).toContain('总行动力')
-    expect(html).toContain('1,301')
+    expect(html).toContain('<span>行动力</span>')
+    expect(html).toContain('<span>101/1,301</span>')
+    expect(html).not.toContain('<small>')
   })
 
-  it('总行动力未增加时不显示冗余或异常后缀', () => {
-    const html = renderResources([{name: 'ActionPoint', label: '行动力', value: 101, total: 101, record: '2026-09-16 12:00:00'}])
-    const invalid = renderResources([{name: 'ActionPoint', label: '行动力', value: 101, total: 0, record: '2026-09-16 12:00:00'}])
+  it.each([101, 0])('总行动力与当前行动力相等时仍显示完整数值：%s', value => {
+    const html = renderResources([{name: 'ActionPoint', label: '行动力', value, total: value, record: '2026-09-16 12:00:00'}])
 
-    expect(html).toContain('101')
+    expect(html).toContain(`<span>${value}/${value}</span>`)
+  })
+
+  it.each([undefined, 0, 100, NaN, Infinity])('总行动力缺失或异常时回退到当前行动力：%s', total => {
+    const html = renderResources([{name: 'ActionPoint', label: '行动力', value: 101, total, record: '2026-09-16 12:00:00'}])
+
+    expect(html).toContain('<span>行动力</span>')
+    expect(html).toContain('<span>101</span>')
     expect(html).not.toContain('总行动力')
-    expect(invalid).not.toContain('总行动力')
+  })
+
+  it.each([undefined, '2020-01-01 00:00:00'])('尚未同步时不展示总量和明细：%s', record => {
+    const html = renderResources([{name: 'ActionPoint', label: '行动力', value: 101, total: 1301, record}])
+
+    expect(html).toContain('<span>—</span>')
+    expect(html).not.toContain('1,301')
+    expect(html).not.toContain('<small>')
+  })
+
+  it('其他资源仍显示当前值和上限', () => {
+    const html = renderResources([{name: 'Oil', label: '石油', value: 1000, limit: 16000, record: '2026-09-16 12:00:00'}], ['Oil'])
+
+    expect(html).toContain('<span>1,000</span>')
+    expect(html).toContain('<small>/ 16,000</small>')
   })
 })
