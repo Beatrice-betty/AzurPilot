@@ -93,25 +93,28 @@ export function ResourceCards({resources, selected}: {resources: Resource[]; sel
   const {ui} = useApp()
   const prefs = useSyncExternalStore(subscribeDashboardPrefs, readDashboardPrefs, readDashboardPrefs)
   const gridRef = useRef<HTMLDivElement>(null)
+  const mergedRef = useRef<HTMLElement>(null)
 
   /* 卡片适应：按容器宽度算一行放得下几张，列数即「卡片数与一排容量」的较小者 ——
      溢出到第二排以后时末排沿用第一排尺寸，总数不足一排时列数就等于卡片数因而仍均分。 */
   useLayoutEffect(() => {
     const grid = gridRef.current
-    if (!grid || !prefs.fitCards) return
+    /* 通用卡片把卡片包成一张大卡，列数要算在真正装卡片的那一层上。 */
+    const target = prefs.merged ? mergedRef.current : grid
+    if (!grid || !target || !(prefs.fitCards || prefs.merged)) return
     const fit = () => {
-      const style = getComputedStyle(grid)
+      const style = getComputedStyle(target)
       const gap = parseFloat(style.columnGap) || 0
       const min = parseFloat(style.getPropertyValue('--resource-card-min')) || 0
-      if (!grid.clientWidth || !min) return
-      const perRow = Math.max(1, Math.floor((grid.clientWidth + gap) / (min + gap)))
-      grid.style.gridTemplateColumns = `repeat(${Math.min(selected.length, perRow)}, minmax(0, 1fr))`
+      if (!target.clientWidth || !min) return
+      const perRow = Math.max(1, Math.floor((target.clientWidth + gap) / (min + gap)))
+      target.style.gridTemplateColumns = `repeat(${Math.min(selected.length, perRow)}, minmax(0, 1fr))`
     }
     fit()
     const observer = new ResizeObserver(fit)
-    observer.observe(grid)
-    return () => { observer.disconnect(); grid.style.gridTemplateColumns = '' }
-  }, [prefs.fitCards, selected.length])
+    observer.observe(target)
+    return () => { observer.disconnect(); target.style.gridTemplateColumns = '' }
+  }, [prefs.fitCards, prefs.merged, selected.length])
 
   const entries = selected.map((key, index) => {
     const resource = resources.find(item => item.name === key)
@@ -134,7 +137,7 @@ export function ResourceCards({resources, selected}: {resources: Resource[]; sel
   })
 
   const className = ['resource-grid',
-    prefs.fitCards && 'resource-fit',
+    (prefs.fitCards || prefs.merged) && 'resource-fit',
     prefs.fitText && 'resource-fit-text',
     prefs.dense && 'resource-dense'].filter(Boolean).join(' ')
 
@@ -146,7 +149,7 @@ export function ResourceCards({resources, selected}: {resources: Resource[]; sel
   </>
 
   return <div className={className} ref={gridRef}>{prefs.merged
-    ? <section className="resource-card resource-merged">{entries.map(entry => <section key={entry.key} className={`resource-card resource-merged-item resource-${entry.index % 4}`}>{cardBody(entry)}</section>)}</section>
+    ? <section className="resource-card resource-merged" ref={mergedRef}>{entries.map(entry => <section key={entry.key} className={`resource-card resource-merged-item resource-${entry.index % 4}`}>{cardBody(entry)}</section>)}</section>
     : entries.map(entry => <section key={entry.key} className={`resource-card resource-${entry.index % 4}`}>{cardBody(entry)}</section>)}</div>
 }
 export function ResourceSettings({resources, selected, onChange}: {resources: Resource[]; selected: string[]; onChange: (keys: string[]) => void}) {
