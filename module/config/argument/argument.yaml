@@ -1278,7 +1278,9 @@ OpsiMeowfficerFarming:
     value: 5
     option: [ 2, 3, 4, 5, 6, 10 ]
   TargetZone:
-    value: 0
+    # 显式文本模式兼容旧配置中的数字值，否则 WebUI 会渲染 number 输入框并拒绝逗号列表。
+    mode: text
+    value: '0'
   StayInZone: false
   # 效率模式强制移动（套用侵蚀一）：战后遍历 1~4 队雷达清剩余问号，
   # 只切换舰队看雷达、不挪动舰队；默认关闭
