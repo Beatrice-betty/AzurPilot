@@ -168,6 +168,8 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
   const pickerStartRef = useRef<{card: HTMLButtonElement; pointerId: number; x: number; y: number; movedX: number; movedY: number; left: number; top: number} | null>(null)
   const pickerGridRef = useRef<HTMLDivElement | null>(null)
   const pickerFrameRef = useRef<HTMLDivElement | null>(null)
+  const pickerEditorRef = useRef<{left: number; top: number; right: number; bottom: number}[] | null>(null)
+  const pickerTargetsRef = useRef<{left: number; top: number; right: number; bottom: number}[] | null>(null)
   const pickerSlotsRef = useRef<{key: string; left: number; top: number; right: number; bottom: number}[]>([])
   const pickerRectsRef = useRef<Map<string, {left: number; top: number}>>(new Map())
   const pickerFramesRef = useRef<number[]>([])
@@ -181,6 +183,7 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
   const available = resources.filter(resource => !selected.includes(resource.name))
   const displayed = dragOrder ?? selected
   const pickerSequence = pickerOrder ?? available.map(item => item.name)
+  const pickerShown = pickerSequence.filter(key => available.some(item => item.name === key))
 
   function captureRects() {
     const rects = new Map<string, DOMRect>()
@@ -195,20 +198,30 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
     return positions
   }
 
-  /* 跟手：落点取自按下的位置加指针位移，再减去卡片当前的布局位置，与它所在格子无关。 */
+  /* 空位插进某一区会让它增减行、把另一区整块推移：这类变化不经过指针，布局一提交就要重算跟手。 */
+  useLayoutEffect(() => {
+    if (pickerDragRef.current) followPickerPointer()
+    if (dragAnchorRef.current) followPointer()
+  }, [editorDropIndex, pickerDropIndex])
+
+  /* 跟手：卡片停在按下时的位置加指针位移处。减去卡片当前布局位置时要带上容器的视口原点——
+     跨区拖动会让容器增减行，未展示区随之整体位移，省掉这一段卡片就会错开一行。 */
+  function moveCardTo(card: HTMLElement, viewportX: number, viewportY: number) {
+    const origin = card.offsetParent instanceof HTMLElement ? card.offsetParent.getBoundingClientRect() : {left: 0, top: 0}
+    card.style.transition = 'none'
+    card.style.translate = `${viewportX - origin.left - card.offsetLeft}px ${viewportY - origin.top - card.offsetTop}px`
+  }
+
   function followPointer() {
     const anchor = dragAnchorRef.current
     if (!anchor) return
-    anchor.card.style.transition = 'none'
-    anchor.card.style.translate = `${anchor.left + anchor.movedX - anchor.pointerX - anchor.card.offsetLeft}px ${anchor.top + anchor.movedY - anchor.pointerY - anchor.card.offsetTop}px`
+    moveCardTo(anchor.card, anchor.left + anchor.movedX - anchor.pointerX, anchor.top + anchor.movedY - anchor.pointerY)
   }
 
-  /* 跟手：落点取自按下时的布局位置加指针位移，换位后按新布局重算。 */
   function followPickerPointer() {
     const start = pickerStartRef.current
     if (!start) return
-    start.card.style.transition = 'none'
-    start.card.style.translate = `${start.left + start.movedX - start.x - start.card.offsetLeft}px ${start.top + start.movedY - start.y - start.card.offsetTop}px`
+    moveCardTo(start.card, start.left + start.movedX - start.x, start.top + start.movedY - start.y)
   }
 
   /* 落点虚框钉在被拖卡片的格子上：卡片跟着指针走，虚框标出它会落在哪一格。 */
@@ -341,23 +354,49 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
   function remove(key: string) {
     onChange(selected.filter(item => item !== key))
   }
-  /* 落点判定按目标区域的矩形，不受指针下压着的被拖卡片影响。 */
-  function inRect(element: Element, x: number, y: number) {
+  function boxOf(element: Element): {left: number; top: number; right: number; bottom: number} {
     const rect = element.getBoundingClientRect()
-    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+    return {left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom}
+  }
+
+  function inside(box: {left: number; top: number; right: number; bottom: number}, x: number, y: number) {
+    return x >= box.left && x <= box.right && y >= box.top && y <= box.bottom
+  }
+
+  /* 是否落在容器内：容器在拖动期间会增减行而移动，这里按当前位置判，不用快照。 */
+  function inArea(element: Element | null | undefined, x: number, y: number) {
+    return !!element && inside(boxOf(element), x, y)
+  }
+
+  /* 跨区落点一律用按下时的快照：空位插进容器会让容器多一行，用实时位置判定会自己追自己。 */
+  function captureEditorTargets() {
+    const editor = editorRef.current
+    return editor ? [...editor.querySelectorAll<HTMLElement>('[data-resource-key]')].map(boxOf) : null
   }
 
   /* 落点：指针压在哪张卡上就插到它的位置，压在空白处则排到最后。 */
   function editorDropTarget(x: number, y: number) {
-    const cards = [...editorRef.current?.querySelectorAll<HTMLElement>('[data-resource-key]') ?? []]
-    const hit = cards.findIndex(card => { const rect = card.getBoundingClientRect(); return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom })
-    return hit < 0 ? displayed.length : hit
+    return pickerEditorRef.current ? dropIndexAt(pickerEditorRef.current, x, y) : displayed.length
   }
 
-  /* 落点：未展示区按可用顺序排列、不落盘，空位开在这张卡真正会回到的位置。 */
-  function pickerLandingIndex(key: string) {
-    const sequence = resources.map(item => item.name).filter(name => name === key || available.some(entry => entry.name === name))
-    return Math.max(0, sequence.indexOf(key))
+  function pickerDropTarget(x: number, y: number) {
+    return pickerTargetsRef.current ? dropIndexAt(pickerTargetsRef.current, x, y) : pickerShown.length
+  }
+
+  /* 落点：取最近的那个格子，指针在它下半（同行在右半）时插到它后面；间隙按最近格子算，序号不会在格子与末尾之间来回跳。 */
+  function dropIndexAt(boxes: {left: number; top: number; right: number; bottom: number}[], x: number, y: number) {
+    if (!boxes.length) return 0
+    let best = 0
+    let bestDist = Infinity
+    boxes.forEach((box, index) => {
+      const dx = x - (box.left + box.right) / 2
+      const dy = y - (box.top + box.bottom) / 2
+      const dist = dx * dx + dy * dy
+      if (dist < bestDist) {bestDist = dist; best = index}
+    })
+    const box = boxes[best]
+    const inRow = y >= box.top && y <= box.bottom
+    return y > (box.top + box.bottom) / 2 || (inRow && x > (box.left + box.right) / 2) ? best + 1 : best
   }
 
   function finishDrag(pointerId: number, apply: boolean) {
@@ -384,8 +423,14 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
     if (apply) {
       /* 松手落在未展示区，这张卡就此移出仪表盘；其余情况按拖动后的顺序提交。 */
       const picker = editorRef.current?.parentElement?.querySelector('.resource-picker')
-      const dropped = !!(anchor && picker && inRect(picker, anchor.movedX, anchor.movedY))
-      if (dropped) { remove(anchor.key); setDragOrder(null) }
+      const dropped = !!(anchor && inArea(picker, anchor.movedX, anchor.movedY))
+      if (dropped) {
+        const order = pickerShown
+        const index = pickerDropIndex ?? order.length
+        setPickerOrder([...order.slice(0, index), anchor.key, ...order.slice(index)])
+        remove(anchor.key)
+        setDragOrder(null)
+      }
       else if (next && next.some((key, index) => key !== selected[index])) onChange(next)
     } else setDragOrder(null)
   }
@@ -408,9 +453,11 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
             dragOrderRef.current = [...selected]
             /* 格子位置与各卡矩形都在按下时量一次：拖动期间卡片会重排，实时量会取到滞后一帧的 DOM。 */
             const rects = captureRects()
-            dragAnchorRef.current = {key, card: event.currentTarget, pointerX: event.clientX, pointerY: event.clientY, movedX: event.clientX, movedY: event.clientY, left: event.currentTarget.offsetLeft, top: event.currentTarget.offsetTop}
+            const cardBox = event.currentTarget.getBoundingClientRect()
+            dragAnchorRef.current = {key, card: event.currentTarget, pointerX: event.clientX, pointerY: event.clientY, movedX: event.clientX, movedY: event.clientY, left: cardBox.left, top: cardBox.top}
             rectsRef.current = captureLayout()
             slotsRef.current = [...rects].map(([slotKey, rect]) => ({key: slotKey, left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom}))
+            pickerTargetsRef.current = capturePickerSlots()
             setDragOrder([...selected])
             setDraggingKey(key)
           }}
@@ -423,7 +470,7 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
             anchor.movedY = event.clientY
             followPointer()
             const picker = editorRef.current?.parentElement?.querySelector('.resource-picker')
-            setPickerDropIndex(picker && inRect(picker, event.clientX, event.clientY) ? pickerLandingIndex(sourceKey) : null)
+            setPickerDropIndex(inArea(picker, event.clientX, event.clientY) ? pickerDropTarget(event.clientX, event.clientY) : null)
             const index = slotsRef.current.findIndex(slot => event.clientX >= slot.left && event.clientX <= slot.right && event.clientY >= slot.top && event.clientY <= slot.bottom)
             const target = index < 0 ? undefined : order[index]
             if (!target) return
@@ -450,14 +497,16 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
     {pickerOpen && <div className="resource-picker">{available.length ? <div className="resource-picker-grid" ref={pickerGridRef}>{pickerSequence.map(key => { const resource = available.find(item => item.name === key); if (!resource) return null
       const labelKey = resourceLabels[resource.name]
       const label = labelKey ? ui(labelKey) : resource.label ?? resource.name
-      return <Fragment key={resource.name}>{pickerDropIndex !== null && pickerSequence[pickerDropIndex] === resource.name && <div className="resource-editor-card resource-drop-slot" aria-hidden="true"/>}
+      return <Fragment key={resource.name}>{pickerDropIndex !== null && pickerShown[pickerDropIndex] === resource.name && <div className="resource-editor-card resource-drop-slot" aria-hidden="true"/>}
       <button type="button" className="resource-editor-card resource-picker-card" data-resource-key={resource.name} onPointerDown={event => { if (event.button !== 0) return
           event.currentTarget.setPointerCapture(event.pointerId)
           pickerDragRef.current = resource.name
-          pickerStartRef.current = {card: event.currentTarget, pointerId: event.pointerId, x: event.clientX, y: event.clientY, movedX: event.clientX, movedY: event.clientY, left: event.currentTarget.offsetLeft, top: event.currentTarget.offsetTop}
-          const order = available.map(item => item.name)
+          const cardBox = event.currentTarget.getBoundingClientRect()
+          pickerStartRef.current = {card: event.currentTarget, pointerId: event.pointerId, x: event.clientX, y: event.clientY, movedX: event.clientX, movedY: event.clientY, left: cardBox.left, top: cardBox.top}
           pickerRectsRef.current = capturePickerLayout()
           pickerSlotsRef.current = capturePickerSlots()
+          const order = pickerSlotsRef.current.map(slot => slot.key)
+          pickerEditorRef.current = captureEditorTargets()
           pickerOrderRef.current = order
           setPickerOrder(order) }}
           onPointerMove={event => { const start = pickerStartRef.current
@@ -466,7 +515,7 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
             start.movedY = event.clientY
             followPickerPointer()
             const editor = editorRef.current
-            setEditorDropIndex(editor && inRect(editor, event.clientX, event.clientY) ? editorDropTarget(event.clientX, event.clientY) : null)
+            setEditorDropIndex(inArea(editor, event.clientX, event.clientY) ? editorDropTarget(event.clientX, event.clientY) : null)
             const order = pickerOrderRef.current
             const index = pickerSlotsRef.current.findIndex(slot => event.clientX >= slot.left && event.clientX <= slot.right && event.clientY >= slot.top && event.clientY <= slot.bottom)
             const target = index < 0 || !order ? undefined : order[index]
@@ -482,14 +531,16 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
             pickerStartRef.current = null
             /* 交回过渡，卡片滑回原位。 */
             if (start) {start.card.style.transition = ''; start.card.style.translate = ''}
-            pickerOrderRef.current = null
             pickerSlotsRef.current = []
-            setPickerOrder(null)
             const editor = editorRef.current
-            if (key && editor && inRect(editor, event.clientX, event.clientY)) add(key, editorDropIndex)
+            if (key && inArea(editor, event.clientX, event.clientY)) {
+              add(key, editorDropIndex)
+              setPickerOrder(pickerShown.filter(item => item !== key))
+            }
+            pickerEditorRef.current = null
             markDropFrame(pickerFrameRef.current)
             setEditorDropIndex(null) }}
           onClick={() => add(resource.name)}><span className="resource-editor-icon resource-editor-icon-image"><ResourceIcon resourceKey={resource.name} size={28}/></span><span>{label}</span><Plus size={15}/></button></Fragment>
-    })}<div className="resource-editor-card resource-drop-slot resource-drop-frame" ref={pickerFrameRef} aria-hidden="true"/></div> : <div className="resource-picker-empty">{ui('resource.allAdded')}</div>}</div>}
+    })}<div className="resource-editor-card resource-drop-slot resource-drop-frame" ref={pickerFrameRef} aria-hidden="true"/>{pickerDropIndex !== null && pickerDropIndex >= pickerShown.length && <div className="resource-editor-card resource-drop-slot" aria-hidden="true"/>}</div> : <div className="resource-picker-empty">{ui('resource.allAdded')}</div>}</div>}
   </div>
 }
