@@ -14,24 +14,25 @@ const REDUCED_KEY = 'azurpilot.motion.reduced'
 
 function readStored(): MotionPrefs {
   try {
-    const speed = Number(localStorage.getItem(SPEED_KEY))
+    const rawSpeed = localStorage.getItem(SPEED_KEY)
+    const speed = Number(rawSpeed)
     const strength = localStorage.getItem(STRENGTH_KEY)
     return {
-      speed: speed === 2 || speed === 4 ? speed : 1,
-      strength: strength === 'strong' ? 'strong' : 'standard',
+      speed: rawSpeed !== null && (speed === 1 || speed === 2 || speed === 4) ? (speed as MotionSpeed) : 2,
+      strength: strength === 'standard' ? 'standard' : 'strong',
       reduced: localStorage.getItem(REDUCED_KEY) === '1',
     }
-  } catch { return {speed: 1, strength: 'standard', reduced: false} }
+  } catch { return {speed: 2, strength: 'strong', reduced: false} }
 }
 
 const browser = typeof window !== 'undefined' && typeof document !== 'undefined'
 
 /** 全局倍率走 CSS 变量：motion.css 里所有时长都是 calc(基础值 * --motion-speed)。
-    力度档位与“减少动效模拟”走 data 属性，由 motion.css 对应选择器消费。 */
+    默认 0.5× 对应倍率 2；力度档位与“减少动效模拟”走 data 属性，由 motion.css 对应选择器消费。 */
 function apply(next: MotionPrefs) {
   if (!browser) return
   const root = document.documentElement
-  if (next.speed === 1) root.style.removeProperty('--motion-speed')
+  if (next.speed === 2) root.style.removeProperty('--motion-speed')
   else root.style.setProperty('--motion-speed', String(next.speed))
   if (next.strength === 'strong') root.dataset.motionStrength = 'strong'
   else delete root.dataset.motionStrength
@@ -73,4 +74,4 @@ function commit(next: MotionPrefs) {
 export const setMotionSpeed = (speed: MotionSpeed) => commit({...state, speed})
 export const setMotionStrength = (strength: MotionStrength) => commit({...state, strength})
 export const setMotionReduced = (reduced: boolean) => commit({...state, reduced})
-export const resetMotionPrefs = () => commit({speed: 1, strength: 'standard', reduced: false})
+export const resetMotionPrefs = () => commit({speed: 2, strength: 'strong', reduced: false})
