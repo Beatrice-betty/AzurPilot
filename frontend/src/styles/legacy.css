@@ -11,6 +11,7 @@
 @import './theme-primitives.css';
 @import './forms.css';
 @import './legacy-fonts.css';
+@import './motion.css';
 
 /* MD3 输入框：底部强调指示线与浅色容器背景，聚焦时底线加粗变主色 */
 :root {--form-shadow: none}
