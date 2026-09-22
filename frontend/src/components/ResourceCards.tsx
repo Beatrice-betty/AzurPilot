@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Box, GripVertical, Plus, X } from 'lucide-react'
 import type { Resource } from '../api/types'
 import { useApp } from '../app/context'
@@ -158,19 +158,23 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
   const [draggingKey, setDraggingKey] = useState<string | null>(null)
   const [dragOrder, setDragOrder] = useState<string[] | null>(null)
   const editorRef = useRef<HTMLDivElement>(null)
+  const editorFrameRef = useRef<HTMLDivElement | null>(null)
   const dragOrderRef = useRef<string[] | null>(null)
   const dragPointerRef = useRef<number | null>(null)
   const dragKeyRef = useRef<string | null>(null)
   const dragAnchorRef = useRef<{key: string; card: HTMLElement; pointerX: number; pointerY: number; movedX: number; movedY: number; left: number; top: number} | null>(null)
   const releasedKeyRef = useRef<string | null>(null)
   const pickerDragRef = useRef<string | null>(null)
-  const pickerStartRef = useRef<{card: HTMLButtonElement; x: number; y: number} | null>(null)
+  const pickerStartRef = useRef<{card: HTMLButtonElement; pointerId: number; x: number; y: number; movedX: number; movedY: number; left: number; top: number} | null>(null)
   const pickerGridRef = useRef<HTMLDivElement | null>(null)
+  const pickerFrameRef = useRef<HTMLDivElement | null>(null)
   const pickerSlotsRef = useRef<{key: string; left: number; top: number; right: number; bottom: number}[]>([])
   const pickerRectsRef = useRef<Map<string, {left: number; top: number}>>(new Map())
   const pickerFramesRef = useRef<number[]>([])
   const pickerOrderRef = useRef<string[] | null>(null)
   const [pickerOrder, setPickerOrder] = useState<string[] | null>(null)
+  const [editorDropIndex, setEditorDropIndex] = useState<number | null>(null)
+  const [pickerDropIndex, setPickerDropIndex] = useState<number | null>(null)
   const slotsRef = useRef<{key: string; left: number; top: number; right: number; bottom: number}[]>([])
   const rectsRef = useRef<Map<string, {left: number; top: number}>>(new Map())
   const framesRef = useRef<number[]>([])
@@ -199,6 +203,25 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
     anchor.card.style.translate = `${anchor.left + anchor.movedX - anchor.pointerX - anchor.card.offsetLeft}px ${anchor.top + anchor.movedY - anchor.pointerY - anchor.card.offsetTop}px`
   }
 
+  /* 跟手：落点取自按下时的布局位置加指针位移，换位后按新布局重算。 */
+  function followPickerPointer() {
+    const start = pickerStartRef.current
+    if (!start) return
+    start.card.style.transition = 'none'
+    start.card.style.translate = `${start.left + start.movedX - start.x - start.card.offsetLeft}px ${start.top + start.movedY - start.y - start.card.offsetTop}px`
+  }
+
+  /* 落点虚框钉在被拖卡片的格子上：卡片跟着指针走，虚框标出它会落在哪一格。 */
+  function markDropFrame(frame: HTMLDivElement | null, card?: HTMLElement) {
+    if (!frame) return
+    if (!card) {frame.style.display = 'none'; return}
+    frame.style.display = 'block'
+    frame.style.left = `${card.offsetLeft}px`
+    frame.style.top = `${card.offsetTop}px`
+    frame.style.width = `${card.offsetWidth}px`
+    frame.style.height = `${card.offsetHeight}px`
+  }
+
   /* 换位用 FLIP：重排后先把卡片移回原位，下一帧再放开，位移走独立的 translate 属性，
      与拖起态的缩放互不覆盖；过渡结束后清掉内联值，落定不留痕迹。 */
   useLayoutEffect(() => {
@@ -209,6 +232,7 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
          刚松手的那张只跳过动画。 */
       if (card.dataset.resourceKey === dragKeyRef.current) {
         followPointer()
+        markDropFrame(editorFrameRef.current, card)
         const pointerId = dragPointerRef.current
         if (pointerId !== null && !card.hasPointerCapture(pointerId)) card.setPointerCapture(pointerId)
         return
@@ -239,16 +263,23 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
         })
       }))
     }))
-  }, [dragOrder])
+  }, [dragOrder, editorDropIndex])
 
   /* 换位用 FLIP：重排后先把卡片移回原位，下一帧再放开，位移走独立的 translate 属性。
      被拖动的卡片不参与换位动画，跟手位移由指针直接驱动。 */
   useLayoutEffect(() => {
-    if (!pickerOrder) return
     const before = pickerRectsRef.current
     const moved: HTMLElement[] = []
     pickerGridRef.current?.querySelectorAll<HTMLElement>('[data-resource-key]').forEach(card => {
-      if (card.dataset.resourceKey === pickerDragRef.current) return
+      /* 被拖动的卡片不参与换位动画，改为按新布局重算跟手位移并重新捕获指针；
+         换位会移动这张卡的 DOM 节点，指针捕获随之丢失。 */
+      if (card.dataset.resourceKey === pickerDragRef.current) {
+        followPickerPointer()
+        markDropFrame(pickerFrameRef.current, card)
+        const start = pickerStartRef.current
+        if (start && !card.hasPointerCapture(start.pointerId)) card.setPointerCapture(start.pointerId)
+        return
+      }
       const previous = before.get(card.dataset.resourceKey ?? '')
       if (!previous) return
       const dx = previous.left - card.offsetLeft
@@ -271,7 +302,7 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
         })
       }))
     }))
-  }, [pickerOrder])
+  }, [pickerOrder, pickerDropIndex])
 
   useEffect(() => () => {
     pickerFramesRef.current.forEach(cancelAnimationFrame)
@@ -300,8 +331,12 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
     })
   }
 
-  function add(key: string) {
-    if (!selected.includes(key)) onChange([...selected, key])
+  /* 加入显示区：给了落点就插到该位置，否则排到最后。 */
+  function add(key: string, index: number | null = null) {
+    if (selected.includes(key)) return
+    const next = [...selected]
+    next.splice(index ?? next.length, 0, key)
+    onChange(next)
   }
   function remove(key: string) {
     onChange(selected.filter(item => item !== key))
@@ -310,6 +345,19 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
   function inRect(element: Element, x: number, y: number) {
     const rect = element.getBoundingClientRect()
     return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+  }
+
+  /* 落点：指针压在哪张卡上就插到它的位置，压在空白处则排到最后。 */
+  function editorDropTarget(x: number, y: number) {
+    const cards = [...editorRef.current?.querySelectorAll<HTMLElement>('[data-resource-key]') ?? []]
+    const hit = cards.findIndex(card => { const rect = card.getBoundingClientRect(); return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom })
+    return hit < 0 ? displayed.length : hit
+  }
+
+  /* 落点：未展示区按可用顺序排列、不落盘，空位开在这张卡真正会回到的位置。 */
+  function pickerLandingIndex(key: string) {
+    const sequence = resources.map(item => item.name).filter(name => name === key || available.some(entry => entry.name === name))
+    return Math.max(0, sequence.indexOf(key))
   }
 
   function finishDrag(pointerId: number, apply: boolean) {
@@ -331,6 +379,8 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
     dragKeyRef.current = null
     slotsRef.current = []
     setDraggingKey(null)
+    setPickerDropIndex(null)
+    markDropFrame(editorFrameRef.current)
     if (apply) {
       /* 松手落在未展示区，这张卡就此移出仪表盘；其余情况按拖动后的顺序提交。 */
       const picker = editorRef.current?.parentElement?.querySelector('.resource-picker')
@@ -343,11 +393,12 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
   return <div className="resource-settings">
     <div className="resource-settings-heading"><div><strong>{ui('resource.cards')}</strong><span>{ui('resource.cardsHint')}</span></div><button type="button" className="button" onClick={() => onChange(defaultResourceKeys)}>{ui('resource.restoreDefault')}</button></div>
     <div className="resource-card-editor" ref={editorRef}>
-      {displayed.map(key => {
+      {displayed.map((key, index) => {
         const resource = resources.find(item => item.name === key)
           const labelKey = resourceLabels[key]
           const label = labelKey ? ui(labelKey) : resource?.label ?? key
-        return <div key={key} data-resource-key={key} className={`resource-editor-card${draggingKey === key ? ' dragging' : ''}`}
+        return <Fragment key={key}>{editorDropIndex === index && <div className="resource-editor-card resource-drop-slot" aria-hidden="true"/>}
+          <div data-resource-key={key} className={`resource-editor-card${draggingKey === key ? ' dragging' : ''}`}
           onPointerDown={event => {
             if (event.button !== 0 || (event.target as HTMLElement).closest('button')) return
             event.preventDefault()
@@ -371,6 +422,8 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
             anchor.movedX = event.clientX
             anchor.movedY = event.clientY
             followPointer()
+            const picker = editorRef.current?.parentElement?.querySelector('.resource-picker')
+            setPickerDropIndex(picker && inRect(picker, event.clientX, event.clientY) ? pickerLandingIndex(sourceKey) : null)
             const index = slotsRef.current.findIndex(slot => event.clientX >= slot.left && event.clientX <= slot.right && event.clientY >= slot.top && event.clientY <= slot.bottom)
             const target = index < 0 ? undefined : order[index]
             if (!target) return
@@ -389,16 +442,19 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
           <span className="resource-editor-label">{label}</span>
           <button type="button" className="resource-editor-remove" aria-label={ui('resource.remove', {label})} title={ui('resource.remove', {label})} onClick={() => remove(key)}><X size={15}/></button>
         </div>
-      })}
+      </Fragment>})}
+      {editorDropIndex === displayed.length && <div className="resource-editor-card resource-drop-slot" aria-hidden="true"/>}
       <button type="button" className={`resource-editor-card resource-editor-add${pickerOpen ? ' open' : ''}`} onClick={() => setPickerOpen(open => !open)}><span className="resource-editor-add-icon"><Plus size={18}/></span><span>{ui('resource.addCard')}</span></button>
+      <div className="resource-editor-card resource-drop-slot resource-drop-frame" ref={editorFrameRef} aria-hidden="true"/>
     </div>
     {pickerOpen && <div className="resource-picker">{available.length ? <div className="resource-picker-grid" ref={pickerGridRef}>{pickerSequence.map(key => { const resource = available.find(item => item.name === key); if (!resource) return null
       const labelKey = resourceLabels[resource.name]
       const label = labelKey ? ui(labelKey) : resource.label ?? resource.name
-      return <button type="button" key={resource.name} className="resource-editor-card resource-picker-card" data-resource-key={resource.name} onPointerDown={event => { if (event.button !== 0) return
+      return <Fragment key={resource.name}>{pickerDropIndex !== null && pickerSequence[pickerDropIndex] === resource.name && <div className="resource-editor-card resource-drop-slot" aria-hidden="true"/>}
+      <button type="button" className="resource-editor-card resource-picker-card" data-resource-key={resource.name} onPointerDown={event => { if (event.button !== 0) return
           event.currentTarget.setPointerCapture(event.pointerId)
           pickerDragRef.current = resource.name
-          pickerStartRef.current = {card: event.currentTarget, x: event.clientX, y: event.clientY}
+          pickerStartRef.current = {card: event.currentTarget, pointerId: event.pointerId, x: event.clientX, y: event.clientY, movedX: event.clientX, movedY: event.clientY, left: event.currentTarget.offsetLeft, top: event.currentTarget.offsetTop}
           const order = available.map(item => item.name)
           pickerRectsRef.current = capturePickerLayout()
           pickerSlotsRef.current = capturePickerSlots()
@@ -406,8 +462,11 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
           setPickerOrder(order) }}
           onPointerMove={event => { const start = pickerStartRef.current
             if (!start || pickerDragRef.current !== resource.name) return
-            start.card.style.transition = 'none'
-            start.card.style.translate = `${event.clientX - start.x}px ${event.clientY - start.y}px`
+            start.movedX = event.clientX
+            start.movedY = event.clientY
+            followPickerPointer()
+            const editor = editorRef.current
+            setEditorDropIndex(editor && inRect(editor, event.clientX, event.clientY) ? editorDropTarget(event.clientX, event.clientY) : null)
             const order = pickerOrderRef.current
             const index = pickerSlotsRef.current.findIndex(slot => event.clientX >= slot.left && event.clientX <= slot.right && event.clientY >= slot.top && event.clientY <= slot.bottom)
             const target = index < 0 || !order ? undefined : order[index]
@@ -427,8 +486,10 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
             pickerSlotsRef.current = []
             setPickerOrder(null)
             const editor = editorRef.current
-            if (key && editor && inRect(editor, event.clientX, event.clientY)) add(key) }}
-          onClick={() => add(resource.name)}><span className="resource-editor-icon resource-editor-icon-image"><ResourceIcon resourceKey={resource.name} size={28}/></span><span>{label}</span><Plus size={15}/></button>
-    })}</div> : <div className="resource-picker-empty">{ui('resource.allAdded')}</div>}</div>}
+            if (key && editor && inRect(editor, event.clientX, event.clientY)) add(key, editorDropIndex)
+            markDropFrame(pickerFrameRef.current)
+            setEditorDropIndex(null) }}
+          onClick={() => add(resource.name)}><span className="resource-editor-icon resource-editor-icon-image"><ResourceIcon resourceKey={resource.name} size={28}/></span><span>{label}</span><Plus size={15}/></button></Fragment>
+    })}<div className="resource-editor-card resource-drop-slot resource-drop-frame" ref={pickerFrameRef} aria-hidden="true"/></div> : <div className="resource-picker-empty">{ui('resource.allAdded')}</div>}</div>}
   </div>
 }
