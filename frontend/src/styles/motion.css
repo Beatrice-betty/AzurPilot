@@ -27,7 +27,7 @@
 
   /* 位移与缩放 */
   --shift-page: 8px;      /* 页面级横向位移 */
-  --shift-page-y: 6px;    /* 页面级纵向位移 */
+  --shift-page-y: 0px;    /* 页面级纵向位移（已移除整页上浮，保持底板稳定） */
   --shift-entry: 8px;     /* 列表/卡片入场位移 */
   --press-scale: .97;
   --scale-modal: .97;
@@ -50,8 +50,9 @@
 /* 力度档位（开发者工具「动效控制台」可切换；默认标准＝PR 取值） */
 :root[data-motion-strength='strong'] {
   --shift-page: 12px;
-  --shift-page-y: 9px;
+  --shift-page-y: 0px;
   --shift-entry: 12px;
+  --card-stagger-shift: 24px;
   --dur-4: calc(300ms * var(--motion-speed, 1));
   --dur-5: calc(380ms * var(--motion-speed, 1));
   --scale-modal: .95;
@@ -66,23 +67,23 @@
 }
 
 /* 旧版主题保持接近现状；minimal / extreme 由主题自身明确禁用全部动效。 */
-:root[data-theme='legacy-light'], :root[data-theme='legacy-dark'] { --shift-page: 7px; --shift-page-y: 5px; --motion-page-dur: var(--dur-4) }
-:root { --motion-page-dur: var(--dur-5) }
+:root[data-theme='legacy-light'], :root[data-theme='legacy-dark'] { --shift-page: 7px; --shift-page-y: 0px; --motion-page-dur: var(--dur-3) }
+:root { --motion-page-dur: var(--dur-3) }
 
 /* ============================================================================
    1 · 页面转场（由 usePageMotion 给 #main-content 挂类触发；首屏与同路径不播）
    ============================================================================ */
 @keyframes motion-page-forward { from { opacity: 0; transform: translateX(var(--shift-page)) } to { opacity: 1; transform: none } }
 @keyframes motion-page-back { from { opacity: 0; transform: translateX(calc(-1 * var(--shift-page))) } to { opacity: 1; transform: none } }
-@keyframes motion-page-fade { from { opacity: 0; transform: translateY(var(--shift-page-y)) } to { opacity: 1; transform: none } }
+@keyframes motion-page-fade { from { opacity: 0 } to { opacity: 1 } }
 
-main#main-content.motion-nav-forward { animation: motion-page-forward var(--motion-page-dur) var(--ease-emphasized) both }
-main#main-content.motion-nav-back { animation: motion-page-back var(--motion-page-dur) var(--ease-emphasized) both }
-main#main-content.motion-nav-fade { animation: motion-page-fade var(--motion-page-dur) var(--ease-decelerate) both }
-
-/* 转场期间 main 会短暂移出视口边界（±8px）：横向 clip 防止出现瞬时横向滚动条。
-   overflow-x: clip 不创建滚动容器，不影响 sticky 与固定定位后代（弹窗/浮层不被裁切）。 */
-.main-shell { overflow-x: clip }
+/* 页面转场已完全交由内部卡片从左上角逐个错峰上浮接管；
+   main#main-content 底板保持无图层隔离状态，避免破坏子元素 backdrop-filter 对背景壁纸的实时采样模糊。 */
+main#main-content.motion-nav-forward,
+main#main-content.motion-nav-back,
+main#main-content.motion-nav-fade {
+  animation: none !important;
+}
 
 /* ============================================================================
    2 · 抽屉与右栏：视觉不变、性能修复（left/right → transform，避免逐帧重排）
@@ -125,25 +126,44 @@ dialog.modal[open]::backdrop { animation: motion-backdrop-in var(--dur-3) var(--
 .text-button:active { transform: scale(var(--press-scale)) }
 
 /* ============================================================================
-   5 · 主页编排：左列文案 → 统计 → 卡片逐个浮现（错峰 40ms，区间 0-320ms）
+   5 · 卡片从左上角逐个上浮出现（柔和弹簧阻尼与景深微缩放，彻底消除傻快与线性感）
    ============================================================================ */
+:root {
+  --card-stagger-shift: 12px;
+  --card-stagger-scale: .985;
+  --card-stagger-dur: var(--dur-4); /* 约 260ms，从容柔和 */
+  --ease-card-spring: cubic-bezier(.18, .92, .26, 1.02); /* 微过冲柔和弹簧阻尼 */
+}
+:root[data-motion-strength='strong'] {
+  --card-stagger-shift: 18px;
+  --card-stagger-scale: .975;
+  --card-stagger-dur: calc(300ms * var(--motion-speed, 1));
+}
+
+@keyframes motion-card-stagger-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--card-stagger-shift, 12px)) scale(var(--card-stagger-scale, .985));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.motion-card-stagger {
+  animation: motion-card-stagger-in var(--card-stagger-dur, 260ms) var(--ease-card-spring) both;
+  animation-delay: var(--card-stagger-delay, 0ms);
+  -webkit-backdrop-filter: var(--theme-material-filter, none);
+  backdrop-filter: var(--theme-material-filter, none);
+}
+
 @keyframes motion-fade-up { from { opacity: 0; transform: translateY(var(--shift-entry)) } to { opacity: 1; transform: none } }
 
-.home-deck-copy > *, .home-main-heading { animation: motion-fade-up var(--dur-4) var(--ease-decelerate) both }
-.home-deck-copy > :nth-child(2) { animation-delay: 40ms }
-.home-deck-copy > :nth-child(3) { animation-delay: 80ms }
-.home-deck-foot { animation: motion-fade-up var(--dur-4) var(--ease-decelerate) both; animation-delay: 120ms }
-
-.home-instance-grid > * { animation: motion-fade-up var(--dur-4) var(--ease-decelerate) both }
-.home-instance-grid > :nth-child(1) { animation-delay: 40ms }
-.home-instance-grid > :nth-child(2) { animation-delay: 80ms }
-.home-instance-grid > :nth-child(3) { animation-delay: 120ms }
-.home-instance-grid > :nth-child(4) { animation-delay: 160ms }
-.home-instance-grid > :nth-child(5) { animation-delay: 200ms }
-.home-instance-grid > :nth-child(6) { animation-delay: 240ms }
-.home-instance-grid > :nth-child(7) { animation-delay: 280ms }
-.home-instance-grid > :nth-child(8) { animation-delay: 320ms }
-.home-instance-grid > :nth-child(n+9) { animation-delay: 360ms }
+.home-deck-copy > *, .home-main-heading { animation: motion-fade-up var(--dur-3) var(--ease-decelerate) both }
+.home-deck-copy > :nth-child(2) { animation-delay: 30ms }
+.home-deck-copy > :nth-child(3) { animation-delay: 60ms }
+.home-deck-foot { animation: motion-fade-up var(--dur-3) var(--ease-decelerate) both; animation-delay: 90ms }
 
 /* ============================================================================
    6 · 日志新行入场（LogPanel 给增量行挂 .motion-enter；初始加载不播）

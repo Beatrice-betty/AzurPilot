@@ -1,6 +1,9 @@
 import { useLayoutEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { motionReducedActive, motionSpeedValue } from './motionPrefs'
+import { triggerCardStaggerMotion, replayCardStaggerMotion } from './cardMotion'
+
+export { triggerCardStaggerMotion, replayCardStaggerMotion } from './cardMotion'
 
 export type NavDirection = 'forward' | 'back' | 'fade'
 
@@ -63,18 +66,21 @@ function playTransition(target: HTMLElement, className: string) {
   }, 480 * motionSpeedValue())
 }
 
-/** 重播最近一次页面转场（开发者工具用；与正常播放同一套类与时长）。 */
+/** 重播最近一次页面转场（开发者工具用；重播外层底板转场并重新从左上角逐个错峰上浮所有卡片）。 */
 export function replayLastPageTransition() {
   const target = document.getElementById('main-content')
-  if (!target || !lastTransitionClass) return
+  if (!target) return
   if (motionReducedActive()) return
-  playTransition(target, lastTransitionClass)
+  if (lastTransitionClass) {
+    playTransition(target, lastTransitionClass)
+  }
+  replayCardStaggerMotion()
 }
 
-/** 给 #main-content 挂页面转场类（motion.css 中消费）。
- *  - 首屏挂载与同路径不播；
+/** 给 #main-content 挂页面转场类，并调度卡片从左上角逐个错峰上浮。
  *  - 系统「减少动效」或调试模拟开启时直接跳过；
- *  - 用 useLayoutEffect 在绘制前挂类，避免「先渲染终态再跳回起点」的闪帧。 */
+ *  - 页面进入与异步数据挂载卡片时，依物理几何坐标逐个上浮；
+ *  - 用 useLayoutEffect 在绘制前挂类，避免闪帧。 */
 export function usePageMotion() {
   const location = useLocation()
   const previous = useRef<string | null>(null)
@@ -83,8 +89,13 @@ export function usePageMotion() {
     const target = document.getElementById('main-content')
     const before = previous.current
     previous.current = pathname
-    if (!target || before === null || before === pathname) return
+    if (!target) return
     if (motionReducedActive()) return
+
+    // 触发卡片从左上角逐个错峰上浮
+    triggerCardStaggerMotion(target)
+
+    if (before === null || before === pathname) return
     const className = DIRECTION_CLASS[routeDirection(before, pathname)]
     lastTransitionClass = className
     playTransition(target, className)

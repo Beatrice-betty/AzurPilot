@@ -400,18 +400,18 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 :root[data-theme='legacy-dark'] .toggle:active {transform: scale(.96)}
 :root[data-theme='legacy-light'] .monitor-segmented button:active,
 :root[data-theme='legacy-dark'] .monitor-segmented button:active {background: var(--accent-soft)}
-/* 旧版外壳下换页：页面内容淡入并轻微上移，动画挂在页面根元素与内容列上。 */
+/* 旧版外壳下换页：页面内容淡入，动画挂在页面根元素与内容列上。 */
 .app-shell.legacy-shell .instance-page-grid,
 .app-shell.legacy-shell .statistics-legacy,
 .app-shell.legacy-shell .task-config-settings-inner,
 .app-shell.legacy-shell .task-config-rail-slot .task-rail-directory {animation: legacy-page-in .22s cubic-bezier(.22, .61, .36, 1)}
-@keyframes legacy-page-in {from {opacity: 0; transform: translateY(6px)} to {opacity: 1; transform: none}}
-/* 总览页在两个视图间切换：面板用自己的动画，按切换方向从上方或下方滑入。 */
+@keyframes legacy-page-in {from {opacity: 0} to {opacity: 1}}
+/* 总览页在两个视图间切换：面板用自己的动画，按切换方向淡入。 */
 .app-shell.legacy-shell .instance-page-panel {animation: none}
 .app-shell.legacy-shell .instance-page-panel.panel-drop {animation: panel-drop .24s cubic-bezier(.22, .61, .36, 1)}
 .app-shell.legacy-shell .instance-page-panel.panel-rise {animation: panel-rise .24s cubic-bezier(.22, .61, .36, 1)}
-@keyframes panel-drop {from {opacity: 0; transform: translateY(-6px)} to {opacity: 1; transform: none}}
-@keyframes panel-rise {from {opacity: 0; transform: translateY(6px)} to {opacity: 1; transform: none}}
+@keyframes panel-drop {from {opacity: 0} to {opacity: 1}}
+@keyframes panel-rise {from {opacity: 0} to {opacity: 1}}
 @media (prefers-reduced-motion: reduce) {.app-shell.legacy-shell .instance-page-grid, .app-shell.legacy-shell .statistics-legacy, .app-shell.legacy-shell .task-config-settings-inner, .app-shell.legacy-shell .instance-page-panel, .app-shell.legacy-shell .instance-page-panel.panel-drop, .app-shell.legacy-shell .instance-page-panel.panel-rise, .app-shell.legacy-shell .task-config-rail-slot .task-rail-directory {animation: none}}
 .app-shell.legacy-shell > .main-shell > main > .instance-page-grid,
 .app-shell.legacy-shell > .main-shell > main > .task-config-legacy {flex-shrink: 1; min-height: 0}
