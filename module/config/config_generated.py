@@ -116,7 +116,9 @@ class GeneratedConfig:
     Error_HandleError = True
     Error_SaveError = True
     Error_StrictRestart = False
-    Error_SaveErrorCount = 30
+    Error_SaveErrorRetentionDays = 30
+    Error_SaveErrorBackUpMethod = 'zip'  # delete, zip, copy
+    Error_SaveErrorZipMethod = 'zip'  # bz2, gzip, xz, zip
     Error_OnePushConfig = 'provider: null'
     Error_ScreenshotLength = 1
     Error_GameStuckRestart = False
@@ -157,6 +159,8 @@ class GeneratedConfig:
     # 配置组 `DropRecord`
     DropRecord_SaveFolder = './screenshots'
     DropRecord_RetentionDays = 0
+    DropRecord_BackUpMethod = 'zip'  # delete, zip, copy
+    DropRecord_ZipMethod = 'zip'  # bz2, gzip, xz, zip
     DropRecord_AzurStatsID = None
     DropRecord_API = 'default'  # default, cn_gz_reverse_proxy
     DropRecord_ResearchRecord = 'do_not'  # do_not, save, upload, save_and_upload
