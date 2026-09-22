@@ -206,7 +206,7 @@ Error:
   RestartOperationTimeout:
     value: 120
     validate: [10, 600]
-  LlmAnalysis: true
+  LlmAnalysis: false
   LlmApiKey:
     type: textarea
     value: ""
@@ -252,7 +252,7 @@ Optimization:
   TaskHoardingDuration: 0
   CloseEmulatorDuringLongWait:
     type: checkbox
-    value: true
+    value: false
     option: [true, false]
   WhenTaskQueueEmpty:
     value: goto_main
