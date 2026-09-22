@@ -13,6 +13,14 @@ export const PURE_RULE_RE = /^[═─]{3,}$/
 export const CENTER_TITLE_RE = /^\s{3,}(.*?)\s{3,}$/
 export const LOG_ENTRY_LIMIT = 1000
 
+/** 日志跟随的每帧步长上限（像素）；距离更近时按距离收比例。 */
+export const MAX_FOLLOW_STEP = 24
+
+/** 跟随步长：远时按上限匀速，近时按距离收比例，新日志逐帧滚入而不跳到末尾。 */
+export function followStep(remaining: number, maxStep = MAX_FOLLOW_STEP) {
+  return Math.sign(remaining) * Math.min(maxStep, Math.max(1, Math.abs(remaining) * .35))
+}
+
 /**
  * 所有日志入口先在纯数据层截断，避免异常历史 payload 进入 React state 后创建数万 DOM。
  * 正常后端只保留约 400 条；这里的 1000 条是客户端独立的防御上限。
@@ -237,9 +245,15 @@ export function LogPanel({active = true}: {active?: boolean}) {
   useLayoutEffect(() => {
     if (!active || !follow || !scroll.current) return
     const container = scroll.current
-    // 在 DOM 更新后、浏览器绘制前同步完成跟随，避免新日志先闪现在可视区外。
-    // scrollTo 明确作用于日志容器，不会像尾部元素的 scrollIntoView 那样误滚动整个页面。
-    container.scrollTo({top: descending ? 0 : container.scrollHeight})
+    /* 只改日志容器自身的滚动位置，不会像尾部元素的 scrollIntoView 那样连带滚动整个页面。 */
+    const target = descending ? 0 : container.scrollHeight - container.clientHeight
+    let frame = requestAnimationFrame(function step() {
+      const remaining = target - container.scrollTop
+      if (Math.abs(remaining) <= 1) {container.scrollTop = target; return}
+      container.scrollTop += followStep(remaining)
+      frame = requestAnimationFrame(step)
+    })
+    return () => cancelAnimationFrame(frame)
   }, [entries, follow, active, descending])
 
   const visible = entries.filter(entry =>
