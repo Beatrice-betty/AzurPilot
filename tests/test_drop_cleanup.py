@@ -374,5 +374,70 @@ class TestCommissionCountCapSkipsBackup(unittest.TestCase):
         self.assertTrue(os.path.isdir(base))
 
 
+class TestConfigWiring(unittest.TestCase):
+    """用真实配置对象校验键名与取值口径。
+
+    上面的用例都用 SimpleNamespace 假配置，键名写错也会静默回落默认值；
+    这一组走真实的 config_update + bind，确保配置项真的叫这些名字。
+    """
+
+    def make_config(self, **groups):
+        """按 tests/test_backup.py 的既有手法在内存里构造配置。"""
+        from module.config.config import AzurLaneConfig
+
+        config = AzurLaneConfig('template')
+        config.auto_update = False
+        config.data = config.config_update({'Alas': groups})
+        config.bind('Alas')
+        return config
+
+    def test_defaults_match_argument_definition(self):
+        config = self.make_config()
+
+        self.assertEqual(config.DropRecord_RetentionDays, 0)
+        self.assertEqual(config.DropRecord_BackUpMethod, 'zip')
+        self.assertEqual(config.DropRecord_ZipMethod, 'zip')
+        self.assertEqual(config.Error_SaveErrorRetentionDays, 30)
+        self.assertEqual(config.Error_SaveErrorBackUpMethod, 'zip')
+        self.assertEqual(config.Error_SaveErrorZipMethod, 'zip')
+
+    def test_old_config_is_filled_with_new_defaults(self):
+        """存量配置没有这几项时应补成默认值，而不是读不到。"""
+        config = self.make_config(DropRecord={'SaveFolder': './screenshots'})
+
+        self.assertEqual(config.DropRecord_BackUpMethod, 'zip')
+        self.assertEqual(config.Error_SaveErrorRetentionDays, 30)
+
+    def test_cleanup_reads_values_from_real_config(self):
+        root = tempfile.mkdtemp(prefix='drop_wiring_')
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        folder = os.path.join(root, 'screenshots')
+        genre = os.path.join(folder, 'commission')
+        os.makedirs(genre)
+        old = os.path.join(genre, '1704067200000.png')
+        with open(old, 'wb') as f:
+            f.write(b'x')
+        stale = time.time() - 8 * 86400
+        os.utime(old, (stale, stale))
+
+        config = self.make_config(DropRecord={
+            'SaveFolder': folder,
+            'RetentionDays': 7,
+            'BackUpMethod': 'zip',
+            'ZipMethod': 'zip',
+        })
+
+        with patch.object(
+                drop_cleanup, 'COMMISSION_REWARD_FOLDER',
+                os.path.join(root, 'commission_rewards')):
+            self.assertEqual(
+                drop_cleanup.cleanup_drop_screenshots(config, 7), 1)
+
+        self.assertFalse(os.path.exists(old))
+        names = os.listdir(os.path.join(folder, 'bak'))
+        self.assertEqual(len(names), 1)
+        self.assertTrue(names[0].endswith('_commission.zip'), names[0])
+
+
 if __name__ == '__main__':
     unittest.main()

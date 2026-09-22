@@ -146,5 +146,44 @@ class TestErrorLogCleanup(ErrorLogCleanupTestCase):
         self.assertTrue(self.bak_files()[0].endswith('.zip'))
 
 
+class TestRealConfigWiring(ErrorLogCleanupTestCase):
+    """用真实配置对象验证键名与取值口径。
+
+    上面的用例都用 SimpleNamespace 假配置，键名写错也会静默回落默认值；
+    这一组走真实的 config_update + bind，确保配置项真的叫这些名字。
+    """
+
+    def make_config(self, **groups):
+        """按 tests/test_backup.py 的既有手法在内存里构造配置。"""
+        from module.config.config import AzurLaneConfig
+
+        config = AzurLaneConfig('template')
+        config.auto_update = False
+        config.data = config.config_update({'Alas': groups})
+        config.bind('Alas')
+        return config
+
+    def test_defaults_match_argument_definition(self):
+        config = self.make_config()
+
+        self.assertEqual(config.Error_SaveErrorRetentionDays, 30)
+        self.assertEqual(config.Error_SaveErrorBackUpMethod, 'zip')
+        self.assertEqual(config.Error_SaveErrorZipMethod, 'zip')
+
+    def test_cleanup_reads_values_from_real_config(self):
+        old = make_error_folder(self.config_folder, '1704067200000', 40 * 86400)
+        config = self.make_config(Error={
+            'SaveErrorRetentionDays': 30,
+            'SaveErrorBackUpMethod': 'copy',
+            'SaveErrorZipMethod': 'bz2',
+        })
+
+        self.assertEqual(self.cleanup(config), 1)
+        self.assertFalse(os.path.exists(old))
+        # 走的是配置里的 copy 方式，而不是代码默认值
+        self.assertTrue(os.path.isfile(os.path.join(
+            self.config_folder, 'bak', '1704067200000', 'log.txt')))
+
+
 if __name__ == '__main__':
     unittest.main()
