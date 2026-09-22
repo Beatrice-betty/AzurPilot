@@ -124,12 +124,16 @@ def _expire_folder(folder, deadline, now, method, zip_method, name,
         int: 处理的文件数。
     """
     groups = _collect_expired(folder, deadline, now, pattern)
+    if not groups:
+        return 0
+
     bak_folder = os.path.join(folder, BAK_FOLDER)
     handled = 0
     for parent, paths in sorted(groups.items()):
         source = os.path.basename(os.path.normpath(parent)) or name
         handled += archive.expire(
             paths, bak_folder, method, zip_method, f'{prefix}{source}')
+    # 只有真的处理过才扫空目录，省掉每小时一次的无谓遍历
     _remove_empty_folders(folder)
     return handled
 

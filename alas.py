@@ -1269,8 +1269,9 @@ class AzurLaneAutoScript:
 
         过期条目按「错误日志 - 过期错误日志处理方式」归置：直接删除、
         拷贝备份（``bak/<时间戳>/``）或压缩备份
-        （``bak/<日期范围>_<实例名>.zip``，格式由「压缩格式」决定）。
-        ``bak`` 目录不参与扫描，不会被重复处理。
+        （``bak/<日期范围>_<实例名>.<压缩后缀>``，格式由「压缩格式」决定）。
+        ``bak`` 目录不参与扫描，不会被重复处理。清理是尽力而为的：
+        单个条目失败只记警告，不让清理本身的异常盖掉正在处理的错误。
 
         Args:
             folder_path (str): 错误日志根目录，即 ``./log/error/<实例名>``。
@@ -1288,7 +1289,12 @@ class AzurLaneAutoScript:
         now = time.time()
         deadline = days * 86400
         expired = []
-        for name in os.listdir(folder_path):
+        try:
+            names = os.listdir(folder_path)
+        except OSError as e:
+            logger.warning(f'[Alas] 读取错误日志目录失败 {folder_path}: {e}，本次跳过清理')
+            return 0
+        for name in names:
             if name == 'bak':
                 continue
             folder = os.path.join(folder_path, name)

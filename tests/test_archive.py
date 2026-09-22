@@ -184,6 +184,25 @@ class TestSafety(ArchiveTestCase):
         self.assertEqual(archive.expire([file], self.bak, 'shred', 'zip', 'alas'), 1)
         self.assertFalse(os.path.exists(file))
 
+    def test_unusable_backup_folder_keeps_originals(self):
+        """备份目录不可用时保留原条目，不做删除。"""
+        with open(self.bak, 'w', encoding='utf-8') as f:  # bak 被占成普通文件
+            f.write('x')
+        file = self.make_file('a.png')
+
+        self.assertEqual(archive.expire([file], self.bak, 'zip', 'zip', 'alas'), 0)
+        self.assertTrue(os.path.exists(file))
+
+    def test_no_stray_placeholder_after_archive(self):
+        """取名字用的占位文件会被真正的压缩包取代。"""
+        file = self.make_file('a.png')
+        self.assertEqual(archive.expire([file], self.bak, 'zip', 'zip', 'alas'), 1)
+
+        names = os.listdir(self.bak)
+        self.assertEqual(len(names), 1)
+        with zipfile.ZipFile(os.path.join(self.bak, names[0])) as z:
+            self.assertEqual(z.namelist(), ['a.png'])
+
     def test_unreadable_path_does_not_break_the_rest(self):
         """单个条目失败不中断整轮清理。"""
         missing = os.path.join(self.root, 'not_exists.png')

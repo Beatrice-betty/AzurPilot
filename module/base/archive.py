@@ -103,17 +103,31 @@ def _archive_path(bak_folder, name, suffix, times):
 
     同一天或只有一条时只写一个日期。加序号而不是覆盖，
     避免同一时间范围内再次清理时丢掉上一轮备份。
+
+    取名字时先独占创建占位文件：截图目录默认被多个实例共用，
+    两个实例同时清理时若只判断「文件是否存在」，会双双选中同一个
+    名字，后写入的把先写的备份截断。占位失败就换下一个序号。
     """
-    first = time.strftime(DATE_FORMAT, time.localtime(min(times)))
-    last = time.strftime(DATE_FORMAT, time.localtime(max(times)))
+    fmt = DATE_FORMAT
+    first = time.strftime(fmt, time.localtime(min(times)))
+    last = time.strftime(fmt, time.localtime(max(times)))
     stem = first if first == last else f'{first}~{last}'
 
-    path = os.path.join(bak_folder, f'{stem}_{name}{suffix}')
-    index = 2
-    while os.path.exists(path):
-        path = os.path.join(bak_folder, f'{stem}_{name}({index}){suffix}')
-        index += 1
-    return path
+    index = 1
+    while True:
+        tail = '' if index == 1 else f'({index})'
+        path = os.path.join(bak_folder, f'{stem}_{name}{tail}{suffix}')
+        try:
+            with open(path, 'x'):
+                pass
+            return path
+        except FileExistsError:
+            index += 1
+        except OSError as e:
+            # 连占位都建不了（权限/磁盘满），退回带序号的名字，
+            # 由调用方的异常处理决定是否放弃
+            logger.warning(f'[清理] 无法创建备份文件 {path}: {e}')
+            return os.path.join(bak_folder, f'{stem}_{name}({index}){suffix}')
 
 
 def _write_zip(archive, paths):
