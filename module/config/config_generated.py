@@ -341,7 +341,7 @@ class GeneratedConfig:
 
     # 配置组 `EventGeneral`
     EventGeneral_PtLimit = 0
-    EventGeneral_TimeLimit = datetime.datetime(2020, 1, 1, 0, 0)
+    EventGeneral_TimeLimit = datetime.datetime(2023, 1, 1, 0, 0)
 
     # 配置组 `TaskBalancer`
     TaskBalancer_Enable = False
