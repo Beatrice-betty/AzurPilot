@@ -6,6 +6,7 @@ import type { Config } from '../api/types'
 import { useApp, useConnection } from '../app/context'
 import { usesLegacyLayout } from '../app/theme'
 import { readRailView, setRailView, subscribeRailView } from '../app/railPrefs'
+import { smoothScrollToElement } from '../app/scroll'
 import { Empty, ErrorBox, Loading, Modal, PageTitle } from '../components/ui'
 import { LogPanel } from '../components/LogPanel'
 import { MeowfficerScorePanel } from '../components/MeowfficerScorePanel'
@@ -269,7 +270,8 @@ export function TaskConfig() {
         href={`#group-${group}`}
         onClick={event => {
           event.preventDefault()
-          document.getElementById(`group-${group}`)?.scrollIntoView({behavior: 'smooth', block: 'start'})
+          const target = document.getElementById(`group-${group}`)
+          if (target) smoothScrollToElement(target)
         }}
       >
         {t(`${group}._info.name`)}

@@ -13,6 +13,14 @@ export const PURE_RULE_RE = /^[═─]{3,}$/
 export const CENTER_TITLE_RE = /^\s{3,}(.*?)\s{3,}$/
 export const LOG_ENTRY_LIMIT = 1000
 
+/** 日志跟随的每帧步长上限（像素）；距离更近时按距离收比例。 */
+export const MAX_FOLLOW_STEP = 24
+
+/** 跟随步长：远时按上限匀速，近时按距离收比例，新日志逐帧滚入而不跳到末尾。 */
+export function followStep(remaining: number, maxStep = MAX_FOLLOW_STEP) {
+  return Math.sign(remaining) * Math.min(maxStep, Math.max(1, Math.abs(remaining) * .35))
+}
+
 /**
  * 所有日志入口先在纯数据层截断，避免异常历史 payload 进入 React state 后创建数万 DOM。
  * 正常后端只保留约 400 条；这里的 1000 条是客户端独立的防御上限。
@@ -98,16 +106,17 @@ function renderSearchHighlights(text: string, searchLower: string, keyPrefix: st
   return <span key={keyPrefix}>{nodes}</span>
 }
 
-export function LogLine({entry, search, isCenter}: {entry: LogEntry; search: string; isCenter?: boolean}) {
+export function LogLine({entry, search, isCenter, fresh}: {entry: LogEntry; search: string; isCenter?: boolean; fresh?: boolean}) {
   const rawText = entry.text.replace(/[\r\n]+$/, '')
   const trimmed = rawText.trim()
+  const freshClass = fresh ? ' motion-enter' : ''
 
   // 1. 判断是否为纯分割线 (Pure Rule)
   const isPureRule = PURE_RULE_RE.test(trimmed)
   if (isPureRule) {
     const char = trimmed.includes('═') ? '═' : '─'
     return (
-      <div className={`log-rule ${char === '═' ? 'rule-double' : 'rule-single'}`}>
+      <div className={`log-rule ${char === '═' ? 'rule-double' : 'rule-single'}${freshClass}`}>
         <span className="rule-bar" />
         <span className="rule-bar" />
       </div>
@@ -120,7 +129,7 @@ export function LogLine({entry, search, isCenter}: {entry: LogEntry; search: str
     const title = ruleMatch[1].trim()
     const char = trimmed.includes('═') ? '═' : '─'
     return (
-      <div className={`log-rule ${char === '═' ? 'rule-double' : 'rule-single'}`}>
+      <div className={`log-rule ${char === '═' ? 'rule-double' : 'rule-single'}${freshClass}`}>
         <span className="rule-bar" />
         <span className="rule-title">{highlightText(title, search)}</span>
         <span className="rule-bar" />
@@ -134,7 +143,7 @@ export function LogLine({entry, search, isCenter}: {entry: LogEntry; search: str
     const [, levelStr, dateStr, timeStr, messageStr] = logMatch
     const levelKey = levelStr.toLowerCase()
     return (
-      <div className={`log-line log-entry-line level-${levelKey}`}>
+      <div className={`log-line log-entry-line level-${levelKey}${freshClass}`}>
         <span className={`log-lvl lvl-${levelKey}`}>{levelStr}</span>
         <span className="log-ts">{dateStr ? `${dateStr} ` : ''}{timeStr}</span>
         <span className="log-divider">│</span>
@@ -155,7 +164,7 @@ export function LogLine({entry, search, isCenter}: {entry: LogEntry; search: str
   if (shouldCenter) {
     const title = trimmed
     return (
-      <div className="log-line log-entry-line log-center-title">
+      <div className={`log-line log-entry-line log-center-title${freshClass}`}>
         <span className="center-title-text">{highlightText(title, search)}</span>
       </div>
     )
@@ -163,7 +172,7 @@ export function LogLine({entry, search, isCenter}: {entry: LogEntry; search: str
 
   // 5. 其他非标准行或多行 Traceback
   return (
-    <div className={`log-line log-entry-line log-raw level-${entry.level.toLowerCase()}`}>
+    <div className={`log-line log-entry-line log-raw level-${entry.level.toLowerCase()}${freshClass}`}>
       <span className="log-msg">{highlightText(rawText, search)}</span>
     </div>
   )
@@ -196,6 +205,8 @@ export function LogPanel({active = true}: {active?: boolean}) {
   const connection = useConnection()
   const {notify, ui} = useApp()
   const scroll = useRef<HTMLDivElement>(null)
+  /* 已渲染到的最大日志 id：大于它的增量行做入场动画（初始加载不播）。 */
+  const freshFrom = useRef<number | null>(null)
 
   useEffect(() => {
     setLevel(loadLogLevel(instance))
@@ -235,11 +246,21 @@ export function LogPanel({active = true}: {active?: boolean}) {
   }), [instance])
 
   useLayoutEffect(() => {
+    freshFrom.current = entries.at(-1)?.id ?? null
+  }, [entries])
+
+  useLayoutEffect(() => {
     if (!active || !follow || !scroll.current) return
     const container = scroll.current
-    // 在 DOM 更新后、浏览器绘制前同步完成跟随，避免新日志先闪现在可视区外。
-    // scrollTo 明确作用于日志容器，不会像尾部元素的 scrollIntoView 那样误滚动整个页面。
-    container.scrollTo({top: descending ? 0 : container.scrollHeight})
+    /* 只改日志容器自身的滚动位置，不会像尾部元素的 scrollIntoView 那样连带滚动整个页面。 */
+    const target = descending ? 0 : container.scrollHeight - container.clientHeight
+    let frame = requestAnimationFrame(function step() {
+      const remaining = target - container.scrollTop
+      if (Math.abs(remaining) <= 1) {container.scrollTop = target; return}
+      container.scrollTop += followStep(remaining)
+      frame = requestAnimationFrame(step)
+    })
+    return () => cancelAnimationFrame(frame)
   }, [entries, follow, active, descending])
 
   const visible = entries.filter(entry =>
@@ -307,6 +328,7 @@ export function LogPanel({active = true}: {active?: boolean}) {
                 entry={entry}
                 search={search}
                 isCenter={isCenterByContext}
+                fresh={freshFrom.current !== null && entry.id > freshFrom.current}
               />
             )
           })

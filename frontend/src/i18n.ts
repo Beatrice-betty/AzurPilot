@@ -149,6 +149,8 @@ const zhCN = {
   'dashboard.totalFirstHelp': '行动力优先显示总量，变成「总行动力 / 当前行动力」。',
   'instance.backupNotice': '实例已移入备份',
   'instance.deletePrompt': '删除 {name}？配置将保留在备份中。',
+  'instance.deletePrompt2': '真的确定吗？删了就没了，配置只留在备份里。',
+  'instance.deletePrompt3': '最后一次了！点下去 {name} 就彻底消失。',
   'instance.deleteConfirm': '确认删除',
   'instance.deleting': '正在删除…',
   'instance.delete': '删除实例',
@@ -459,6 +461,8 @@ export type UiKey = keyof typeof zhCN
 export type UiTranslator = (key: UiKey, params?: TranslationParams) => string
 
 const enUS: Record<UiKey, string> = {
+  'instance.deletePrompt2': 'Sure about that? {name} disappears — only the backup keeps its config.',
+  'instance.deletePrompt3': 'Last chance! One more click and {name} is gone for good.',
   'settings.colorMode': 'Theme mode',
   'settings.colorModeHelp': 'Automatic mode follows your system appearance and adapts the color palette.',
   'settings.modeAuto': 'Automatic',
@@ -537,6 +541,8 @@ const enUS: Record<UiKey, string> = {
 }
 
 const jaJP: Record<UiKey, string> = {
+  'instance.deletePrompt2': '本当に？{name} は消えます。設定はバックアップに残るだけです。',
+  'instance.deletePrompt3': 'これが最後！押すと {name} は完全に消えます。',
   'settings.colorMode': 'テーマモード',
   'settings.colorModeHelp': '自動モードはシステムの外観に合わせて配色を切り替えます。',
   'settings.modeAuto': '自動',
@@ -753,6 +759,8 @@ const zhTW: Record<UiKey, string> = {
   'nav.tabSize': '調整分頁大小',
   'instance.backupNotice': '實例已移至備份',
   'instance.deletePrompt': '刪除 {name}？設定會保留在備份中。',
+  'instance.deletePrompt2': '真的確定嗎？刪了就沒了，設定只留在備份裡。',
+  'instance.deletePrompt3': '最後一次了！按下去 {name} 就徹底消失。',
   'task.runTitle': '執行 {task}',
   'task.runWarning': '此操作將連線模擬器並執行該工具。請確認目前實例沒有正在執行的任務。',
   'fleet.emptyTitle': '還沒有艦隊掃描記錄',

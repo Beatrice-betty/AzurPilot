@@ -11,6 +11,7 @@
 @import './theme-primitives.css';
 @import './forms.css';
 @import './legacy-fonts.css';
+@import './motion.css';
 
 /* MD3 输入框：底部强调指示线与浅色容器背景，聚焦时底线加粗变主色 */
 :root {--form-shadow: none}
@@ -856,3 +857,15 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 
 @keyframes rail-view-in-right {from {opacity: 0; transform: translateX(7px)} to {opacity: 1; transform: none}}
 @keyframes rail-view-in-left {from {opacity: 0; transform: translateX(-7px)} to {opacity: 1; transform: none}}
+
+/* 任务设置列表与右侧栏不显示滚动条。 */
+.app-shell.legacy-shell .task-nav,
+.app-shell.legacy-shell .group-nav {scrollbar-width: none}
+.app-shell.legacy-shell .task-nav::-webkit-scrollbar,
+.app-shell.legacy-shell .group-nav::-webkit-scrollbar {width: 0}
+
+/* 调度栏视图下的容器与其中的任务列表不显示滚动条。 */
+.app-shell.legacy-shell .task-rail-scheduler,
+.app-shell.legacy-shell .rail-task-list {scrollbar-width: none}
+.app-shell.legacy-shell .task-rail-scheduler::-webkit-scrollbar,
+.app-shell.legacy-shell .rail-task-list::-webkit-scrollbar {width: 0}
