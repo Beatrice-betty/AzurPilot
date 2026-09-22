@@ -93,8 +93,7 @@ test('玻璃主题长页面滚动时两侧栏保持贴合视口', async ({page})
   await page.goto('/#/i/testpilot/task/Alas')
   await expect(page.locator('.right-rail')).toBeVisible()
 
-  await page.evaluate(() => scrollTo(0, 500))
-  await expect.poll(() => page.evaluate(() => scrollY)).toBe(500)
+  await expect.poll(() => page.evaluate(() => { scrollTo(0, 500); return scrollY }), {timeout: 15000}).toBe(500)
 
   const sidebar = (await page.locator('.sidebar').boundingBox())!
   const rail = (await page.locator('.right-rail').boundingBox())!
@@ -154,7 +153,7 @@ test('简约总览、弹窗、控件和移动端导航均使用实色', async ({
   expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true)
   await page.setViewportSize({width: 1440, height: 1100})
   await page.screenshot({path: testInfo.outputPath('minimal-overview.png'), fullPage: true})
-  await page.getByRole('button', {name: '实例设置', exact: true}).click()
+  await page.getByRole('button', {name: '仪表盘设置', exact: true}).click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await expectFlat(page)
   await page.getByRole('button', {name: '关闭', exact: true}).click()

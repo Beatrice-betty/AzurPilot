@@ -1,7 +1,8 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Box, GripVertical, Plus, X } from 'lucide-react'
 import type { Resource } from '../api/types'
 import { useApp } from '../app/context'
+import { readDashboardPrefs, subscribeDashboardPrefs } from '../app/dashboardPrefs'
 import type { UiKey } from '../i18n'
 
 export const resourceLabels: Record<string, UiKey> = {Oil: 'resource.Oil', Coin: 'resource.Coin', Gem: 'resource.Gem', Cube: 'resource.Cube', Pt: 'resource.Pt', ActionPoint: 'resource.ActionPoint', YellowCoin: 'resource.YellowCoin', PurpleCoin: 'resource.PurpleCoin', Core: 'resource.Core', Medal: 'resource.Medal', Merit: 'resource.Merit', GuildCoin: 'resource.GuildCoin', Chip: 'resource.Chip'}
@@ -74,38 +75,169 @@ function ResourceValue({value, suffix}: {value: string; suffix?: string}) {
   </div>
 }
 
-export function ResourceCards({resources, selected}: {resources: Resource[]; selected: string[]}) {
-  const {ui} = useApp()
-  return <div className="resource-grid">{selected.map((key, index) => {
-      const resource = resources.find(item => item.name === key)
-      const recorded = resource?.record && !resource.record.startsWith('2020-01-01')
-      const labelKey = resourceLabels[key]
-      const label = labelKey ? ui(labelKey) : resource?.label ?? key
-      const limit = resource?.limit
-      const total = resource?.total
-      const showLimit = typeof limit === 'number' && limit > 0
-      const showTotal = !!recorded && !showLimit && resource?.name === 'ActionPoint' && typeof resource.value === 'number' && typeof total === 'number' && Number.isFinite(total) && total >= resource.value
-      const value = resource?.value
-      const displayValue = recorded && value != null ? value.toLocaleString() : '—'
-      const suffix = recorded && showLimit ? limit.toLocaleString() : showTotal ? total.toLocaleString() : undefined
-      return <section key={key} className={`resource-card resource-${index % 4}`}>
-        <div className="resource-heading"><span>{label}</span><div className="resource-image-wrap"><ResourceIcon resourceKey={key} size={32}/></div></div>
-        <ResourceValue value={displayValue} suffix={suffix}/>
-        <div className="resource-foot">{recorded ? ui('resource.recordedAt', {time: resource.record?.replace('T', ' ').slice(5, 19) ?? ''}) : ui('resource.waitingSync')}</div>
-      </section>
-    })}</div>
+/* 记录时间：当日给时分秒，跨日给月日与小时；超过一年标记为过久。 */
+const RECORD_STALE_MS = 365 * 24 * 60 * 60 * 1000
+
+function recordText(value: string | undefined): {text: string; stale: boolean} {
+  const at = value ? new Date(value) : null
+  if (!at || Number.isNaN(at.getTime())) return {text: '', stale: false}
+  if (Date.now() - at.getTime() > RECORD_STALE_MS) return {text: '', stale: true}
+  const pad = (count: number) => String(count).padStart(2, '0')
+  const now = new Date()
+  const sameDay = at.getFullYear() === now.getFullYear() && at.getMonth() === now.getMonth() && at.getDate() === now.getDate()
+  const text = sameDay ? `${pad(at.getHours())}:${pad(at.getMinutes())}:${pad(at.getSeconds())}` : `${pad(at.getMonth() + 1)}-${pad(at.getDate())}-${pad(at.getHours())}`
+  return {text, stale: false}
 }
 
+export function ResourceCards({resources, selected}: {resources: Resource[]; selected: string[]}) {
+  const {ui} = useApp()
+  const prefs = useSyncExternalStore(subscribeDashboardPrefs, readDashboardPrefs, readDashboardPrefs)
+  const gridRef = useRef<HTMLDivElement>(null)
+
+  /* 卡片适应：按容器宽度算一行放得下几张，列数即「卡片数与一排容量」的较小者 ——
+     溢出到第二排以后时末排沿用第一排尺寸，总数不足一排时列数就等于卡片数因而仍均分。 */
+  useLayoutEffect(() => {
+    const grid = gridRef.current
+    if (!grid || !prefs.fitCards) return
+    const fit = () => {
+      const style = getComputedStyle(grid)
+      const gap = parseFloat(style.columnGap) || 0
+      const min = parseFloat(style.getPropertyValue('--resource-card-min')) || 0
+      if (!grid.clientWidth || !min) return
+      const perRow = Math.max(1, Math.floor((grid.clientWidth + gap) / (min + gap)))
+      grid.style.gridTemplateColumns = `repeat(${Math.min(selected.length, perRow)}, minmax(0, 1fr))`
+    }
+    fit()
+    const observer = new ResizeObserver(fit)
+    observer.observe(grid)
+    return () => { observer.disconnect(); grid.style.gridTemplateColumns = '' }
+  }, [prefs.fitCards, selected.length])
+
+  const entries = selected.map((key, index) => {
+    const resource = resources.find(item => item.name === key)
+    const recorded = resource?.record && !resource.record.startsWith('2020-01-01')
+    const labelKey = resourceLabels[key]
+    const label = labelKey ? ui(labelKey) : resource?.label ?? key
+    const limit = resource?.limit
+    const total = resource?.total
+    const showLimit = typeof limit === 'number' && limit > 0
+    const showTotal = !!recorded && !showLimit && resource?.name === 'ActionPoint' && typeof resource.value === 'number' && typeof total === 'number' && Number.isFinite(total) && total >= resource.value
+    const value = resource?.value
+    const currentText = recorded && value != null ? value.toLocaleString() : '—'
+    const totalText = showTotal ? (total as number).toLocaleString() : undefined
+    /* 总行动力优先时总量与当前值互换；行动力以外的字段不受影响。 */
+    const displayValue = prefs.totalFirst && totalText ? totalText : currentText
+    const suffix = prefs.totalFirst && totalText ? currentText : recorded && showLimit ? limit.toLocaleString() : totalText
+    const record = recordText(resource?.record)
+    const foot = recorded ? (record.stale ? ui('resource.recordedTooOld') : record.text) : ui('resource.waitingSync')
+    return {key, index, label, displayValue, suffix, foot}
+  })
+
+  const className = ['resource-grid',
+    prefs.fitCards && 'resource-fit',
+    prefs.fitText && 'resource-fit-text',
+    prefs.dense && 'resource-dense'].filter(Boolean).join(' ')
+
+  /* 通用卡片只换外层容器：两种排法共用这段卡片内部渲染。 */
+  const cardBody = (entry: typeof entries[number]) => <>
+    <div className="resource-heading"><span>{entry.label}</span><div className="resource-image-wrap"><ResourceIcon resourceKey={entry.key} size={32}/></div></div>
+    <ResourceValue value={entry.displayValue} suffix={entry.suffix}/>
+    <div className="resource-foot">{entry.foot}</div>
+  </>
+
+  return <div className={className} ref={gridRef}>{prefs.merged
+    ? <section className="resource-card resource-merged">{entries.map(entry => <section key={entry.key} className={`resource-card resource-merged-item resource-${entry.index % 4}`}>{cardBody(entry)}</section>)}</section>
+    : entries.map(entry => <section key={entry.key} className={`resource-card resource-${entry.index % 4}`}>{cardBody(entry)}</section>)}</div>
+}
 export function ResourceSettings({resources, selected, onChange}: {resources: Resource[]; selected: string[]; onChange: (keys: string[]) => void}) {
   const {ui} = useApp()
   const [pickerOpen, setPickerOpen] = useState(false)
   const [draggingKey, setDraggingKey] = useState<string | null>(null)
   const [dragOrder, setDragOrder] = useState<string[] | null>(null)
+  const editorRef = useRef<HTMLDivElement>(null)
   const dragOrderRef = useRef<string[] | null>(null)
   const dragPointerRef = useRef<number | null>(null)
   const dragKeyRef = useRef<string | null>(null)
+  const dragAnchorRef = useRef<{key: string; card: HTMLElement; pointerX: number; pointerY: number; movedX: number; movedY: number; left: number; top: number} | null>(null)
+  const releasedKeyRef = useRef<string | null>(null)
+  const slotsRef = useRef<{key: string; left: number; top: number; right: number; bottom: number}[]>([])
+  const rectsRef = useRef<Map<string, {left: number; top: number}>>(new Map())
+  const framesRef = useRef<number[]>([])
   const available = resources.filter(resource => !selected.includes(resource.name))
   const displayed = dragOrder ?? selected
+
+  function captureRects() {
+    const rects = new Map<string, DOMRect>()
+    editorRef.current?.querySelectorAll<HTMLElement>('[data-resource-key]').forEach(card => rects.set(card.dataset.resourceKey ?? '', card.getBoundingClientRect()))
+    return rects
+  }
+
+  /* 换位动画的基准取布局位置：卡片身上的位移属于绘制结果，不是布局。 */
+  function captureLayout() {
+    const positions = new Map<string, {left: number; top: number}>()
+    editorRef.current?.querySelectorAll<HTMLElement>('[data-resource-key]').forEach(card => positions.set(card.dataset.resourceKey ?? '', {left: card.offsetLeft, top: card.offsetTop}))
+    return positions
+  }
+
+  /* 跟手：落点取自按下的位置加指针位移，再减去卡片当前的布局位置，与它所在格子无关。 */
+  function followPointer() {
+    const anchor = dragAnchorRef.current
+    if (!anchor) return
+    anchor.card.style.transition = 'none'
+    anchor.card.style.translate = `${anchor.left + anchor.movedX - anchor.pointerX - anchor.card.offsetLeft}px ${anchor.top + anchor.movedY - anchor.pointerY - anchor.card.offsetTop}px`
+  }
+
+  /* 换位用 FLIP：重排后先把卡片移回原位，下一帧再放开，位移走独立的 translate 属性，
+     与拖起态的缩放互不覆盖；过渡结束后清掉内联值，落定不留痕迹。 */
+  useLayoutEffect(() => {
+    const before = rectsRef.current
+    const moved: HTMLElement[] = []
+    editorRef.current?.querySelectorAll<HTMLElement>('[data-resource-key]').forEach(card => {
+      /* 被拖动的卡片不参与换位动画，改为按新布局重算跟手位移并重新捕获指针；
+         刚松手的那张只跳过动画。 */
+      if (card.dataset.resourceKey === dragKeyRef.current) {
+        followPointer()
+        const pointerId = dragPointerRef.current
+        if (pointerId !== null && !card.hasPointerCapture(pointerId)) card.setPointerCapture(pointerId)
+        return
+      }
+      if (card.dataset.resourceKey === releasedKeyRef.current) return
+      const previous = before.get(card.dataset.resourceKey ?? '')
+      if (!previous) return
+      const dx = previous.left - card.offsetLeft
+      const dy = previous.top - card.offsetTop
+      if (!dx && !dy) return
+      /* 起点值瞬时到位，随后的放开才由过渡接管。 */
+      card.style.transition = 'none'
+      card.style.translate = `${dx}px ${dy}px`
+      moved.push(card)
+    })
+    rectsRef.current = captureLayout()
+    releasedKeyRef.current = null
+    if (!moved.length) return
+    /* 放开落在下一帧：中间隔着一次样式更新，过渡才会成立。 */
+    framesRef.current.push(requestAnimationFrame(() => {
+      framesRef.current.push(requestAnimationFrame(() => {
+        moved.forEach(card => {
+          card.style.transition = ''
+          card.style.translate = 'none'
+          card.addEventListener('transitionend', event => {
+            if (event.propertyName === 'translate' && card.style.translate === 'none') card.style.translate = ''
+          }, {once: true})
+        })
+      }))
+    }))
+  }, [dragOrder])
+
+  useEffect(() => () => {
+    framesRef.current.forEach(cancelAnimationFrame)
+    framesRef.current = []
+  }, [])
+
+  /* 上层把顺序写回同序后交还显示权：此时两边一致，DOM 不再变化。 */
+  useEffect(() => {
+    if (dragOrder && dragOrder.length === selected.length && dragOrder.every((key, index) => key === selected[index])) setDragOrder(null)
+  }, [dragOrder, selected])
 
   function add(key: string) {
     if (!selected.includes(key)) onChange([...selected, key])
@@ -116,17 +248,30 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
   function finishDrag(pointerId: number, apply: boolean) {
     if (dragPointerRef.current !== pointerId) return
     const next = dragOrderRef.current
+    /* 松手结算：跟手的位移交回过渡，卡片滑入所在格子。 */
+    const anchor = dragAnchorRef.current
+    if (anchor) {
+      releasedKeyRef.current = anchor.key
+      anchor.card.style.transition = ''
+      anchor.card.style.translate = 'none'
+      anchor.card.addEventListener('transitionend', event => {
+        if (event.propertyName === 'translate' && anchor.card.style.translate === 'none') anchor.card.style.translate = ''
+      }, {once: true})
+    }
+    dragAnchorRef.current = null
     dragPointerRef.current = null
     dragOrderRef.current = null
     dragKeyRef.current = null
+    slotsRef.current = []
     setDraggingKey(null)
-    setDragOrder(null)
-    if (apply && next && next.some((key, index) => key !== selected[index])) onChange(next)
+    if (apply) {
+      if (next && next.some((key, index) => key !== selected[index])) onChange(next)
+    } else setDragOrder(null)
   }
 
   return <div className="resource-settings">
-    <div className="resource-settings-heading"><div><strong>{ui('resource.cards')}</strong><span>{ui('resource.cardsHint')}</span></div><button type="button" className="text-button" onClick={() => onChange(defaultResourceKeys)}>{ui('resource.restoreDefault')}</button></div>
-    <div className="resource-card-editor">
+    <div className="resource-settings-heading"><div><strong>{ui('resource.cards')}</strong><span>{ui('resource.cardsHint')}</span></div><button type="button" className="button" onClick={() => onChange(defaultResourceKeys)}>{ui('resource.restoreDefault')}</button></div>
+    <div className="resource-card-editor" ref={editorRef}>
       {displayed.map(key => {
         const resource = resources.find(item => item.name === key)
           const labelKey = resourceLabels[key]
@@ -139,16 +284,27 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
             dragPointerRef.current = event.pointerId
             dragKeyRef.current = key
             dragOrderRef.current = [...selected]
+            /* 格子位置与各卡矩形都在按下时量一次：拖动期间卡片会重排，实时量会取到滞后一帧的 DOM。 */
+            const rects = captureRects()
+            dragAnchorRef.current = {key, card: event.currentTarget, pointerX: event.clientX, pointerY: event.clientY, movedX: event.clientX, movedY: event.clientY, left: event.currentTarget.offsetLeft, top: event.currentTarget.offsetTop}
+            rectsRef.current = captureLayout()
+            slotsRef.current = [...rects].map(([slotKey, rect]) => ({key: slotKey, left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom}))
             setDragOrder([...selected])
             setDraggingKey(key)
           }}
           onPointerMove={event => {
             const sourceKey = dragKeyRef.current
-            if (dragPointerRef.current !== event.pointerId || !sourceKey) return
-            const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-resource-key]')?.dataset.resourceKey
-            if (!target || !dragOrderRef.current) return
-            const next = moveResourceKey(dragOrderRef.current, sourceKey, target)
-            if (next === dragOrderRef.current) return
+            const order = dragOrderRef.current
+            const anchor = dragAnchorRef.current
+            if (dragPointerRef.current !== event.pointerId || !sourceKey || !order || !anchor) return
+            anchor.movedX = event.clientX
+            anchor.movedY = event.clientY
+            followPointer()
+            const index = slotsRef.current.findIndex(slot => event.clientX >= slot.left && event.clientX <= slot.right && event.clientY >= slot.top && event.clientY <= slot.bottom)
+            const target = index < 0 ? undefined : order[index]
+            if (!target) return
+            const next = moveResourceKey(order, sourceKey, target)
+            if (next === order) return
             dragOrderRef.current = next
             setDragOrder(next)
           }}
