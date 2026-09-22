@@ -332,5 +332,47 @@ class TestCommissionScreenshotSwitch(unittest.TestCase):
         fake._prune_commission_reward_screenshots.assert_called_once_with('alas')
 
 
+class TestCommissionCountCapSkipsBackup(unittest.TestCase):
+    """张数兜底（未填保留天数时）不能把 bak 里的备份算进去或删掉。"""
+
+    def make_base(self):
+        root = tempfile.mkdtemp(prefix='commission_prune_')
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        return os.path.join(root, 'alas')
+
+    def prune(self, base, max_keep):
+        from module.commission.commission import RewardCommission
+
+        RewardCommission._prune_commission_reward_screenshots(
+            'alas', max_keep=max_keep, base=base)
+
+    def test_backup_folder_is_ignored(self):
+        base = self.make_base()
+        bak = os.path.join(base, 'bak')
+        os.makedirs(bak)
+        backup = os.path.join(bak, '20200101_000000_000000_0.png')
+        with open(backup, 'wb') as f:
+            f.write(b'x')
+
+        # max_keep=0 时若不跳过 bak，备份会被算作超量并删掉
+        self.prune(base, max_keep=0)
+
+        self.assertTrue(os.path.isfile(backup))
+        self.assertTrue(os.path.isdir(bak))
+
+    def test_normal_screenshots_still_pruned(self):
+        base = self.make_base()
+        month = os.path.join(base, '2020-01')
+        os.makedirs(month)
+        for name in ('20200101_000000_000000_0.png', '20200102_000000_000000_0.png'):
+            with open(os.path.join(month, name), 'wb') as f:
+                f.write(b'x')
+
+        self.prune(base, max_keep=1)
+
+        self.assertEqual(len(os.listdir(month)), 1)
+        self.assertTrue(os.path.isdir(base))
+
+
 if __name__ == '__main__':
     unittest.main()
