@@ -34,7 +34,7 @@ test('总览三态、资源搭配记忆、日志与被动截图切换', async ({
   await page.goto('/#/i/demo-main/overview')
   await expect(page.getByLabel('搜索日志')).toHaveCount(0)
   await expect(page.locator('.primary-nav').getByRole('link', {name: '运行日志'})).toHaveCount(0)
-  await page.getByRole('button', {name: '实例设置', exact: true}).click()
+  await page.getByRole('button', {name: '仪表盘设置', exact: true}).click()
   const settings = page.getByRole('dialog')
   await settings.getByRole('button', {name: '添加卡片', exact: true}).click()
   await settings.getByRole('button', {name: '行动力', exact: true}).click()
@@ -683,20 +683,34 @@ test('实例列表读取失败不阻塞全局设置', async ({page}) => {
   await expect(page.getByLabel('监听端口')).toBeVisible()
 })
 
-test('实例设置保留自动运行和删除，删除后返回主页', async ({page}) => {
+test('启动开关在系统设置页保存，点名称不切换且保存后不回弹', async ({page}) => {
+  await page.goto('/#/i/demo-main/task/Alas')
+  const autoRun = page.getByLabel('启动时自动运行', {exact: true})
+  const remember = page.getByLabel('启动时记忆运行', {exact: true})
+  const before = await remember.getAttribute('aria-checked')
+  await page.locator('.config-groups .field-name').nth(1).click()
+  await expect(remember).toHaveAttribute('aria-checked', before!)
+  await remember.check()
+  await expect(page.locator('#instance-remember-status')).toHaveText('已保存')
+  // 状态标记消失即队列已丢弃该条目，此后开关仍须显示服务端的值。
+  await expect(page.locator('#instance-remember-status')).toHaveCount(0)
+  await expect(remember).toHaveAttribute('aria-checked', 'true')
+  await autoRun.check()
+  await expect(page.locator('#instance-startup-status')).toHaveText('已保存')
+})
+
+test('仪表盘设置只含仪表盘项：无启动开关、无删除实例', async ({page}) => {
   await page.goto('/')
   await page.getByRole('button', {name: '新建实例'}).click()
   const name = `home_${Date.now()}`
   await page.getByLabel('实例名称').fill(name)
   await page.getByRole('dialog').getByRole('button', {name: '创建实例', exact: true}).click()
   await page.locator('.primary-nav').getByRole('link', {name: '运行总览', exact: true}).click()
-  await page.getByRole('button', {name: '实例设置'}).click()
-  await page.getByLabel('启动时自动运行', {exact: true}).check()
-  await expect(page.locator('#instance-startup-status')).toHaveText('已保存')
-  await page.getByRole('button', {name: '删除实例', exact: true}).click()
-  await page.getByRole('button', {name: '确认删除'}).click()
-  await expect(page.getByRole('heading', {name: /好，指挥官/})).toBeVisible()
-  await expect(page.locator('.instance-card').filter({hasText: name})).toHaveCount(0)
+  await page.getByRole('button', {name: '仪表盘设置'}).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByRole('switch', {name: '卡片适应'})).toBeVisible()
+  await expect(dialog.getByLabel('启动时自动运行', {exact: true})).toHaveCount(0)
+  await expect(dialog.getByRole('button', {name: '删除实例', exact: true})).toHaveCount(0)
 })
 
 test('Logo 旁更新提示、完整提交分页、获取和应用更新', async ({page}) => {

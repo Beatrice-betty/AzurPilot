@@ -1,11 +1,11 @@
 .table-toolbar {display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; color:var(--muted); font-size:12px}
-.resource-grid {display:flex;flex-wrap:wrap}.resource-grid .resource-card {flex:1 1 150px}
+.resource-grid {display:flex;flex-wrap:wrap;--resource-card-min:150px}.resource-grid .resource-card {flex:1 1 var(--resource-card-min)}
 .resource-card {min-width:0}.resource-value {white-space:nowrap}
 .resource-settings {margin-top:8px;padding-top:18px;border-top:1px solid var(--border)}
 .resource-settings-heading {display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px}.resource-settings-heading>div {display:flex;flex-direction:column;gap:4px}.resource-settings-heading strong {font-size:15px;letter-spacing:-.2px}.resource-settings-heading span {color:var(--muted);font-size:11px;line-height:1.5}
 .resource-card-editor {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.resource-editor-card {min-width:0;min-height:58px;display:flex;align-items:center;gap:9px;padding:10px 11px;border:1px solid color-mix(in srgb,var(--border) 82%,transparent);border-radius:16px;background:color-mix(in srgb,var(--surface) 92%,transparent);box-shadow:0 4px 14px #00000008,inset 0 1px 0 #ffffff66;transition:transform .18s,border-color .18s,box-shadow .18s,background .18s;user-select:none}
-.resource-editor-card:not(.resource-editor-add) {cursor:grab;touch-action:none}.resource-editor-card:not(.resource-editor-add):active {cursor:grabbing}.resource-editor-card:hover {border-color:color-mix(in srgb,var(--accent) 34%,var(--border));box-shadow:0 7px 18px #0000000d,inset 0 1px 0 #ffffff80}.resource-editor-card.dragging {opacity:.52;transform:scale(.975);border-color:var(--accent)}
+.resource-editor-card {min-width:0;min-height:58px;display:flex;align-items:center;gap:9px;padding:10px 11px;border:1px solid color-mix(in srgb,var(--border) 82%,transparent);border-radius:16px;background:color-mix(in srgb,var(--surface) 92%,transparent);box-shadow:0 4px 14px #00000008,inset 0 1px 0 #ffffff66;transition:transform .18s,translate .18s,border-color .18s,box-shadow .18s,background .18s;user-select:none}
+.resource-editor-card:not(.resource-editor-add) {cursor:grab;touch-action:none}.resource-editor-card:not(.resource-editor-add):active {cursor:grabbing}.resource-editor-card:hover {border-color:color-mix(in srgb,var(--accent) 34%,var(--border));box-shadow:0 7px 18px #0000000d,inset 0 1px 0 #ffffff80}.resource-editor-card.dragging {z-index:2;transform:scale(1.04);border-color:var(--accent);box-shadow:0 12px 26px #00000026,inset 0 1px 0 #ffffff80}
 .resource-editor-grip {width:16px;display:grid;place-items:center;color:color-mix(in srgb,var(--muted) 72%,transparent);flex:0 0 auto}.resource-editor-icon {width:32px;height:32px;display:grid;place-items:center;flex:0 0 auto;border-radius:10px;background:var(--accent-soft);color:var(--accent)}.resource-editor-icon-image {background:transparent;overflow:visible}.resource-editor-icon-image .resource-icon-image {width:30px;height:30px}.resource-editor-label {min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600}
 .resource-editor-remove {width:28px;height:28px;display:grid;place-items:center;flex:0 0 auto;padding:0;border:0;border-radius:9px;background:transparent;color:var(--muted);cursor:pointer;transition:background .15s,color .15s}.resource-editor-remove:hover {background:color-mix(in srgb,var(--red) 11%,transparent);color:var(--red)}
 .resource-editor-add {justify-content:center;cursor:pointer;border-style:dashed;color:var(--accent);background:color-mix(in srgb,var(--accent-soft) 42%,var(--surface));font:inherit;font-size:13px;font-weight:600}.resource-editor-add:hover,.resource-editor-add.open {border-color:color-mix(in srgb,var(--accent) 62%,var(--border));background:color-mix(in srgb,var(--accent-soft) 72%,var(--surface))}.resource-editor-add-icon {width:30px;height:30px;display:grid;place-items:center;border-radius:10px;background:color-mix(in srgb,var(--accent) 12%,transparent)}
@@ -143,4 +143,33 @@
    这里必须带 !important：紧凑主题用 padding 简写加 !important 压过面板内边距。 */
 .panel.chart-expanded .panel-heading {position:sticky;top:0;z-index:2;padding-right:160px !important;background:var(--surface)}
 .statistics-table {min-width:0}.statistics-table h3 {margin:0;font-size:14px}.table-toolbar {padding:10px 22px;margin:0;flex-wrap:wrap}.table-toolbar input {max-width:240px}.table-scroll {overflow-x:auto;overflow-y:visible;max-height:none}.statistics-table table {border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap}.statistics-table td,.statistics-table th {padding:13px 20px;text-align:left;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}.statistics-table th {position:sticky;top:0;background:var(--surface-muted);z-index:1}.statistics-table th button {border:0;background:none;color:var(--text);cursor:pointer;font:inherit}.statistics-table tbody tr:hover {background:var(--surface-muted)}
+/* 卡片适应：列数由脚本按容器宽度写入，末排因此不会各自撑满整行。 */
+.resource-grid.resource-fit {display:grid}
+/* 卡片适应把网格切成多列，合并卡片仍占满整行。 */
+.resource-grid.resource-fit .resource-merged {grid-column:1/-1}
+/* 紧凑视图：只收紧间距与内边距；旧版主题有更具体的规则，仍按主题的紧凑度走。 */
+.resource-grid.resource-dense {gap:4px;margin-bottom:6px}
+.resource-grid.resource-dense .resource-card {padding:4px 11px 3px}
+/* 字体适应：窄卡片按容器宽度重排字号层级——数值统一收小并各卡一致（覆盖上游窄视口下的固定字号）；
+   标题、图标与记录时间上调，总量后缀随数值放大；权重高于各主题的同名规则，避免紧凑主题按自己的尺寸覆盖。 */
+:root .resource-grid.resource-fit-text .resource-card,
+:root .resource-grid.resource-fit-text .resource-merged-item {container-type:inline-size}
+:root .resource-grid.resource-fit-text .resource-heading {font-size:clamp(14px,6.6cqw,17px)}
+:root .resource-grid.resource-fit-text .resource-heading > div {width:clamp(28px,15cqw,32px);height:clamp(28px,15cqw,32px)}
+:root .resource-grid.resource-fit-text .resource-icon-image {width:clamp(28px,15cqw,32px);height:clamp(28px,15cqw,32px)}
+:root .resource-grid.resource-fit-text .resource-value {font-size:20px !important}
+:root .resource-grid.resource-fit-text .resource-value-content small {font-size:.8em}
+:root .resource-grid.resource-fit-text .resource-foot {font-size:clamp(12px,5.6cqw,14px)}
+/* 通用卡片：内部条目沿用资源卡自身的排版，仅由外层容器统一描边。 */
+.resource-grid .resource-merged {flex:1 1 100%;display:flex;flex-wrap:wrap;gap:8px;box-shadow:var(--shadow)}
+.resource-merged .resource-merged-item {flex:1 1 var(--resource-card-min);min-width:0;border:0;background:transparent;box-shadow:none}
+/* 仪表盘设置弹窗内的开关行：弹窗比设置页窄，用紧凑排法。 */
+.dashboard-options {display:flex;flex-direction:column}
+.dashboard-option {display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid color-mix(in srgb,var(--border) 70%,transparent)}
+.dashboard-option:last-child {border-bottom:0}
+.dashboard-option-label {min-width:0;display:flex;flex-direction:column;gap:3px}
+.dashboard-option-label strong {font-size:13px;font-weight:600}
+.dashboard-option-label span {color:var(--muted);font-size:11px;line-height:1.6}
+.dashboard-option .toggle {flex:0 0 auto;margin-top:2px}
+
 @media(max-width:950px) {.resource-grid {grid-template-columns:repeat(auto-fit,minmax(140px,1fr)) !important}.resource-card-editor,.resource-picker-grid {grid-template-columns:1fr}.resource-settings-heading {gap:10px}.task-row {grid-template-columns:minmax(0,1fr) 48px 74px 10px !important}.stat-metrics {grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.statistics-controls {padding:15px;gap:10px}.statistics-controls label {max-width:100%}.statistics-controls input {max-width:100%}.statistics-sections {flex:none;grid-template-rows:auto auto}.schedule-panel, .monitor-panel {height:500px}.chart-expanded {inset:5px}.statistics-note {font-size:11px}}

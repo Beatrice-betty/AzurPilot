@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { AppContext, type AppContextValue } from '../app/context'
 import type { Resource } from '../api/types'
 import { translateUi } from '../i18n'
+import { setDashboardPref } from '../app/dashboardPrefs'
 import { moveResourceKey, ResourceCards } from './ResourceCards'
 
 function renderResources(resources: Resource[], selected = ['ActionPoint']) {
@@ -21,6 +22,24 @@ describe('资源卡片', () => {
     expect(moveResourceKey(original, 'Oil', 'Cube')).toEqual(['Coin', 'Gem', 'Cube', 'Oil'])
     expect(moveResourceKey(original, 'Oil', 'Oil')).toBe(original)
     expect(original).toEqual(['Oil', 'Coin', 'Gem', 'Cube'])
+  })
+
+  it('记录时间当日只给时分秒，跨日给月日与小时', () => {
+    const pad = (count: number) => String(count).padStart(2, '0')
+    const stamp = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+    const now = new Date()
+    const today = renderResources([{name: 'Oil', label: '石油', value: 1, record: stamp(now)}], ['Oil'])
+    const earlier = renderResources([{name: 'Oil', label: '石油', value: 1, record: stamp(new Date(now.getTime() - 24 * 60 * 60 * 1000))}], ['Oil'])
+
+    expect(today).toMatch(/class="resource-foot">\d{2}:\d{2}:\d{2}</)
+    expect(earlier).toMatch(/class="resource-foot">\d{2}-\d{2}-\d{2}</)
+  })
+
+  it('记录时间超过一年只提示过久', () => {
+    const long = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000)
+    const html = renderResources([{name: 'Oil', label: '石油', value: 1, record: long.toISOString()}], ['Oil'])
+
+    expect(html).toContain('时间太久了啦…')
   })
 
   it('行动力与石油一致，以小字后缀显示总量', () => {
@@ -57,5 +76,30 @@ describe('资源卡片', () => {
 
     expect(html).toContain('<span>1,000</span>')
     expect(html).toContain('<small>/ 16,000</small>')
+  })
+
+  it('总行动力优先时两个数字互换', () => {
+    setDashboardPref('totalFirst', true)
+    try {
+      const html = renderResources([{name: 'ActionPoint', label: '行动力', value: 101, total: 1301, record: '2026-09-16 12:00:00'}])
+
+      expect(html).toContain('<span>1,301</span><small>/ 101</small>')
+    } finally {
+      setDashboardPref('totalFirst', false)
+    }
+  })
+
+  it('通用卡片把已选资源收进同一个容器', () => {
+    setDashboardPref('merged', true)
+    try {
+      const html = renderResources([{name: 'Oil', label: '石油', value: 1000, record: '2026-09-16 12:00:00'}], ['Oil', 'Coin'])
+
+      expect(html.match(/class="resource-card resource-merged"/g)).toHaveLength(1)
+      expect(html.match(/resource-merged-item/g)).toHaveLength(2)
+      expect(html.match(/class="resource-heading"/g)).toHaveLength(2)
+      expect(html.match(/class="resource-value-content"/g)).toHaveLength(2)
+    } finally {
+      setDashboardPref('merged', false)
+    }
   })
 })
