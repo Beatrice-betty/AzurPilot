@@ -143,9 +143,15 @@
 :root[data-theme='extreme'] .log-panel {flex: 1; min-height: 0}
 :root[data-theme='extreme'] .log-content {height: auto; flex: 1; min-height: 150px; padding: 7px 11px; line-height: 1.45}
 
-/* 右栏顶部的「实例工作区 / 实例名」与面包屑重复，整块隐去省一行。
-   窄屏抽屉不依赖它的关闭按钮 —— 顶栏的日历图标同样能开关右栏。 */
-:root[data-theme='extreme'] .right-rail-header {display: none}
+/* 桌面可省略重复标题，窄屏需保留抽屉内的关闭入口。 */
+@media (min-width: 951px) {
+  :root[data-theme='extreme'] .right-rail-header {display: none}
+}
+@media (max-width: 950px) {
+  /* 窄屏由文档滚动承载总览，监控面板使用共享层的高度，避免零基准伸缩压扁截图。 */
+  :root[data-theme='extreme'] .overview-page {height: auto}
+  :root[data-theme='extreme'] .overview-main > .panel {flex: none}
+}
 
 /* 内容留白：窄屏断点用 !important 写死的面板内边距一并压掉 */
 :root[data-theme='extreme'] main {min-height: 0; padding: 4px}

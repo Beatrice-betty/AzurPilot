@@ -123,6 +123,68 @@ test('资源数值按可用宽度缩放并保持当前值与上限在同一行',
   expect(errors).toEqual([])
 })
 
+for (const theme of ['minimal', 'legacy-light', 'legacy-dark', 'extreme'] as const) {
+  test(`${theme} 窄屏总览与统计内容完整可访问`, async ({page}) => {
+    test.setTimeout(60000)
+    await page.addInitScript(value => localStorage.setItem('azurpilot.theme', value), theme)
+    await page.setViewportSize({width: 550, height: 1000})
+    await page.goto('/#/i/demo-main/overview')
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+    const legacy = theme.startsWith('legacy-')
+    await expect(page.locator('.resource-card')).toHaveCount(4)
+    await expect.poll(() => page.locator('main').evaluate(element => element.clientHeight)).toBeGreaterThan(500)
+    if (!legacy) await page.getByRole('button', {name: '打开调度与任务', exact: true}).click()
+    await page.getByRole('button', {name: '启动调度器', exact: true}).click()
+    if (!legacy) await page.locator('.right-rail').getByRole('button', {name: '关闭调度与任务', exact: true}).click()
+    try {
+      await page.getByRole('tab', {name: '截图', exact: true}).click()
+      const preview = page.getByAltText('任务最近一次截图')
+      await expect(preview).toBeVisible({timeout: 10000})
+      for (const width of [900, 550, 390]) {
+        await page.setViewportSize({width, height: 1000})
+        await preview.scrollIntoViewIfNeeded()
+        await expect(preview).toBeInViewport({ratio: .95})
+        expect((await preview.boundingBox())!.height).toBeGreaterThan(100)
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      }
+      await page.screenshot({path: `test-results/narrow-${theme}-overview.png`, fullPage: true})
+    } finally {
+      if (!legacy) await page.getByRole('button', {name: '打开调度与任务', exact: true}).click()
+      await page.getByRole('button', {name: '停止运行', exact: true}).click()
+      if (!legacy) await page.locator('.right-rail').getByRole('button', {name: '关闭调度与任务', exact: true}).click()
+    }
+
+    await page.goto('/#/i/demo-main/statistics')
+    for (const width of [900, 550, 390]) {
+      await page.setViewportSize({width, height: 1000})
+      await page.getByRole('button', {name: '打开导航', exact: true}).click()
+      await expect(page.locator('.sidebar')).toBeInViewport({ratio: .95})
+      await page.getByRole('button', {name: '关闭导航', exact: true}).click()
+      if (!legacy) {
+        await page.getByRole('button', {name: '打开调度与任务', exact: true}).click()
+        await expect(page.locator('.right-rail')).toBeInViewport({ratio: .95})
+        await page.locator('.right-rail').getByRole('button', {name: '关闭调度与任务', exact: true}).click()
+      }
+      for (const category of ['资源趋势', '大世界趋势', '短猫掉落']) {
+        const picker = page.getByRole('combobox', {name: '统计分类', exact: true})
+        if (await picker.isVisible()) {
+          await picker.click()
+          await page.getByRole('option', {name: category, exact: true}).click()
+        } else {
+          await page.getByRole('tab', {name: category, exact: true}).click()
+        }
+        const content = page.locator(category === '短猫掉落' ? '.statistics-table' : '.chart-canvas').first()
+        await expect(content).toBeVisible()
+        await content.scrollIntoViewIfNeeded()
+        await expect(content).toBeInViewport({ratio: .95})
+        await expect.poll(() => page.locator('.statistics-sections').evaluate(element => element.clientHeight)).toBeGreaterThan(200)
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      }
+    }
+    await page.screenshot({path: `test-results/narrow-${theme}-statistics.png`, fullPage: true})
+  })
+}
+
 test('任务二级菜单通过顶层浮层覆盖资源卡片', async ({page}) => {
   await page.setViewportSize({width: 1134, height: 669})
   await page.addInitScript(() => localStorage.setItem('azurpilot.resources.demo-main', JSON.stringify(['Oil', 'ActionPoint'])))

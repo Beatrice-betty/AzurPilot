@@ -826,6 +826,10 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
   /* 窄屏没有页内滚动区（下面的定高规则都在 ≥951px 里），
      外壳再钉死视口加 overflow:hidden 就会把后面的内容整段裁掉、页面还滚不动。 */
   .app-shell.legacy-shell, .app-shell.legacy-shell > .main-shell {height: auto; overflow: visible}
+  /* 桌面 main 的零基准伸缩和裁剪也必须复位，否则子页仍被压成零高。 */
+  .app-shell.legacy-shell > .main-shell > main,
+  .app-shell.legacy-shell > .main-shell > main:has(.instance-page-grid),
+  .app-shell.legacy-shell > .main-shell > main:has(.task-config-legacy) {flex: none; overflow: visible}
   .instance-page-grid {display: flex; flex-direction: column; gap: 12px; height: auto}
   .instance-page-rail, .instance-page-main {overflow: visible}
   .task-config-legacy {display: block}
