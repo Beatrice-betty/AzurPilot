@@ -71,7 +71,7 @@
 .live-label i {width: 4px; height: 4px; border-radius: 50%; background: #6aba9e}
 .log-panel {display: flex; flex-direction: column}
 .log-panel .panel-heading {padding-top: 14px; padding-bottom: 14px; flex-shrink: 0}
-.log-content {background: var(--surface-muted); padding: 13px 17px; height: 62vh; min-height: 220px; overflow: auto; font-family: "Cascadia Code", "JetBrains Mono", "Consolas", "Courier New", monospace; font-size: 11px; line-height: 1.6; color: var(--text)}
+.log-content {background: var(--surface-muted); padding: 13px 17px; height: 62vh; min-height: 220px; overflow: auto; font-family: var(--theme-font-mono, "JetBrains Mono", "JetBrains Mono NL", "Cascadia Code", "Consolas", "Courier New", monospace); font-size: 11px; line-height: 1.6; color: var(--text)}
 .compact .log-content {height: 178px; min-height: 0}
 .log-entry-line {display: flex; gap: 8px; padding: 2px 0; white-space: pre-wrap; word-break: break-all}
 .log-entry-line.log-raw {display: block}
@@ -193,12 +193,12 @@
   .field-control:has(> .edit-status) {position: static; display: flex; flex-direction: column; align-items: flex-start; gap: 6px}
   .field-control > .edit-status {position: static; order: -1; margin: 0; max-width: 100%; transform: none}
 }
-.field-row-multiline textarea {padding: 10px 14px; background: var(--surface-muted); font-family: "Cascadia Code", "Consolas", "Microsoft YaHei", monospace}
+.field-row-multiline textarea {padding: 10px 14px; background: var(--surface-muted); font-family: var(--theme-font-mono, "JetBrains Mono", "JetBrains Mono NL", "Cascadia Code", "Consolas", "Microsoft YaHei", monospace)}
 .yaml-editor {border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface-muted); text-align: left}
 .yaml-editor:focus-within {border-color: var(--accent)}
 .editor-heading {padding: 8px 14px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 11px; letter-spacing: 1px}
 .yaml-editor .cm-editor {background: var(--surface-muted); color: var(--text); outline: none; font-size: 13px}
-.yaml-editor .cm-scroller {max-height: 480px; overflow: auto; font-family: "Cascadia Code", "Consolas", "Microsoft YaHei", monospace; line-height: 1.9}
+.yaml-editor .cm-scroller {max-height: 480px; overflow: auto; font-family: var(--theme-font-mono, "JetBrains Mono", "JetBrains Mono NL", "Cascadia Code", "Consolas", "Microsoft YaHei", monospace); line-height: 1.9}
 .yaml-editor .cm-content {padding: 12px 0; caret-color: var(--text)}
 .yaml-editor .cm-line {padding: 0 14px}
 .yaml-editor .cm-gutters {background: var(--surface-muted); color: var(--muted); border-right: 1px solid var(--border)}
@@ -224,7 +224,7 @@
 .shop-strategy-help-body > * {margin: 0}
 .shop-strategy-help-body h3 {color: var(--text); font-size: 14px; font-weight: 600}
 .shop-strategy-help-body ul {display: grid; gap: 6px; padding-left: 20px}
-.shop-strategy-help-body code, .shop-strategy-help-body pre {font-family: "Cascadia Code", "Consolas", "Microsoft YaHei", monospace}
+.shop-strategy-help-body code, .shop-strategy-help-body pre {font-family: var(--theme-font-mono, "JetBrains Mono", "JetBrains Mono NL", "Cascadia Code", "Consolas", "Microsoft YaHei", monospace)}
 .shop-strategy-help-body pre {max-width: 100%; padding: 12px 14px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-muted); color: var(--text); font-size: 12px; line-height: 1.7; white-space: pre}
 .shop-strategy-api {display: grid; gap: 8px}
 .shop-strategy-api > div {display: grid; grid-template-columns: minmax(250px, 1fr) minmax(0, 1fr); gap: 14px; align-items: baseline}
@@ -239,12 +239,12 @@
 .shop-strategy-current {color: var(--text)}
 @media (max-width: 700px) {.shop-strategy-help summary, .shop-strategy-help-body {padding-left: 14px; padding-right: 14px}.shop-strategy-api > div {grid-template-columns: 1fr; gap: 2px}.shop-strategy-help-body pre {font-size: 11px}}
 .storage-field {display: grid; gap: 12px}
-.storage-field pre {margin: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-muted); font: 13px/1.9 "Cascadia Code", "Consolas", "Microsoft YaHei", monospace; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 480px; overflow-y: auto}
+.storage-field pre {margin: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-muted); font: 13px/1.9 var(--theme-font-mono, "JetBrains Mono", "JetBrains Mono NL", "Cascadia Code", "Consolas", "Microsoft YaHei", monospace); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 480px; overflow-y: auto}
 .storage-field .button {justify-self: start}
 .edit-status { margin-top: 6px; font-size: 12px; color: var(--muted); }
 .edit-error { color: var(--red); }
 .remote-address {display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 18px 21px}
-.remote-address code {flex: 1 1 260px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-muted); font: 13px/1.7 "Cascadia Code", "Consolas", "Microsoft YaHei", monospace; overflow-wrap: anywhere; user-select: all}
+.remote-address code {flex: 1 1 260px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-muted); font: 13px/1.7 var(--theme-font-mono, "JetBrains Mono", "JetBrains Mono NL", "Cascadia Code", "Consolas", "Microsoft YaHei", monospace); overflow-wrap: anywhere; user-select: all}
 .remote-hint {margin: 0; padding: 0 21px 16px; font-size: 12px}
 .remote-badge {padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 550; white-space: nowrap}
 .remote-badge-ready {background: #269a8120; color: #269a81}
@@ -316,7 +316,7 @@
 .meow-rubric-head {display: flex; flex-wrap: wrap; align-items: center; gap: 10px}
 .meow-rubric-head strong {font-size: 13px; font-weight: 600}
 .meow-rubric-head .meow-score {margin-left: auto; font-size: 14px}
-.meow-formula {font-family: "Cascadia Code", "Consolas", "Microsoft YaHei", monospace; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums}
+.meow-formula {font-family: var(--theme-font-mono, "JetBrains Mono", "JetBrains Mono NL", "Cascadia Code", "Consolas", "Microsoft YaHei", monospace); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums}
 .meow-score-bar {height: 5px; border-radius: 999px; background: var(--surface-muted); overflow: hidden}
 .meow-score-bar > i {display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #74bda8, #2f9e83)}
 .meow-axis {display: flex; flex-wrap: wrap; align-items: baseline; gap: 7px}
@@ -347,5 +347,5 @@
 .meow-advice-targets {margin: 6px 0 0; padding: 0; list-style: none}
 .meow-advice-targets li {position: relative; padding-left: 13px; font-size: 11px; color: var(--text); margin: 3px 0}
 .meow-advice-targets li::before {content: '→'; position: absolute; left: 0; color: var(--accent); opacity: .8}
-.meow-shot {font-family: "Cascadia Code", "Consolas", "Microsoft YaHei", monospace; overflow-wrap: anywhere}
+.meow-shot {font-family: var(--theme-font-mono, "JetBrains Mono", "JetBrains Mono NL", "Cascadia Code", "Consolas", "Microsoft YaHei", monospace); overflow-wrap: anywhere}
 @media (max-width: 700px) {.meow-cats {padding: 12px}.meow-axis-label {flex-basis: 100%}.meow-card-score {width: 100%; justify-content: flex-start}}
