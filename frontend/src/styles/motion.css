@@ -154,8 +154,6 @@ dialog.modal[open]::backdrop { animation: motion-backdrop-in var(--dur-3) var(--
 .motion-card-stagger {
   animation: motion-card-stagger-in var(--card-stagger-dur, 260ms) var(--ease-card-spring) both;
   animation-delay: var(--card-stagger-delay, 0ms);
-  -webkit-backdrop-filter: var(--theme-material-filter, none);
-  backdrop-filter: var(--theme-material-filter, none);
 }
 
 @keyframes motion-fade-up { from { opacity: 0; transform: translateY(var(--shift-entry)) } to { opacity: 1; transform: none } }

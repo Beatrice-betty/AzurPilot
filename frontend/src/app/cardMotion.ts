@@ -5,7 +5,6 @@ const CARD_SELECTORS = [
   '.panel',
   '.resource-card',
   '.instance-card',
-  '.home-deck',
   '.statistics-table',
   '.statistics-chart',
   '.summary-metrics-panel',

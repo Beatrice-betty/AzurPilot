@@ -20,8 +20,15 @@
 }
 body {background: var(--bg); background-attachment: fixed}
 #root {isolation: isolate}
-.wallpaper {position: fixed; inset: 0; z-index: -1; pointer-events: none; background: none}
-.wallpaper img, .wallpaper video {width: 100%; height: 100%; object-fit: cover; opacity: 1}
+.wallpaper {position: fixed; inset: 0; z-index: -1; pointer-events: none; background: none; overflow: hidden}
+.wallpaper img, .wallpaper video {position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover}
+.wallpaper-media {opacity: 1; backface-visibility: hidden; transform: translateZ(0)}
+.wallpaper-media.wallpaper-hidden {opacity: 0}
+.wallpaper-fade-in {animation: wallpaper-fade-in var(--dur-5, .36s) cubic-bezier(.16, 1, .3, 1) both}
+@keyframes wallpaper-fade-in {
+  from {opacity: 0}
+  to {opacity: 1}
+}
 .lucide {stroke-width: 1.75}
 
 /* 兼容前缀必须先于标准属性，避免生产压缩后只保留 WebKit 的模糊声明。 */
