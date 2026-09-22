@@ -163,13 +163,28 @@ main:focus {outline: none}
 .button:active:not(:disabled) {filter: brightness(.94)}
 .icon-button {width: 36px; height: 36px; border-radius: 50%; color: var(--muted)}
 .text-button {font-size: 12px; min-height: 36px; padding: 6px 8px}
-.panel, .resource-card, .summary-metrics section {
+.panel, .resource-card {
   background: var(--glass-tint);
   -webkit-backdrop-filter: blur(24px) saturate(130%);
   backdrop-filter: blur(24px) saturate(130%);
   border: 1px solid var(--glass-edge);
   border-radius: 26px;
   box-shadow: var(--glass-shadow);
+}
+.summary-metrics-panel .summary-metric-card,
+.summary-metrics-panel .summary-metrics section {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+.summary-metrics-panel .summary-metric-card:hover,
+.summary-metrics-panel .summary-metrics section:hover {
+  background: color-mix(in srgb, var(--surface) 35%, transparent);
+  border-color: color-mix(in srgb, var(--glass-edge) 60%, transparent);
+  transform: none;
 }
 
 .panel-heading {min-height: 62px; padding: 18px 22px}

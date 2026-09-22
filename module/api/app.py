@@ -42,7 +42,11 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
             if manage_runtime:
                 from module.api.lifecycle import startup
                 from module.runtime.deploy_settings import parse_run_config
+                from module.runtime.startup_memory import remembered_runs
                 runs = args.run or parse_run_config(State.deploy_config.Run)
+                if not args.run:
+                    # --run 是显式清单，不叠加记忆。
+                    runs = list(dict.fromkeys([*runs, *remembered_runs()]))
                 await asyncio.to_thread(startup, runs)
                 if State.deploy_config.DiscordRichPresence:
                     try:
