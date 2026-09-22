@@ -23,8 +23,10 @@
   .app-shell:has(.overview-page) .main-shell {min-height: 0}
   /* 高度取父级 100%：外壳没给确定高度时它会退化成 auto。flex-basis 会盖过 height，所以不参与伸缩。 */
   .overview-page {display:flex;flex-direction:column;flex:0 0 auto;height:100%;min-height:0;width:100%}
-  /* 停在自己的内容高上、让页面去滚：压到内容高以下会被 overflow 截掉，且没有可滚高度够回去。 */
-  .monitor-panel {flex:1 0 auto;height:auto;min-height:0}
+  /* 总览日志必须按父容器的剩余高度收缩，溢出交给 .log-content 内部滚动。
+     basis:auto 会把日志内容纳入面板基准高度，日志越多面板就越长；旧版总览也会被这条全局规则误伤。 */
+  .overview-page .monitor-panel,
+  .instance-page-panel > .monitor-panel {flex:1 1 0;height:auto;min-height:0}
   .overview-main {margin-bottom:-10px}
 }
 .schedule-panel .panel-heading,.schedule-panel .schedule-summary {flex-shrink:0}
