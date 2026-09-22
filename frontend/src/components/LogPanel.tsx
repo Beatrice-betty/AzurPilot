@@ -11,6 +11,19 @@ export const LOG_LINE_RE = /^([A-Z]{4,8})\s+(?:(\d{4}-\d{2}-\d{2})\s+)?(\d{2}:\d
 export const RULE_RE = /^[═─]{3,}\s*(.*?)\s*[═─]{3,}$/
 export const PURE_RULE_RE = /^[═─]{3,}$/
 export const CENTER_TITLE_RE = /^\s{3,}(.*?)\s{3,}$/
+export const LOG_ENTRY_LIMIT = 1000
+
+/**
+ * 所有日志入口先在纯数据层截断，避免异常历史 payload 进入 React state 后创建数万 DOM。
+ * 正常后端只保留约 400 条；这里的 1000 条是客户端独立的防御上限。
+ */
+export function mergeLogEntries(previous: LogEntry[], incoming: LogEntry[], reset = false): LogEntry[] {
+  const recent = incoming.length > LOG_ENTRY_LIMIT ? incoming.slice(-LOG_ENTRY_LIMIT) : incoming
+  const entries = new Map<number, LogEntry>()
+  if (!reset) for (const entry of previous.slice(-LOG_ENTRY_LIMIT)) entries.set(entry.id, entry)
+  for (const entry of recent) entries.set(entry.id, entry)
+  return [...entries.values()].sort((a, b) => a.id - b.id).slice(-LOG_ENTRY_LIMIT)
+}
 
 function highlightText(text: string, search: string): ReactNode {
   if (!text) return null
@@ -208,11 +221,7 @@ export function LogPanel({active = true}: {active?: boolean}) {
     setFloor(0)
     setEntries([])
     void api.request('logs.get', {instance}).then(value => {
-      if (active) setEntries(previous => {
-        const entries = new Map(value.entries.map(entry => [entry.id, entry]))
-        previous.forEach(entry => entries.set(entry.id, entry))
-        return [...entries.values()].sort((a, b) => a.id - b.id).slice(-400)
-      })
+      if (active) setEntries(previous => mergeLogEntries(previous, value.entries))
     }).catch(error => notify(error.message, true))
     return () => { active = false }
   }, [connection, instance, notify])
@@ -222,12 +231,7 @@ export function LogPanel({active = true}: {active?: boolean}) {
     const data = event.data as LogsData
     if (data.instance !== instance) return
     setFloor(previous => data.cursor < previous ? 0 : previous)
-    setEntries(previous => {
-      if (data.reset) return data.entries
-      const byId = new Map(previous.map(entry => [entry.id, entry]))
-      data.entries.forEach(entry => byId.set(entry.id, entry))
-      return [...byId.values()].sort((a, b) => a.id - b.id).slice(-400)
-    })
+    setEntries(previous => mergeLogEntries(previous, data.entries, data.reset))
   }), [instance])
 
   useLayoutEffect(() => {
@@ -244,7 +248,7 @@ export function LogPanel({active = true}: {active?: boolean}) {
     entry.text.toLowerCase().includes(search.toLowerCase())
   )
   // 倒序只反转渲染顺序；相邻行的居中标题判断是对称的（前后都要求是分割线），不受影响。
-  const ordered = descending ? [...visible].reverse() : visible
+  const ordered = descending ? [...visible].reverse().slice(0, LOG_ENTRY_LIMIT) : visible.slice(-LOG_ENTRY_LIMIT)
 
   function download() {
     const url = URL.createObjectURL(new Blob([visible.map(entry => entry.text).join('\n')], {type: 'text/plain;charset=utf-8'}))
