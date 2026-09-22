@@ -163,6 +163,7 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
   const dragKeyRef = useRef<string | null>(null)
   const dragAnchorRef = useRef<{key: string; card: HTMLElement; pointerX: number; pointerY: number; movedX: number; movedY: number; left: number; top: number} | null>(null)
   const releasedKeyRef = useRef<string | null>(null)
+  const pickerDragRef = useRef<string | null>(null)
   const slotsRef = useRef<{key: string; left: number; top: number; right: number; bottom: number}[]>([])
   const rectsRef = useRef<Map<string, {left: number; top: number}>>(new Map())
   const framesRef = useRef<number[]>([])
@@ -268,7 +269,10 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
     slotsRef.current = []
     setDraggingKey(null)
     if (apply) {
-      if (next && next.some((key, index) => key !== selected[index])) onChange(next)
+      /* 松手落在未展示区，这张卡就此移出仪表盘；其余情况按拖动后的顺序提交。 */
+      const dropped = anchor && document.elementFromPoint(anchor.movedX, anchor.movedY)?.closest('.resource-picker')
+      if (dropped) { remove(anchor.key); setDragOrder(null) }
+      else if (next && next.some((key, index) => key !== selected[index])) onChange(next)
     } else setDragOrder(null)
   }
 
@@ -327,7 +331,13 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
     {pickerOpen && <div className="resource-picker">{available.length ? <div className="resource-picker-grid">{available.map(resource => {
       const labelKey = resourceLabels[resource.name]
       const label = labelKey ? ui(labelKey) : resource.label ?? resource.name
-      return <button type="button" key={resource.name} className="resource-picker-card" onClick={() => add(resource.name)}><span className="resource-editor-icon resource-editor-icon-image"><ResourceIcon resourceKey={resource.name} size={28}/></span><span>{label}</span><Plus size={15}/></button>
+      return <button type="button" key={resource.name} className="resource-editor-card resource-picker-card" onPointerDown={event => { if (event.button !== 0) return
+            event.currentTarget.setPointerCapture(event.pointerId)
+            pickerDragRef.current = resource.name }}
+          /* 从「未展示」拖进已展示区，等于把这张卡加回来。 */
+          onPointerUp={event => { const key = pickerDragRef.current; pickerDragRef.current = null
+            if (key && document.elementFromPoint(event.clientX, event.clientY)?.closest(".resource-card-editor")) add(key) }}
+          onClick={() => add(resource.name)}><span className="resource-editor-icon resource-editor-icon-image"><ResourceIcon resourceKey={resource.name} size={28}/></span><span>{label}</span><Plus size={15}/></button>
     })}</div> : <div className="resource-picker-empty">{ui('resource.allAdded')}</div>}</div>}
   </div>
 }
