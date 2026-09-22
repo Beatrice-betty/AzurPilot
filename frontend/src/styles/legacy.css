@@ -856,3 +856,9 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 
 @keyframes rail-view-in-right {from {opacity: 0; transform: translateX(7px)} to {opacity: 1; transform: none}}
 @keyframes rail-view-in-left {from {opacity: 0; transform: translateX(-7px)} to {opacity: 1; transform: none}}
+
+/* 任务设置列表与右侧栏不显示滚动条。 */
+.app-shell.legacy-shell .task-nav,
+.app-shell.legacy-shell .group-nav {scrollbar-width: none}
+.app-shell.legacy-shell .task-nav::-webkit-scrollbar,
+.app-shell.legacy-shell .group-nav::-webkit-scrollbar {width: 0}
