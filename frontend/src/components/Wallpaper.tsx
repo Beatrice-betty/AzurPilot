@@ -11,12 +11,10 @@ interface DisplayItem {
 export function Wallpaper() {
   const background = useSyncExternalStore(subscribeBackground, getBackground)
   const [active, setActive] = useState<DisplayItem | null>(null)
-  const [previous, setPrevious] = useState<DisplayItem | null>(null)
   const [videoReady, setVideoReady] = useState(false)
   const [failed, setFailed] = useState(false)
   const activeRef = useRef<DisplayItem | null>(null)
   activeRef.current = active
-  const cleanupTimerRef = useRef<number | null>(null)
 
   useEffect(() => {
     setFailed(false)
@@ -29,7 +27,6 @@ export function Wallpaper() {
 
     if (!targetUrl) {
       setActive(null)
-      setPrevious(null)
       return
     }
 
@@ -40,12 +37,7 @@ export function Wallpaper() {
     if (targetKind === 'video') {
       setVideoReady(false)
       const nextItem: DisplayItem = { id: `${targetUrl}-${Date.now()}`, url: targetUrl, kind: 'video' }
-      setPrevious(activeRef.current)
       setActive(nextItem)
-      if (cleanupTimerRef.current) window.clearTimeout(cleanupTimerRef.current)
-      cleanupTimerRef.current = window.setTimeout(() => {
-        setPrevious(null)
-      }, 500)
       return
     }
 
@@ -58,13 +50,7 @@ export function Wallpaper() {
     const handleReady = () => {
       if (cancelled) return
       const nextItem: DisplayItem = { id: `${targetUrl}-${Date.now()}`, url: targetUrl, kind: 'image' }
-      setPrevious(activeRef.current)
       setActive(nextItem)
-
-      if (cleanupTimerRef.current) window.clearTimeout(cleanupTimerRef.current)
-      cleanupTimerRef.current = window.setTimeout(() => {
-        setPrevious(null)
-      }, 500)
     }
 
     const handleError = () => {
@@ -94,13 +80,7 @@ export function Wallpaper() {
     }
   }, [background.assetUrl, background.kind])
 
-  useEffect(() => {
-    return () => {
-      if (cleanupTimerRef.current) window.clearTimeout(cleanupTimerRef.current)
-    }
-  }, [])
-
-  const renderItem = (item: DisplayItem, isIncoming: boolean) => {
+  const renderItem = (item: DisplayItem) => {
     if (item.kind === 'video') {
       return (
         <video
@@ -111,7 +91,7 @@ export function Wallpaper() {
           loop
           playsInline
           preload="metadata"
-          className={`wallpaper-media ${isIncoming ? (videoReady ? 'wallpaper-fade-in' : 'wallpaper-hidden') : ''}`}
+          className={`wallpaper-media ${videoReady ? 'wallpaper-fade-in' : 'wallpaper-hidden'}`}
           onLoadedData={() => setVideoReady(true)}
           onError={() => setFailed(true)}
         />
@@ -124,7 +104,7 @@ export function Wallpaper() {
         alt=""
         referrerPolicy="no-referrer"
         decoding="async"
-        className={`wallpaper-media ${isIncoming ? 'wallpaper-fade-in' : ''}`}
+        className="wallpaper-media wallpaper-fade-in"
         onError={() => setFailed(true)}
       />
     )
@@ -133,12 +113,8 @@ export function Wallpaper() {
   return (
     <div className="wallpaper" aria-hidden="true">
       {!failed && (
-        <>
-          {previous && renderItem(previous, false)}
-          {active && renderItem(active, true)}
-        </>
+        active && renderItem(active)
       )}
     </div>
   )
 }
-
