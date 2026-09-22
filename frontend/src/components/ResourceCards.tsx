@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Box, GripVertical, Plus, X } from 'lucide-react'
 import type { Resource } from '../api/types'
 import { useApp } from '../app/context'
@@ -23,9 +23,20 @@ const iconImages: Record<string, string> = {
 
 function ResourceIcon({resourceKey, size = 32}: {resourceKey: string; size?: number}) {
   const src = iconImages[resourceKey]
-  return src ? <img className="resource-icon-image" src={src} alt="" width={size} height={size}/> : <Box size={Math.round(size * .62)}/>
+  return src ? <img className="resource-icon-image" src={src} alt="" width={size} height={size} draggable={false}/> : <Box size={Math.round(size * .62)}/>
 }
 export const defaultResourceKeys = ['Oil', 'Coin', 'Gem', 'Cube']
+
+export function moveResourceKey(keys: string[], fromKey: string, toKey: string): string[] {
+  if (fromKey === toKey) return keys
+  const from = keys.indexOf(fromKey)
+  const to = keys.indexOf(toKey)
+  if (from < 0 || to < 0) return keys
+  const next = [...keys]
+  const [moved] = next.splice(from, 1)
+  next.splice(to, 0, moved)
+  return next
+}
 
 export function ResourceCards({resources, selected}: {resources: Resource[]; selected: string[]}) {
   const {ui} = useApp()
@@ -46,7 +57,12 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
   const {ui} = useApp()
   const [pickerOpen, setPickerOpen] = useState(false)
   const [draggingKey, setDraggingKey] = useState<string | null>(null)
+  const [dragOrder, setDragOrder] = useState<string[] | null>(null)
+  const dragOrderRef = useRef<string[] | null>(null)
+  const dragPointerRef = useRef<number | null>(null)
+  const dragKeyRef = useRef<string | null>(null)
   const available = resources.filter(resource => !selected.includes(resource.name))
+  const displayed = dragOrder ?? selected
 
   function add(key: string) {
     if (!selected.includes(key)) onChange([...selected, key])
@@ -54,25 +70,50 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
   function remove(key: string) {
     onChange(selected.filter(item => item !== key))
   }
-  function move(fromKey: string, toKey: string) {
-    if (fromKey === toKey) return
-    const from = selected.indexOf(fromKey)
-    const to = selected.indexOf(toKey)
-    if (from < 0 || to < 0) return
-    const keys = [...selected]
-    const [moved] = keys.splice(from, 1)
-    keys.splice(to, 0, moved)
-    onChange(keys)
+  function finishDrag(pointerId: number, apply: boolean) {
+    if (dragPointerRef.current !== pointerId) return
+    const next = dragOrderRef.current
+    dragPointerRef.current = null
+    dragOrderRef.current = null
+    dragKeyRef.current = null
+    setDraggingKey(null)
+    setDragOrder(null)
+    if (apply && next && next.some((key, index) => key !== selected[index])) onChange(next)
   }
 
   return <div className="resource-settings">
     <div className="resource-settings-heading"><div><strong>{ui('resource.cards')}</strong><span>{ui('resource.cardsHint')}</span></div><button type="button" className="text-button" onClick={() => onChange(defaultResourceKeys)}>{ui('resource.restoreDefault')}</button></div>
     <div className="resource-card-editor">
-      {selected.map(key => {
+      {displayed.map(key => {
         const resource = resources.find(item => item.name === key)
           const labelKey = resourceLabels[key]
           const label = labelKey ? ui(labelKey) : resource?.label ?? key
-        return <div key={key} className={`resource-editor-card${draggingKey === key ? ' dragging' : ''}`} draggable onDragStart={event => {setDraggingKey(key); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', key)}} onDragEnd={() => setDraggingKey(null)} onDragOver={event => {event.preventDefault(); event.dataTransfer.dropEffect = 'move'}} onDrop={event => {event.preventDefault(); const source = draggingKey ?? event.dataTransfer.getData('text/plain'); if (source) move(source, key); setDraggingKey(null)}}>
+        return <div key={key} data-resource-key={key} className={`resource-editor-card${draggingKey === key ? ' dragging' : ''}`}
+          onPointerDown={event => {
+            if (event.button !== 0 || (event.target as HTMLElement).closest('button')) return
+            event.preventDefault()
+            event.currentTarget.setPointerCapture(event.pointerId)
+            dragPointerRef.current = event.pointerId
+            dragKeyRef.current = key
+            dragOrderRef.current = [...selected]
+            setDragOrder([...selected])
+            setDraggingKey(key)
+          }}
+          onPointerMove={event => {
+            const sourceKey = dragKeyRef.current
+            if (dragPointerRef.current !== event.pointerId || !sourceKey) return
+            const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-resource-key]')?.dataset.resourceKey
+            if (!target || !dragOrderRef.current) return
+            const next = moveResourceKey(dragOrderRef.current, sourceKey, target)
+            if (next === dragOrderRef.current) return
+            dragOrderRef.current = next
+            setDragOrder(next)
+          }}
+          onPointerUp={event => {
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+            finishDrag(event.pointerId, true)
+          }}
+          onPointerCancel={event => finishDrag(event.pointerId, false)}>
           <span className="resource-editor-grip" aria-hidden="true"><GripVertical size={16}/></span>
           <span className="resource-editor-icon resource-editor-icon-image"><ResourceIcon resourceKey={key} size={30}/></span>
           <span className="resource-editor-label">{label}</span>

@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { AppContext, type AppContextValue } from '../app/context'
 import type { Resource } from '../api/types'
 import { translateUi } from '../i18n'
-import { ResourceCards } from './ResourceCards'
+import { moveResourceKey, ResourceCards } from './ResourceCards'
 
 function renderResources(resources: Resource[]) {
   return renderToStaticMarkup(
@@ -14,6 +14,15 @@ function renderResources(resources: Resource[]) {
 }
 
 describe('资源卡片', () => {
+  it('按拖动目标重排卡片且不修改原数组', () => {
+    const original = ['Oil', 'Coin', 'Gem', 'Cube']
+
+    expect(moveResourceKey(original, 'Cube', 'Coin')).toEqual(['Oil', 'Cube', 'Coin', 'Gem'])
+    expect(moveResourceKey(original, 'Oil', 'Cube')).toEqual(['Coin', 'Gem', 'Cube', 'Oil'])
+    expect(moveResourceKey(original, 'Oil', 'Oil')).toBe(original)
+    expect(original).toEqual(['Oil', 'Coin', 'Gem', 'Cube'])
+  })
+
   it('行动力没有上限时显示不同的总行动力', () => {
     const html = renderResources([{name: 'ActionPoint', label: '行动力', value: 101, total: 1301, record: '2026-09-16 12:00:00'}])
 
