@@ -122,7 +122,7 @@
 .connection-dot {background: #d2ab67; width: 6px; height: 6px; border-radius: 50%}
 .connection-dot.online {background: #40b594; box-shadow: 0 0 0 3px #40b59412}
 .main-shell {min-width: 0; display: flex; flex-direction: column}
-.topbar {height: var(--topbar-height, 69px); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 31px; background: var(--surface); flex-shrink: 0}
+.topbar {height: var(--topbar-height, 69px); border-bottom: none; display: flex; align-items: center; justify-content: space-between; padding: 0 31px; background: var(--surface); flex-shrink: 0}
 .breadcrumb {font-size: 11px; color: var(--muted); display: flex; gap: 13px; align-items: center}
 .breadcrumb span {color: #c5cdd4}
 .breadcrumb strong {font-weight: 500; color: var(--text)}
@@ -165,7 +165,7 @@ main {padding: 32px 32px 16px; flex: 1}
 .title-actions {display: flex; gap: 10px; flex-wrap: wrap}
 .connection-banner {padding: 10px 32px; display: flex; gap: 9px; align-items: center; background: #fbf2db; color: #8f6d25; font-size: 11px}
 .right-rail {position: sticky; top: 0; height: var(--viewport-height); min-width: 0; display: flex; flex-direction: column; background: var(--surface); border-left: 1px solid var(--border); z-index: 18; overflow: hidden}
-.right-rail-header {height: 72px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--border)}
+.right-rail-header {height: 72px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; border-bottom: 0}
 .right-rail-header > div {min-width: 0}
 .right-rail-header strong {display: block; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px}
 .right-rail-eyebrow {display: block; color: var(--muted); font-size: 9px; letter-spacing: .9px; text-transform: uppercase}
