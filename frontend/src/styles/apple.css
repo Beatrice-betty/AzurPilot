@@ -92,7 +92,7 @@ body {background: var(--bg); background-attachment: fixed}
 /* 顶栏横跨到屏幕右缘，两个模式都如此：右栏的 top 就在顶栏下方，顶栏不伸过去的话
    两者之间会空出一条缝。用视口单位而不是百分比：百分比以内容盒为基准，
    加上顶栏自身的 margin-left 后会比视口长出一截。 */
-.app-shell.with-rail .topbar {width: calc(100vw - var(--sidebar-width) - 14px - 24px); border-bottom: none !important}
+.app-shell.with-rail .topbar {width: calc(100% + var(--right-rail-width) + 14px - 24px); border-bottom: none !important}
 .topbar > :not(.glass-material), .title-actions > :not(.glass-material) {position: relative; z-index: 1}
 .breadcrumb {font-size: 13px; gap: 10px}
 .breadcrumb .instance-caption strong {font-size: 13px}

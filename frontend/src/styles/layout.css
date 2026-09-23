@@ -122,6 +122,13 @@
 .connection-dot {background: #d2ab67; width: 6px; height: 6px; border-radius: 50%}
 .connection-dot.online {background: #40b594; box-shadow: 0 0 0 3px #40b59412}
 .main-shell {min-width: 0; display: flex; flex-direction: column}
+/* 桌面配置页只让内容列滚动，长参数列表不能把外壳和浏览器页面撑高。 */
+@media (min-width: 951px) {
+  .app-shell.task-config-shell:not(.legacy-shell) {height: var(--viewport-height); overflow: hidden}
+  .app-shell.task-config-shell:not(.legacy-shell) .main-shell {min-height: 0}
+  .app-shell.task-config-shell:not(.legacy-shell) .main-shell > main {min-height: 0; overflow-y: auto}
+  .app-shell.task-config-shell:not(.legacy-shell) .group-nav {top: 16px}
+}
 .topbar {height: var(--topbar-height, 69px); border-bottom: none; display: flex; align-items: center; justify-content: space-between; padding: 0 31px; background: var(--surface); flex-shrink: 0}
 .breadcrumb {font-size: 11px; color: var(--muted); display: flex; gap: 13px; align-items: center}
 .breadcrumb span {color: #c5cdd4}
