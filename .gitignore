@@ -335,3 +335,6 @@ frontend/test-results/
 frontend/playwright-report/
 frontend/*.tsbuildinfo
 !uv.lock
+
+# GraphFlow 工具的本地缓存（graphflow MCP 在工作目录运行时产生）
+.graphflow-cache/
