@@ -93,7 +93,7 @@ def series(rows, key, label):
     return {'key': key, 'label': label, 'points': points}
 
 
-def report(configs, instance, category, month, days, period, series=0):
+def report(configs, instance, category, month, days, period, research_series=0):
     configs.path(instance)
     now = datetime.now()
     try:
@@ -214,11 +214,15 @@ def report(configs, instance, category, month, days, period, series=0):
         result['series'] = [series(daily, 'total_exp_gained', '每日经验'), series(daily, 'battle_count', '每日战斗'), series(daily, 'total_run_time', '每日运行秒数')]
     elif category == 'research':
         from module.statistics.research_stats import collect, RARITY_LABELS
-        summary = collect(instance, days=days, series=series)
+        summary = collect(instance, days=days, series=research_series)
         if not summary['available']:
-            result['notes'].append(
-                '还没有科研掉落记录。统计在领奖时自动完成，'
-                '请把「科研记录」设为「保存」或「上传」，之后正常跑科研任务即可。')
+            # 走表格的 note 而不是 notes：前端只渲染 tables，notes 仅在导出 CSV 时用到，
+            # 放在那里用户界面上什么都看不到（会以为功能坏了）。
+            result['tables'].append(table(
+                '科研掉落', ['图标', '物品', '稀有度', '数量', '获得次数'], [],
+                note='还没有科研掉落记录。统计在领奖时自动完成：'
+                     '把「科研截图」设为「保存」或「上传」即可（两者都会统计，'
+                     '区别只是要不要把截图落盘）。'))
             return result
         metric('掉落记录', summary['records'], '次')
         metric('物品种类', len(summary['items']), '种')
