@@ -43,20 +43,20 @@ ITEM_TEMPLATE_FOLDER = './assets/stats/research_items'
 # 科研掉落的数量上限，只用于触发重识别（超限即认为读错）。
 # 心智单元能到 100+，不能沿用大世界那边的 50 上限。
 RESEARCH_AMOUNT_MAX = {'CognitiveChips': 300}
-# 舰船图纸与彩装备图纸一次不超过 10 张，其余物品没有这个规律：
-# 实测金装备图纸一次能掉 71 张，用 10 去卡会把正确读数截断成 7。
+# 科研掉落的图纸（舰船图纸与全部装备图纸）一次都不超过 10 张。
+# 超限即认为读错，交给 AmountOcr 重试并在仍超限时截断末位：
+# 实测「真值 7 被读成 71」正是这样被修正回 7 的。
 RESEARCH_SURE_MAX = 10
-# 舰船图纸与彩装备（模板名带 _T0 后缀）适用 10 张上限
 RESEARCH_SURE_PREFIXES = ('Blueprint',)
-RESEARCH_SURE_SUFFIXES = ('_T0',)
+# 装备图纸的模板名以 _T<数字> 结尾，可能还带 _2/_3 变体后缀
+RESEARCH_SURE_PATTERN = re.compile(r'_T\d+(_\d+)?$')
 
 
 def research_amount_default_max(item_name: str) -> int:
     """科研掉落的默认数量上限。
 
-    只有舰船图纸与彩装备图纸稳定不超过 10 张（用户按实际掉落规律给的经验值）；
-    其余物品（金装备图纸、改造图纸、装备本身）没有这个规律，套用 10 会把正确
-    读数判成错误再截断末位。
+    科研掉落的图纸只有舰船图纸（Blueprint*）与装备图纸（*_T<数字>）两类，
+    一次都不超过 10 张；其余物品（心智单元、物资等）没有这个规律。
 
     Args:
         item_name (str): 物品模板名。
@@ -66,7 +66,7 @@ def research_amount_default_max(item_name: str) -> int:
     """
     from module.statistics.item import DEFAULT_AMOUNT_MAX
 
-    if item_name.startswith(RESEARCH_SURE_PREFIXES) or item_name.endswith(RESEARCH_SURE_SUFFIXES):
+    if item_name.startswith(RESEARCH_SURE_PREFIXES) or RESEARCH_SURE_PATTERN.search(item_name):
         return RESEARCH_SURE_MAX
     return DEFAULT_AMOUNT_MAX
 
