@@ -112,6 +112,9 @@
 .summary-metrics .summary-metric-label {display:block;margin-bottom:0;color:var(--muted);font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .summary-metric-icon {display:inline-flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;flex-shrink:0;transition:transform .18s ease,opacity .18s ease}
 .summary-metric-card:hover .summary-metric-icon {opacity:1;transform:scale(1.08)}
+.summary-metric-icon-webp {opacity:1;transform:none}
+.summary-metric-icon-webp img {width:48px;height:48px;object-fit:contain;display:block;user-select:none;pointer-events:none;filter:drop-shadow(0 3px 8px rgb(0 0 0 / .24))}
+.summary-metric-card:hover .summary-metric-icon-webp {transform:scale(1.08)}
 .summary-metric-card strong {display:block;font-size:24px;font-weight:650;font-variant-numeric:tabular-nums;line-height:1.15;letter-spacing:-0.5px}
 .summary-metric-card small {font-size:12px;font-weight:400;margin-left:6px;color:var(--muted);letter-spacing:normal}
 .statistics-metrics-container {display:flex;flex-direction:column;gap:8px;padding:14px 22px 0}
@@ -123,6 +126,10 @@
 .stat-chip.empty {opacity:.45;cursor:not-allowed}
 .stat-chip small {font-size:10px;color:var(--muted);margin-left:2px}
 .stat-chip-dot {width:9px;height:9px;border-radius:50%;background:var(--border);flex-shrink:0;transition:all .15s ease}
+.stat-chip-icon {width:20px;height:20px;object-fit:contain;flex-shrink:0;display:block;user-select:none;pointer-events:none;opacity:.75;transition:all .15s ease;filter:drop-shadow(0 1px 2px rgb(0 0 0 / .2))}
+.stat-chip:hover:not(:disabled) .stat-chip-icon {opacity:.95}
+.stat-chip.active .stat-chip-icon {opacity:1;transform:scale(1.08)}
+.stat-metric-header .stat-chip-icon {width:20px;height:20px;opacity:1;transform:none}
 .stat-chip-badge {font-size:10px;padding:1px 5px;border-radius:4px;font-weight:600;line-height:1.2;margin-left:4px;transition:all .15s ease}
 .stat-chip-badge.primary {background:var(--accent);color:#fff}
 .stat-chip-badge.secondary {background:var(--surface-muted);color:var(--muted);border:1px solid var(--border)}
@@ -144,7 +151,7 @@
    同时面板自身可滚动，滚动后标题行会滚出视口。右侧让开按钮宽度并让它吸顶。
    这里必须带 !important：紧凑主题用 padding 简写加 !important 压过面板内边距。 */
 .panel.chart-expanded .panel-heading {position:sticky;top:0;z-index:2;padding-right:160px !important;background:var(--surface)}
-.statistics-table {min-width:0}.statistics-table h3 {margin:0;font-size:14px}.table-toolbar {padding:10px 22px;margin:0;flex-wrap:wrap}.table-toolbar input {max-width:240px}.table-scroll {overflow-x:auto;overflow-y:visible;max-height:none}.statistics-table table {border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap}.statistics-table td,.statistics-table th {padding:13px 20px;text-align:left;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}.statistics-table th {position:sticky;top:0;background:var(--surface-muted);z-index:1}.statistics-table th button {border:0;background:none;color:var(--text);cursor:pointer;font:inherit}.statistics-table tbody tr:hover {background:var(--surface-muted)}
+.statistics-table {min-width:0}.statistics-table h3 {margin:0;font-size:14px}.table-toolbar {padding:10px 22px;margin:0;flex-wrap:wrap}.table-toolbar input {max-width:240px}.table-scroll {overflow-x:auto;overflow-y:visible;max-height:none}.statistics-table table {border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap}.statistics-table td,.statistics-table th {padding:13px 20px;text-align:left;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}.statistics-table th {position:sticky;top:0;background:var(--surface-muted);z-index:1}.statistics-table th button {border:0;background:none;color:var(--text);cursor:pointer;font:inherit}.statistics-table tbody tr:hover {background:var(--surface-muted)}.table-resource-cell {display:inline-flex;align-items:center;gap:8px;vertical-align:middle}.table-resource-icon {width:26px;height:26px;object-fit:contain;flex-shrink:0;display:block;user-select:none;pointer-events:none;filter:drop-shadow(0 1px 3px rgb(0 0 0 / .2))}.table-header-icon {width:24px;height:24px;margin-right:2px}
 /* 卡片适应：列数由脚本按容器宽度写入，末排因此不会各自撑满整行。 */
 .resource-grid.resource-fit {display:grid}
 /* 卡片适应把网格切成多列，合并卡片仍占满整行。 */

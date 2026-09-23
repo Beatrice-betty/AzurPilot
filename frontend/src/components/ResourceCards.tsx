@@ -20,6 +20,7 @@ const iconImages: Record<string, string> = {
   Medal: `${iconBase}honor_medal.webp`,
   Merit: `${iconBase}merit.webp`,
   GuildCoin: `${iconBase}stamina.webp`,
+  Chip: `${iconBase}core_data.webp`,
 }
 
 function ResourceIcon({resourceKey, size = 32}: {resourceKey: string; size?: number}) {

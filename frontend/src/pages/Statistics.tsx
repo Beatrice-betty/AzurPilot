@@ -66,6 +66,24 @@ const metricIcons: Record<string, LucideIcon> = {
   '今日运行': Timer,
 }
 
+const iconBase = import.meta.env.BASE_URL
+const metricWebpIcons: Record<string, string> = {
+  '完成委托': `${iconBase}honor_medal.webp`,
+  '钻石': `${iconBase}diamond.webp`,
+  '心智魔方': `${iconBase}cube.webp`,
+  '心智单元': `${iconBase}core_data.webp`,
+  '石油': `${iconBase}oil.webp`,
+  '物资': `${iconBase}gold.webp`,
+}
+
+function getMetricWebp(label: string): string | undefined {
+  if (metricWebpIcons[label]) return metricWebpIcons[label]
+  for (const [key, src] of Object.entries(metricWebpIcons)) {
+    if (label.includes(key) || key.includes(label)) return src
+  }
+  return undefined
+}
+
 function getMetricIcon(label: string): LucideIcon | undefined {
   if (metricIcons[label]) return metricIcons[label]
   for (const [key, icon] of Object.entries(metricIcons)) {
@@ -198,11 +216,20 @@ export function Statistics() {
     {category === 'loot' && <span>{ui('stats.lootHint')}</span>}
   </>
   const dataView = error ? <ErrorBox message={error} retry={() => setRevision(value => value + 1)}/> : !data ? <Loading/> : <div className="statistics-sections">{!!data.metrics.length && <section className="panel summary-metrics-panel"><div className="stat-metrics summary-metrics">{data.metrics.map(item => {
-    const Icon = getMetricIcon(item.label)
+    const webp = getMetricWebp(item.label)
+    const Icon = !webp ? getMetricIcon(item.label) : undefined
     return <div key={item.label} className="summary-metric-card">
       <div className="summary-metric-head">
         <span className="summary-metric-label">{item.label}</span>
-        {Icon && <span className="summary-metric-icon" aria-hidden="true"><Icon size={18} strokeWidth={1.8}/></span>}
+        {webp ? (
+          <span className="summary-metric-icon summary-metric-icon-webp" aria-hidden="true">
+            <img src={webp} alt="" width={48} height={48} draggable={false}/>
+          </span>
+        ) : Icon ? (
+          <span className="summary-metric-icon" aria-hidden="true">
+            <Icon size={18} strokeWidth={1.8}/>
+          </span>
+        ) : null}
       </div>
       <strong>{item.value == null ? '—' : item.value.toLocaleString(undefined, {maximumFractionDigits: 2})}<small>{item.unit}</small></strong>
     </div>
