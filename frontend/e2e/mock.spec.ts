@@ -1,5 +1,19 @@
 import { expect, test } from '@playwright/test'
 
+test('任务分组目录重复点击保持在同一栏目', async ({page}) => {
+  await page.emulateMedia({reducedMotion: 'reduce'})
+  await page.addInitScript(() => localStorage.setItem('azurpilot.theme', 'light'))
+  await page.setViewportSize({width: 1440, height: 600})
+  await page.goto('/#/i/demo-main/task/Main')
+  const links = page.locator('.config-layout .group-nav a')
+  await expect(links.nth(1)).toBeVisible()
+  await links.nth(1).click()
+  await expect.poll(() => page.evaluate(() => document.scrollingElement!.scrollTop)).toBeGreaterThan(0)
+  const firstPosition = await page.evaluate(() => document.scrollingElement!.scrollTop)
+  await links.nth(1).click()
+  await expect.poll(() => page.evaluate(() => document.scrollingElement!.scrollTop)).toBeCloseTo(firstPosition, 0)
+})
+
 test('玻璃装饰不阻挡导航，背景失败降级并尊重减少动态效果', async ({page}) => {
   let backgrounds = 0
   await page.route('https://api.yppp.net/api.php', async route => {
