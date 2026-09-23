@@ -29,6 +29,17 @@ body {background: var(--bg); background-attachment: fixed}
   from {opacity: 0}
   to {opacity: 1}
 }
+:root[data-theme='dark'] .wallpaper::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / .52);
+  pointer-events: none;
+  animation: wallpaper-fade-in var(--dur-5, .36s) cubic-bezier(.16, 1, .3, 1) both;
+}
+:root[data-theme='dark'].home-active .wallpaper::after {
+  background: linear-gradient(168deg, rgb(0 0 0 / .46), rgb(0 0 0 / .56) 55%, rgb(0 0 0 / .68));
+}
 .lucide {stroke-width: 1.75}
 
 /* 兼容前缀必须先于标准属性，避免生产压缩后只保留 WebKit 的模糊声明。 */
