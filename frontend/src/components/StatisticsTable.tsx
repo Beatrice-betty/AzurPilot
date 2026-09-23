@@ -30,7 +30,9 @@ const RESEARCH_PREFIX = 'research:'
 function resolveIcon(value: string): {src: string, label: string} | undefined {
   if (value.startsWith(RESEARCH_PREFIX)) {
     const name = value.slice(RESEARCH_PREFIX.length)
-    return {src: `${iconBase}research-items/${name}.png`, label: name}
+    // 图标列不重复显示模板名：它很长（Prototype_Quadruple_305mm_..._T0）会把列撑爆，
+    // 而中文名在「物品」列已经有了；搜索也走那一列。
+    return {src: `${iconBase}research-items/${name}.png`, label: ''}
   }
   const icon = resourceIcons[value]
   return icon ? {src: icon, label: value} : undefined
