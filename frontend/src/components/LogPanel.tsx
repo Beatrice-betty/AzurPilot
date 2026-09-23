@@ -254,6 +254,8 @@ export function LogPanel({active = true}: {active?: boolean}) {
     const container = scroll.current
     /* 只改日志容器自身的滚动位置，不会像尾部元素的 scrollIntoView 那样连带滚动整个页面。 */
     const target = descending ? 0 : container.scrollHeight - container.clientHeight
+    /* 与目标相距超过一屏：直接落位，不做逐帧滚入。 */
+    if (Math.abs(target - container.scrollTop) > container.clientHeight) {container.scrollTop = target; return}
     let frame = requestAnimationFrame(function step() {
       const remaining = target - container.scrollTop
       if (Math.abs(remaining) <= 1) {container.scrollTop = target; return}
