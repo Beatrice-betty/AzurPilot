@@ -23,9 +23,19 @@ const iconImages: Record<string, string> = {
   Chip: `${iconBase}core_data.webp`,
 }
 
-function ResourceIcon({resourceKey, size = 32}: {resourceKey: string; size?: number}) {
-  const src = iconImages[resourceKey]
-  return src ? <img className="resource-icon-image" src={src} alt="" width={size} height={size} draggable={false}/> : <Box size={Math.round(size * .62)}/>
+export function isActionPointDog(resource?: Resource): boolean {
+  if (!resource || resource.name !== 'ActionPoint') return false
+  if (resource.record?.startsWith('2020-01-01')) return false
+  const value = typeof resource.value === 'number' && Number.isFinite(resource.value) ? resource.value : 0
+  const total = typeof resource.total === 'number' && Number.isFinite(resource.total) && resource.total >= value
+    ? resource.total
+    : value
+  return total > 5000
+}
+
+function ResourceIcon({resourceKey, size = 32, src}: {resourceKey: string; size?: number; src?: string}) {
+  const imageSrc = src ?? iconImages[resourceKey]
+  return imageSrc ? <img className="resource-icon-image" src={imageSrc} alt="" width={size} height={size} draggable={false}/> : <Box size={Math.round(size * .62)}/>
 }
 export const defaultResourceKeys = ['Oil', 'Coin', 'Gem', 'Cube']
 
@@ -134,7 +144,8 @@ export function ResourceCards({resources, selected}: {resources: Resource[]; sel
     const suffix = prefs.totalFirst && totalText ? currentText : recorded && showLimit ? limit.toLocaleString() : totalText
     const record = recordText(resource?.record)
     const foot = recorded ? (record.stale ? ui('resource.recordedTooOld') : record.text) : ui('resource.waitingSync')
-    return {key, index, label, displayValue, suffix, foot}
+    const iconSrc = isActionPointDog(resource) ? `${iconBase}dog.webp` : undefined
+    return {key, index, label, displayValue, suffix, foot, iconSrc}
   })
 
   const className = ['resource-grid',
@@ -144,7 +155,7 @@ export function ResourceCards({resources, selected}: {resources: Resource[]; sel
 
   /* 通用卡片只换外层容器：两种排法共用这段卡片内部渲染。 */
   const cardBody = (entry: typeof entries[number]) => <>
-    <div className="resource-heading"><span>{entry.label}</span><div className="resource-image-wrap"><ResourceIcon resourceKey={entry.key} size={32}/></div></div>
+    <div className="resource-heading"><span>{entry.label}</span><div className="resource-image-wrap"><ResourceIcon resourceKey={entry.key} size={32} src={entry.iconSrc}/></div></div>
     <ResourceValue value={entry.displayValue} suffix={entry.suffix}/>
     <div className="resource-foot">{entry.foot}</div>
   </>
@@ -486,7 +497,7 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
           }}
           onPointerCancel={event => finishDrag(event.pointerId, false)}>
           <span className="resource-editor-grip" aria-hidden="true"><GripVertical size={16}/></span>
-          <span className="resource-editor-icon resource-editor-icon-image"><ResourceIcon resourceKey={key} size={30}/></span>
+          <span className="resource-editor-icon resource-editor-icon-image"><ResourceIcon resourceKey={key} size={30} src={isActionPointDog(resources.find(item => item.name === key)) ? `${iconBase}dog.webp` : undefined}/></span>
           <span className="resource-editor-label">{label}</span>
           <button type="button" className="resource-editor-remove" aria-label={ui('resource.remove', {label})} title={ui('resource.remove', {label})} onClick={() => remove(key)}><X size={15}/></button>
         </div>
@@ -541,7 +552,7 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
             pickerEditorRef.current = null
             markDropFrame(pickerFrameRef.current)
             setEditorDropIndex(null) }}
-          onClick={() => add(resource.name)}><span className="resource-editor-icon resource-editor-icon-image"><ResourceIcon resourceKey={resource.name} size={28}/></span><span>{label}</span><Plus size={15}/></button></Fragment>
+          onClick={() => add(resource.name)}><span className="resource-editor-icon resource-editor-icon-image"><ResourceIcon resourceKey={resource.name} size={28} src={isActionPointDog(resource) ? `${iconBase}dog.webp` : undefined}/></span><span>{label}</span><Plus size={15}/></button></Fragment>
     })}<div className="resource-editor-card resource-drop-slot resource-drop-frame" ref={pickerFrameRef} aria-hidden="true"/>{pickerDropIndex !== null && pickerDropIndex >= pickerShown.length && <div className="resource-editor-card resource-drop-slot" aria-hidden="true"/>}</div> : <div className="resource-picker-empty">{ui('resource.allAdded')}</div>}</div>}
   </div>
 }
