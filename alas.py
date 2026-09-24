@@ -953,7 +953,8 @@ class AzurLaneAutoScript:
         根据异常类型自动判断：重启游戏、重启模拟器、请求人工介入或直接终止。
         严格重启模式下，敏感任务出错时直接停止，不做任何重启。
 
-        任务执行前会进行一次截图（除非 skip_first_screenshot=True）。
+        普通任务执行前会进行一次截图（除非 skip_first_screenshot=True）。Restart 在启动游戏前不截图，
+        避免 Android 虚拟屏尚无首帧时因截图失败而阻断 app_restart()。
 
         Args:
             command (str): 任务方法名（驼峰转下划线后的形式）。
@@ -969,7 +970,10 @@ class AzurLaneAutoScript:
         command = inflection.underscore(command)
         set_task(inflection.camelize(command))
         try:
-            if not skip_first_screenshot:
+            # Restart 的职责就是把游戏从“未运行/未出首帧”恢复起来。
+            # Android 虚拟屏在没有实际内容提交前不会产生可读帧；若这里先截图，
+            # screencap 会 no-frame，导致永远执行不到 restart() -> app_restart()。
+            if not skip_first_screenshot and command != 'restart':
                 self.device.screenshot()
             # 游戏重启后悬浮球会再次显示，重置会话标志
             if command == 'restart':

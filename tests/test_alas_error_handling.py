@@ -55,3 +55,20 @@ class TestGameNotRunningErrorHandling(unittest.TestCase):
             level=30,
             with_traceback=False,
         )
+
+
+class TestRestartBootstrap(unittest.TestCase):
+    def test_restart_skips_pre_task_screenshot(self):
+        """Restart 必须能在游戏未运行、虚拟屏尚无首帧时先执行启动逻辑。"""
+        script = AzurLaneAutoScript.__new__(AzurLaneAutoScript)
+        script.config_name = 'test'
+        script._channel_float_done = True
+        script.__dict__['device'] = Mock()
+        script.__dict__['restart'] = Mock()
+
+        result = script.run('restart')
+
+        self.assertTrue(result)
+        script.device.screenshot.assert_not_called()
+        script.restart.assert_called_once_with()
+        self.assertFalse(script._channel_float_done)
