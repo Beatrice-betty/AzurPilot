@@ -37,6 +37,7 @@ import { SegmentedControl } from '../components/SegmentedControl'
 import { StatisticsTable } from '../components/StatisticsTable'
 import { downloadCsv } from '../components/statisticsData'
 import type { UiKey } from '../i18n'
+import { readStatisticsPrefs, updateStatisticsPrefs } from '../app/statisticsPrefs'
 
 const metricIcons: Record<string, LucideIcon> = {
   '战斗次数': Swords,
@@ -100,12 +101,31 @@ export function Statistics() {
   const {ui, theme, language} = useApp()
   const {instance = ''} = useParams()
   const legacy = usesLegacyLayout(theme)
-  const [category, setCategory] = useState<Category>('resources')
-  const [days, setDays] = useState(7)
+  const initialPrefs = useRef(readStatisticsPrefs()).current
+  const [category, setCategoryState] = useState<Category>(initialPrefs.category)
+  const [days, setDaysState] = useState(initialPrefs.days)
   const [month, setMonth] = useState(() => {const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`})
-  const [period, setPeriod] = useState<'day' | 'week' | 'month'>('month')
+  const [period, setPeriodState] = useState<'day' | 'week' | 'month'>(initialPrefs.period)
   // 科研期数：0 表示最新有记录的一期，与后端约定一致
-  const [researchSeries, setResearchSeries] = useState(0)
+  const [researchSeries, setResearchSeriesState] = useState(initialPrefs.researchSeries)
+
+  const setCategory = useCallback((next: Category) => {
+    setCategoryState(next)
+    updateStatisticsPrefs({category: next})
+  }, [])
+  const setDays = useCallback((next: number) => {
+    setDaysState(next)
+    updateStatisticsPrefs({days: next})
+  }, [])
+  const setPeriod = useCallback((next: 'day' | 'week' | 'month') => {
+    setPeriodState(next)
+    updateStatisticsPrefs({period: next})
+  }, [])
+  const setResearchSeries = useCallback((next: number) => {
+    setResearchSeriesState(next)
+    updateStatisticsPrefs({researchSeries: next})
+  }, [])
+
   const [revision, setRevision] = useState(0)
   const [data, setData] = useState<StatisticsReport>()
   const [error, setError] = useState('')
@@ -236,7 +256,7 @@ export function Statistics() {
       </div>
       <strong>{item.value == null ? '—' : item.value.toLocaleString(undefined, {maximumFractionDigits: 2})}<small>{item.unit}</small></strong>
     </div>
-  })}</div></section>}{!!data.series.length && <Suspense fallback={<Loading/>}><StatisticsChart key={category} series={data.series} tables={condensed ? data.tables : []} heading={!condensed} expanded={expanded} onToggleExpanded={toggleExpanded} title={ui(categories[category])}/></Suspense>}{!condensed && data.tables.map(table => <section className="panel" key={table.title}><StatisticsTable data={table}/></section>)}</div>
+  })}</div></section>}{!!data.series.length && <Suspense fallback={<Loading/>}><StatisticsChart key={category} category={category} series={data.series} tables={condensed ? data.tables : []} heading={!condensed} expanded={expanded} onToggleExpanded={toggleExpanded} title={ui(categories[category])}/></Suspense>}{!condensed && data.tables.map(table => <section className="panel" key={table.title}><StatisticsTable data={table}/></section>)}</div>
 
   const content = <>
     {condensed

@@ -1,5 +1,5 @@
 import { Select } from './FormControls'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as echarts from 'echarts/core'
 import { LineChart, CandlestickChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, DataZoomComponent, ToolboxComponent, LegendComponent } from 'echarts/components'
@@ -10,6 +10,14 @@ import { StatisticsTable } from './StatisticsTable'
 import { aggregatePoints, mergeMultiSeriesRows } from './statisticsData'
 import { useApp } from '../app/context'
 import { usesMaterial } from '../app/theme'
+import {
+  readStatisticsPrefs,
+  updateStatisticsPrefs,
+  setSelectedKeysForCategory,
+  getSelectedKeysForCategory,
+  type ChartMode,
+  type ChartAxisMode,
+} from '../app/statisticsPrefs'
 
 echarts.use([LineChart, CandlestickChart, GridComponent, TooltipComponent, DataZoomComponent, ToolboxComponent, LegendComponent, CanvasRenderer])
 
@@ -19,7 +27,6 @@ const RESOURCE_PALETTE: Record<string, string> = {
   ap: '#3b82f6', asset: '#6366f1', distance: '#14b8a6', yellow_coins: '#eab308', purple_coins: '#a855f7',
 }
 const DEFAULT_PALETTE = ['#159b88', '#f59e0b', '#0ea5e9', '#ec4899', '#8b5cf6', '#10b981', '#f97316', '#6366f1', '#14b8a6']
-type ChartMode = 'line' | 'candlestick'
 
 function getSeriesColor(key: string, index: number, fallback?: string): string {
   return RESOURCE_PALETTE[key] ?? (index === 0 && fallback ? fallback : DEFAULT_PALETTE[index % DEFAULT_PALETTE.length])
@@ -55,7 +62,7 @@ function getChartIcon(label: string): string | undefined {
 
 /** 图表主体。紧凑主题把标题行与「放大查看」上提到页面工具栏（`heading=false`），
     并把报表附带的表格并进同一面板，避免同一页出现两个顶层区域。 */
-export function StatisticsChart({series, tables = [], heading = true, expanded = false, onToggleExpanded, title, initialMode = 'line'}: {
+export function StatisticsChart({series, tables = [], heading = true, expanded = false, onToggleExpanded, title, initialMode, category = 'resources'}: {
   series: StatSeries[]
   tables?: StatisticsReport['tables']
   heading?: boolean
@@ -65,15 +72,46 @@ export function StatisticsChart({series, tables = [], heading = true, expanded =
      只写「趋势与细节」就分不出看的是资源趋势还是委托收益。 */
   title?: string
   initialMode?: ChartMode
+  category?: string
 }) {
   const {ui, language, theme} = useApp()
-  const [selectedKeys, setSelectedKeys] = useState<string[]>(() => {
+  const [selectedKeys, setSelectedKeysState] = useState<string[]>(() => {
+    const remembered = getSelectedKeysForCategory(category, series)
+    if (remembered.length > 0) return remembered
     const active = series.find(item => item.points.length)?.key ?? series[0]?.key
     return active ? [active] : []
   })
-  const [mode, setMode] = useState(initialMode)
-  const [axisMode, setAxisMode] = useState<'separate' | 'unified'>('separate')
-  const [bucket, setBucket] = useState(initialMode === 'candlestick' ? 60 : 0)
+
+  const setSelectedKeys = useCallback((updater: string[] | ((prev: string[]) => string[])) => {
+    setSelectedKeysState(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      setSelectedKeysForCategory(category, next)
+      return next
+    })
+  }, [category])
+
+  const [mode, setModeState] = useState<ChartMode>(() => initialMode ?? readStatisticsPrefs().chartMode)
+  const setMode = useCallback((next: ChartMode) => {
+    setModeState(next)
+    updateStatisticsPrefs({chartMode: next})
+  }, [])
+
+  const [axisMode, setAxisModeState] = useState<ChartAxisMode>(() => readStatisticsPrefs().chartAxisMode)
+  const setAxisMode = useCallback((next: 'separate' | 'unified') => {
+    setAxisModeState(next)
+    updateStatisticsPrefs({chartAxisMode: next})
+  }, [])
+
+  const [bucket, setBucketState] = useState(() => {
+    const saved = readStatisticsPrefs().bucket
+    const activeMode = initialMode ?? readStatisticsPrefs().chartMode
+    return activeMode === 'candlestick' && saved === 0 ? 60 : saved
+  })
+  const setBucket = useCallback((next: number) => {
+    setBucketState(next)
+    updateStatisticsPrefs({bucket: next})
+  }, [])
+
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
 
