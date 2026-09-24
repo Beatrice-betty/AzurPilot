@@ -7,7 +7,7 @@
 截图/控制方法选择 "azurpilot_android"。本模块不 import 任何 adb/u2 依赖。
 
 注意：
-- MaaFW 截图与 AzurPilot 均使用 BGR，直接保留前三通道。
+- Android 桥输出 BGR，AzurPilot 的截图管线使用 RGB，客户端负责交换红蓝通道。
 - 游戏必须跑在 MaaFwApp 的虚拟屏上：app_start_azurpilot_android 用 `am start --display <VID>`，
   VID 由代理侧 shell 探测（dumpsys display 找 VIRTUAL displayId），每轮进程缓存一次。
 - get_orientation 对桥接固定返回 0（虚拟屏始终横屏 1280x720）。
@@ -124,9 +124,10 @@ class AzurPilotAndroid:
                 raise
         image = np.frombuffer(raw, dtype=np.uint8).reshape(
             int(resp['height']), int(resp['width']), int(resp['channels']))
-        # 桥原始帧为 BGR(A)，AzurPilot 按 BGR 读取。
+        # 桥原始帧为 BGR(A)，AzurPilot 全局截图约定为 RGB。
+        # 直接保留前三通道会让预览和模板识别的红蓝通道互换。
         if image.shape[2] >= 3:
-            image = image[..., :3]
+            image = image[..., 2::-1]
         return np.ascontiguousarray(image)
 
     def click_azurpilot_android(self, x, y):
@@ -186,10 +187,10 @@ class AzurPilotAndroid:
     def app_stop_azurpilot_android(self, package=None):
         self.azurpilot_android_shell_output(f'am force-stop {shlex.quote(package or self.package)}')
 
-    def app_current_azurpilot_android(self) -> str:
+    def app_current_azurpilot_android(self, timeout: float = 30) -> str:
         """虚拟屏的前台应用包名。dumpsys window displays 按 displayId 分块，
         取目标块内的 mCurrentFocus；找不到即视为未在本虚拟屏运行。"""
-        out = self.azurpilot_android_shell_output('dumpsys window displays')
+        out = self.azurpilot_android_shell_output('dumpsys window displays', timeout=timeout)
         vid = self.azurpilot_android_display_id
         current = ''
         for block in re.split(r'\n\s*(?=Display )', out):

@@ -4,7 +4,7 @@ import json
 import os
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import numpy as np
 from starlette.applications import Starlette
@@ -12,6 +12,7 @@ from starlette.testclient import TestClient
 
 from module.api.android import routes
 from module.api.protocol import ApiError
+from module.device.app_control import AppControl
 from module.device.method.azurpilot_android import AzurPilotAndroid
 from module.runtime.process_manager import ProcessManager
 
@@ -37,15 +38,27 @@ class BridgeTests(unittest.TestCase):
     def tearDown(self):
         AzurPilotAndroid._azurpilot_android_sock = None
 
-    def test_screenshot_keeps_bgr_and_consumes_frame(self):
+    def test_screenshot_converts_bridge_bgr_to_rgb_and_consumes_frame(self):
         pixels = bytes([1, 2, 3, 255, 4, 5, 6, 255])
         reply = json.dumps({'ok': True, 'length': len(pixels), 'width': 2, 'height': 1,
                             'channels': 4}).encode() + b'\n' + pixels
         socket = FakeSocket(reply)
         with patch.object(AzurPilotAndroid, '_azurpilot_android_connect', return_value=socket):
             image = AzurPilotAndroid().screenshot_azurpilot_android()
-        np.testing.assert_array_equal(image, np.array([[[1, 2, 3], [4, 5, 6]]], dtype=np.uint8))
+        np.testing.assert_array_equal(image, np.array([[[3, 2, 1], [6, 5, 4]]], dtype=np.uint8))
         self.assertEqual(json.loads(socket.sent)['method'], 'screencap')
+
+    def test_bounded_foreground_check_uses_android_bridge(self):
+        device = SimpleNamespace(
+            config=SimpleNamespace(Emulator_ControlMethod='azurpilot_android'),
+            package='com.bilibili.azurlane',
+            app_current_azurpilot_android=Mock(return_value='com.bilibili.azurlane'),
+            adb_shell=Mock(side_effect=AssertionError('ADB must not be used in Android bridge mode')),
+        )
+
+        self.assertTrue(AppControl.app_is_running_bounded(device, timeout=7))
+        device.app_current_azurpilot_android.assert_called_once_with(timeout=7)
+        device.adb_shell.assert_not_called()
 
 
 class FakeConfigs:

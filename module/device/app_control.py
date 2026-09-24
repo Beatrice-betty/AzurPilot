@@ -71,8 +71,8 @@ class AppControl(AzurPilotAndroid, Adb, WSA, Uiautomator2):
     def app_is_running_bounded(self, timeout: int = 10) -> bool:
         """带固定超时检查目标应用是否在前台。
 
-        恢复流程在模拟器异常时使用，避免 uiautomator2 的重试
-        长时间阻塞游戏重启流程。查询走 ADB shell，单次受 timeout 限制。
+        恢复流程在设备异常时使用，避免后端重试长时间阻塞游戏重启流程。
+        Android 宿主走本机桥，其余设备走 ADB shell，单次受 timeout 限制。
 
         Args:
             timeout (int): 单次 ADB 查询超时秒数，默认 10 秒。
@@ -80,6 +80,15 @@ class AppControl(AzurPilotAndroid, Adb, WSA, Uiautomator2):
         Returns:
             bool: 应用在前台运行返回 True；查询失败或无法判断返回 False。
         """
+        if self.config.Emulator_ControlMethod == 'azurpilot_android':
+            try:
+                package = self.app_current_azurpilot_android(timeout=timeout)
+            except Exception as e:
+                logger.warning(f'[设备-应用] 前台应用检查失败（{timeout}s 超时）: {e}')
+                return False
+            logger.attr('应用包名', package)
+            return package == self.package
+
         try:
             output = self.adb_shell(['dumpsys', 'window', 'windows'], timeout=timeout)
         except Exception as e:
