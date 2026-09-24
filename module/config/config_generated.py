@@ -167,7 +167,14 @@ class GeneratedConfig:
     DropRecord_CommissionRecord = 'do_not'  # do_not, save, upload, save_and_upload
     DropRecord_CommissionIncomeScreenshot = 'save'  # do_not, save
     DropRecord_CombatRecord = 'do_not'  # do_not, save
-    DropRecord_OpsiRecord = 'upload'  # do_not, save, upload, save_and_upload
+    DropRecord_OpsiHazard1Leveling = 'upload'  # do_not, save, upload, save_and_upload
+    DropRecord_OpsiMeowfficerFarming = 'upload'  # do_not, save, upload, save_and_upload
+    DropRecord_OpsiDaily = 'upload'  # do_not, save, upload, save_and_upload
+    DropRecord_OpsiObscure = 'upload'  # do_not, save, upload, save_and_upload
+    DropRecord_OpsiAbyssal = 'upload'  # do_not, save, upload, save_and_upload
+    DropRecord_OpsiStronghold = 'upload'  # do_not, save, upload, save_and_upload
+    DropRecord_OpsiExplore = 'upload'  # do_not, save, upload, save_and_upload
+    DropRecord_OpsiOther = 'upload'  # do_not, save, upload, save_and_upload
     DropRecord_MeowfficerBuy = 'do_not'  # do_not, save
     DropRecord_MeowfficerTalent = 'do_not'  # do_not, save, upload, save_and_upload
     DropRecord_TelemetryReport = True

@@ -256,14 +256,15 @@ stateDiagram-v2
 | `Alas.DropRecord.SaveFolder` | str | ./screenshots | 掉落截图根目录（按 genre 分子目录） |
 | `Alas.DropRecord.RetentionDays` | int | 0 | 截图保留天数，0 = 不清理 |
 | `Alas.DropRecord.BackUpMethod` / `ZipMethod` | option | zip / zip | 过期截图的处理方式（delete / zip / copy）与压缩格式（bz2 / gzip / xz / zip）；备份落在各来源目录下的 `bak/` |
-| `Alas.DropRecord.CombatRecord` / `OpsiRecord` / `ResearchRecord` / `CommissionRecord` | option | do_not / upload | 各场景掉落记录方式（do_not / save / upload / save_and_upload） |
+| `Alas.DropRecord.CombatRecord` / `ResearchRecord` / `CommissionRecord` | option | do_not | 各场景掉落记录方式（do_not / save / upload / save_and_upload） |
+| `Alas.DropRecord.OpsiHazard1Leveling` / `OpsiMeowfficerFarming` / `OpsiDaily` / `OpsiObscure` / `OpsiAbyssal` / `OpsiStronghold` / `OpsiExplore` / `OpsiOther` | option | upload | 大世界掉落记录方式，按任务拆分（前七项依次为侵蚀1练级、耄耋相接、大世界每日、隐秘海域、深渊海域、塞壬要塞、每月开荒）：跨月每日跟大世界每日、档案坐标跟隐秘海域、月度Boss跟深渊海域共用开关，`OpsiOther` 兜底没列出的任务；运行期由 `opsi_drop_record(config)` 按 `config.task.command` 取用 |
 | `Alas.DropRecord.CommissionIncomeScreenshot` | option | save | 委托收益截图开关 |
 | `Alas.DropRecord.ResearchRecord` | option | do_not | 科研掉落截图开关；`save` / `upload` / `save_and_upload` 都会统计（区别只在要不要把截图落盘） |
 | `Alas.DropRecord.TelemetryReport` | bool | true | CL1 遥测提交开关（hazard_leveling 里检查） |
 | `Alas.Error.LlmApiKey/LlmApiBase/LlmModel` | str | "" | 日报 LLM 配置（与错误上报共用） |
 | `Alas.Error.OnePushConfig` | str | "" | 推送通道配置 |
 
-关联关系：日报的 LLM 与推送配置刻意复用 `Error` 组，避免两套密钥；掉落记录各场景开关决定 `DropImage.save/local`，而 `LOCAL_GENRES` 判定让 `OpsiRecord` 的 `upload` 档位对接本地解析。日报线程不持有完整配置对象——`alas.py` 只传 `SimpleNamespace` 快照并按配置文件 mtime 热读，避免与任务线程争用配置对象。
+关联关系：日报的 LLM 与推送配置刻意复用 `Error` 组，避免两套密钥；掉落记录各场景开关决定 `DropImage.save/local`，而 `LOCAL_GENRES` 判定让大世界记录里耄耋相接（`OpsiMeowfficerFarming`）的 `upload` 档位对接本地解析，其余大世界任务选 `upload` 不落盘也不解析。日报线程不持有完整配置对象——`alas.py` 只传 `SimpleNamespace` 快照并按配置文件 mtime 热读，避免与任务线程争用配置对象。
 
 ## 11. 异常与错误处理
 
@@ -350,9 +351,10 @@ CL1 库的兼容性迁移是自动的：启动时把旧位置 `log/cl1/cl1_data.
 
 ```python
 # ModuleBase 子类里，用配置开关包住一次自动搜索
+# 记录方式按当前任务取（opsi_drop_record），智能调度等代理执行时读到的是子任务的开关
 with self.stat.new(
     genre=inflection.underscore(self.config.task.command),
-    method=self.config.DropRecord_OpsiRecord,
+    method=opsi_drop_record(self.config),
 ) as drop:
     combat = self.os_auto_search_run(drop)   # 结算画面出现时 drop.handle_add(main=self)
     drop.set_combat_count(combat)

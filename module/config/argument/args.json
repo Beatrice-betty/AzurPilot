@@ -790,7 +790,77 @@
           "save"
         ]
       },
-      "OpsiRecord": {
+      "OpsiHazard1Leveling": {
+        "type": "select",
+        "value": "upload",
+        "option": [
+          "do_not",
+          "save",
+          "upload",
+          "save_and_upload"
+        ]
+      },
+      "OpsiMeowfficerFarming": {
+        "type": "select",
+        "value": "upload",
+        "option": [
+          "do_not",
+          "save",
+          "upload",
+          "save_and_upload"
+        ]
+      },
+      "OpsiDaily": {
+        "type": "select",
+        "value": "upload",
+        "option": [
+          "do_not",
+          "save",
+          "upload",
+          "save_and_upload"
+        ]
+      },
+      "OpsiObscure": {
+        "type": "select",
+        "value": "upload",
+        "option": [
+          "do_not",
+          "save",
+          "upload",
+          "save_and_upload"
+        ]
+      },
+      "OpsiAbyssal": {
+        "type": "select",
+        "value": "upload",
+        "option": [
+          "do_not",
+          "save",
+          "upload",
+          "save_and_upload"
+        ]
+      },
+      "OpsiStronghold": {
+        "type": "select",
+        "value": "upload",
+        "option": [
+          "do_not",
+          "save",
+          "upload",
+          "save_and_upload"
+        ]
+      },
+      "OpsiExplore": {
+        "type": "select",
+        "value": "upload",
+        "option": [
+          "do_not",
+          "save",
+          "upload",
+          "save_and_upload"
+        ]
+      },
+      "OpsiOther": {
         "type": "select",
         "value": "upload",
         "option": [

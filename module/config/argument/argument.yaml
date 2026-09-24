@@ -303,7 +303,30 @@ DropRecord:
   CombatRecord:
     value: do_not
     option: [do_not, save]
-  OpsiRecord:
+  # 大世界掉落截图按任务拆分（原 OpsiRecord 单一开关）。跨月每日跟大世界每日、
+  # 档案坐标跟隐秘海域、月度Boss跟深渊坐标共用一项，其余任务走 OpsiOther。
+  OpsiHazard1Leveling:
+    value: upload
+    option: [do_not, save, upload, save_and_upload]
+  OpsiMeowfficerFarming:
+    value: upload
+    option: [do_not, save, upload, save_and_upload]
+  OpsiDaily:
+    value: upload
+    option: [do_not, save, upload, save_and_upload]
+  OpsiObscure:
+    value: upload
+    option: [do_not, save, upload, save_and_upload]
+  OpsiAbyssal:
+    value: upload
+    option: [do_not, save, upload, save_and_upload]
+  OpsiStronghold:
+    value: upload
+    option: [do_not, save, upload, save_and_upload]
+  OpsiExplore:
+    value: upload
+    option: [do_not, save, upload, save_and_upload]
+  OpsiOther:
     value: upload
     option: [do_not, save, upload, save_and_upload]
   MeowfficerBuy:
