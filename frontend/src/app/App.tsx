@@ -205,7 +205,8 @@ export function App() {
   /* 窄屏下 home.css 会把标签条藏起来，此时展示切换器。 */
   const isDesktop = useIsDesktop()
   const tabsShown = tabsMode && isDesktop
-  const modeToggle = instances.length === 0 || !isDesktop ? null : <button
+  const allowTopbarControls = usesLegacyLayout(theme) && isDesktop
+  const modeToggle = instances.length === 0 || !allowTopbarControls ? null : <button
     type="button"
     className="topbar-mode-toggle icon-button"
     aria-label={tabsMode ? ui('nav.listMode') : ui('nav.tabsMode')}
@@ -214,7 +215,7 @@ export function App() {
     onClick={() => setTopbarMode(tabsMode ? 'dropdown' : 'tabs')}
   >{tabsMode ? <PanelTop size={17}/> : <GalleryHorizontal size={17}/>}</button>
   /* 缩放只作用在标签页自身（顶栏高度由各主题定死）：中 → 大 → 小 循环。 */
-  const sizeToggle = instances.length === 0 || !isDesktop ? null : <button
+  const sizeToggle = instances.length === 0 || !allowTopbarControls ? null : <button
     type="button"
     className="topbar-tab-size icon-button"
     aria-label={ui('nav.tabSize')}
@@ -222,7 +223,7 @@ export function App() {
     onClick={() => cycleTabSize(tabSize)}
   >{tabSize === 'lg' ? <Minimize2 size={17}/> : <Maximize2 size={17}/>}</button>
   /* 两枚开关与「主页」打包在一起：顶栏与旧版的页内栏共用同一份标记，两处都要一起出现。 */
-  const topbarActions = isDesktop ? <span className="topbar-actions"><span className="topbar-actions-hover"/><span className="topbar-actions-buttons">{modeToggle}{sizeToggle}</span><Link to="/">{ui('nav.home')}</Link></span> : <span className="topbar-actions"><Link to="/">{ui('nav.home')}</Link></span>
+  const topbarActions = allowTopbarControls ? <span className="topbar-actions"><span className="topbar-actions-hover"/><span className="topbar-actions-buttons">{modeToggle}{sizeToggle}</span><Link to="/">{ui('nav.home')}</Link></span> : <span className="topbar-actions"><Link to="/">{ui('nav.home')}</Link></span>
   const tabStrip = <InstanceTabs onCreate={() => setCreating(true)}/>
   const breadcrumbInner = <>{topbarActions}{instance ? (tabsShown ? null : <><span>/</span><InstanceSwitcher onCreate={() => setCreating(true)}/></>) : activeSection !== ui('nav.home') && <><span>/</span><strong>{activeSection}</strong></>}{tabsShown && tabStrip}{instance && (currentTask ? <><span>/</span><Link to={`${base}/task/Alas`}>{ui('nav.taskConfig')}</Link><span>/</span><Link className="breadcrumb-current" to={`${base}/task/${currentTask}`}><strong>{t(`Task.${currentTask}.name`)}</strong></Link></> : location.pathname.endsWith('/statistics') && !tabsMode && <><span>/</span><strong>{ui('nav.statistics')}</strong></>)}</>
   const topbar = <header className="topbar">
