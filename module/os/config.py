@@ -11,8 +11,8 @@ OSConfig 被 OperationSiren 等大世界模块使用。
 另提供按任务读取掉落记录开关的 opsi_drop_record()。
 """
 
-# 大世界掉落记录：每个任务一个开关（参数名与 DropRecord 组一致，见
-# module/config/argument/argument.yaml），未列出的任务由 OpsiOther 兜底。
+# 大世界掉落记录：下列任务各有一个同名开关（见 module/config/argument/argument.yaml
+# 的 DropRecord 组），其余任务由 OpsiOther 兜底。
 OPSI_DROP_RECORD_TASKS = (
     'OpsiHazard1Leveling',
     'OpsiMeowfficerFarming',
@@ -20,7 +20,15 @@ OPSI_DROP_RECORD_TASKS = (
     'OpsiObscure',
     'OpsiAbyssal',
     'OpsiStronghold',
+    'OpsiExplore',
 )
+# 与上面某个开关共用记录方式的任务：任务名 → 开关名。共用只影响存图与否，
+# 掉落统计仍按各自的 genre 归类（本地解析只放行耄耋相接这一个 genre）。
+OPSI_DROP_RECORD_SHARED = {
+    'OpsiCrossMonth': 'OpsiMeowfficerFarming',
+    'OpsiArchive': 'OpsiObscure',
+    'OpsiMonthBoss': 'OpsiAbyssal',
+}
 OPSI_DROP_RECORD_OTHER = 'OpsiOther'
 
 
@@ -37,7 +45,9 @@ def opsi_drop_record(config):
         str: 记录方式，do_not / save / upload / save_and_upload。
     """
     task = config.task.command
-    arg = task if task in OPSI_DROP_RECORD_TASKS else OPSI_DROP_RECORD_OTHER
+    arg = OPSI_DROP_RECORD_SHARED.get(task)
+    if arg is None:
+        arg = task if task in OPSI_DROP_RECORD_TASKS else OPSI_DROP_RECORD_OTHER
     return getattr(config, f'DropRecord_{arg}')
 
 

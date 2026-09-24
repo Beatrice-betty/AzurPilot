@@ -1018,7 +1018,7 @@
     },
     "OpsiMeowfficerFarming": {
       "name": "Meowfficer farming drop screenshot",
-      "help": "Upload parses drops into the local statistics database, which the profit stats under the \"Meowfficer loot\" category rely on",
+      "help": "Upload parses drops into the local statistics database, which the profit stats under the \"Meowfficer loot\" category rely on\nCross-Month Daily shares this switch",
       "do_not": "No action",
       "save": "Save",
       "upload": "Upload",
@@ -1034,7 +1034,7 @@
     },
     "OpsiObscure": {
       "name": "Obscured zone drop screenshot",
-      "help": "Upload currently only takes effect on Meowfficer farming",
+      "help": "Upload currently only takes effect on Meowfficer farming\nArchive Coordinates shares this switch",
       "do_not": "No action",
       "save": "Save",
       "upload": "Upload",
@@ -1042,7 +1042,7 @@
     },
     "OpsiAbyssal": {
       "name": "Abyssal zone drop screenshot",
-      "help": "Upload currently only takes effect on Meowfficer farming",
+      "help": "Upload currently only takes effect on Meowfficer farming\nMonthly Boss shares this switch",
       "do_not": "No action",
       "save": "Save",
       "upload": "Upload",
@@ -1056,9 +1056,17 @@
       "upload": "Upload",
       "save_and_upload": "Save and upload"
     },
+    "OpsiExplore": {
+      "name": "Monthly exploration drop screenshot",
+      "help": "Its own switch for Monthly Exploration Plus, not shared with other tasks",
+      "do_not": "No action",
+      "save": "Save",
+      "upload": "Upload",
+      "save_and_upload": "Save and upload"
+    },
     "OpsiOther": {
       "name": "Other Operation Siren drop screenshot",
-      "help": "Covers Monthly Exploration, Monthly Boss, Archive Coordinates, Cross-Month Daily and other Operation Siren tasks without a switch of their own\nUpload currently only takes effect on Meowfficer farming",
+      "help": "Fallback for Operation Siren tasks without a switch of their own\nUpload currently only takes effect on Meowfficer farming",
       "do_not": "No action",
       "save": "Save",
       "upload": "Upload",

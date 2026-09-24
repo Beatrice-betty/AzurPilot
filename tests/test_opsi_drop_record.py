@@ -1,11 +1,13 @@
 """大世界掉落截图开关按任务取值的回归。
 
 背景：原先只有一个 `Alas.DropRecord.OpsiRecord` 管着所有大世界任务的掉落截图，
-现在拆成 7 个开关——侵蚀1练级、耄耋相接、大世界每日、隐秘海域、深渊海域、
-塞壬要塞各一个，`OpsiOther` 兜底每月开荒、月度Boss、档案坐标、跨月每日等
-没有单独开关的任务。这里锁定三件事：旧配置迁移时旧值被铺给每个新开关、
-运行期按当前任务取到自己的开关、未列出的任务落到 `OpsiOther`。耄耋相接的
-开关还必须在 `upload` 档位继续打开本地解析——统计页的短猫收益靠它。
+现在拆成 8 个开关——侵蚀1练级、耄耋相接、大世界每日、隐秘海域、深渊海域、
+塞壬要塞、每月开荒各一个，`OpsiOther` 兜底没列出的任务。跨月每日跟耄耋相接、
+档案坐标跟隐秘海域、月度Boss跟深渊海域共用开关，共用只影响存图与否，掉落统计
+仍按各自的 genre 归类。这里锁定四件事：旧配置迁移时旧值被铺给每个新开关、
+运行期按当前任务取到该读的开关（含共用）、没列出的任务落到 `OpsiOther`、
+共用任务不占独立开关。耄耋相接的开关还必须在 `upload` 档位继续打开本地解析
+——统计页的短猫收益靠它。
 """
 
 import unittest
@@ -16,7 +18,7 @@ from module.config.config_updater import ConfigUpdater
 from module.config.redirect_utils.utils import OPSI_RECORD_ARGS, opsi_record_redirect
 from module.config.deep import deep_get
 from module.config.utils import filepath_args, read_file
-from module.os.config import OPSI_DROP_RECORD_TASKS, opsi_drop_record
+from module.os.config import OPSI_DROP_RECORD_SHARED, OPSI_DROP_RECORD_TASKS, opsi_drop_record
 from module.statistics.azurstats import AzurStats
 
 
@@ -98,16 +100,30 @@ class TestOpsiDropRecordLookup(FakeConfigTestCase):
             'OpsiObscure': 'save',
             'OpsiAbyssal': 'upload',
             'OpsiStronghold': 'save',
+            'OpsiExplore': 'save_and_upload',
         }
         for task, expect in values.items():
             with self.subTest(task=task):
                 config = self.make_config(task, values)
                 self.assertEqual(opsi_drop_record(config), expect)
 
+    def test_shared_tasks_read_the_host_switch(self):
+        """跨月每日跟短猫相接、档案坐标跟隐秘海域、月度Boss跟深渊坐标共用开关。"""
+        values = {
+            'OpsiMeowfficerFarming': 'upload',
+            'OpsiObscure': 'save',
+            'OpsiAbyssal': 'do_not',
+        }
+        for task, expect in (('OpsiCrossMonth', 'upload'),
+                             ('OpsiArchive', 'save'),
+                             ('OpsiMonthBoss', 'do_not')):
+            with self.subTest(task=task):
+                config = self.make_config(task, values)
+                self.assertEqual(opsi_drop_record(config), expect)
+
     def test_unlisted_tasks_fall_back_to_other(self):
-        """每月开荒、月度Boss、档案坐标、跨月每日等没有单独开关的任务走 OpsiOther。"""
-        for task in ('OpsiExplore', 'OpsiMonthBoss', 'OpsiArchive', 'OpsiCrossMonth',
-                     'OpsiScheduling', 'OpsiPreventActionPointOverflow', 'OpsiDaemon', 'Alas'):
+        """没列进任何一项的大世界任务走 OpsiOther。"""
+        for task in ('OpsiScheduling', 'OpsiPreventActionPointOverflow', 'OpsiDaemon', 'Alas'):
             with self.subTest(task=task):
                 config = self.make_config(task, {'OpsiOther': 'save'})
                 self.assertEqual(opsi_drop_record(config), 'save')
@@ -118,6 +134,13 @@ class TestOpsiDropRecordLookup(FakeConfigTestCase):
         for task in OPSI_DROP_RECORD_TASKS:
             with self.subTest(task=task):
                 self.assertIn(task, args, f'{task} 没有对应的掉落截图开关')
+
+    def test_shared_tasks_have_no_switch_of_their_own(self):
+        """共用开关的任务不占单独一项，界面上只出现有独立开关的任务。"""
+        args = read_file(filepath_args())['Alas']['DropRecord']
+        for task in OPSI_DROP_RECORD_SHARED:
+            with self.subTest(task=task):
+                self.assertNotIn(task, args)
 
 
 class TestMigrationThroughConfigUpdate(unittest.TestCase):
@@ -136,6 +159,20 @@ class TestMigrationThroughConfigUpdate(unittest.TestCase):
         for arg in OPSI_RECORD_ARGS:
             with self.subTest(arg=arg):
                 self.assertEqual(getattr(config, f'DropRecord_{arg}'), 'save_and_upload')
+
+    def test_already_migrated_keys_keep_user_values(self):
+        """迁移过的开关保持用户改过的值，只有还缺的那些由旧值补齐。
+
+        实例先升到上一版、用户又改过几项，然后才升到本版时走的就是这条路。
+        """
+        config = self.make_config({'DropRecord': {
+            'OpsiRecord': 'save',
+            'OpsiAbyssal': 'do_not',
+            'OpsiMeowfficerFarming': 'save_and_upload',
+        }})
+        self.assertEqual(config.DropRecord_OpsiAbyssal, 'do_not')
+        self.assertEqual(config.DropRecord_OpsiMeowfficerFarming, 'save_and_upload')
+        self.assertEqual(config.DropRecord_OpsiExplore, 'save')
 
     def test_old_config_keeps_other_drop_settings(self):
         config = self.make_config({'DropRecord': {'OpsiRecord': 'save', 'RetentionDays': 3}})
