@@ -13,8 +13,8 @@ import { RightRail } from '../components/RightRail'
 import { CompactScrollbars } from '../components/CompactScrollbars'
 import { TaskNav } from '../components/TaskNav'
 import { SidebarTransition } from '../components/SidebarTransition'
-import { ThemeQuickSwitch } from '../components/ThemeQuickSwitch'
-import { isDesktopDevice } from '../components/TaskNavFlyout'
+
+import { useIsDesktop } from '../components/TaskNav'
 import { TaskSwitcher } from '../components/TaskSwitcher'
 import { useUpdater } from './updater'
 import { usePageMotion } from './pageMotion'
@@ -203,7 +203,8 @@ export function App() {
   /* 分页模式把所有实例铺在顶栏一行；原模式仍把实例收在下拉里。两种模式共用这一个开关。 */
   const tabsMode = topbarMode === 'tabs' && instances.length > 0
   /* 窄屏下 home.css 会把标签条藏起来，此时展示切换器。 */
-  const tabsShown = tabsMode && isDesktopDevice()
+  const isDesktop = useIsDesktop()
+  const tabsShown = tabsMode && isDesktop
   const modeToggle = instances.length === 0 ? null : <button
     type="button"
     className="topbar-mode-toggle icon-button"
@@ -242,9 +243,9 @@ export function App() {
       <SidebarTransition viewKey={instance ? `instance:${instance}` : 'global'}>
         <nav className="primary-nav" aria-label={ui('nav.primary')}>
           {instance ? <><NavLink to={`${base}/overview`} onClick={closeDrawer}><LayoutDashboard size={17}/>{ui('nav.overview')}</NavLink><NavLink to={`${base}/statistics`} onClick={closeDrawer}><ChartNoAxesCombined size={17}/>{ui('nav.statistics')}</NavLink></> : <><NavLink to="/" end onClick={closeDrawer}><House size={17}/>{ui('nav.home')}</NavLink><NavLink to="/announcement" onClick={closeDrawer}><Megaphone size={17}/>{ui('nav.announcement')}{announcement.unread && <span className="tiny-dot red"/>}</NavLink><NavLink to="/updater" onClick={closeDrawer}><Download size={17}/>{ui('nav.updater')}{updateAvailable && <span className="tiny-dot teal"/>}</NavLink><NavLink to="/interface" onClick={closeDrawer}><Palette size={17}/>{ui('nav.interface')}</NavLink><NavLink to="/remote" onClick={closeDrawer}><Globe size={17}/>{ui('nav.remote')}</NavLink><NavLink to="/configs" onClick={closeDrawer}><FileJson size={17}/>{ui('nav.configs')}</NavLink><NavLink to="/settings" onClick={closeDrawer}><Settings2 size={17}/>{ui('nav.settings')}</NavLink><NavLink to="/dev" onClick={closeDrawer}><Code2 size={17}/>{ui('nav.developer')}</NavLink><a className="nav-open-source" href="https://github.com/wess09/AzurPilot" target="_blank" rel="noreferrer" onClick={closeDrawer}><ExternalLink size={17}/>{ui('nav.openSource')}</a></>}
-          <ThemeQuickSwitch/>
+
         </nav>
-        {instance && <TaskNav/>}
+        {instance && <TaskNav onNavigate={closeDrawer}/>}
       </SidebarTransition>
     </aside>
     {railFirst && instance && showRail && <RightRail instance={instance} onMobileClose={() => setRailOpen(false)}/>}

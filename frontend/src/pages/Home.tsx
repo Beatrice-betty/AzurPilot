@@ -41,10 +41,11 @@ export function Home() {
     try { previous = localStorage.getItem('azurpilot.theme-before-legacy') } catch { /* 同上。 */ }
     setTheme(previous !== null && MODERN_THEMES.includes(previous) ? previous as Theme : resolvedMode === 'dark' ? 'dark' : 'light')
   }
+  const hasAnnouncement = Boolean(announcement.data && (announcement.data.title || announcement.data.content))
   return <>
     <div className="home-editorial">
-      <aside className="home-deck">
-        {announcement.data && (announcement.data.title || announcement.data.content) ? (
+      <aside className={`home-deck ${hasAnnouncement ? 'home-deck-with-announcement' : ''}`}>
+        {hasAnnouncement && announcement.data ? (
           <div className="home-deck-announcement">
             <header className="home-deck-announcement-header">
               <div className="home-deck-badge-group">
@@ -57,7 +58,9 @@ export function Home() {
                 <ArrowRight size={13} />
               </Link>
             </header>
-            <h1 className="home-deck-announcement-title">{announcement.data.title}</h1>
+            <h1 className="home-deck-announcement-title">
+              <Link to="/announcement">{announcement.data.title}</Link>
+            </h1>
             <div className="home-deck-announcement-content">
               <MarkdownView content={announcement.data.content} />
             </div>

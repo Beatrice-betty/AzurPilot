@@ -151,30 +151,76 @@
 .home-deck-greeting {margin: 0 0 14px; font-size: clamp(30px, 3vw, 42px); line-height: 1.24; font-weight: 700; word-break: keep-all; overflow-wrap: anywhere; text-wrap: balance}
 .home-deck-subtitle {margin: 0; font-size: 13.5px; line-height: 1.8; opacity: .82}
 
-/* 侧栏公告卡片 */
+/* 侧栏公告卡片：适配浅色/深色/极简/经典所有主题 */
 .home-deck-announcement {
   margin: auto 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   max-width: 38em;
-  padding: 22px 24px;
-  border-radius: var(--theme-radius-card, 22px);
-  background: rgb(0 0 0 / .35);
-  border: 1px solid rgb(255 255 255 / .20);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-  color: #fff;
-  text-shadow: none;
-  box-shadow: 0 14px 40px rgb(0 0 0 / .35);
+  padding: 20px 22px;
+  border-radius: var(--theme-radius-card, 20px);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(140%);
+  transition: transform .2s cubic-bezier(.16, 1, .3, 1), box-shadow .2s ease;
+  overflow: hidden;
 }
+.home-deck-announcement * {
+  text-shadow: none !important;
+}
+
+/* 默认与浅色主题：通透白瓷磨砂玻璃卡片，高对比度文字与柔和立体光影 */
+.home-deck-announcement,
+:root[data-theme='light'] .home-deck-announcement {
+  background: color-mix(in srgb, var(--surface, #ffffff) 86%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border, rgba(0, 0, 0, 0.08)) 75%, transparent);
+  color: var(--text, #1d1d1f);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+:root[data-theme='light'] .home-deck-announcement,
+:root[data-theme='light'] .home-deck-announcement p,
+:root[data-theme='light'] .home-deck-announcement span:not(.home-deck-badge-group *):not(.home-deck-view-all *):not(.home-deck-link *) {
+  color: var(--text, #1d1d1f);
+}
+.home-deck-announcement:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.11), 0 3px 10px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+
+/* 深色主题：深邃暗黑磨砂玻璃卡片 */
+:root[data-theme='dark'] .home-deck-announcement {
+  background: color-mix(in srgb, var(--surface, #1e1e20) 78%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #f5f5f7;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+:root[data-theme='dark'] .home-deck-announcement:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+/* 极简与紧凑主题 */
 [data-theme='minimal'] .home-deck-announcement,
 [data-theme='extreme'] .home-deck-announcement {
   background: var(--surface);
-  border-color: var(--border);
+  border: 1px solid var(--border);
   color: var(--text);
   box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
+
+/* 经典旧版主题 */
+:root[data-theme='legacy-light'] .home-deck-announcement,
+:root[data-theme='legacy-dark'] .home-deck-announcement {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 .home-deck-announcement-header {
   display: flex;
   align-items: center;
@@ -184,12 +230,18 @@
 .home-deck-badge-group {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  font-size: 12px;
-  font-weight: 700;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 650;
   color: var(--accent);
-  letter-spacing: .04em;
-  text-transform: uppercase;
+  padding: 3px 9px 3px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  letter-spacing: .02em;
+}
+.home-deck-badge-group .tiny-dot.red {
+  box-shadow: 0 0 6px rgba(255, 59, 48, 0.6);
 }
 .home-deck-view-all {
   display: inline-flex;
@@ -197,65 +249,129 @@
   gap: 4px;
   font-size: 12px;
   font-weight: 600;
-  color: #fff;
-  opacity: .88;
   text-decoration: none;
-  padding: 4px 9px;
-  border-radius: 6px;
-  background: rgb(255 255 255 / .12);
-  transition: opacity .15s, background-color .15s;
-}
-.home-deck-view-all:hover {
-  opacity: 1;
-  background: rgb(255 255 255 / .22);
-}
-[data-theme='minimal'] .home-deck-view-all,
-[data-theme='extreme'] .home-deck-view-all {
+  padding: 5px 11px;
+  border-radius: 999px;
   color: var(--accent);
   background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  transition: all .15s ease;
 }
+.home-deck-view-all:hover {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent-hover, var(--accent));
+  transform: translateX(1px);
+}
+:root[data-theme='dark'] .home-deck-view-all {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+:root[data-theme='dark'] .home-deck-view-all:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+[data-theme='minimal'] .home-deck-view-all,
+[data-theme='extreme'] .home-deck-view-all,
+:root[data-theme='legacy-light'] .home-deck-view-all,
+:root[data-theme='legacy-dark'] .home-deck-view-all {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
+}
+
 .home-deck-announcement-title {
   margin: 0;
-  font-size: clamp(18px, 1.8vw, 22px);
-  font-weight: 750;
+  font-size: clamp(17px, 1.8vw, 21px);
+  font-weight: 700;
   line-height: 1.35;
+  color: var(--text, #1d1d1f);
+  letter-spacing: -.3px;
+}
+:root[data-theme='dark'] .home-deck-announcement-title {
   color: #fff;
-  letter-spacing: -.4px;
+}
+.home-deck-announcement-title a {
+  color: inherit;
+  text-decoration: none;
+  transition: color .15s ease;
+}
+.home-deck-announcement-title a:hover {
+  color: var(--accent);
 }
 [data-theme='minimal'] .home-deck-announcement-title,
-[data-theme='extreme'] .home-deck-announcement-title {
+[data-theme='extreme'] .home-deck-announcement-title,
+:root[data-theme='legacy-light'] .home-deck-announcement-title,
+:root[data-theme='legacy-dark'] .home-deck-announcement-title {
   color: var(--text);
 }
+
 .home-deck-announcement-content {
-  max-height: min(45vh, 420px);
-  overflow-y: auto;
-  padding-right: 6px;
+  max-height: 4.2em;
+  overflow: hidden !important;
+  position: relative;
   font-size: 13px;
-  line-height: 1.65;
-  scrollbar-width: thin;
+  line-height: 1.55;
+  mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+}
+.home-deck-announcement-content .katex,
+.home-deck-announcement-content .katex-display,
+.home-deck-announcement-content .md-callout,
+.home-deck-announcement-content .md-table-wrap,
+.home-deck-announcement-content blockquote,
+.home-deck-announcement-content pre,
+.home-deck-announcement-content table,
+.home-deck-announcement-content hr,
+.home-deck-announcement-content h1,
+.home-deck-announcement-content h2,
+.home-deck-announcement-content h3,
+.home-deck-announcement-content h4,
+.home-deck-announcement-content .md-h1,
+.home-deck-announcement-content .md-h2,
+.home-deck-announcement-content .md-h3 {
+  display: none !important;
 }
 .home-deck-announcement-content .markdown-view {
-  color: rgb(255 255 255 / .92);
+  color: var(--text, #2c2c2e);
+  opacity: .88;
+}
+:root[data-theme='dark'] .home-deck-announcement-content .markdown-view {
+  color: rgba(255, 255, 255, 0.88);
 }
 [data-theme='minimal'] .home-deck-announcement-content .markdown-view,
-[data-theme='extreme'] .home-deck-announcement-content .markdown-view {
-  color: var(--text);
-}
-.home-deck-announcement-content .markdown-view .md-h1,
-.home-deck-announcement-content .markdown-view .md-h2,
-.home-deck-announcement-content .markdown-view .md-h3 {
-  color: #fff;
-}
-[data-theme='minimal'] .home-deck-announcement-content .markdown-view .md-h1,
-[data-theme='minimal'] .home-deck-announcement-content .markdown-view .md-h2,
-[data-theme='minimal'] .home-deck-announcement-content .markdown-view .md-h3 {
+[data-theme='extreme'] .home-deck-announcement-content .markdown-view,
+:root[data-theme='legacy-light'] .home-deck-announcement-content .markdown-view,
+:root[data-theme='legacy-dark'] .home-deck-announcement-content .markdown-view {
   color: var(--text);
 }
 .home-deck-announcement-footer {
-  margin-top: 4px;
+  margin-top: 2px;
   display: flex;
   align-items: center;
   gap: 10px;
+}
+.home-deck-announcement-footer .home-deck-link {
+  font-size: 11.5px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  color: var(--accent) !important;
+  background: var(--accent-soft) !important;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  transition: all .15s ease;
+}
+.home-deck-announcement-footer .home-deck-link:hover {
+  background: var(--accent) !important;
+  color: #fff !important;
+}
+:root[data-theme='dark'] .home-deck-announcement-footer .home-deck-link {
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+:root[data-theme='dark'] .home-deck-announcement-footer .home-deck-link:hover {
+  background: rgba(255, 255, 255, 0.22) !important;
 }
 .home-deck-foot {display: flex; flex-direction: column; gap: 14px; padding-top: 6px}
 .home-stats {display: flex; flex-wrap: wrap; gap: 10px 26px; margin: 0}
@@ -329,12 +445,104 @@
   .commit-pagination {padding: 16px; gap: 8px}
   .home-editorial {grid-template-columns: 1fr}
   .home-deck {min-height: 248px; padding: 26px 30px}
+  .home-deck.home-deck-with-announcement,
+  .home-deck:has(.home-deck-announcement) {
+    min-height: auto;
+    padding: 16px 20px 12px;
+    gap: 12px;
+  }
+  .home-deck-announcement {
+    margin: 0;
+    padding: 12px 14px;
+    gap: 8px;
+    border-radius: 16px;
+  }
+  :root[data-theme='light'] .home-deck-announcement,
+  .home-deck-announcement {
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  }
+  :root[data-theme='dark'] .home-deck-announcement {
+    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+  .home-deck-announcement:active {
+    transform: scale(0.99);
+  }
+  .home-deck-announcement-header {
+    gap: 8px;
+  }
+  .home-deck-badge-group {
+    font-size: 11px;
+    padding: 2.5px 8px 2.5px 6px;
+    gap: 5px;
+  }
+  .home-deck-badge-group svg {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+  }
+  .home-deck-view-all {
+    font-size: 11px;
+    padding: 3px 9px;
+  }
+  .home-deck-view-all svg {
+    width: 12px;
+    height: 12px;
+  }
+  .home-deck-announcement-title {
+    font-size: 14px;
+    font-weight: 650;
+    line-height: 1.42;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .home-deck-announcement-content,
+  .home-deck-announcement-footer {
+    display: none;
+  }
+  .home-deck.home-deck-with-announcement .home-deck-foot,
+  .home-deck:has(.home-deck-announcement) .home-deck-foot {
+    gap: 8px;
+    padding-top: 0;
+  }
+  .home-deck.home-deck-with-announcement .home-stats,
+  .home-deck:has(.home-deck-announcement) .home-stats {
+    gap: 4px 16px;
+  }
+  .home-deck.home-deck-with-announcement .home-stat dd,
+  .home-deck:has(.home-deck-announcement) .home-stat dd {
+    font-size: 17px;
+  }
   .home-deck-greeting {font-size: clamp(28px, 7vw, 40px)}
   .home-main {padding: 30px 26px}
 }
 
 @media (max-width: 620px) {
   .home-deck {min-height: 210px; padding: 22px 20px; gap: 16px}
+  .home-deck.home-deck-with-announcement,
+  .home-deck:has(.home-deck-announcement) {
+    min-height: auto;
+    padding: 10px 14px 8px;
+    gap: 8px;
+  }
+  .home-deck-announcement {
+    padding: 8px 10px;
+    gap: 5px;
+    border-radius: 12px;
+  }
+  .home-deck.home-deck-with-announcement .home-deck-links,
+  .home-deck:has(.home-deck-announcement) .home-deck-links {
+    gap: 6px;
+  }
+  .home-deck.home-deck-with-announcement .home-deck-link,
+  .home-deck:has(.home-deck-announcement) .home-deck-link {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+  .home-deck-announcement-title {
+    font-size: 13px;
+  }
   .home-deck-eyebrow, .home-deck-subtitle {display: none}
   .home-main {padding: 24px 18px}
   .home-main-heading {align-items: flex-start; flex-direction: column; gap: 14px}
