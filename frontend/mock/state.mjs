@@ -467,31 +467,42 @@ export function createMockState({ empty = false } = {}) {
             ]
           }]
         } else if (params.category === 'research') {
-          // 两个视图共用一套形状：期数视图（默认）走「收获明细 + 掉落记录」，
-          // 心智/物资视图走单表。素材与服务端 module/api/statistics_service.py 对齐。
+          // 两个视图共用同一套形状：上面收益卡片、中间收获明细、下面原始掉落记录，
+          // 区别只在期数视图按期过滤、心智/物资视图不分期。素材与服务端
+          // module/api/statistics_service.py 对齐。
           const scope = params.scope ?? 'series'
-          const scopeRows = {
-            consumable: [
-              ['Coins', '物资', '—', 3116, 78],
-              ['CognitiveChips', '心智单元', '—', 480, 12]
-            ]
-          }
           if (scope !== 'series') {
-            const rows = name === 'demo-alt' ? [] : scopeRows[scope] ?? []
+            const items = name === 'demo-alt' ? [] : [
+              ['CognitiveChips', '心智单元', '金', 480, 12],
+              ['Coins', '物资', '—', 3116, 78]
+            ]
+            const recordRows = name === 'demo-alt' ? [] : [
+              ['2026-09-24 21:04:10', 'D-737-MI', 9, '物资 x96'],
+              ['2026-09-24 12:30:05', 'Q-051-UL', 7, '物资 x120'],
+              ['2026-09-23 08:12:44', 'G-531-MI', 9, '心智单元 x40、物资 x88']
+            ]
             result.metrics = [
               { label: '掉落记录', value: 79, unit: '次' },
-              { label: '物品种类', value: rows.length, unit: '种' },
-              { label: '掉落总数', value: rows.reduce((sum, row) => sum + row[3], 0), unit: '' },
-              { label: '今日总计', value: 0, unit: '' },
-              { label: '本月总计', value: rows.reduce((sum, row) => sum + row[3], 0), unit: '' }
+              ...items.map(([key, zh, , amount]) => ({ label: zh, value: amount || null, unit: '', icon: `research:${key}` }))
             ]
-            result.tables = [{
-              title: '心智/物资统计（全部期数）',
-              columns: ['图标', '物品', '稀有度', '数量', '获得次数'],
-              note: '心智单元与物资不绑期数、各期混着出，所以这里不分期统计。图标暂用当前物品模板。',
-              defaultSort: { index: 3, descending: true },
-              rows: rows.map(([key, zh, rarity, amount, count]) => [`research:${key}`, zh, rarity, amount, count])
-            }]
+            result.tables = [
+              {
+                title: '心智/物资收获明细',
+                columns: ['图标', '物品', '稀有度', '总收益', '掉落记录数', '平均每次掉落'],
+                note: '心智单元与物资不绑期数、各期混着出，所以这里不分期统计（统计最近 365 天）；清单里没掉过的也留一行，便于对照。图标暂用当前物品模板。',
+                defaultSort: { index: 3, descending: true },
+                rows: items.map(([key, zh, rarity, amount, count]) => [
+                  `research:${key}`, zh, rarity, amount || null, count || null, count ? 1.5 : null
+                ])
+              },
+              {
+                title: '掉落记录',
+                columns: ['时间', '项目', '期数', '掉落物'],
+                note: '按时间倒序；只列掉了心智单元或物资的记录。',
+                defaultSort: { index: 0, descending: true },
+                rows: recordRows
+              }
+            ]
           } else {
             const items = [
               ['BlueprintValparaiso', '蓝图：瓦尔帕莱索', '彩', 12],
