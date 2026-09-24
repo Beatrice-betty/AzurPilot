@@ -422,6 +422,20 @@ html.home-active .topbar,
   input, select, textarea {font-size: 16px; min-height: 44px}
   .field-control > input, .field-control > select, .field-control > textarea {font-size: 16px}
 }
+
+@media (max-width: 950px) {
+  :root.azurpilot-android-webview .sidebar {
+    isolation: isolate;
+    contain: layout paint;
+    background: var(--surface) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  :root.azurpilot-android-webview .app-shell.mobile-open::after {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
 @media (max-width: 300px) {.app-shell.with-rail .breadcrumb {display: none}}
 @media (max-width: 480px) {
   .monitor-tabs {height: 60px; padding: 8px 10px}
