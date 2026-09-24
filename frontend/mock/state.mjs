@@ -483,7 +483,10 @@ export function createMockState({ empty = false } = {}) {
             ]
             result.metrics = [
               { label: '掉落记录', value: 79, unit: '次' },
-              ...items.map(([key, zh, , amount]) => ({ label: zh, value: amount || null, unit: '', icon: `research:${key}` }))
+              ...items.map(([key, zh, , amount]) => ({ label: zh, value: amount || null, unit: '', icon: `research:${key}` })),
+              { label: '今日总计', value: name === 'demo-alt' ? null : 96, unit: '' },
+              { label: '本月总计', value: name === 'demo-alt' ? null : 2840, unit: '' },
+              { label: '选定月份总计', value: name === 'demo-alt' ? null : 3596, unit: '' }
             ]
             result.tables = [
               {

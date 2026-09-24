@@ -5,6 +5,7 @@
 其中一个视图被改回单表。
 
 用假记录喂进服务层，不碰 SQLite 与用户数据；名称表用仓库里的真表。
+时间冻结在固定时刻，这样「今日 / 本月 / 选定月份」的断言不受运行日期影响。
 """
 
 from datetime import datetime, timedelta
@@ -14,6 +15,18 @@ from types import ModuleType, SimpleNamespace
 import sys
 import unittest
 from unittest.mock import Mock, patch
+
+
+# 冻结的「现在」：9 月 15 日，于是今日 = 15 日、本月 = 2026-09、上月 = 2026-08
+NOW = datetime(2026, 9, 15, 12, 0, 0)
+
+
+class FrozenDatetime(datetime):
+    """让被 patch 的模块里 datetime.now() 返回固定时刻。"""
+
+    @classmethod
+    def now(cls, tz=None):
+        return NOW
 
 
 def module_stub(name, **attrs):
@@ -88,12 +101,13 @@ class ResearchReportLayoutTest(unittest.TestCase):
     """两个视图共用「收益卡片 + 收获明细 + 掉落记录」三段式。"""
 
     def setUp(self):
-        self.now = datetime.now()
         self.entries = [
-            # 九期：物资 + 一张船图纸（船图纸只有期数视图认）
-            entry({'Coins': 120, 'BlueprintTakahashi': 1}, 9, self.now),
-            # 七期：心智单元 + 物资
-            entry({'CognitiveChips': 40, 'Coins': 88}, 7, self.now - timedelta(days=2)),
+            # 本月 15 日（= 今日）：物资 + 一张船图纸（船图纸只有期数视图认）
+            entry({'Coins': 120, 'BlueprintTakahashi': 1}, 9, datetime(2026, 9, 15, 10, 0)),
+            # 本月 10 日：心智单元 + 物资
+            entry({'CognitiveChips': 40, 'Coins': 88}, 7, datetime(2026, 9, 10, 9, 0)),
+            # 上月 20 日：只有物资，用来区分「本月」与「选定月份」
+            entry({'Coins': 30}, 8, datetime(2026, 8, 20, 9, 0)),
         ]
         self.stats = load_research_stats()
         self.api = load_service()
@@ -104,17 +118,19 @@ class ResearchReportLayoutTest(unittest.TestCase):
         }))
         self.enterContext(patch.object(self.stats, '_iter_entries',
                                        lambda *args, **kwargs: iter(self.entries)))
+        # 两个模块各自 from datetime import datetime，都要冻结
+        self.enterContext(patch.object(self.stats, 'datetime', FrozenDatetime))
+        self.enterContext(patch.object(self.api, 'datetime', FrozenDatetime))
         self.configs = SimpleNamespace(path=Mock())
 
-    def consumable(self):
-        return self.api.report(self.configs, 'alas', 'research', None, 365, 'month', 0, 'consumable')
+    def consumable(self, month=None):
+        return self.api.report(self.configs, 'alas', 'research', month, 365, 'month', 0, 'consumable')
 
-    def series(self):
-        return self.api.report(self.configs, 'alas', 'research',
-                               self.now.strftime('%Y-%m'), 7, 'month', 9, 'series')
+    def series(self, month='2026-09'):
+        return self.api.report(self.configs, 'alas', 'research', month, 7, 'month', 9, 'series')
 
     def test_consumable_has_the_same_sections_and_columns_as_series(self):
-        consumable = self.consumable()
+        consumable = self.consumable('2026-09')
         series = self.series()
         self.assertEqual([item['title'] for item in consumable['tables']],
                          ['心智/物资收获明细', '掉落记录'])
@@ -123,36 +139,44 @@ class ResearchReportLayoutTest(unittest.TestCase):
                 self.assertEqual(consumable['tables'][index]['columns'],
                                  series['tables'][index]['columns'])
 
-    def test_consumable_cards_list_both_items_with_icons(self):
-        """卡片行与期数视图同构：先掉落记录，再每件物品一张带图标的卡。"""
-        metrics = self.consumable()['metrics']
-        self.assertEqual([item['label'] for item in metrics], ['掉落记录', '心智单元', '物资'])
+    def test_consumable_cards_list_both_items_then_time_totals(self):
+        """卡片行：掉落记录、每件物品一张带图标的卡，再跟上三档时间总计。"""
+        metrics = self.consumable('2026-09')['metrics']
+        self.assertEqual([item['label'] for item in metrics],
+                         ['掉落记录', '心智单元', '物资', '今日总计', '本月总计', '选定月份总计'])
         self.assertEqual([item.get('icon') for item in metrics],
-                         [None, 'research:CognitiveChips', 'research:Coins'])
-        self.assertEqual(metrics[0]['value'], 2)
-        self.assertEqual(metrics[1]['value'], 40)
-        self.assertEqual(metrics[2]['value'], 208)
+                         [None, 'research:CognitiveChips', 'research:Coins', None, None, None])
+        # 掉落记录 = 掉了心智/物资的次数（三条都掉了）；心智单元 40；物资 120+88+30
+        self.assertEqual([item['value'] for item in metrics[:3]], [3, 40, 238])
+
+    def test_time_totals_are_per_window(self):
+        """今日 / 本月 / 选定月份各按自己的窗口算（选上个月时第三张跟着变）。"""
+        today, this_month, selected = self.consumable('2026-09')['metrics'][3:]
+        self.assertEqual([today['value'], this_month['value'], selected['value']], [120, 248, 248])
+        last_month = self.consumable('2026-08')['metrics'][5]
+        self.assertEqual(last_month['value'], 30)
 
     def test_consumable_detail_keeps_a_row_per_item(self):
         """没掉过的物品也留一行（显示「—」），与期数视图的固定清单一致。"""
-        rows = self.consumable()['tables'][0]['rows']
+        rows = self.consumable('2026-09')['tables'][0]['rows']
         self.assertEqual([row[1] for row in rows], ['心智单元', '物资'])
         self.assertEqual([row[2] for row in rows], ['金', '—'])
-        self.assertEqual([row[3] for row in rows], [40, 208])
+        self.assertEqual([row[3] for row in rows], [40, 238])
 
     def test_consumable_detail_shows_dash_for_missing_item(self):
         """没掉过的那件留空行显示「—」，而不是整行消失。"""
         self.entries[:] = [item for item in self.entries if 'CognitiveChips' not in item['items']]
-        rows = self.consumable()['tables'][0]['rows']
+        rows = self.consumable('2026-09')['tables'][0]['rows']
         self.assertEqual([row[1] for row in rows], ['心智单元', '物资'])
         self.assertIsNone(rows[0][3])
         self.assertIsNone(rows[0][4])
-        self.assertEqual(rows[1][3], 120)
+        # 去掉心智单元那条后，物资只剩 120 + 30
+        self.assertEqual(rows[1][3], 150)
 
     def test_consumable_records_exclude_series_only_items(self):
         """掉落记录只列本视图认的物品：那次的船图纸不算进心智/物资口径。"""
-        records = self.consumable()['tables'][1]['rows']
-        self.assertEqual(len(records), 2)
+        records = self.consumable('2026-09')['tables'][1]['rows']
+        self.assertEqual(len(records), 3)
         for row in records:
             with self.subTest(row=row):
                 self.assertNotIn('蓝图', row[3])

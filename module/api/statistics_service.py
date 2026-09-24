@@ -293,6 +293,15 @@ def report(configs, instance, category, month, days, period, research_series=0, 
                              amount or None, (entry['count'] if entry else 0) or None,
                              (entry['avg'] if entry else 0) or None])
                 metric(info['zh'], amount or None, icon=f'research:{name}')
+            # 三档时间总计：表格按「最近 days 天」统计，这里再给出今日/本月/选定月份
+            # 三个窗口的合计，免得为了看某一天或某个月还得改统计天数。
+            month_start = selected.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            month_end = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+            month_summary = collect(instance, series=research_series, scope=research_scope,
+                                    start=month_start, end=month_end)
+            metric('今日总计', summary['today'] or None)
+            metric('本月总计', summary['month'] or None)
+            metric('选定月份总计', month_summary['total'] or None)
             result['tables'].append(table(
                 title, detail_columns, rows, note=note,
                 default_sort={'index': 3, 'descending': True},
