@@ -103,44 +103,55 @@ describe('资源卡片', () => {
     }
   })
 
-  it('大狗图标默认或关闭时，即使总行动力达到10000也使用默认图标', () => {
+  it('大狗图标默认开启，关闭时即使总行动力达到10000也使用默认图标', () => {
     setDashboardPref('dogIcon', false)
-    const html = renderResources([
-      {name: 'ActionPoint', label: '行动力', value: 101, total: 10000, record: '2026-09-16 12:00:00'},
-      {name: 'Oil', label: '石油', value: 1000, record: '2026-09-16 12:00:00'},
-    ], ['ActionPoint', 'Oil'])
-    expect(html).toContain('guild_coin.webp')
-    expect(html).toContain('oil.webp')
-    expect(html).not.toContain('dog.webp')
-  })
-
-  it('大狗图标开启时，总行动力未满10000使用默认图标，达到10000时仪表盘全部图标变大狗', () => {
-    setDashboardPref('dogIcon', true)
     try {
-      const normalHtml = renderResources([
-        {name: 'ActionPoint', label: '行动力', value: 101, total: 9999, record: '2026-09-16 12:00:00'},
-        {name: 'Oil', label: '石油', value: 1000, record: '2026-09-16 12:00:00'},
-      ], ['ActionPoint', 'Oil'])
-      expect(normalHtml).toContain('guild_coin.webp')
-      expect(normalHtml).toContain('oil.webp')
-      expect(normalHtml).not.toContain('dog.webp')
-
-      const dogHtml = renderResources([
+      const html = renderResources([
         {name: 'ActionPoint', label: '行动力', value: 101, total: 10000, record: '2026-09-16 12:00:00'},
         {name: 'Oil', label: '石油', value: 1000, record: '2026-09-16 12:00:00'},
       ], ['ActionPoint', 'Oil'])
-      expect(dogHtml).toContain('dog.webp')
-      expect(dogHtml).not.toContain('guild_coin.webp')
-      expect(dogHtml).not.toContain('oil.webp')
+      expect(html).toContain('guild_coin.webp')
+      expect(html).toContain('oil.webp')
+      expect(html).not.toContain('dog.webp')
     } finally {
-      setDashboardPref('dogIcon', false)
+      setDashboardPref('dogIcon', true)
     }
   })
 
+  it('大狗图标开启时：不超过5000全默认，5000以上只改行动力，达到10000全员改大狗', () => {
+    setDashboardPref('dogIcon', true)
+    // 档位一：<= 5000 全默认
+    const tier1Html = renderResources([
+      {name: 'ActionPoint', label: '行动力', value: 101, total: 5000, record: '2026-09-16 12:00:00'},
+      {name: 'Oil', label: '石油', value: 1000, record: '2026-09-16 12:00:00'},
+    ], ['ActionPoint', 'Oil'])
+    expect(tier1Html).toContain('guild_coin.webp')
+    expect(tier1Html).toContain('oil.webp')
+    expect(tier1Html).not.toContain('dog.webp')
+
+    // 档位二：5000~9999 仅行动力变大狗
+    const tier2Html = renderResources([
+      {name: 'ActionPoint', label: '行动力', value: 101, total: 5001, record: '2026-09-16 12:00:00'},
+      {name: 'Oil', label: '石油', value: 1000, record: '2026-09-16 12:00:00'},
+    ], ['ActionPoint', 'Oil'])
+    expect(tier2Html).toContain('dog.webp')
+    expect(tier2Html).not.toContain('guild_coin.webp')
+    expect(tier2Html).toContain('oil.webp')
+
+    // 档位三：>= 10000 全员变大狗
+    const tier3Html = renderResources([
+      {name: 'ActionPoint', label: '行动力', value: 101, total: 10000, record: '2026-09-16 12:00:00'},
+      {name: 'Oil', label: '石油', value: 1000, record: '2026-09-16 12:00:00'},
+    ], ['ActionPoint', 'Oil'])
+    expect(tier3Html).toContain('dog.webp')
+    expect(tier3Html).not.toContain('guild_coin.webp')
+    expect(tier3Html).not.toContain('oil.webp')
+  })
+
   it('验证isActionPointDog逻辑边界与回退', () => {
-    expect(isActionPointDog({name: 'ActionPoint', label: '行动力', value: 100, total: 9999})).toBe(false)
+    expect(isActionPointDog({name: 'ActionPoint', label: '行动力', value: 100, total: 5000})).toBe(false)
+    expect(isActionPointDog({name: 'ActionPoint', label: '行动力', value: 100, total: 5001})).toBe(true)
     expect(isActionPointDog({name: 'ActionPoint', label: '行动力', value: 100, total: 10000})).toBe(true)
-    expect(isActionPointDog({name: 'ActionPoint', label: '行动力', value: 100, total: 10001})).toBe(true)
     expect(isActionPointDog({name: 'ActionPoint', label: '行动力', value: 100, total: 12000, record: '2020-01-01 00:00:00'})).toBe(false)
     expect(isActionPointDog({name: 'Oil', label: '石油', value: 100, total: 12000})).toBe(false)
     expect(isActionPointDog(undefined)).toBe(false)

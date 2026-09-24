@@ -49,11 +49,15 @@ describe('前端模拟服务', () => {
       '../template', 'a/b', 'template', 'template.fpy', 'CON', 'c:foo', 'a*b']
     for (const name of names) expect(mock.test(name), name).toBe(app.test(name))
   })
-  it('总览投影保留行动力总值', () => {
+  it('总览投影保留行动力总值并覆盖三个档位', () => {
     const {dispatch} = createMockState()
-    const actionPoint = dispatch('overview.get', {instance: 'demo-main'}).resources.find(resource => resource.name === 'ActionPoint')
+    const altAp = dispatch('overview.get', {instance: 'demo-alt'}).resources.find(resource => resource.name === 'ActionPoint')
+    const mainAp = dispatch('overview.get', {instance: 'demo-main'}).resources.find(resource => resource.name === 'ActionPoint')
+    const dogAp = dispatch('overview.get', {instance: 'demo-dog'}).resources.find(resource => resource.name === 'ActionPoint')
 
-    expect(actionPoint).toMatchObject({value: 101, total: 5301})
+    expect(altAp).toMatchObject({value: 99, total: 1301})
+    expect(mainAp).toMatchObject({value: 101, total: 5301})
+    expect(dogAp).toMatchObject({value: 95, total: 12000})
   })
   it('契约参数、只读字段、语言、日志游标和被动预览可验证', () => {
     const {dispatch, tick} = createMockState()
