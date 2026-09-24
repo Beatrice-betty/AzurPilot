@@ -1008,9 +1008,57 @@
       "do_not": "No action",
       "save": "Save"
     },
-    "OpsiRecord": {
-      "name": "OpSi drop screenshot",
-      "help": "",
+    "OpsiHazard1Leveling": {
+      "name": "Corrosion 1 drop screenshot",
+      "help": "Upload currently only takes effect on Meowfficer farming",
+      "do_not": "No action",
+      "save": "Save",
+      "upload": "Upload",
+      "save_and_upload": "Save and upload"
+    },
+    "OpsiMeowfficerFarming": {
+      "name": "Meowfficer farming drop screenshot",
+      "help": "Upload parses drops into the local statistics database, which the profit stats under the \"Meowfficer loot\" category rely on",
+      "do_not": "No action",
+      "save": "Save",
+      "upload": "Upload",
+      "save_and_upload": "Save and upload"
+    },
+    "OpsiDaily": {
+      "name": "Operation Siren daily drop screenshot",
+      "help": "Upload currently only takes effect on Meowfficer farming",
+      "do_not": "No action",
+      "save": "Save",
+      "upload": "Upload",
+      "save_and_upload": "Save and upload"
+    },
+    "OpsiObscure": {
+      "name": "Obscured zone drop screenshot",
+      "help": "Upload currently only takes effect on Meowfficer farming",
+      "do_not": "No action",
+      "save": "Save",
+      "upload": "Upload",
+      "save_and_upload": "Save and upload"
+    },
+    "OpsiAbyssal": {
+      "name": "Abyssal zone drop screenshot",
+      "help": "Upload currently only takes effect on Meowfficer farming",
+      "do_not": "No action",
+      "save": "Save",
+      "upload": "Upload",
+      "save_and_upload": "Save and upload"
+    },
+    "OpsiStronghold": {
+      "name": "Siren stronghold drop screenshot",
+      "help": "Upload currently only takes effect on Meowfficer farming",
+      "do_not": "No action",
+      "save": "Save",
+      "upload": "Upload",
+      "save_and_upload": "Save and upload"
+    },
+    "OpsiOther": {
+      "name": "Other Operation Siren drop screenshot",
+      "help": "Covers Monthly Exploration, Monthly Boss, Archive Coordinates, Cross-Month Daily and other Operation Siren tasks without a switch of their own\nUpload currently only takes effect on Meowfficer farming",
       "do_not": "No action",
       "save": "Save",
       "upload": "Upload",
