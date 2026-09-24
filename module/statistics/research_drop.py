@@ -4,9 +4,13 @@
 数据入口，也是 WebUI 科研统计页的数据来源。
 
 记录结构：一条掉落记录是一张 PNG，内含多帧（由 AzurStats.pack 垂直拼接）：
-    - 第 0 帧：科研队列页，卡片上印着项目代号（如 D-737-MI），
-      据此查 LIST_RESEARCH_PROJECT 得到期数与预期产出；
+    - 第 0 帧：科研队列页，卡片上印着项目代号（如 D-737-MI）与系列角标（罗马数字）；
     - 第 1..n 帧：「获得道具」弹窗，是这次实际到手的东西。
+
+**期数只看卡片上的罗马数字角标，不看项目代号**：同一个代号（G-531-MI、Q-051-MI…）
+在每一期都存在，代号里没有期数信息。而掉落物也不能反推期数——只有彩装备与舰船图纸
+是绑定期数的，金装备各期混着出（队列里还常常混着别期的「定向研发」项目）。
+角标用 module/research/series.py 既有的 match_series 读，实测 896 张全对。
 
 入口：
     record_research_drop() 由 AzurStats.commit() 在领奖时调用。
@@ -33,6 +37,10 @@ QUEUE_CARD_AREAS = (
     (782, 296, 955, 338),
     (1025, 296, 1190, 338),
 )
+# 卡 1 左上角的系列角标（罗马数字）区域。队列页的卡片是平的，没有透视缩放，
+# 所以 scaling 固定 1.0（科研主页那 5 张卡是弧形排列，那套要按位置补缩放）。
+# 区域比角标本身（35x26）留出余量：太贴边模板匹配会失败（实测裁到 40x36 就全读不出）。
+SERIES_BADGE_AREA = (55, 118, 105, 160)
 # 项目代号字表，与 module/research/project.py 的 OCR_RESEARCH 保持一致
 RESEARCH_ALPHABET = '0123456789BCDEGHQTMIULRF-'
 # 合法代号形如 D-737-MI
@@ -171,14 +179,17 @@ class ResearchDropParser:
                 return name
         return ''
 
-    def _read_project(self, image: np.ndarray) -> t.Tuple[str, int]:
-        """从队列页读取本组掉落对应的科研项目。
+    def _read_project(self, image: np.ndarray) -> str:
+        """从队列页读取本组掉落对应的科研项目代号。
+
+        代号只用来记录「哪一次项目」，**不带期数信息**（同一个代号每期都有），
+        期数一律走 `_read_series()`。
 
         Args:
             image (np.ndarray): 队列页截图。
 
         Returns:
-            tuple: (项目代号, 期数)；识别失败返回 ('', 0)。
+            str: 项目代号；识别失败返回空串。
         """
         names = self.ocr.ocr(image)
         if not isinstance(names, list):
@@ -188,13 +199,33 @@ class ResearchDropParser:
             if not code:
                 continue
             if code in self.lookup:
-                return code, self.lookup[code]['series']
+                return code
             fixed = self._correct_code(code)
             if fixed:
                 logger.info(f'[科研统计] 项目代号 {code} 纠正为 {fixed}')
-                return fixed, self.lookup[fixed]['series']
+                return fixed
         logger.warning(f'[科研统计] 未能识别项目代号: {names}')
-        return '', 0
+        return ''
+
+    def _read_series(self, image: np.ndarray) -> int:
+        """从队列页卡片 1 的角标读取科研期数。
+
+        复用 module/research/series.py 的模板匹配（那里已经有 I~IX 的模板，
+        本来是为科研主页的项目卡片写的）。
+
+        Args:
+            image (np.ndarray): 队列页截图。
+
+        Returns:
+            int: 期数 1~9；读不出来返回 0。
+        """
+        from module.base.utils import crop
+        from module.research.series import match_series
+
+        series = match_series(crop(image, SERIES_BADGE_AREA), scaling=1.0)
+        if not series:
+            logger.warning('[科研统计] 未能读出卡片角标的期数，本次记录不计入任何一期')
+        return series
 
     def parse(self, images: t.Sequence[np.ndarray]) -> ResearchDrop:
         """解析一组科研掉落截图。
@@ -226,7 +257,8 @@ class ResearchDropParser:
                 queue_page = frame
                 break
         if queue_page is not None:
-            drop.project, drop.series = self._read_project(queue_page)
+            drop.project = self._read_project(queue_page)
+            drop.series = self._read_series(queue_page)
         else:
             logger.info('[科研统计] 本组截图没有队列页，只统计掉落物')
 

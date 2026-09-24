@@ -93,7 +93,7 @@ def series(rows, key, label):
     return {'key': key, 'label': label, 'points': points}
 
 
-def report(configs, instance, category, month, days, period, research_series=0):
+def report(configs, instance, category, month, days, period, research_series=0, research_scope='series'):
     configs.path(instance)
     now = datetime.now()
     try:
@@ -106,8 +106,12 @@ def report(configs, instance, category, month, days, period, research_series=0):
     result = {'instance': instance, 'category': category, 'month': f'{year:04d}-{month_number:02d}',
               'metrics': [], 'series': [], 'tables': [], 'notes': []}
 
-    def metric(label, value, unit=''):
-        result['metrics'].append({'label': label, 'value': value, 'unit': unit})
+    def metric(label, value, unit='', icon=None):
+        entry = {'label': label, 'value': value, 'unit': unit}
+        if icon:
+            # 前端按 icon 找图标，找不到就用 label 查内置表；科研物品写 'research:<模板名>'
+            entry['icon'] = icon
+        result['metrics'].append(entry)
 
     if category == 'resources':
         from module.statistics.resource_stats import RESOURCE_COLUMNS, get_resource_timeline
@@ -213,36 +217,112 @@ def report(configs, instance, category, month, days, period, research_series=0):
         daily = [{'ts': key, **value} for key, value in sorted(data.get('daily_stats', {}).items())]
         result['series'] = [series(daily, 'total_exp_gained', '每日经验'), series(daily, 'battle_count', '每日战斗'), series(daily, 'total_run_time', '每日运行秒数')]
     elif category == 'research':
-        from module.statistics.research_stats import collect, RARITY_LABELS
-        summary = collect(instance, days=days, series=research_series)
-        if not summary['available']:
-            # 走表格的 note 而不是 notes：前端只渲染 tables，notes 仅在导出 CSV 时用到，
-            # 放在那里用户界面上什么都看不到（会以为功能坏了）。
+        from module.statistics.research_stats import (
+            collect, item_info, RARITY_LABELS, SCOPE_SERIES, SCOPE_GOLD)
+        # 走表格的 note 而不是 notes：前端只渲染 tables，notes 仅在导出 CSV 时用到，
+        # 放在那里用户界面上什么都看不到（会以为功能坏了）。
+        if research_scope != SCOPE_SERIES:
+            summary = collect(instance, days=days, series=research_series, scope=research_scope)
+            columns = ['图标', '物品', '稀有度', '数量', '获得次数']
+            if research_scope == SCOPE_GOLD:
+                title = '金装统计（全部期数）'
+                note = ('金装 = 稀有度 4 的装备图纸，全部期数合并统计。'
+                        '彩装备、图纸、心智与物资看其它视图。图标暂用当前物品模板。')
+            else:
+                title = '心智/物资统计（全部期数）'
+                note = ('心智单元与物资不绑期数、各期混着出，所以这里不分期统计。'
+                        '图标暂用当前物品模板。')
+            if not summary['records']:
+                result['tables'].append(table(title, columns, [], note=(
+                    '还没有科研掉落记录。统计在领奖时自动完成：'
+                    '把「科研截图」设为「保存」或「上传」即可（两者都会统计，'
+                    '区别只是要不要把截图落盘）。')))
+                return result
+            metric('掉落记录', summary['records'], '次')
+            metric('物品种类', len(summary['items']), '种')
+            metric('掉落总数', summary['total'])
+            metric('今日总计', summary['today'])
+            metric('本月总计', summary['month'])
+            rows = [
+                [f'research:{item["name"]}', item['zh'],
+                 RARITY_LABELS.get(item.get('rarity'), '—'), item['amount'], item['count']]
+                for item in summary['items']
+            ]
             result['tables'].append(table(
-                '科研掉落', ['图标', '物品', '稀有度', '数量', '获得次数'], [],
-                note='还没有科研掉落记录。统计在领奖时自动完成：'
-                     '把「科研截图」设为「保存」或「上传」即可（两者都会统计，'
-                     '区别只是要不要把截图落盘）。'))
+                title, columns, rows, note=note,
+                default_sort={'index': 3, 'descending': True},
+            ))
             return result
-        metric('掉落记录', summary['records'], '次')
-        metric('物品种类', len(summary['items']), '种')
-        metric('掉落总数', summary['total'])
+
+        # 期数视图照委托收益的样子来：按「汇总周期」框一段时间（period=month 看选定月份，
+        # day/week 看今天/本周），再取该期的记录；上面是每期船图纸与彩装的收益卡片，
+        # 下面是收获明细与原始掉落记录。
+        start = selected.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        end = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
+        if period != 'month':
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            if period == 'week':
+                start -= timedelta(days=start.weekday())
+            end = now
+        summary = collect(instance, series=research_series, scope=SCOPE_SERIES, start=start, end=end)
+        title = f'第 {summary["series"]} 期收获明细'
+        columns = ['图标', '物品', '稀有度', '总收益', '掉落记录数', '平均每次掉落']
+        note = ('每期只统计该期各艘船的图纸与该期的彩装图纸；金装备在「金装统计」、'
+                '心智与物资在「心智/物资」里看。图标暂用当前物品模板。'
+                '清单里本期没掉过的也留一行，便于对照。')
+        if not summary['records']:
+            if summary['available']:
+                hint = (f'第 {summary["series"]} 期在统计区间内没有记录；有记录的期数：'
+                        + '、'.join(f'第 {item} 期' for item in summary['available'])
+                        + '（可把「汇总周期」改成选定月份再看）')
+            else:
+                hint = ('还没有科研掉落记录。统计在领奖时自动完成：'
+                        '把「科研截图」设为「保存」或「上传」即可（两者都会统计，'
+                        '区别只是要不要把截图落盘）。')
+            result['tables'].append(table(title, columns, [], note=hint))
+            return result
+        # 原始掉落记录：本视图认的物品才算「一次掉落」，只列这些
+        from module.statistics.cl1_database import db as cl1_db
+        from module.statistics.research_stats import should_show
+        entries = []
+        cursor = start.replace(day=1)
+        while cursor < end:
+            entries.extend(cl1_db.get_research_drop(instance, cursor.year, cursor.month))
+            cursor = (cursor.replace(day=28) + timedelta(days=4)).replace(day=1)
+        entries = [entry for entry in entries
+                   if start.isoformat(sep=' ') <= str(entry.get('ts', '')).replace('T', ' ') < end.isoformat(sep=' ')]
+        entries.sort(key=lambda entry: entry['ts'])
+        record_rows = []
+        for entry in entries:
+            shown = [(item_info(name)['zh'], amount) for name, amount in (entry.get('items') or {}).items()
+                     if should_show(name, scope=SCOPE_SERIES)]
+            if not shown:
+                # 这一次只掉了心智/物资等本视图不看的东西，不算本视图的一次掉落
+                continue
+            record_rows.append([
+                entry['ts'], entry.get('project') or '—', entry.get('series') or '—',
+                '、'.join(f'{zh} x{amount}' for zh, amount in shown),
+            ])
+
+        metric('掉落记录', len(record_rows), '次')
+        for item in summary['items']:
+            # 0 传 null：前端与委托收益一样显示「—」，区分「没有」和「真是 0」
+            metric(item['zh'], item['amount'] or None, icon=f'research:{item["name"]}')
         rows = [
-            [f'research:{item["name"]}', item['zh'],
-             RARITY_LABELS.get(item.get('rarity'), '—'), item['amount'], item['count']]
+            [f'research:{item["name"]}', item['zh'], RARITY_LABELS.get(item.get('rarity'), '—'),
+             item['amount'] or None, item['count'] or None, item['avg'] or None]
             for item in summary['items']
         ]
         result['tables'].append(table(
-            f'第 {summary["series"]} 期掉落',
-            ['图标', '物品', '稀有度', '数量', '获得次数'],
-            rows,
-            note='只统计彩装备、彩图纸、金图纸与心智单元；其余物品照常入库但不在此展示。'
-                 '图标暂用当前物品模板。',
+            title, columns, rows, note=note,
             default_sort={'index': 3, 'descending': True},
         ))
-        result['notes'].append(
-            f'当前展示第 {summary["series"]} 期；有记录的期数：'
-            + ('、'.join(f'第 {item} 期' for item in summary['available']) if summary['available'] else '无'))
+        result['tables'].append(table(
+            '掉落记录', ['时间', '项目', '期数', '掉落物'], record_rows[-200:],
+            note='按时间倒序；只列掉了本期图纸或彩装的记录，那一次只掉心智或物资的不算。'
+                 + ('记录超过 200 条，只显示最近 200 条。' if len(record_rows) > 200 else ''),
+            default_sort={'index': 0, 'descending': True},
+        ))
     elif category == 'loot':
         from module.statistics.azurstats import AzurStats
         rows = []

@@ -49,6 +49,8 @@ module/statistics/
 ├── daily_summary_store.py    # DailySummaryStore：日报事件库
 ├── daily_summary_text.py     # 日报 system prompt
 ├── commission_income_stats.py# 委托收益聚合（day/week/month/interval）
+├── research_drop.py          # 科研掉落解析（队列页角标读期数 + 收获帧识别）
+├── research_stats.py         # 科研掉落聚合（按期 / 金装 / 心智物资三种口径）
 ├── resource_stats.py         # resource_snapshots 快照与区间摘要
 ├── ship_exp_stats.py         # ShipExpStats：战斗计时与经验效率
 ├── opsi_month.py             # OpsiMonthStats：月度大世界汇总与时间线
@@ -123,6 +125,7 @@ module/log_res/
 | `meow_hazard_stats` | 按侵蚀等级拆分的桶（次数、耗时样本、明石） |
 | `siren_research_devices` | 塞壬研究装置（吊机）计数，cl1 与 meow 分源 |
 | `commission_income_entries` / `running_gem_commissions` | 委托收益明细（上限 5000）与运行中钻石委托（跨月合并） |
+| `research_drop_entries` | 科研掉落明细：项目代号、期数、物品（上限 5000，imgid 去重） |
 
 关键机制：`_stats_transaction()` 用 `BEGIN IMMEDIATE` 取写锁，跨线程/进程串行化整个「读-改-写」，避免并发覆盖；`save_stats` 只做整体替换，增量修改必须走事务内方法。旧版 AES-GCM 密文（密钥由 device_id 派生）在初始化时自动解密迁移为明文 JSON。
 
@@ -218,7 +221,7 @@ flowchart TD
   └─ 全量快照 → resource_snapshots（azurstats_local.db）
 
 查询侧：
-  statistics.report → opsi_month / commission_income_stats / ship_exp_stats
+  statistics.report → opsi_month / commission_income_stats / research_stats / ship_exp_stats
                     / azurstats / resource_stats → metrics + series + tables
   日报窗口 → 日报库 + resource_stats + cl1_db → facts JSON → LLM
 ```
@@ -255,6 +258,7 @@ stateDiagram-v2
 | `Alas.DropRecord.BackUpMethod` / `ZipMethod` | option | zip / zip | 过期截图的处理方式（delete / zip / copy）与压缩格式（bz2 / gzip / xz / zip）；备份落在各来源目录下的 `bak/` |
 | `Alas.DropRecord.CombatRecord` / `OpsiRecord` / `ResearchRecord` / `CommissionRecord` | option | do_not / upload | 各场景掉落记录方式（do_not / save / upload / save_and_upload） |
 | `Alas.DropRecord.CommissionIncomeScreenshot` | option | save | 委托收益截图开关 |
+| `Alas.DropRecord.ResearchRecord` | option | do_not | 科研掉落截图开关；`save` / `upload` / `save_and_upload` 都会统计（区别只在要不要把截图落盘） |
 | `Alas.DropRecord.TelemetryReport` | bool | true | CL1 遥测提交开关（hazard_leveling 里检查） |
 | `Alas.Error.LlmApiKey/LlmApiBase/LlmModel` | str | "" | 日报 LLM 配置（与错误上报共用） |
 | `Alas.Error.OnePushConfig` | str | "" | 推送通道配置 |
@@ -325,6 +329,9 @@ CL1 库的兼容性迁移是自动的：启动时把旧位置 `log/cl1/cl1_data.
 - **OCR 数量的修正逻辑是按具体误读样本反复校准的**（`remove_small_fragments`、`revise_item`、`AmountOcr` 截断），注释里记录了每个阈值的来源案例；调整阈值前先用真实截图回归验证，不要「顺手简化」。
 - **遥测提交只发聚合指标**（battle_count/明石次数 + MD5 前缀 instance_id），不要往 `calculate_metrics` 里加可识别个人的字段。
 - `module/statistics/assets.py` 与 `module/azur_stats/assets.py` 是 `dev_tools.button_extract` 的生成物，改按钮资源后重新生成，不要手改。
+- **科研的期数只能看队列页卡片的罗马数字角标**（`research_drop._read_series`，复用 `module/research/series.py` 的模板）。项目代号在每一期都存在、判不了期；掉落物也判不了——只有彩装备与舰船图纸绑期数，金装备各期混着出，项目还会「额外赠送」别期的图纸。
+- **心智单元不属于任何一期**：它有自己的「心智/物资」视图，也不计入每期的总收益；金装备同理，在「金装统计」里单独看。`research_stats.should_show()` 按 `scope` 分这三套口径。
+- 科研模板的新增/重命名走 `dev_tools/research_template_extract.py`（从游戏 Lua 数据推导仓库命名，含底色变体与 `{namecode:XXX}` 占位符处理），不要手裁素材。
 
 ## 17. 已知限制
 
@@ -334,6 +341,7 @@ CL1 库的兼容性迁移是自动的：启动时把旧位置 `log/cl1/cl1_data.
 - 遥测域名 `ApiClient.PRIMARY_DOMAIN` 与 `FALLBACK_DOMAIN` 当前相同，故障转移实际未生效。
 - farming CSV（`azurstat_meowofficer_farming.csv`）是全量重算而非增量，明细库很大时刷新会变慢。
 - `drop_statistics.py` 离线分析依赖手动重命名模板与改脚本常量，没有命令行参数化。
+- 科研模板库还缺 1~5 期几艘船的图纸（一期路易九世、三期柴郡、四期奥古斯特·冯·帕塞瓦尔与马可波罗、五期鲁普雷希特）：没有模板的掉落会在解析阶段被跳过，所以按期视图里看不到这几艘。
 
 ## 18. 示例
 

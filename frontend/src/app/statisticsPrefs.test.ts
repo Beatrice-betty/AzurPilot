@@ -35,7 +35,7 @@ describe('统计页与图表选项持久化', () => {
       category: 'opsi',
       days: 30,
       period: 'week',
-      researchSeries: 3,
+      researchSelect: 'gold',
       chartMode: 'candlestick',
       chartAxisMode: 'unified',
       bucket: 60,
@@ -53,7 +53,7 @@ describe('统计页与图表选项持久化', () => {
       category: 'opsi',
       days: 30,
       period: 'week',
-      researchSeries: 3,
+      researchSelect: 'gold',
       chartMode: 'candlestick',
       chartAxisMode: 'unified',
       bucket: 60,
@@ -89,7 +89,7 @@ describe('统计页与图表选项持久化', () => {
         category: 'invalid_category',
         days: 9999,
         period: 'year',
-        researchSeries: -5,
+        researchSelect: 'nonsense',
         chartMode: 'pie',
         chartAxisMode: 'random',
         bucket: 12345,
@@ -103,7 +103,7 @@ describe('统计页与图表选项持久化', () => {
     expect(loaded.category).toBe(DEFAULT_STATISTICS_PREFS.category)
     expect(loaded.days).toBe(DEFAULT_STATISTICS_PREFS.days)
     expect(loaded.period).toBe(DEFAULT_STATISTICS_PREFS.period)
-    expect(loaded.researchSeries).toBe(DEFAULT_STATISTICS_PREFS.researchSeries)
+    expect(loaded.researchSelect).toBe(DEFAULT_STATISTICS_PREFS.researchSelect)
     expect(loaded.chartMode).toBe(DEFAULT_STATISTICS_PREFS.chartMode)
     expect(loaded.chartAxisMode).toBe(DEFAULT_STATISTICS_PREFS.chartAxisMode)
     expect(loaded.bucket).toBe(DEFAULT_STATISTICS_PREFS.bucket)
