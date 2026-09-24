@@ -55,9 +55,9 @@ describe('前端模拟服务', () => {
     const mainAp = dispatch('overview.get', {instance: 'demo-main'}).resources.find(resource => resource.name === 'ActionPoint')
     const dogAp = dispatch('overview.get', {instance: 'demo-dog'}).resources.find(resource => resource.name === 'ActionPoint')
 
-    expect(altAp).toMatchObject({value: 99, total: 1301})
-    expect(mainAp).toMatchObject({value: 101, total: 5301})
-    expect(dogAp).toMatchObject({value: 95, total: 12000})
+    expect(altAp).toMatchObject({value: 99, total: 8001})
+    expect(mainAp).toMatchObject({value: 101, total: 6001})
+    expect(dogAp).toMatchObject({value: 95, total: 12001})
   })
   it('契约参数、只读字段、语言、日志游标和被动预览可验证', () => {
     const {dispatch, tick} = createMockState()

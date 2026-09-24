@@ -4,7 +4,7 @@ import { AppContext, type AppContextValue } from '../app/context'
 import type { Resource } from '../api/types'
 import { translateUi } from '../i18n'
 import { setDashboardPref } from '../app/dashboardPrefs'
-import { isActionPointDog, moveResourceKey, ResourceCards } from './ResourceCards'
+import { actionPointDogIcon, moveResourceKey, ResourceCards } from './ResourceCards'
 
 function renderResources(resources: Resource[], selected = ['ActionPoint']) {
   return renderToStaticMarkup(
@@ -103,57 +103,58 @@ describe('资源卡片', () => {
     }
   })
 
-  it('大狗图标默认开启，关闭时即使总行动力达到10000也使用默认图标', () => {
+  it('大狗图标关闭时，行动力再高也用默认图标', () => {
     setDashboardPref('dogIcon', false)
     try {
       const html = renderResources([
-        {name: 'ActionPoint', label: '行动力', value: 101, total: 10000, record: '2026-09-16 12:00:00'},
+        {name: 'ActionPoint', label: '行动力', value: 101, total: 12000, record: '2026-09-16 12:00:00'},
         {name: 'Oil', label: '石油', value: 1000, record: '2026-09-16 12:00:00'},
       ], ['ActionPoint', 'Oil'])
       expect(html).toContain('guild_coin.webp')
       expect(html).toContain('oil.webp')
-      expect(html).not.toContain('dog.webp')
+      expect(html).not.toContain('dog_')
     } finally {
       setDashboardPref('dogIcon', true)
     }
   })
 
-  it('大狗图标开启时：不超过5000全默认，5000以上只改行动力，达到10000全员改大狗', () => {
+  it('行动力图标按四档换图，其余资源始终用自带图标', () => {
     setDashboardPref('dogIcon', true)
-    // 档位一：<= 5000 全默认
-    const tier1Html = renderResources([
-      {name: 'ActionPoint', label: '行动力', value: 101, total: 5000, record: '2026-09-16 12:00:00'},
+    const render = (total: number) => renderResources([
+      {name: 'ActionPoint', label: '行动力', value: 101, total, record: '2026-09-16 12:00:00'},
       {name: 'Oil', label: '石油', value: 1000, record: '2026-09-16 12:00:00'},
     ], ['ActionPoint', 'Oil'])
-    expect(tier1Html).toContain('guild_coin.webp')
-    expect(tier1Html).toContain('oil.webp')
-    expect(tier1Html).not.toContain('dog.webp')
 
-    // 档位二：5000~9999 仅行动力变大狗
-    const tier2Html = renderResources([
-      {name: 'ActionPoint', label: '行动力', value: 101, total: 5001, record: '2026-09-16 12:00:00'},
-      {name: 'Oil', label: '石油', value: 1000, record: '2026-09-16 12:00:00'},
-    ], ['ActionPoint', 'Oil'])
-    expect(tier2Html).toContain('dog.webp')
-    expect(tier2Html).not.toContain('guild_coin.webp')
-    expect(tier2Html).toContain('oil.webp')
-
-    // 档位三：>= 10000 全员变大狗
-    const tier3Html = renderResources([
-      {name: 'ActionPoint', label: '行动力', value: 101, total: 10000, record: '2026-09-16 12:00:00'},
-      {name: 'Oil', label: '石油', value: 1000, record: '2026-09-16 12:00:00'},
-    ], ['ActionPoint', 'Oil'])
-    expect(tier3Html).toContain('dog.webp')
-    expect(tier3Html).not.toContain('guild_coin.webp')
-    expect(tier3Html).not.toContain('oil.webp')
+    const tiers: Array<[number, string]> = [
+      [6000, 'guild_coin.webp'],
+      [6001, 'dog_small.webp'],
+      [8000, 'dog_small.webp'],
+      [8001, 'dog_medium.webp'],
+      [10000, 'dog_medium.webp'],
+      [10001, 'dog_large.webp'],
+      [12000, 'dog_large.webp'],
+      [12001, 'dog_king.webp'],
+    ]
+    for (const [total, icon] of tiers) {
+      const html = render(total)
+      expect(html, `总行动力 ${total} 应使用 ${icon}`).toContain(icon)
+      expect(html, `总行动力 ${total} 时石油不该换图`).toContain('oil.webp')
+    }
+    expect(render(12001)).not.toContain('guild_coin.webp')
   })
 
-  it('验证isActionPointDog逻辑边界与回退', () => {
-    expect(isActionPointDog({name: 'ActionPoint', label: '行动力', value: 100, total: 5000})).toBe(false)
-    expect(isActionPointDog({name: 'ActionPoint', label: '行动力', value: 100, total: 5001})).toBe(true)
-    expect(isActionPointDog({name: 'ActionPoint', label: '行动力', value: 100, total: 10000})).toBe(true)
-    expect(isActionPointDog({name: 'ActionPoint', label: '行动力', value: 100, total: 12000, record: '2020-01-01 00:00:00'})).toBe(false)
-    expect(isActionPointDog({name: 'Oil', label: '石油', value: 100, total: 12000})).toBe(false)
-    expect(isActionPointDog(undefined)).toBe(false)
+  it('actionPointDogIcon 的档位边界与回退', () => {
+    const ap = (total: number, extra: Partial<Resource> = {}) => ({name: 'ActionPoint', label: '行动力', value: 100, total, ...extra})
+    expect(actionPointDogIcon(ap(6000))).toBeUndefined()
+    expect(actionPointDogIcon(ap(6001))).toContain('dog_small.webp')
+    expect(actionPointDogIcon(ap(8000))).toContain('dog_small.webp')
+    expect(actionPointDogIcon(ap(8001))).toContain('dog_medium.webp')
+    expect(actionPointDogIcon(ap(10001))).toContain('dog_large.webp')
+    expect(actionPointDogIcon(ap(12001))).toContain('dog_king.webp')
+    expect(actionPointDogIcon(ap(12001, {record: '2020-01-01 00:00:00'}))).toBeUndefined()
+    expect(actionPointDogIcon({name: 'Oil', label: '石油', value: 100, total: 12001})).toBeUndefined()
+    expect(actionPointDogIcon(undefined)).toBeUndefined()
+    /* total 小于 value 时退回 value：异常数据不该被当成低档。 */
+    expect(actionPointDogIcon({name: 'ActionPoint', label: '行动力', value: 9000, total: 1})).toContain('dog_medium.webp')
   })
 })

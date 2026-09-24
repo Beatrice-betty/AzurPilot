@@ -209,7 +209,8 @@ export function createMockState({ empty = false } = {}) {
       values.Main.Emotion.Fleet1Record = '2026-09-12 23:45:12.123456'
       values.Main.Scheduler.NextRun = '2099-01-01 12:00:00'
       values.Alas.Emulator.Serial = `127.0.0.1:${5555 + index * 2}`
-      const apTotal = name === 'demo-dog' ? 12000 : name === 'demo-alt' ? 1301 : 5301 - index * 2
+      /* 四个演示实例各占一档：小狗 / 中狗 / 大狗 / 狗王，用来一次看全行动力图标的四档。 */
+      const apTotal = {'demo-main': 6001, 'demo-alt': 8001, 'demo-error': 10001, 'demo-dog': 12001}[name] ?? 6001
       const dashboardDefaults = {
         Oil: { Value: 14200 - index * 100, Limit: 25000 },
         Coin: { Value: 186420 - index * 1000, Limit: 600000 },
