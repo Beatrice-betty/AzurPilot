@@ -113,6 +113,14 @@ NAME_TABLE_OVERRIDES = {
         'en': 'Prototype Triple 550mm Improved (Ammo Mod) Torpedo Mount T0 Design',
         'rarity': 4,
     },
+    # 心智单元与物资也没有 T 品阶后缀；它们是「心智/物资」口径里的两件物品，
+    # 名称表里必须有中文名（稀有度取自 Lua：心智单元 4、物资 1）。
+    'CognitiveChips': {
+        'zh': '心智单元', 'en': 'Cognitive Chips', 'rarity': 4,
+    },
+    'Coins': {
+        'zh': '物资', 'en': 'Coins', 'rarity': 1,
+    },
 }
 
 

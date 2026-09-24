@@ -475,10 +475,15 @@
             "title": "Series",
             "type": "integer"
           },
-          "gold": {
-            "default": false,
-            "title": "Gold",
-            "type": "boolean"
+          "scope": {
+            "default": "series",
+            "enum": [
+              "series",
+              "gold",
+              "consumable"
+            ],
+            "title": "Scope",
+            "type": "string"
           }
         },
         "required": [

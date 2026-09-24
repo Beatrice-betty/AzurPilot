@@ -5,8 +5,12 @@
 
 展示口径（用户 2026-09-24 定）：
 - **期数视图**（第 1~9 期）：只统计**彩装备、彩图纸、金图纸**与心智单元；
-- **金装视图**（不分期）：只看**金装备图纸**，所有期数合并。
-其余物品照常入库，只是不出现在这里，将来想扩展口径直接改 SHOW_RARITY 即可。
+- **金装视图**（不分期）：只看**金装备图纸**，所有期数合并；
+- **心智/物资视图**（不分期）：只看**心智单元与物资**，所有期数合并。
+
+不分期的两个口径是必要的：只有彩装备与舰船图纸绑定期数，金装备、心智单元与物资
+都是各期混着出的（见 alas-research-stats 技能文档第六节第 16 条）。
+其余物品照常入库，只是不出现在这里，将来想扩展口径改 should_show 即可。
 """
 
 import json
@@ -28,6 +32,13 @@ RARITY_GOLD = 4
 RARITY_LABELS = {6: '彩', 5: '彩', 4: '金', 3: '紫', 2: '蓝'}
 # 心智单元的模板名，单独放行（它没有 T 品阶后缀，查不到稀有度）
 ALWAYS_SHOW = ('CognitiveChips',)
+
+# 视图口径
+SCOPE_SERIES = 'series'
+SCOPE_GOLD = 'gold'
+SCOPE_CONSUMABLE = 'consumable'
+# 心智/物资视图认的物品（模板名）。这两件不绑期数，各期混着出，所以单开一个不分期的视图。
+CONSUMABLE_ITEMS = ('CognitiveChips', 'Coins')
 # 少数物品的名字推导不出模板名（如心智单元没有 T 后缀），内置兜底
 BUILTIN_NAMES = {
     'CognitiveChips': {'zh': '心智单元', 'en': 'Cognitive Chips', 'rarity': 4},
@@ -95,21 +106,24 @@ def is_gold_equipment(template_name: str) -> bool:
     return (info.get('zh') or '').endswith('设计图')
 
 
-def should_show(template_name: str, gold: bool = False) -> bool:
-    """判断某件掉落是否进入展示口径。
+def should_show(template_name: str, scope: str = SCOPE_SERIES) -> bool:
+    """判断某件掉落是否进入当前视图。
 
-    期数视图只展示彩装备、彩图纸、金图纸与心智单元；金装视图只展示金装备图纸。
-    稀有度来自静态名称表，查不到时（模板没收录进表）一律不展示，避免用乱码占屏。
+    期数视图只展示彩装备、彩图纸、金图纸与心智单元；金装视图只展示金装备图纸；
+    心智/物资视图只展示心智单元与物资。稀有度来自静态名称表，查不到时（模板没
+    收录进表）一律不展示，避免用乱码占屏。
 
     Args:
         template_name (str): 模板文件名（不含扩展名）。
-        gold (bool): True 表示金装视图（不分期，只看金装备图纸）。
+        scope (str): 视图口径，SCOPE_SERIES / SCOPE_GOLD / SCOPE_CONSUMABLE。
 
     Returns:
         bool: 是否展示。
     """
-    if gold:
+    if scope == SCOPE_GOLD:
         return is_gold_equipment(template_name)
+    if scope == SCOPE_CONSUMABLE:
+        return template_name in CONSUMABLE_ITEMS
     if template_name in ALWAYS_SHOW:
         return True
     info = item_info(template_name)
@@ -164,19 +178,19 @@ def _entry_date(entry: dict) -> t.Optional[date]:
     return None
 
 
-def collect(instance: str, days: int = 90, series: int = 0, gold: bool = False) -> dict:
+def collect(instance: str, days: int = 90, series: int = 0, scope: str = SCOPE_SERIES) -> dict:
     """汇总最近若干天的科研掉落。
 
     Args:
         instance (str): ALAS 实例名。
         days (int): 回溯天数。
-        series (int): 只看某一期（1~9）；0 表示最新有记录的一期。金装视图忽略此参数。
-        gold (bool): True 表示金装视图：只看金装备图纸，且把所有期数合并。
+        series (int): 只看某一期（1~9）；0 表示最新有记录的一期。不分期的口径忽略此参数。
+        scope (str): 视图口径，SCOPE_SERIES / SCOPE_GOLD / SCOPE_CONSUMABLE。
 
     Returns:
         dict: {
-            'scope': 'series' 或 'gold',
-            'series': 实际展示的期数（金装视图为 0）,
+            'scope': 视图口径,
+            'series': 实际展示的期数（不分期的口径为 0）,
             'available': 有记录的期数列表（降序）,
             'items': [{'name': 模板名, 'zh': 中文名, 'rarity': ..., 'amount': 总数量,
                        'count': 掉落次数, 'today': 今日数量, 'month': 本月数量}, ...],
@@ -191,7 +205,7 @@ def collect(instance: str, days: int = 90, series: int = 0, gold: bool = False) 
     entries = list(_iter_entries(instance, start, now + timedelta(seconds=1)))
 
     available = sorted({int(e.get('series') or 0) for e in entries if e.get('series')}, reverse=True)
-    if gold:
+    if scope != SCOPE_SERIES:
         picked = entries
     else:
         if series <= 0:
@@ -207,7 +221,7 @@ def collect(instance: str, days: int = 90, series: int = 0, gold: bool = False) 
     for entry in picked:
         stamp = _entry_date(entry)
         for name, amount in (entry.get('items') or {}).items():
-            if not should_show(name, gold=gold):
+            if not should_show(name, scope=scope):
                 continue
             amount = int(amount)
             amount_by_item[name] += amount
@@ -234,8 +248,8 @@ def collect(instance: str, days: int = 90, series: int = 0, gold: bool = False) 
     items.sort(key=lambda item: (-(item['rarity'] or 0), -item['amount'], item['zh']))
 
     return {
-        'scope': 'gold' if gold else 'series',
-        'series': 0 if gold else series,
+        'scope': scope,
+        'series': 0 if scope != SCOPE_SERIES else series,
         'available': available,
         'items': items,
         'total': sum(item['amount'] for item in items),

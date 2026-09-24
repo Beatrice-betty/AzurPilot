@@ -105,9 +105,10 @@ export function Statistics() {
   const [month, setMonth] = useState(() => {const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`})
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('month')
   // 科研期数：0 表示最新有记录的一期，与后端约定一致
-  // 科研视图：'1'~'9' = 各期（默认 9 期），'gold' = 金装统计（所有金装，不分期）
+  // 科研视图：'1'~'9' = 各期（默认 9 期），'gold' = 金装统计，'consumable' = 心智/物资。
+  // 后两个都不分期——金装与心智物资各期混着出，只有彩装备与舰船图纸绑定期数。
   const [researchSeries, setResearchSeries] = useState('9')
-  const researchGold = researchSeries === 'gold'
+  const researchScope = researchSeries === 'gold' || researchSeries === 'consumable' ? researchSeries : 'series'
   const [revision, setRevision] = useState(0)
   const [data, setData] = useState<StatisticsReport>()
   const [error, setError] = useState('')
@@ -126,14 +127,14 @@ export function Statistics() {
     if (connection !== 'ready') return
     let active = true
     setData(undefined); setError('')
-    void api.request('statistics.report', {instance, category, days, month, period, series: researchGold ? 0 : Number(researchSeries), gold: researchGold}).then(value => {if (active) setData(value)}).catch(error => {if (active) setError(error.message)})
+    void api.request('statistics.report', {instance, category, days, month, period, series: researchScope === 'series' ? Number(researchSeries) : 0, scope: researchScope}).then(value => {if (active) setData(value)}).catch(error => {if (active) setError(error.message)})
     return () => {active = false}
   }, [instance, category, days, month, period, researchSeries, connection, revision])
 
   // 静默更新：后端数据更新推送到前端时平滑更新图表与指标，避免 Loading 闪烁
   const silentRefresh = useCallback(() => {
     if (connection !== 'ready') return
-    void api.request('statistics.report', {instance, category, days, month, period, series: researchGold ? 0 : Number(researchSeries), gold: researchGold})
+    void api.request('statistics.report', {instance, category, days, month, period, series: researchScope === 'series' ? Number(researchSeries) : 0, scope: researchScope})
       .then(value => {
         setData(value)
       })
@@ -213,7 +214,7 @@ export function Statistics() {
     {category === 'resources' && <label className="statistics-inline-control" data-tip={ui('stats.range')}><span className="statistics-inline-label">{ui('stats.range')}</span><Select aria-label={ui('stats.days')} value={days} onChange={event => setDays(Number(event.target.value))}>{[1, 7, 30, 90, 365].map(value => <option value={value} key={value}>{ui('stats.recentDays', {days: value})}</option>)}</Select></label>}
     {/* 月份输入框本身就显示「2026年09月」，标签只在提示里出现 */}
     {['action', 'opsi', 'commission'].includes(category!) && <label className="statistics-inline-control" data-tip={ui('stats.month')}><input aria-label={ui('stats.month')} type="month" min="2020-01" max="9998-12" value={month} disabled={category === 'commission' && period !== 'month'} onChange={event => {if (event.target.value) setMonth(event.target.value)}}/></label>}
-    {category === 'research' && <label className="statistics-inline-control" data-tip={ui('stats.researchSeries')}><span className="statistics-inline-label">{ui('stats.researchSeries')}</span><Select aria-label={ui('stats.researchSeries')} value={researchSeries} onChange={event => setResearchSeries(String(event.target.value))}>{[1, 2, 3, 4, 5, 6, 7, 8, 9].map(value => <option value={String(value)} key={value}>{ui('stats.seriesN', {n: value})}</option>)}<option value="gold">{ui('stats.goldScope')}</option></Select></label>}
+    {category === 'research' && <label className="statistics-inline-control" data-tip={ui('stats.researchSeries')}><span className="statistics-inline-label">{ui('stats.researchSeries')}</span><Select aria-label={ui('stats.researchSeries')} value={researchSeries} onChange={event => setResearchSeries(String(event.target.value))}>{[1, 2, 3, 4, 5, 6, 7, 8, 9].map(value => <option value={String(value)} key={value}>{ui('stats.seriesN', {n: value})}</option>)}<option value="gold">{ui('stats.goldScope')}</option><option value="consumable">{ui('stats.consumableScope')}</option></Select></label>}
     {category === 'commission' && <label className="statistics-inline-control" data-tip={ui('stats.period')}><span className="statistics-inline-label">{ui('stats.period')}</span><Select aria-label={ui('stats.commissionPeriod')} value={period} onChange={event => setPeriod(event.target.value as typeof period)}><option value="day">{ui('stats.today')}</option><option value="week">{ui('stats.thisWeek')}</option><option value="month">{ui('stats.selectedMonth')}</option></Select></label>}
   </>
   const hints = <>

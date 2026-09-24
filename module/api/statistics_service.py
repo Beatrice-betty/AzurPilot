@@ -93,7 +93,7 @@ def series(rows, key, label):
     return {'key': key, 'label': label, 'points': points}
 
 
-def report(configs, instance, category, month, days, period, research_series=0, research_gold=False):
+def report(configs, instance, category, month, days, period, research_series=0, research_scope='series'):
     configs.path(instance)
     now = datetime.now()
     try:
@@ -213,27 +213,32 @@ def report(configs, instance, category, month, days, period, research_series=0, 
         daily = [{'ts': key, **value} for key, value in sorted(data.get('daily_stats', {}).items())]
         result['series'] = [series(daily, 'total_exp_gained', '每日经验'), series(daily, 'battle_count', '每日战斗'), series(daily, 'total_run_time', '每日运行秒数')]
     elif category == 'research':
-        from module.statistics.research_stats import collect, RARITY_LABELS
-        summary = collect(instance, days=days, series=research_series, gold=research_gold)
+        from module.statistics.research_stats import (
+            collect, RARITY_LABELS, SCOPE_SERIES, SCOPE_GOLD, SCOPE_CONSUMABLE)
+        summary = collect(instance, days=days, series=research_series, scope=research_scope)
         columns = ['图标', '物品', '稀有度', '数量', '获得次数']
         # 走表格的 note 而不是 notes：前端只渲染 tables，notes 仅在导出 CSV 时用到，
         # 放在那里用户界面上什么都看不到（会以为功能坏了）。
-        if summary['scope'] == 'gold':
+        if summary['scope'] == SCOPE_GOLD:
             title = '金装统计（全部期数）'
             note = ('金装 = 稀有度 4 的装备图纸，全部期数合并统计。'
-                    '彩装备、图纸与心智单元看各期视图。图标暂用当前物品模板。')
+                    '彩装备、图纸、心智与物资看其它视图。图标暂用当前物品模板。')
+        elif summary['scope'] == SCOPE_CONSUMABLE:
+            title = '心智/物资统计（全部期数）'
+            note = ('心智单元与物资不绑期数、各期混着出，所以这里不分期统计。'
+                    '图标暂用当前物品模板。')
         else:
             title = f'第 {summary["series"]} 期掉落'
-            note = ('只统计彩装备、彩图纸、金图纸与心智单元；'
-                    '金装备图纸在「金装统计」里单独看。图标暂用当前物品模板。')
+            note = ('只统计彩装备、彩图纸、金图纸与心智单元；金装备在「金装统计」、'
+                    '心智与物资在「心智/物资」里单独看。图标暂用当前物品模板。')
         if not summary['records']:
-            if summary['scope'] == 'gold' or not summary['available']:
+            if summary['scope'] == SCOPE_SERIES and summary['available']:
+                hint = (f'第 {summary["series"]} 期还没有记录；有记录的期数：'
+                        + '、'.join(f'第 {item} 期' for item in summary['available']))
+            else:
                 hint = ('还没有科研掉落记录。统计在领奖时自动完成：'
                         '把「科研截图」设为「保存」或「上传」即可（两者都会统计，'
                         '区别只是要不要把截图落盘）。')
-            else:
-                hint = (f'第 {summary["series"]} 期还没有记录；有记录的期数：'
-                        + '、'.join(f'第 {item} 期' for item in summary['available']))
             result['tables'].append(table(title, columns, [], note=hint))
             return result
         if not summary['items']:
@@ -252,7 +257,7 @@ def report(configs, instance, category, month, days, period, research_series=0, 
             title, columns, rows, note=note,
             default_sort={'index': 3, 'descending': True},
         ))
-        if summary['scope'] != 'gold':
+        if summary['scope'] == SCOPE_SERIES:
             result['notes'].append(
                 f'当前展示第 {summary["series"]} 期；有记录的期数：'
                 + ('、'.join(f'第 {item} 期' for item in summary['available']) if summary['available'] else '无'))
