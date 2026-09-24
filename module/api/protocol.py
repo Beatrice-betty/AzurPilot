@@ -95,8 +95,10 @@ class StatisticsReportParams(InstanceParams):
     month: StrictStr | None = Field(default=None, pattern=r'^\d{4}-(0[1-9]|1[0-2])$')
     days: StrictInt = Field(default=7, ge=1, le=365)
     period: Literal['day', 'week', 'month'] = 'month'
-    # 科研统计专用：只看某一期，0 表示最新有记录的一期
+    # 科研统计专用：只看某一期（1~9），0 表示最新有记录的一期（界面不再提供该项）
     series: StrictInt = Field(default=0, ge=0, le=20)
+    # 科研统计专用：金装视图——只看金装备图纸，且把所有期数合并，此时忽略 series
+    gold: StrictBool = Field(default=False)
 
 
 class MeowfficerScoreReportParams(InstanceParams):

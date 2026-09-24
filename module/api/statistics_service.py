@@ -93,7 +93,7 @@ def series(rows, key, label):
     return {'key': key, 'label': label, 'points': points}
 
 
-def report(configs, instance, category, month, days, period, research_series=0):
+def report(configs, instance, category, month, days, period, research_series=0, research_gold=False):
     configs.path(instance)
     now = datetime.now()
     try:
@@ -214,35 +214,48 @@ def report(configs, instance, category, month, days, period, research_series=0):
         result['series'] = [series(daily, 'total_exp_gained', '每日经验'), series(daily, 'battle_count', '每日战斗'), series(daily, 'total_run_time', '每日运行秒数')]
     elif category == 'research':
         from module.statistics.research_stats import collect, RARITY_LABELS
-        summary = collect(instance, days=days, series=research_series)
-        if not summary['available']:
-            # 走表格的 note 而不是 notes：前端只渲染 tables，notes 仅在导出 CSV 时用到，
-            # 放在那里用户界面上什么都看不到（会以为功能坏了）。
-            result['tables'].append(table(
-                '科研掉落', ['图标', '物品', '稀有度', '数量', '获得次数'], [],
-                note='还没有科研掉落记录。统计在领奖时自动完成：'
-                     '把「科研截图」设为「保存」或「上传」即可（两者都会统计，'
-                     '区别只是要不要把截图落盘）。'))
+        summary = collect(instance, days=days, series=research_series, gold=research_gold)
+        columns = ['图标', '物品', '稀有度', '数量', '获得次数']
+        # 走表格的 note 而不是 notes：前端只渲染 tables，notes 仅在导出 CSV 时用到，
+        # 放在那里用户界面上什么都看不到（会以为功能坏了）。
+        if summary['scope'] == 'gold':
+            title = '金装统计（全部期数）'
+            note = ('金装 = 稀有度 4 的装备图纸，全部期数合并统计。'
+                    '彩装备、图纸与心智单元看各期视图。图标暂用当前物品模板。')
+        else:
+            title = f'第 {summary["series"]} 期掉落'
+            note = ('只统计彩装备、彩图纸、金图纸与心智单元；'
+                    '金装备图纸在「金装统计」里单独看。图标暂用当前物品模板。')
+        if not summary['records']:
+            if summary['scope'] == 'gold' or not summary['available']:
+                hint = ('还没有科研掉落记录。统计在领奖时自动完成：'
+                        '把「科研截图」设为「保存」或「上传」即可（两者都会统计，'
+                        '区别只是要不要把截图落盘）。')
+            else:
+                hint = (f'第 {summary["series"]} 期还没有记录；有记录的期数：'
+                        + '、'.join(f'第 {item} 期' for item in summary['available']))
+            result['tables'].append(table(title, columns, [], note=hint))
             return result
+        if not summary['items']:
+            note += '本口径内暂时没有掉落。'
         metric('掉落记录', summary['records'], '次')
         metric('物品种类', len(summary['items']), '种')
         metric('掉落总数', summary['total'])
+        metric('今日总计', summary['today'])
+        metric('本月总计', summary['month'])
         rows = [
             [f'research:{item["name"]}', item['zh'],
              RARITY_LABELS.get(item.get('rarity'), '—'), item['amount'], item['count']]
             for item in summary['items']
         ]
         result['tables'].append(table(
-            f'第 {summary["series"]} 期掉落',
-            ['图标', '物品', '稀有度', '数量', '获得次数'],
-            rows,
-            note='只统计彩装备、彩图纸、金图纸与心智单元；其余物品照常入库但不在此展示。'
-                 '图标暂用当前物品模板。',
+            title, columns, rows, note=note,
             default_sort={'index': 3, 'descending': True},
         ))
-        result['notes'].append(
-            f'当前展示第 {summary["series"]} 期；有记录的期数：'
-            + ('、'.join(f'第 {item} 期' for item in summary['available']) if summary['available'] else '无'))
+        if summary['scope'] != 'gold':
+            result['notes'].append(
+                f'当前展示第 {summary["series"]} 期；有记录的期数：'
+                + ('、'.join(f'第 {item} 期' for item in summary['available']) if summary['available'] else '无'))
     elif category == 'loot':
         from module.statistics.azurstats import AzurStats
         rows = []

@@ -474,6 +474,11 @@
             "minimum": 0,
             "title": "Series",
             "type": "integer"
+          },
+          "gold": {
+            "default": false,
+            "title": "Gold",
+            "type": "boolean"
           }
         },
         "required": [
