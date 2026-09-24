@@ -13,7 +13,8 @@ export interface StatisticsPrefs {
   category: StatisticsCategory
   days: number
   period: CommissionPeriod
-  researchSeries: number
+  /** 科研页面的视图：'1'~'9' 是各期，'gold' 是金装统计，'consumable' 是心智/物资 */
+  researchSelect: string
   chartMode: ChartMode
   chartAxisMode: ChartAxisMode
   bucket: number
@@ -28,12 +29,13 @@ export const VALID_PERIODS: readonly CommissionPeriod[] = ['day', 'week', 'month
 export const VALID_BUCKETS: readonly number[] = [0, 5, 60, 1440]
 export const VALID_CHART_MODES: readonly ChartMode[] = ['line', 'candlestick']
 export const VALID_AXIS_MODES: readonly ChartAxisMode[] = ['separate', 'unified']
+export const VALID_RESEARCH_SELECTS: readonly string[] = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'gold', 'consumable']
 
 export const DEFAULT_STATISTICS_PREFS: StatisticsPrefs = {
   category: 'resources',
   days: 7,
   period: 'month',
-  researchSeries: 0,
+  researchSelect: '9',
   chartMode: 'line',
   chartAxisMode: 'separate',
   bucket: 0,
@@ -56,9 +58,9 @@ export function readStatisticsPrefs(): StatisticsPrefs {
       const period = VALID_PERIODS.includes(obj.period as CommissionPeriod)
         ? (obj.period as CommissionPeriod)
         : DEFAULT_STATISTICS_PREFS.period
-      const researchSeries = typeof obj.researchSeries === 'number' && obj.researchSeries >= 0
-        ? Math.floor(obj.researchSeries)
-        : DEFAULT_STATISTICS_PREFS.researchSeries
+      const researchSelect = VALID_RESEARCH_SELECTS.includes(obj.researchSelect as string)
+        ? (obj.researchSelect as string)
+        : DEFAULT_STATISTICS_PREFS.researchSelect
       const chartMode = VALID_CHART_MODES.includes(obj.chartMode as ChartMode)
         ? (obj.chartMode as ChartMode)
         : DEFAULT_STATISTICS_PREFS.chartMode
@@ -82,7 +84,7 @@ export function readStatisticsPrefs(): StatisticsPrefs {
         category,
         days,
         period,
-        researchSeries,
+        researchSelect,
         chartMode,
         chartAxisMode,
         bucket,

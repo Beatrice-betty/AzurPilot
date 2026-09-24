@@ -474,6 +474,16 @@
             "minimum": 0,
             "title": "Series",
             "type": "integer"
+          },
+          "scope": {
+            "default": "series",
+            "enum": [
+              "series",
+              "gold",
+              "consumable"
+            ],
+            "title": "Scope",
+            "type": "string"
           }
         },
         "required": [

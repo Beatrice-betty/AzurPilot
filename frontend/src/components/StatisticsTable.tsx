@@ -26,11 +26,11 @@ const resourceIcons: Record<string, string> = {
 
 // 科研掉落用仓库里的模板图当图标，后端把 /research-items 挂到 assets/stats/research_items，
 // 不走前端构建，补了新模板立刻生效。单元格值形如 'research:BlueprintValparaiso'。
-const RESEARCH_PREFIX = 'research:'
-function resolveIcon(value: string): {src: string, label: string} | undefined {
+export const RESEARCH_PREFIX = 'research:'
+export function resolveIcon(value: string): {src: string, label: string} | undefined {
   if (value.startsWith(RESEARCH_PREFIX)) {
     const name = value.slice(RESEARCH_PREFIX.length)
-    // 图标列不重复显示模板名：它很长（Prototype_Quadruple_305mm_..._T0）会把列撑爆，
+    // 图标列不重复显示模板名：它很长（Prototype_Quadruple_610mm_Cruiser_...）会把列撑爆，
     // 而中文名在「物品」列已经有了；搜索也走那一列。
     return {src: `${iconBase}research-items/${name}.png`, label: ''}
   }

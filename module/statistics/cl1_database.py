@@ -1705,6 +1705,7 @@ class Cl1Database:
         *,
         imgid: str = '',
         completed_at: Optional[datetime] = None,
+        ts: Optional[datetime] = None,
     ) -> Optional[Dict[str, Any]]:
         """记录一次科研领奖的掉落。
 
@@ -1717,7 +1718,9 @@ class Cl1Database:
             series (int): 科研期数；未识别时传 0。
             items (Dict[str, int]): {物品模板名: 数量}。
             imgid (str): 掉落记录文件名，用于去重。
-            completed_at (Optional[datetime]): 领奖时间，缺省取当前时间。
+            completed_at (Optional[datetime]): 领奖时间，缺省取记录时间。
+            ts (Optional[datetime]): 记录时间，同时决定写进哪个月份分区；缺省取当前时间。
+                导入历史截图时传截图时间，否则「今日/本月」会落在导入那天。
 
         Returns:
             Optional[Dict[str, Any]]: 写入的条目；重复或空掉落返回 None。
@@ -1726,11 +1729,11 @@ class Cl1Database:
         if not items:
             return None
 
-        now = datetime.now()
-        month = f"{now.year:04d}-{now.month:02d}"
+        stamp = ts or datetime.now()
+        month = f"{stamp.year:04d}-{stamp.month:02d}"
         entry = {
-            "ts": now.isoformat(),
-            "completed_at": (completed_at or now).isoformat(),
+            "ts": stamp.isoformat(),
+            "completed_at": (completed_at or stamp).isoformat(),
             "imgid": str(imgid or ''),
             "project": str(project or ''),
             "series": self._coerce_int(series or 0),
