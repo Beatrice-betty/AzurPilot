@@ -123,14 +123,14 @@ class ResearchReportLayoutTest(unittest.TestCase):
         self.enterContext(patch.object(self.api, 'datetime', FrozenDatetime))
         self.configs = SimpleNamespace(path=Mock())
 
-    def consumable(self, month=None):
-        return self.api.report(self.configs, 'alas', 'research', month, 365, 'month', 0, 'consumable')
+    def consumable(self, month='2026-09', period='month'):
+        return self.api.report(self.configs, 'alas', 'research', month, 365, period, 0, 'consumable')
 
     def series(self, month='2026-09'):
         return self.api.report(self.configs, 'alas', 'research', month, 7, 'month', 9, 'series')
 
     def test_consumable_has_the_same_sections_and_columns_as_series(self):
-        consumable = self.consumable('2026-09')
+        consumable = self.consumable()
         series = self.series()
         self.assertEqual([item['title'] for item in consumable['tables']],
                          ['心智/物资收获明细', '掉落记录'])
@@ -141,42 +141,48 @@ class ResearchReportLayoutTest(unittest.TestCase):
 
     def test_consumable_cards_list_both_items_then_time_totals(self):
         """卡片行：掉落记录、每件物品一张带图标的卡，再跟上三档时间总计。"""
-        metrics = self.consumable('2026-09')['metrics']
+        metrics = self.consumable()['metrics']
         self.assertEqual([item['label'] for item in metrics],
                          ['掉落记录', '心智单元', '物资', '今日总计', '本月总计', '选定月份总计'])
         self.assertEqual([item.get('icon') for item in metrics],
                          [None, 'research:CognitiveChips', 'research:Coins', None, None, None])
-        # 掉落记录 = 掉了心智/物资的次数（三条都掉了）；心智单元 40；物资 120+88+30
-        self.assertEqual([item['value'] for item in metrics[:3]], [3, 40, 238])
+        # 掉落记录 = 本月掉了心智/物资的次数（两条都掉了）；心智单元 40；物资 120+88
+        self.assertEqual([item['value'] for item in metrics[:3]], [2, 40, 208])
+
+    def test_period_selects_the_table_window(self):
+        """汇总周期决定表格与物品卡的窗口：选今日就只看当天。"""
+        metrics = self.consumable(period='day')['metrics']
+        self.assertEqual([item['value'] for item in metrics[:3]], [1, None, 120])
+        self.assertEqual(len(self.consumable(period='day')['tables'][1]['rows']), 1)
 
     def test_time_totals_are_per_window(self):
-        """今日 / 本月 / 选定月份各按自己的窗口算（选上个月时第三张跟着变）。"""
-        today, this_month, selected = self.consumable('2026-09')['metrics'][3:]
+        """今日 / 本月 / 选定月份各按自己的窗口算，不受汇总周期影响。"""
+        today, this_month, selected = self.consumable()['metrics'][3:]
         self.assertEqual([today['value'], this_month['value'], selected['value']], [120, 248, 248])
-        last_month = self.consumable('2026-08')['metrics'][5]
+        last_month = self.consumable(month='2026-08')['metrics'][5]
         self.assertEqual(last_month['value'], 30)
 
     def test_consumable_detail_keeps_a_row_per_item(self):
         """没掉过的物品也留一行（显示「—」），与期数视图的固定清单一致。"""
-        rows = self.consumable('2026-09')['tables'][0]['rows']
+        rows = self.consumable()['tables'][0]['rows']
         self.assertEqual([row[1] for row in rows], ['心智单元', '物资'])
         self.assertEqual([row[2] for row in rows], ['金', '—'])
-        self.assertEqual([row[3] for row in rows], [40, 238])
+        self.assertEqual([row[3] for row in rows], [40, 208])
 
     def test_consumable_detail_shows_dash_for_missing_item(self):
         """没掉过的那件留空行显示「—」，而不是整行消失。"""
         self.entries[:] = [item for item in self.entries if 'CognitiveChips' not in item['items']]
-        rows = self.consumable('2026-09')['tables'][0]['rows']
+        rows = self.consumable()['tables'][0]['rows']
         self.assertEqual([row[1] for row in rows], ['心智单元', '物资'])
         self.assertIsNone(rows[0][3])
         self.assertIsNone(rows[0][4])
-        # 去掉心智单元那条后，物资只剩 120 + 30
-        self.assertEqual(rows[1][3], 150)
+        # 窗口是本月（2026-09），只剩本月 15 日那条的 120
+        self.assertEqual(rows[1][3], 120)
 
     def test_consumable_records_exclude_series_only_items(self):
         """掉落记录只列本视图认的物品：那次的船图纸不算进心智/物资口径。"""
-        records = self.consumable('2026-09')['tables'][1]['rows']
-        self.assertEqual(len(records), 3)
+        records = self.consumable()['tables'][1]['rows']
+        self.assertEqual(len(records), 2)
         for row in records:
             with self.subTest(row=row):
                 self.assertNotIn('蓝图', row[3])

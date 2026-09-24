@@ -132,6 +132,11 @@ def _research_record_rows(instance, start, end, scope):
     return rows
 
 
+def _month_end(moment):
+    """该时刻所在月份的下月 1 号（0 点）。"""
+    return (moment.replace(day=28) + timedelta(days=4)).replace(day=1)
+
+
 def report(configs, instance, category, month, days, period, research_series=0, research_scope='series'):
     configs.path(instance)
     now = datetime.now()
@@ -264,21 +269,29 @@ def report(configs, instance, category, month, days, period, research_series=0, 
         # 下面原始掉落记录——前端按数据形状渲染，这里保持一致即得一致版式。
         detail_columns = ['图标', '物品', '稀有度', '总收益', '掉落记录数', '平均每次掉落']
         record_columns = ['时间', '项目', '期数', '掉落物']
+        # 两个视图都照委托收益的样子按「汇总周期」框时间（period=month 看选定月份，
+        # day/week 看今天/本周）；差别只在期数视图还按期过滤。
+        start = selected.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        end = _month_end(start)
+        if period != 'month':
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            if period == 'week':
+                start -= timedelta(days=start.weekday())
+            end = now
+
         if research_scope != SCOPE_SERIES:
-            # 唯一区别是这里不分期：心智单元与物资各期混着出。
-            summary = collect(instance, days=days, series=research_series, scope=research_scope)
+            # 不分期：心智单元与物资各期混着出，只有时间范围跟着「汇总周期」走。
+            summary = collect(instance, series=research_series, scope=research_scope, start=start, end=end)
             title = '心智/物资收获明细'
-            note = (f'心智单元与物资不绑期数、各期混着出，所以这里不分期统计'
-                    f'（统计最近 {days} 天）；清单里没掉过的也留一行，便于对照。'
+            note = ('心智单元与物资不绑期数、各期混着出，所以这里不分期统计'
+                    '（时间范围跟着「汇总周期」走）；清单里没掉过的也留一行，便于对照。'
                     '图标暂用当前物品模板。')
             if not summary['records']:
                 result['tables'].append(table(title, detail_columns, [], note=(
-                    '还没有科研掉落记录。统计在领奖时自动完成：'
-                    '把「科研截图」设为「保存」或「上传」即可（两者都会统计，'
-                    '区别只是要不要把截图落盘）。')))
+                    '这段时间里没有掉落记录。「汇总周期」选今天/本周时窗口很短，'
+                    '改成「选定月份」能看得更多；统计在领奖时自动完成，把「科研截图」设为'
+                    '「保存」或「上传」即可（两者都会统计，区别只是要不要把截图落盘）。')))
                 return result
-            start = now - timedelta(days=max(1, days))
-            end = now + timedelta(seconds=1)
             record_rows = _research_record_rows(instance, start, end, research_scope)
             metric('掉落记录', len(record_rows), '次')
             by_name = {item['name']: item for item in summary['items']}
@@ -293,15 +306,21 @@ def report(configs, instance, category, month, days, period, research_series=0, 
                              amount or None, (entry['count'] if entry else 0) or None,
                              (entry['avg'] if entry else 0) or None])
                 metric(info['zh'], amount or None, icon=f'research:{name}')
-            # 三档时间总计：表格按「最近 days 天」统计，这里再给出今日/本月/选定月份
-            # 三个窗口的合计，免得为了看某一天或某个月还得改统计天数。
-            month_start = selected.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            month_end = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
-            month_summary = collect(instance, series=research_series, scope=research_scope,
-                                    start=month_start, end=month_end)
-            metric('今日总计', summary['today'] or None)
-            metric('本月总计', summary['month'] or None)
-            metric('选定月份总计', month_summary['total'] or None)
+            # 三档时间总计固定看今日 / 本月 / 选定月份，不受上面「汇总周期」影响；
+            # 三者窗口常常重合（选的就是本月时是同一个），同窗口只查一次库。
+            windows = (
+                ('今日总计', now.replace(hour=0, minute=0, second=0, microsecond=0), now + timedelta(seconds=1)),
+                ('本月总计', now.replace(day=1, hour=0, minute=0, second=0, microsecond=0), None),
+                ('选定月份总计', selected.replace(day=1, hour=0, minute=0, second=0, microsecond=0), None),
+            )
+            totals = {}
+            for label, begin, finish in windows:
+                finish = _month_end(begin) if finish is None else finish
+                if (begin, finish) not in totals:
+                    totals[(begin, finish)] = collect(
+                        instance, series=research_series, scope=research_scope,
+                        start=begin, end=finish)['total']
+                metric(label, totals[(begin, finish)] or None)
             result['tables'].append(table(
                 title, detail_columns, rows, note=note,
                 default_sort={'index': 3, 'descending': True},
@@ -314,16 +333,6 @@ def report(configs, instance, category, month, days, period, research_series=0, 
             ))
             return result
 
-        # 期数视图照委托收益的样子来：按「汇总周期」框一段时间（period=month 看选定月份，
-        # day/week 看今天/本周），再取该期的记录；上面是每期船图纸与彩装的收益卡片，
-        # 下面是收获明细与原始掉落记录。
-        start = selected.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        end = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
-        if period != 'month':
-            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            if period == 'week':
-                start -= timedelta(days=start.weekday())
-            end = now
         summary = collect(instance, series=research_series, scope=SCOPE_SERIES, start=start, end=end)
         title = f'第 {summary["series"]} 期收获明细'
         note = ('每期只统计该期各艘船的图纸与该期的彩装图纸；'

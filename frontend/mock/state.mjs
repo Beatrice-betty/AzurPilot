@@ -492,7 +492,7 @@ export function createMockState({ empty = false } = {}) {
               {
                 title: '心智/物资收获明细',
                 columns: ['图标', '物品', '稀有度', '总收益', '掉落记录数', '平均每次掉落'],
-                note: '心智单元与物资不绑期数、各期混着出，所以这里不分期统计（统计最近 365 天）；清单里没掉过的也留一行，便于对照。图标暂用当前物品模板。',
+                note: '心智单元与物资不绑期数、各期混着出，所以这里不分期统计（时间范围跟着「汇总周期」走）；清单里没掉过的也留一行，便于对照。图标暂用当前物品模板。',
                 defaultSort: { index: 3, descending: true },
                 rows: items.map(([key, zh, rarity, amount, count]) => [
                   `research:${key}`, zh, rarity, amount || null, count || null, count ? 1.5 : null
