@@ -6,6 +6,7 @@ export interface Instance { name: string; status: Status; serial: string; server
 export interface UpdateStatus {
   state: string; localHead: string | null; upstreamHead: string | null; branch: string
   ahead: number; behind: number; available: boolean; busy: boolean; canApply: boolean; canCancel: boolean; error: string
+  managedByAndroid?: boolean
 }
 export interface Commit { sha: string; author: string; date: string; message: string }
 export interface CommitHistory { entries: Commit[]; total: number; hasMore: boolean; localHead: string | null; upstreamHead: string | null }
