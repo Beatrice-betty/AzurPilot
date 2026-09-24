@@ -431,6 +431,7 @@
 @media (max-width: 950px) {
   .instance-tabs {display: none}
   .topbar {gap: 8px}
+  .topbar-actions-hover, .topbar-actions-buttons, .topbar-mode-toggle, .topbar-tab-size {display: none !important}
   .sidebar {z-index: 100}
   .topbar-right {gap: 8px}
   .topbar-right .connection-label span {display: none}
