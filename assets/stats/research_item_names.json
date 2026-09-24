@@ -209,6 +209,11 @@
   "rarity": 4,
   "zh": "蓝图：大山"
  },
+ "BlueprintDmitriDonskoi": {
+  "en": "Blueprint - Dmitri Donskoi",
+  "rarity": 4,
+  "zh": "蓝图：迪米特里·顿斯科伊"
+ },
  "BlueprintDrake": {
   "en": "Blueprint - Drake",
   "rarity": 5,
@@ -349,6 +354,11 @@
   "rarity": 5,
   "zh": "蓝图：马克斯·殷麦曼"
  },
+ "BlueprintMecklenburg": {
+  "en": "Blueprint - Mecklenburg",
+  "rarity": 5,
+  "zh": "蓝图：梅克伦堡"
+ },
  "BlueprintMonarch": {
   "en": "Blueprint - Monarch",
   "rarity": 4,
@@ -438,6 +448,21 @@
   "en": "Blueprint - Vittorio Cuniberti",
   "rarity": 4,
   "zh": "蓝图：维托里奥·库尼贝尔蒂"
+ },
+ "CognitiveChips": {
+  "en": "Cognitive Chips",
+  "rarity": 4,
+  "zh": "心智单元"
+ },
+ "CognitiveChips_2": {
+  "en": "Cognitive Chips",
+  "rarity": 4,
+  "zh": "心智单元"
+ },
+ "Coins": {
+  "en": "Coins",
+  "rarity": 1,
+  "zh": "物资"
  },
  "F2A_Buffalo_T3": {
   "en": "T3 F2A Buffalo Design",
@@ -564,6 +589,16 @@
   "rarity": 4,
   "zh": "试作舰载型BF-109GT0设计图"
  },
+ "Prototype_Carrier_Based_La_9_T0": {
+  "en": "Prototype Carrier-Based La-9 T0 Design",
+  "rarity": 5,
+  "zh": "试作舰载型La-9T0设计图"
+ },
+ "Prototype_Carrier_Based_La_9_T0_2": {
+  "en": "Prototype Carrier-Based La-9 T0 Design",
+  "rarity": 5,
+  "zh": "试作舰载型La-9T0设计图"
+ },
  "Prototype_Carrier_Based_Ta_152_C_1_R14_T0": {
   "en": "Prototype Carrier-Based Ta 152 C-1/R14 T0 Design",
   "rarity": 5,
@@ -574,10 +609,20 @@
   "rarity": 5,
   "zh": "试作舰载型Ta 152C-1/R14T0设计图"
  },
+ "Prototype_F8F_Bearcat_Float_T0": {
+  "en": "Prototype F8F Bearcat (Float) T0 Design",
+  "rarity": 4,
+  "zh": "试作型F8F熊猫（浮筒型）T0设计图"
+ },
  "Prototype_Quadruple_305mm_SKC39_Main_Gun_Mount_T0": {
   "en": "Prototype Quadruple 305mm SKC39 Main Gun Mount T0 Design",
   "rarity": 5,
   "zh": "试作型四联装305mmSKC39主炮T0设计图"
+ },
+ "Prototype_Quadruple_533mm_Si_270_Torpedo_Mount_T0": {
+  "en": "Prototype Quadruple 533mm Si 270 Torpedo Mount T0 Design",
+  "rarity": 4,
+  "zh": "试作型四联装533毫米鱼雷Si 270T0设计图"
  },
  "Prototype_Quadruple_610mm_Cruiser_Torpedo_Mount_T0": {
   "en": "Prototype Quadruple 610mm Cruiser Torpedo Mount T0 Design",
@@ -624,6 +669,11 @@
   "rarity": 4,
   "zh": "试作型三联装203mm舰炮T0设计图"
  },
+ "Prototype_Triple_203mm_SKC_Main_Gun_Mount_T0": {
+  "en": "Prototype Triple 203mm SKC Main Gun Mount T0 Design",
+  "rarity": 5,
+  "zh": "试作型三联装203mmSKC主炮改T0设计图"
+ },
  "Prototype_Triple_380mm_Mle_1935_Main_Gun_Mount_T0": {
   "en": "Prototype Triple 380mm Mle 1935 Main Gun Mount T0 Design",
   "rarity": 4,
@@ -668,6 +718,11 @@
   "en": "Prototype Twin 127mm Mle 1948 Naval Gun T0 Design",
   "rarity": 4,
   "zh": "试作型双联装127mm主炮Mle1948T0设计图"
+ },
+ "Prototype_Twin_410mm_mod_A_Main_Gun_Mount_T0": {
+  "en": "Prototype Twin 410mm mod.A Main Gun Mount T0 Design",
+  "rarity": 4,
+  "zh": "试作型双联装410mm主炮mod.AT0设计图"
  },
  "Prototype_Twin_90mm_Model_1939_High_Angle_Gun_T0": {
   "en": "Prototype Twin 90mm Model 1939 High Angle Gun T0 Design",
