@@ -739,6 +739,21 @@
         "type": "object"
       }
     },
+    "announcement.get": {
+      "mutates": false,
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          }
+        },
+        "title": "AnnouncementParams",
+        "type": "object"
+      }
+    },
     "events.subscribe": {
       "mutates": false,
       "params": {

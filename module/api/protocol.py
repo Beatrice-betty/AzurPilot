@@ -30,6 +30,11 @@ class AuthParams(Params):
     password: StrictStr = Field(default='', max_length=256)
 
 
+class AnnouncementParams(Params):
+    """公告查询参数。"""
+    force: StrictBool = False
+
+
 class SchemaParams(Params):
     language: Literal['zh-CN', 'zh-MIAO', 'en-US', 'ja-JP', 'zh-TW'] = 'zh-CN'
 

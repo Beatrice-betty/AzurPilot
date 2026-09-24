@@ -1,9 +1,10 @@
 import { PasswordInput, Select } from '../components/FormControls'
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type MouseEvent, type ChangeEvent } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowRight, CalendarClock, ChartNoAxesCombined, Code2, Compass, FileJson, GalleryHorizontal, LayoutDashboard, Globe, House, Download, ExternalLink, Maximize2, Menu, Minimize2, Palette, PanelTop, Settings2, WifiOff, X } from 'lucide-react'
+import { ArrowRight, CalendarClock, ChartNoAxesCombined, Code2, Compass, FileJson, GalleryHorizontal, LayoutDashboard, Globe, House, Download, ExternalLink, Maximize2, Megaphone, Menu, Minimize2, Palette, PanelTop, Settings2, WifiOff, X } from 'lucide-react'
 import { api } from '../api/client'
 import { useApp, useConnection } from './context'
+import { useAnnouncement } from './announcement'
 import { ErrorBox, Loading, Modal } from '../components/ui'
 import { GlassMaterial } from '../components/GlassMaterial'
 import { InstanceSwitcher } from '../components/InstanceSwitcher'
@@ -25,7 +26,7 @@ import { cycleTabSize, readLastPath, readTabSize, readTopbarMode, setTopbarMode,
 import { INSTANCE_NAME_PATTERN } from './instanceName'
 
 /* 旧版外壳下也要显示居中页名的顶层路由。 */
-const PRIMARY_NAV_PATHS = ['/updater', '/interface', '/remote', '/configs', '/settings', '/dev']
+const PRIMARY_NAV_PATHS = ['/announcement', '/updater', '/interface', '/remote', '/configs', '/settings', '/dev']
 
 export function CreateInstance({onClose, startWithImport = false}: {onClose: () => void; startWithImport?: boolean}) {
   const [name, setName] = useState('')
@@ -130,13 +131,14 @@ export function App() {
      刷新时地址栏已经是用户要停留的页面，写进去就不再改。 */
   const freshOpen = useRef((performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type === 'navigate')
   const update = useUpdater()
+  const announcement = useAnnouncement()
   usePageMotion()
   useGlassPointerLight()
   const current = instances.find(item => item.name === instance)
   const base = instance ? `/i/${instance}` : ''
   const taskMatch = location.pathname.match(/\/task\/([^/]+)/)
   const currentTask = taskMatch ? taskMatch[1] : null
-  const activeSection = location.pathname.includes('/task/') ? ui('nav.taskConfig') : location.pathname.endsWith('/statistics') ? ui('nav.statistics') : location.pathname.endsWith('/settings') ? ui('nav.settings') : location.pathname.endsWith('/interface') ? ui('nav.interface') : location.pathname.endsWith('/remote') ? ui('nav.remote') : location.pathname.endsWith('/updater') ? ui('nav.updater') : location.pathname.endsWith('/configs') ? ui('nav.configs') : location.pathname.endsWith('/dev') ? ui('nav.developer') : instance ? instance : ui('nav.home')
+  const activeSection = location.pathname.includes('/task/') ? ui('nav.taskConfig') : location.pathname.endsWith('/statistics') ? ui('nav.statistics') : location.pathname.endsWith('/announcement') ? ui('nav.announcement') : location.pathname.endsWith('/settings') ? ui('nav.settings') : location.pathname.endsWith('/interface') ? ui('nav.interface') : location.pathname.endsWith('/remote') ? ui('nav.remote') : location.pathname.endsWith('/updater') ? ui('nav.updater') : location.pathname.endsWith('/configs') ? ui('nav.configs') : location.pathname.endsWith('/dev') ? ui('nav.developer') : instance ? instance : ui('nav.home')
   function handleBrandLogoClick(event: MouseEvent<HTMLImageElement>) {
     if (devMode || !recordDevLogoClick()) return
     event.preventDefault()
@@ -239,7 +241,7 @@ export function App() {
       <div className={`sidebar-brand ${legacyShell || legacyHomeShell ? 'legacy-sidebar-actions' : ''}`.trim()}><div className="sidebar-brand-left">{brand}</div><button className="mobile-close icon-button" aria-label={ui('nav.close')} onClick={() => setMobileOpen(false)}><X size={18}/></button></div>
       <SidebarTransition viewKey={instance ? `instance:${instance}` : 'global'}>
         <nav className="primary-nav" aria-label={ui('nav.primary')}>
-          {instance ? <><NavLink to={`${base}/overview`} onClick={closeDrawer}><LayoutDashboard size={17}/>{ui('nav.overview')}</NavLink><NavLink to={`${base}/statistics`} onClick={closeDrawer}><ChartNoAxesCombined size={17}/>{ui('nav.statistics')}</NavLink></> : <><NavLink to="/" end onClick={closeDrawer}><House size={17}/>{ui('nav.home')}</NavLink><NavLink to="/updater" onClick={closeDrawer}><Download size={17}/>{ui('nav.updater')}{updateAvailable && <span className="tiny-dot teal"/>}</NavLink><NavLink to="/interface" onClick={closeDrawer}><Palette size={17}/>{ui('nav.interface')}</NavLink><NavLink to="/remote" onClick={closeDrawer}><Globe size={17}/>{ui('nav.remote')}</NavLink><NavLink to="/configs" onClick={closeDrawer}><FileJson size={17}/>{ui('nav.configs')}</NavLink><NavLink to="/settings" onClick={closeDrawer}><Settings2 size={17}/>{ui('nav.settings')}</NavLink><NavLink to="/dev" onClick={closeDrawer}><Code2 size={17}/>{ui('nav.developer')}</NavLink><a className="nav-open-source" href="https://github.com/wess09/AzurPilot" target="_blank" rel="noreferrer" onClick={closeDrawer}><ExternalLink size={17}/>{ui('nav.openSource')}</a></>}
+          {instance ? <><NavLink to={`${base}/overview`} onClick={closeDrawer}><LayoutDashboard size={17}/>{ui('nav.overview')}</NavLink><NavLink to={`${base}/statistics`} onClick={closeDrawer}><ChartNoAxesCombined size={17}/>{ui('nav.statistics')}</NavLink></> : <><NavLink to="/" end onClick={closeDrawer}><House size={17}/>{ui('nav.home')}</NavLink><NavLink to="/announcement" onClick={closeDrawer}><Megaphone size={17}/>{ui('nav.announcement')}{announcement.unread && <span className="tiny-dot red"/>}</NavLink><NavLink to="/updater" onClick={closeDrawer}><Download size={17}/>{ui('nav.updater')}{updateAvailable && <span className="tiny-dot teal"/>}</NavLink><NavLink to="/interface" onClick={closeDrawer}><Palette size={17}/>{ui('nav.interface')}</NavLink><NavLink to="/remote" onClick={closeDrawer}><Globe size={17}/>{ui('nav.remote')}</NavLink><NavLink to="/configs" onClick={closeDrawer}><FileJson size={17}/>{ui('nav.configs')}</NavLink><NavLink to="/settings" onClick={closeDrawer}><Settings2 size={17}/>{ui('nav.settings')}</NavLink><NavLink to="/dev" onClick={closeDrawer}><Code2 size={17}/>{ui('nav.developer')}</NavLink><a className="nav-open-source" href="https://github.com/wess09/AzurPilot" target="_blank" rel="noreferrer" onClick={closeDrawer}><ExternalLink size={17}/>{ui('nav.openSource')}</a></>}
           <ThemeQuickSwitch/>
         </nav>
         {instance && <TaskNav/>}

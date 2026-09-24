@@ -49,7 +49,13 @@ class Router:
             'updater.fetch': Method(p.Params, lambda _: self.updates.start('fetch'), True),
             'updater.apply': Method(p.Params, lambda _: self.updates.start('apply'), True),
             'updater.cancel': Method(p.Params, lambda _: self.updates.cancel(), True),
+            'announcement.get': Method(p.AnnouncementParams, lambda x: self.announcements.get(force=x.force)),
         }
+
+    @property
+    def announcements(self):
+        from module.api.announcement_service import announcement_service
+        return announcement_service
 
     @property
     def updates(self):

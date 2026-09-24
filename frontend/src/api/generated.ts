@@ -30,6 +30,7 @@ export interface Parameters {
   "updater.fetch": Record<string, never>
   "updater.apply": Record<string, never>
   "updater.cancel": Record<string, never>
+  "announcement.get": { force?: boolean }
   "auth.login": { password?: string }
   "events.subscribe": { instance?: string | null; topics: Array<"instances" | "overview" | "logs" | "preview"> }
 }

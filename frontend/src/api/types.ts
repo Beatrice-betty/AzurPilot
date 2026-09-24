@@ -68,7 +68,14 @@ export interface ApiResponse { v: 1; type: 'response'; id: string; ok: boolean; 
 export interface ScriptDiagnostic { code?: string; message: string; line?: number | null; column?: number | null; severity?: 'error' | 'warning' }
 export interface ShopStrategyValidation { valid: boolean; diagnostics: ScriptDiagnostic[]; summary?: string }
 export type ShopStrategyTask = 'EventShop' | 'ShopFrequent' | 'ShopOnce' | 'PrivateQuarters' | 'OpsiShop' | 'OpsiVoucher'
+export interface Announcement {
+  announcementId: string
+  title: string
+  content: string
+  url?: string
+}
 export interface Results {
+  'announcement.get': Announcement | null
   'updater.status': UpdateStatus
   'updater.commits': CommitHistory
   'updater.fetch': {accepted: boolean}

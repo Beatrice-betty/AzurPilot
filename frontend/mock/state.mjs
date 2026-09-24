@@ -469,6 +469,60 @@ export function createMockState({empty = false} = {}) {
         if (params.enabled !== undefined) { if (params.enabled) startup.add(name); else startup.delete(name) }
         if (params.remember !== undefined) { if (params.remember) remember.add(name); else remember.delete(name) }
         return {enabled: startup.has(name), remember: remember.has(name)}
+      case 'announcement.get':
+        return {
+          announcementId: 'mock-announcement-v2',
+          title: 'AzurPilot 核心控制中心 v2.4 升级公告',
+          content: [
+            'AzurPilot 现代化全自动化控制中心现已全面升级！支持全服 7×24 小时高稳定性调度。',
+            '',
+            '> [!NOTE]',
+            '> 本次更新已全面集成 **KaTeX 数学公式引擎** 与 **原生安全 HTML 渲染器**，支持更丰富的动态公告展示。',
+            '',
+            '### 📐 算法公式与调度评估',
+            '自动化调度基于强化图像匹配模型，匹配阈值满足 $\\theta \\ge 0.85$，在 $1280 \\times 720$ 画面下的综合评估目标函数如下：',
+            '',
+            '$$T_{\\text{schedule}} = \\sum_{i=1}^{n} \\frac{\\alpha_i \\cdot \\text{Cost}_i}{\\sqrt{\\Delta t_i + 1}} + \\mathcal{O}(\\log n)$$',
+            '',
+            '其中贝叶斯先验概率满足公式：$P(A|B) = \\frac{P(B|A)P(A)}{P(B)}$。',
+            '',
+            '### 🎨 HTML 与富文本排版能力',
+            '- 快捷键操作：按下 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd> 可快速重载配置',
+            '- 状态高亮：系统当前处于 <mark>自动化调度优化</mark> 阶段，网络链路 <font color="#10b981">● 正常连通</font>',
+            '- 样式标签：支持下标 H<sub>2</sub>O、上标 x<sup>2</sup> 与 <span style="color: #60a5fa; font-weight: bold">带颜色样式的自定义文本</span>',
+            '',
+            '<details>',
+            '<summary><b>点击展开查看详细功能清单与发布日志</b></summary>',
+            '',
+            '#### 📋 任务推进清单',
+            '- [x] 引入 Marked + KaTeX + DOMPurify 成熟渲染生态',
+            '- [x] 支持 GitHub 风格 Callout 提示块与折叠详情',
+            '- [x] 优化公告卡片在深浅色主题下的视觉适配',
+            '- [ ] 接入跨设备 WebSocket 实时公告推送通知',
+            '',
+            '#### 📊 各服务器支持状态对照',
+            '| 服务器 | 状态 | 推荐延迟 | 自动重连 |',
+            '| :--- | :---: | :---: | :---: |',
+            '| 国服 (CN) | <font color="#10b981">极佳</font> | &lt; 35ms | 支持 |',
+            '| 日服 (JP) | <font color="#10b981">良好</font> | &lt; 80ms | 支持 |',
+            '| 国际服 (EN) | <font color="#60a5fa">正常</font> | &lt; 150ms | 支持 |',
+            '| 台服 (TW) | <font color="#60a5fa">正常</font> | &lt; 90ms | 支持 |',
+            '',
+            '```python',
+            '# 自动化快速启动示例',
+            'from module.config.config import AzurLaneConfig',
+            'config = AzurLaneConfig("alas")',
+            'print(f"Server: {config.server.server}, Resolution: 1280x720")',
+            '```',
+            '</details>',
+            '',
+            '> [!TIP]',
+            '> 保持模拟器分辨率为 `1280×720`（DPI 240），可获得最高的截图识别率与运行效率。',
+            '',
+            '更多项目详情、Issue 反馈及更新指引，欢迎参阅 [GitHub 官方仓库](https://github.com/wess09/AzurPilot)。',
+          ].join('\n'),
+          url: 'https://github.com/wess09/AzurPilot'
+        }
       case 'events.subscribe':
         if (params.topics.some(topic => topic !== 'instances') && !name) fail('INVALID_PARAMS', '订阅此主题需要指定实例')
         return {topics: params.topics, instance: name ?? null}
