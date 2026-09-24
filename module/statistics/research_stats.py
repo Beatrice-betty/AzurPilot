@@ -14,7 +14,6 @@
 """
 
 import json
-import os
 import typing as t
 from collections import defaultdict
 from datetime import date, datetime, timedelta
@@ -30,8 +29,6 @@ SHOW_RARITY = (4, 5)
 RARITY_GOLD = 4
 # 界面上的稀有度标签，与游戏内一致：彩 > 金 > 紫 > 蓝
 RARITY_LABELS = {6: '彩', 5: '彩', 4: '金', 3: '紫', 2: '蓝'}
-# 心智单元的模板名，单独放行（它没有 T 品阶后缀，查不到稀有度）
-ALWAYS_SHOW = ('CognitiveChips',)
 
 # 视图口径
 SCOPE_SERIES = 'series'
@@ -89,7 +86,7 @@ def item_info(template_name: str) -> dict:
 def is_gold_equipment(template_name: str) -> bool:
     """判断是不是「金装」：稀有度 4 的**装备图纸**。
 
-    舰船图纸与心智单元不算金装——它们在期数视图里各自有位置。
+    舰船图纸与心智单元不算金装——它们在别的视图里各有位置。
 
     Args:
         template_name (str): 模板文件名（不含扩展名）。
@@ -97,21 +94,21 @@ def is_gold_equipment(template_name: str) -> bool:
     Returns:
         bool: 是否金装。
     """
-    if template_name.startswith('Blueprint') or template_name in ALWAYS_SHOW:
+    if template_name.startswith('Blueprint'):
         return False
     info = item_info(template_name)
     if info.get('rarity') != RARITY_GOLD:
         return False
-    # 稀有度对上了还要确认是装备图纸：物资、装备本身的名字里没有「设计图」
+    # 稀有度对上了还要确认是装备图纸：物资、心智单元的名字里没有「设计图」
     return (info.get('zh') or '').endswith('设计图')
 
 
 def should_show(template_name: str, scope: str = SCOPE_SERIES) -> bool:
     """判断某件掉落是否进入当前视图。
 
-    期数视图只展示彩装备、彩图纸、金图纸与心智单元；金装视图只展示金装备图纸；
-    心智/物资视图只展示心智单元与物资。稀有度来自静态名称表，查不到时（模板没
-    收录进表）一律不展示，避免用乱码占屏。
+    期数视图只展示彩装备、彩图纸与金图纸（心智单元另有「心智/物资」视图，
+    不在这里出现）；金装视图只展示金装备图纸；心智/物资视图只展示心智单元与物资。
+    稀有度来自静态名称表，查不到时（模板没收录进表）一律不展示，避免用乱码占屏。
 
     Args:
         template_name (str): 模板文件名（不含扩展名）。
@@ -124,8 +121,6 @@ def should_show(template_name: str, scope: str = SCOPE_SERIES) -> bool:
         return is_gold_equipment(template_name)
     if scope == SCOPE_CONSUMABLE:
         return template_name in CONSUMABLE_ITEMS
-    if template_name in ALWAYS_SHOW:
-        return True
     info = item_info(template_name)
     rarity = info.get('rarity')
     if rarity not in SHOW_RARITY:
@@ -155,10 +150,31 @@ def _iter_entries(instance: str, start: datetime, end: datetime) -> t.Iterator[d
         cursor = (cursor.replace(day=28) + timedelta(days=4)).replace(day=1)
 
 
+def _entry_datetime(entry: dict) -> t.Optional[datetime]:
+    """取一条掉落记录的时间。
+
+    记录里 `ts` 与 `completed_at` 都是 ISO 时间串；缺失或损坏时返回 None。
+
+    Args:
+        entry (dict): 单条掉落记录。
+
+    Returns:
+        datetime: 记录时间；解析不出来时 None。
+    """
+    for key in ('ts', 'completed_at'):
+        raw = entry.get(key)
+        if not raw:
+            continue
+        try:
+            return datetime.fromisoformat(str(raw))
+        except ValueError:
+            continue
+    return None
+
+
 def _entry_date(entry: dict) -> t.Optional[date]:
     """取一条掉落记录的日期。
 
-    记录里 `ts` 与 `completed_at` 都是 ISO 时间串；缺失或损坏时返回 None，
     调用方据此跳过「今日/本月」计数，而不是把缺失值当成今天。
 
     Args:
@@ -167,25 +183,72 @@ def _entry_date(entry: dict) -> t.Optional[date]:
     Returns:
         date: 记录日期；解析不出来时 None。
     """
-    for key in ('ts', 'completed_at'):
-        raw = entry.get(key)
-        if not raw:
-            continue
-        try:
-            return datetime.fromisoformat(str(raw)).date()
-        except ValueError:
-            continue
-    return None
+    stamp = _entry_datetime(entry)
+    return stamp.date() if stamp else None
 
 
-def collect(instance: str, days: int = 90, series: int = 0, scope: str = SCOPE_SERIES) -> dict:
-    """汇总最近若干天的科研掉落。
+def in_window(entry: dict, start: datetime, end: datetime) -> bool:
+    """判断记录是否落在统计窗口内。
+
+    `_iter_entries` 是按月份分区取记录的，只能保证落在窗口覆盖的那几个月里；
+    日/周视图还要按时间精确筛一遍。时间戳缺失的记录不放进任何窗口
+    （与「今日/本月」计数同样的口径：不把缺失当今天）。
+
+    Args:
+        entry (dict): 单条掉落记录。
+        start (datetime): 窗口起点（含）。
+        end (datetime): 窗口终点（不含）。
+
+    Returns:
+        bool: 是否在窗口内。
+    """
+    stamp = _entry_datetime(entry)
+    return stamp is not None and start <= stamp < end
+
+
+def series_item_names(series: int) -> t.List[str]:
+    """某一期的固定物品清单：该期各艘船的图纸 + 该期的彩装图纸（模板名）。
+
+    清单来自名称表的 `series` 字段（由 dev_tools/research_template_extract.py 按游戏
+    数据生成）。同一件道具可能有多个底色变体（`_2`/`_3`），按基名去重只留一个；
+    船图纸排在彩装前面，与界面上「每期舰船的模板和彩图」的顺序一致。
+
+    Args:
+        series (int): 科研期数。
+
+    Returns:
+        list[str]: 模板名列表；该期没有收录任何物品时为空。
+    """
+    table = load_name_table()
+    picked: t.Dict[str, str] = {}
+    for name, info in table.items():
+        if info.get('series') != series:
+            continue
+        base, _, suffix = name.rpartition('_')
+        key = base if base and suffix.isdigit() else name
+        # 变体与基名只留一个；名字小的（不带后缀的基名）优先
+        if key not in picked or name < picked[key]:
+            picked[key] = name
+    return sorted(picked.values(), key=lambda name: (not name.startswith('Blueprint'), name))
+
+
+def collect(
+    instance: str,
+    days: int = 90,
+    series: int = 0,
+    scope: str = SCOPE_SERIES,
+    start: t.Optional[datetime] = None,
+    end: t.Optional[datetime] = None,
+) -> dict:
+    """汇总一段时间内的科研掉落。
 
     Args:
         instance (str): ALAS 实例名。
-        days (int): 回溯天数。
+        days (int): 回溯天数；给了 start/end 时忽略。
         series (int): 只看某一期（1~9）；0 表示最新有记录的一期。不分期的口径忽略此参数。
         scope (str): 视图口径，SCOPE_SERIES / SCOPE_GOLD / SCOPE_CONSUMABLE。
+        start (datetime): 统计起点（含）；缺省按 days 往前推。
+        end (datetime): 统计终点（不含）；缺省取当前时间。
 
     Returns:
         dict: {
@@ -193,7 +256,9 @@ def collect(instance: str, days: int = 90, series: int = 0, scope: str = SCOPE_S
             'series': 实际展示的期数（不分期的口径为 0）,
             'available': 有记录的期数列表（降序）,
             'items': [{'name': 模板名, 'zh': 中文名, 'rarity': ..., 'amount': 总数量,
-                       'count': 掉落次数, 'today': 今日数量, 'month': 本月数量}, ...],
+                       'count': 掉落次数, 'avg': 平均每次, 'today': 今日数量,
+                       'month': 本月数量}, ...],
+            'series_items': 期数视图的固定清单（各期船图纸 + 彩装，含本期没掉过的）,
             'total': 总掉落数量,
             'today': 今日掉落总数量,
             'month': 本月掉落总数量,
@@ -201,8 +266,12 @@ def collect(instance: str, days: int = 90, series: int = 0, scope: str = SCOPE_S
         }
     """
     now = datetime.now()
-    start = now - timedelta(days=max(1, days))
-    entries = list(_iter_entries(instance, start, now + timedelta(seconds=1)))
+    if start is None:
+        start = now - timedelta(days=max(1, days))
+    if end is None:
+        end = now + timedelta(seconds=1)
+    entries = [entry for entry in _iter_entries(instance, start, end)
+               if in_window(entry, start, end)]
 
     available = sorted({int(e.get('series') or 0) for e in entries if e.get('series')}, reverse=True)
     if scope != SCOPE_SERIES:
@@ -231,27 +300,38 @@ def collect(instance: str, days: int = 90, series: int = 0, scope: str = SCOPE_S
             if stamp is not None and (stamp.year, stamp.month) == this_month:
                 month_by_item[name] += amount
 
-    items = []
-    for name, amount in amount_by_item.items():
+    def build(name: str) -> dict:
         info = item_info(name)
-        items.append({
+        amount = amount_by_item.get(name, 0)
+        count = count_by_item.get(name, 0)
+        return {
             'name': name,
             'zh': info.get('zh') or name,
             'en': info.get('en') or '',
             'rarity': info.get('rarity'),
             'amount': amount,
-            'count': count_by_item[name],
-            'today': today_by_item[name],
-            'month': month_by_item[name],
-        })
+            'count': count,
+            'avg': round(amount / count, 1) if count else 0,
+            'today': today_by_item.get(name, 0),
+            'month': month_by_item.get(name, 0),
+        }
+
+    # 期数视图按固定清单铺开：本期没掉过的也留一行（数量和次数为 0），
+    # 与委托收益的「资源格子」一致。清单之外掉进来的（比如项目赠送的别期图纸）
+    # 追加在后面，不丢数据。
+    fixed = series_item_names(series) if scope == SCOPE_SERIES else []
+    items = [build(name) for name in fixed]
+    extra = [name for name in amount_by_item if name not in set(fixed)]
     # 彩在前、金在后，同稀有度按数量降序
-    items.sort(key=lambda item: (-(item['rarity'] or 0), -item['amount'], item['zh']))
+    extra.sort(key=lambda name: (-(item_info(name).get('rarity') or 0), -amount_by_item[name], name))
+    items.extend(build(name) for name in extra)
 
     return {
         'scope': scope,
         'series': 0 if scope != SCOPE_SERIES else series,
         'available': available,
         'items': items,
+        'series_items': fixed,
         'total': sum(item['amount'] for item in items),
         'today': sum(today_by_item.values()),
         'month': sum(month_by_item.values()),

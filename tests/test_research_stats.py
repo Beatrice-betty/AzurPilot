@@ -31,10 +31,11 @@ def load_research_stats():
 
 RESEARCH_STATS = load_research_stats()
 
-# 取自真实名称表的五类代表：彩装备、金装备、金船图纸、心智单元、物资
-RAINBOW_GEAR = 'Prototype_Quadruple_305mm_SKC39_Main_Gun_Mount_T0'   # r=5 彩装
+# 取自真实名称表的几类代表：彩装备、金装备、金船图纸、当期彩装、心智单元、物资
+RAINBOW_GEAR = 'Prototype_Quadruple_305mm_SKC39_Main_Gun_Mount_T0'   # r=5 彩装（八期）
+RAINBOW_GEAR_NINTH = 'Prototype_Carrier_Based_Ta_152_C_1_R14_T0'     # r=5 彩装（九期）
 GOLD_GEAR = 'Prototype_Quadruple_610mm_Cruiser_Torpedo_Mount_T0'     # r=4 金装
-GOLD_BLUEPRINT = 'BlueprintTakahashi'                                # r=4 金船图
+GOLD_BLUEPRINT = 'BlueprintTakahashi'                                # r=4 金船图（九期）
 CHIPS = 'CognitiveChips'                                             # 心智单元
 COINS = 'Coins'                                                      # 物资
 
@@ -55,9 +56,10 @@ class ResearchStatsScopeTest(unittest.TestCase):
     def setUp(self):
         self.now = datetime.now()
         entries = [
-            # 九期：彩装 + 金装 + 金船图 + 心智 + 物资
-            entry({RAINBOW_GEAR: 2, GOLD_GEAR: 3, GOLD_BLUEPRINT: 1, CHIPS: 40, COINS: 120}, 9, self.now),
-            # 七期：金装与心智物资——这三类各期混着出，所以也能出现在别期的记录里
+            # 九期：该期金船图 + 金装 + 心智 + 物资，另外混进一件八期的彩装
+            # （金装备各期混着出、科研项目也会「额外赠送」别期的图纸，用户确认过这两个机制）
+            entry({GOLD_BLUEPRINT: 1, GOLD_GEAR: 3, RAINBOW_GEAR: 2, CHIPS: 40, COINS: 120}, 9, self.now),
+            # 七期：金装与心智物资——这几类各期混着出，所以也能出现在别期的记录里
             entry({GOLD_GEAR: 5, CHIPS: 30, COINS: 80}, 7, self.now - timedelta(days=2)),
         ]
         self.patcher = patch.object(RESEARCH_STATS, '_iter_entries', lambda *a, **k: iter(entries))
@@ -70,16 +72,35 @@ class ResearchStatsScopeTest(unittest.TestCase):
     def names(self, **kwargs):
         return [item['name'] for item in self.collect(**kwargs)['items']]
 
-    def test_series_view_shows_rainbow_blueprint_chips(self):
+    def test_series_view_shows_blueprint_of_that_series(self):
         summary = self.collect(series=9)
         self.assertEqual(summary['scope'], 'series')
-        self.assertIn(RAINBOW_GEAR, self.names(series=9))
-        self.assertIn(GOLD_BLUEPRINT, self.names(series=9))
-        self.assertIn(CHIPS, self.names(series=9))
+        names = self.names(series=9)
+        self.assertIn(GOLD_BLUEPRINT, names)
+        # 该期的彩装也在清单里（本期没掉过就是 0），与委托收益的资源格子一致
+        self.assertIn(RAINBOW_GEAR_NINTH, names)
+        amounts = {item['name']: item['amount'] for item in summary['items']}
+        self.assertEqual(amounts[GOLD_BLUEPRINT], 1)
+        self.assertEqual(amounts[RAINBOW_GEAR_NINTH], 0)
 
-    def test_series_view_hides_gold_gear_and_coins(self):
-        self.assertNotIn(GOLD_GEAR, self.names(series=9))
-        self.assertNotIn(COINS, self.names(series=9))
+    def test_series_view_hides_gear_and_consumables(self):
+        names = self.names(series=9)
+        self.assertNotIn(GOLD_GEAR, names)
+        # 心智与物资有自己的视图，不再出现在每期视图里
+        self.assertNotIn(CHIPS, names)
+        self.assertNotIn(COINS, names)
+
+    def test_cross_series_gift_appears_as_extra_row(self):
+        """项目额外赠送的别期图纸：不进该期固定清单，但掉了就照实列出来。"""
+        summary = self.collect(series=9)
+        self.assertNotIn(RAINBOW_GEAR, summary['series_items'])
+        amounts = {item['name']: item['amount'] for item in summary['items']}
+        self.assertEqual(amounts[RAINBOW_GEAR], 2)
+
+    def test_series_items_are_all_from_that_series(self):
+        for keyword in self.collect(series=9)['series_items']:
+            with self.subTest(item=keyword):
+                self.assertEqual(RESEARCH_STATS.item_info(keyword).get('series'), 9)
 
     def test_gold_view_merges_all_series(self):
         summary = self.collect(scope='gold')
@@ -114,10 +135,15 @@ class ResearchStatsScopeTest(unittest.TestCase):
 
     def test_series_view_keeps_only_selected_series(self):
         summary = self.collect(series=7)
-        # 七期那条只有金装与心智物资，期数视图只留心智单元
-        self.assertEqual(self.names(series=7), [CHIPS])
+        # 七期那条只有金装与心智物资，都不是期数视图的口径，所以金额全为 0
+        self.assertEqual([item['amount'] for item in summary['items']], [0] * len(summary['items']))
+        self.assertTrue(summary['series_items'])
         self.assertEqual(summary['records'], 1)
         self.assertEqual(summary['available'], [9, 7])
+
+    def test_average_per_record(self):
+        summary = self.collect(scope='gold')
+        self.assertEqual(summary['items'][0]['avg'], 4.0)  # 8 张 / 2 次
 
     def test_series_default_picks_latest_available(self):
         self.assertEqual(self.collect(series=0)['series'], 9)
@@ -144,17 +170,19 @@ class ResearchStatsTodayMonthTest(unittest.TestCase):
     def test_today_and_month_buckets(self):
         summary = RESEARCH_STATS.collect('alas', days=365, series=9, scope='gold')
         item = summary['items'][0]
-        self.assertEqual(item['amount'], 17)
+        # 今天 2 张 + 本月 1 号 3 张 + 200 天前 5 张；没有时间戳的那条不进窗口
+        self.assertEqual(item['amount'], 10)
         self.assertEqual(item['today'], 2)
         # 「本月」= 今天那条 + 本月 1 号那条；即使今天就是 1 号，两条也在同一个月里
         self.assertEqual(item['month'], 5)
         self.assertEqual(summary['today'], 2)
         self.assertEqual(summary['month'], 5)
 
-    def test_missing_timestamp_is_not_counted_as_today(self):
+    def test_missing_timestamp_is_excluded(self):
+        """时间戳缺失的记录不进统计窗口，也不算进今天。"""
         summary = RESEARCH_STATS.collect('alas', days=365, series=9, scope='gold')
         self.assertLess(summary['today'], 7)
-        self.assertEqual(summary['records'], 4)
+        self.assertEqual(summary['records'], 3)
 
 
 if __name__ == '__main__':

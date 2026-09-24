@@ -149,6 +149,57 @@ def in_stats_scope(zh_name: str, rarity: Optional[int]) -> bool:
     return zh_name.endswith('设计图') or zh_name.startswith('蓝图')
 
 
+# 每期的彩装设计图（2~9 期各一件）。这份名单来自用户；Lua 里只有八期那件出现在
+# 项目的 drop_client 中（其余彩装用通用占位符发放），所以只能手工登记。
+RAINBOW_DESIGN_SERIES = {
+    13012: 2, 13019: 3, 13030: 4, 13031: 5, 13038: 6, 13043: 7, 13049: 8, 13061: 9,
+}
+
+
+def load_item_series(folder: str) -> Dict[int, int]:
+    """物品 id -> 科研期数，供名称表记录「这件物品属于哪一期」。
+
+    只收**绑期数**的两类：船图纸（`蓝图：XXX`）与彩装图纸（2~9 期各一件）。
+    金装备图纸虽然也在各期的 drop_client 里，但实际掉落是各期混着出的，
+    登记期数只会让人误以为它属于某一期，所以不收。
+
+    船图纸与 1~8 期大部分装备图纸的来源是 `sharecfg/technology_data_template.lua`
+    各期项目的 `drop_client`（项目的 `blueprint_version` 就是期数）；
+    彩装图纸不在里面（用通用占位符发放），期数取自 RAINBOW_DESIGN_SERIES。
+
+    Args:
+        folder (str): Lua 数据源目录。
+
+    Returns:
+        dict: {物品 id: 期数}；只在能唯一确定期数时收录。
+    """
+    try:
+        tech = LuaLoader(folder, server='zh-CN').load('sharecfg/technology_data_template.lua')
+        items = LuaLoader(folder, server='zh-CN').load('sharecfgdata/item_data_statistics.lua')
+    except Exception as e:
+        logger.warning(f'[科研模板] 读取科研项目表失败，名称表将不带期数: {e}')
+        return {}
+    found: Dict[int, set] = {}
+    for key, value in tech.items():
+        if key == 'all':
+            continue
+        series = int(value.get('blueprint_version', 0) or 0)
+        for entry in value.get('drop_client', {}).values():
+            iid = list(entry.values())[1]
+            if iid == 1:
+                iid = 59001  # 物资在项目表里记作 1，物品表里是 59001
+            if not (items.get(iid, {}).get('name') or '').startswith('蓝图'):
+                continue
+            found.setdefault(iid, set()).add(series)
+    series_by_id = {}
+    for iid, series in found.items():
+        # 一条船图纸会出现在多期的 drop_client 里——科研项目会「额外赠送」别期的图纸
+        # （用户确认过这个机制，有上限）。赠礼只会指向更早的期，所以取最小期数即它本尊的期。
+        series_by_id[iid] = min(series)
+    series_by_id.update(RAINBOW_DESIGN_SERIES)
+    return series_by_id
+
+
 # 少数舰船的中文名是 {namecode:XXX} 占位符（见 resolve_ship_placeholder），
 # 正常路径已能还原；这里的别名只在标签被截断得只剩两字时兜底。
 # 别名用 2 字前缀，因为标签常缺字成「马克其」「古图：马克」。
@@ -256,12 +307,20 @@ def load_ship_names() -> Dict[str, str]:
     except (OSError, ValueError):
         return {}
     out = {}
+    variants = {}
     for entry in ships.values():
         names = entry.get('name') or {}
         en_name = (names.get('en') or '').strip()
         zh_name = (names.get('cn') or '').strip()
-        if en_name and zh_name:
-            out.setdefault(fold_text(en_name), zh_name)
+        if not en_name or not zh_name:
+            continue
+        # 同一条船的 μ兵装/改 等变体与本体共用英文名，优先收本体
+        if '(' in zh_name or '（' in zh_name:
+            variants.setdefault(fold_text(en_name), zh_name)
+            continue
+        out.setdefault(fold_text(en_name), zh_name)
+    for key, zh_name in variants.items():
+        out.setdefault(key, zh_name)
     return out
 
 
@@ -334,13 +393,18 @@ class LuaItemNames:
         # 模板名 -> (稀有度, 英文名, 中文名)。稀有度是分辨彩/金的唯一可靠依据：
         # 名字前缀靠不住（'试作型三联装203mmSKC主炮T0' 是金，加个「改」才是彩）。
         self.by_template: Dict[str, Tuple[int, str, str]] = {}
+        self.by_template_id: Dict[str, int] = {}
         for item_id, data in zh.items():
             en_name = (en.get(item_id, {}).get('name') or '').strip()
             template = to_template_name(en_name)
             if template:
                 self.by_template.setdefault(template, (
                     data.get('rarity'), en_name, (data.get('name') or '').strip()))
-        logger.info(f'[科研模板] 加载 Lua 物品名 {len(self.candidates)} 条')
+                self.by_template_id.setdefault(template, item_id)
+        # 物品 id -> 科研期数，写名称表时带上，供「每期收益」按固定清单展示
+        self.series_by_id = load_item_series(folder)
+        logger.info(f'[科研模板] 加载 Lua 物品名 {len(self.candidates)} 条，'
+                    f'带期数的 {len(self.series_by_id)} 件')
 
     @staticmethod
     def _rank(hits: List[Tuple[str, str, str]], text: str = '') -> List[Tuple[str, str]]:
@@ -912,7 +976,13 @@ class ResearchTemplateScanner:
 
             zh_name = self._resolve_namecode(zh_name, en_name, ships)
             if zh_name:
-                table[stem] = {'zh': zh_name, 'en': en_name, 'rarity': rarity}
+                entry = {'zh': zh_name, 'en': en_name, 'rarity': rarity}
+                # 期数只对「绑期数」的物品有意义（船图纸与彩装图纸），
+                # 金装备各期混着出，登记了反而会让人误以为它属于某一期。
+                series = self.lua.series_by_id.get(self.lua.by_template_id.get(key, 0))
+                if series:
+                    entry['series'] = series
+                table[stem] = entry
         path = NAME_TABLE_PATH
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, 'w', encoding='utf-8') as f:
