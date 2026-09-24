@@ -1,6 +1,6 @@
 import { matchPath, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { AlertTriangle, LoaderCircle, Play, Plus, Square, Trash2, X } from 'lucide-react'
-import { useState, type ComponentType } from 'react'
+import { Activity, AlertTriangle, LoaderCircle, Pause, Play, Plus, Square, Trash2, X } from 'lucide-react'
+import { useState } from 'react'
 import { api } from '../api/client'
 import { useApp, useConnection } from '../app/context'
 import { editor } from '../config/editors'
@@ -8,28 +8,12 @@ import type { Status } from '../api/types'
 import type { UiKey } from '../i18n'
 import { ErrorBox, Modal } from './ui'
 
-type StatusIconType = ComponentType<{className?: string; size?: number; 'aria-hidden'?: boolean | 'true' | 'false'}>
-
-/** 待命状态的小圆点图标 */
-function StatusDot({className, size = 14, ...props}: {className?: string; size?: number; 'aria-hidden'?: boolean | 'true' | 'false'}) {
-    return <svg
-        className={`lucide ${className ?? ''}`}
-        width={size}
-        height={size}
-        viewBox="0 0 24 24"
-        fill="currentColor"
-        {...props}
-    >
-        <circle cx="12" cy="12" r="5" />
-    </svg>
-}
-
-/** 图标随状态换：运行与更新带加载动画，出错与停下的静态。 */
-const STATUS_ICON: Record<Status, StatusIconType> = {
-    running: LoaderCircle,
+/** 图标随状态换：跑着的两种叠动画，出错的与停下的静态。 */
+const STATUS_ICON: Record<Status, typeof Activity> = {
+    running: Activity,
     updating: LoaderCircle,
     error: AlertTriangle,
-    stopped: StatusDot,
+    stopped: Pause,
 }
 
 /** 悬停提示用的状态文案。 */

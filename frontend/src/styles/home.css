@@ -33,7 +33,7 @@
 .breadcrumb .instance-menu span {color: inherit}
 
 /* 模式开关与缩放开关都钉在行首不参与收缩，「主页 / 实例…」整体让到它们右边。 */
-.topbar-mode-toggle, .topbar-tab-size {flex-shrink: 0}
+.topbar-mode-toggle, .topbar-tab-size, .topbar-bulk-toggle {flex-shrink: 0}
 /* 放缩只落在承载标签的那条栏上：新版主题是顶栏自己，旧版主题是页内那一行。
    旧版顶部还有一条只有品牌与页名的装饰栏，它不参与放缩，否则顶部会白占两条栏的高度。 */
 /* 承载这一行的栏按「标签高 + 8px」定高，与顶栏是分页还是下拉无关 ——
@@ -52,15 +52,20 @@
    实测按钮四角仍会命中——它只能画东西，收不了命中区，已删。现按要求做成整格可点。） */
 /* components.css 里同特异性的 .icon-button 也定这两枚按钮的尺寸，这里加一族前缀才压得住。 */
 :root[data-tab-size] .app-shell .topbar-mode-toggle,
-:root[data-tab-size] .app-shell .topbar-tab-size {width: calc(var(--instance-tab-icon) * 2); height: calc(var(--instance-tab-icon) * 2); padding: 0; justify-content: center}
+:root[data-tab-size] .app-shell .topbar-tab-size,
+:root[data-tab-size] .app-shell .topbar-bulk-toggle {width: calc(var(--instance-tab-icon) * 2); height: calc(var(--instance-tab-icon) * 2); padding: 0; justify-content: center}
 /* 图标统一按 --instance-tab-icon 定死宽高：两枚按钮换图标（如切换图标形状不同）时不会改变自身宽度，
    否则点一下切换按钮，右侧整条标签都会左右跳。 */
-.topbar-mode-toggle .lucide, .topbar-tab-size .lucide {width: var(--instance-tab-icon); height: var(--instance-tab-icon); flex-shrink: 0}
+.topbar-mode-toggle .lucide, .topbar-tab-size .lucide, .topbar-bulk-toggle .lucide {width: var(--instance-tab-icon); height: var(--instance-tab-icon); flex-shrink: 0}
+/* 一键启停执行期间按钮禁用，图标转圈表示正在逐个处理。 */
+.topbar-bulk-toggle:disabled {cursor: default}
+.topbar-bulk-toggle:disabled .lucide {animation: spin 1.2s linear infinite}
 /* 除旧版主题外，全部主题彻底禁用顶栏模式切换与尺寸缩放按钮及悬停展开层 */
 :root:not([data-theme='legacy-light']):not([data-theme='legacy-dark']) .topbar-actions-hover,
 :root:not([data-theme='legacy-light']):not([data-theme='legacy-dark']) .topbar-actions-buttons,
 :root:not([data-theme='legacy-light']):not([data-theme='legacy-dark']) .topbar-mode-toggle,
-:root:not([data-theme='legacy-light']):not([data-theme='legacy-dark']) .topbar-tab-size {
+:root:not([data-theme='legacy-light']):not([data-theme='legacy-dark']) .topbar-tab-size,
+:root:not([data-theme='legacy-light']):not([data-theme='legacy-dark']) .topbar-bulk-toggle {
   display: none !important;
   width: 0 !important;
   visibility: hidden !important;
@@ -78,9 +83,10 @@
 /* 展开：指针落在左边那片悬停区上、或已进入展开的开关盒内 —— 两者合起来才算悬停区，
    否则指针一挪到开关上就掉出去，展开的开关根本点不到；键盘焦点同理。鼠标点击留下的
    焦点不算 —— 它会一直留着，盒子就再也折不回去。 */
+/* 三枚开关：3×2 个图标宽 + 2×.5 个间隙。 */
 :root[data-tab-size] .app-shell .breadcrumb .topbar-actions:has(> .topbar-actions-hover:hover) .topbar-actions-buttons,
 :root[data-tab-size] .app-shell .breadcrumb .topbar-actions:has(> .topbar-actions-buttons:hover) .topbar-actions-buttons,
-:root[data-tab-size] .app-shell .breadcrumb .topbar-actions:has(:focus-visible) .topbar-actions-buttons {width: calc(var(--instance-tab-icon) * 4.5)}
+:root[data-tab-size] .app-shell .breadcrumb .topbar-actions:has(:focus-visible) .topbar-actions-buttons {width: calc(var(--instance-tab-icon) * 7)}
 :root[data-tab-size] .app-shell .breadcrumb .topbar-actions:has(> .topbar-actions-hover:hover) .topbar-actions-buttons > *,
 :root[data-tab-size] .app-shell .breadcrumb .topbar-actions:has(> .topbar-actions-buttons:hover) .topbar-actions-buttons > *,
 :root[data-tab-size] .app-shell .breadcrumb .topbar-actions:has(:focus-visible) .topbar-actions-buttons > * {visibility: visible; pointer-events: auto}
@@ -132,9 +138,8 @@
 .instance-tab-remove:hover .lucide {display: block}
 .instance-tab-remove:hover {border-radius: 50%; cursor: pointer; color: var(--red); background: var(--surface)}
 
-/* 状态：跑着与更新中的图标旋转加载，出错与停下的静态。图标颜色即状态，不再另加文字。 */
+/* 状态：跑着的图标呼吸，出错的与停下的静态。图标颜色即状态，不再另加文字。 */
 .instance-tab.running {color: var(--accent)}
-.instance-tab.running .instance-tab-icon {animation: spin 1.2s linear infinite}
 .instance-tab.updating {color: var(--muted)}
 .instance-tab.updating .instance-tab-icon {animation: spin 1.2s linear infinite}
 .instance-tab.error {color: var(--red)}

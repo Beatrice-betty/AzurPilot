@@ -578,13 +578,23 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
   color: var(--theme-success, #16a34a) !important;
 }
 .app-shell.legacy-shell .instance-tab.current.running .instance-tab-name {
-  color: var(--text) !important;
+  color: var(--theme-success, #16a34a) !important;
 }
 .app-shell.legacy-shell .instance-tab.current.error {
   color: var(--theme-danger, #dc2626) !important;
 }
 .app-shell.legacy-shell .instance-tab.current.error .instance-tab-name {
-  color: var(--text) !important;
+  color: var(--theme-danger, #dc2626) !important;
+}
+
+/* 状态色只落在图标与实例名上，标签页底色与外框不跟状态走。 */
+.app-shell.legacy-shell .instance-tab.running .instance-tab-icon,
+.app-shell.legacy-shell .instance-tab.running .instance-tab-name {
+  color: var(--theme-success, #16a34a);
+}
+.app-shell.legacy-shell .instance-tab.error .instance-tab-icon,
+.app-shell.legacy-shell .instance-tab.error .instance-tab-name {
+  color: var(--theme-danger, #dc2626);
 }
 
 /* 标签内的关闭 × 按钮（激活标签上始终柔和可见，像 Edge 截图一样） */

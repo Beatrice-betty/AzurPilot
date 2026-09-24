@@ -1,8 +1,10 @@
 import { PasswordInput, Select } from '../components/FormControls'
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type MouseEvent, type ChangeEvent } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowRight, CalendarClock, ChartNoAxesCombined, Code2, Compass, FileJson, GalleryHorizontal, LayoutDashboard, Globe, House, Download, ExternalLink, Maximize2, Megaphone, Menu, Minimize2, Palette, PanelTop, Settings2, WifiOff, X } from 'lucide-react'
+import { ArrowRight, CalendarClock, ChartNoAxesCombined, Code2, Compass, FileJson, GalleryHorizontal, LayoutDashboard, Globe, House, Download, ExternalLink, Maximize2, Megaphone, Menu, Minimize2, Palette, PanelTop, Settings2, WifiOff, X, CirclePause, CirclePlay, LoaderCircle} from 'lucide-react'
 import { api } from '../api/client'
+import { editor } from '../config/editors'
+import {bulkAction, bulkTargets} from './instanceBulk'
 import { useApp, useConnection } from './context'
 import { useAnnouncement } from './announcement'
 import { ErrorBox, Loading, Modal } from '../components/ui'
@@ -222,8 +224,37 @@ export function App() {
     title={`${ui('nav.tabSize')} · ${tabSize}`}
     onClick={() => cycleTabSize(tabSize)}
   >{tabSize === 'lg' ? <Minimize2 size={17}/> : <Maximize2 size={17}/>}</button>
-  /* 两枚开关与「主页」打包在一起：顶栏与旧版的页内栏共用同一份标记，两处都要一起出现。 */
-  const topbarActions = allowTopbarControls ? <span className="topbar-actions"><span className="topbar-actions-hover"/><span className="topbar-actions-buttons">{modeToggle}{sizeToggle}</span><Link to="/">{ui('nav.home')}</Link></span> : <span className="topbar-actions"><Link to="/">{ui('nav.home')}</Link></span>
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const bulk = bulkAction(instances)
+  /* 一键启停：逐个实例串行处理，启动前先等该实例的配置落盘。 */
+  const toggleAll = async () => {
+    const targets = bulkTargets(instances, bulk)
+    if (targets.length === 0) return
+    setBulkBusy(true)
+    let failed = 0
+    for (const name of targets) {
+      try {
+        if (bulk === 'start') await editor(`config:${name}`).settled()
+        await api.request(bulk === 'start' ? 'scheduler.start' : 'scheduler.stop', {instance: name})
+      } catch (error) {
+        failed += 1
+        notify((error as Error).message, true)
+      }
+    }
+    if (failed === 0) notify(ui(bulk === 'start' ? 'scheduler.started' : 'scheduler.stoppedNotice'))
+    setBulkBusy(false)
+  }
+  const bulkToggle = instances.length === 0 || !allowTopbarControls ? null : <button
+    type="button"
+    className="topbar-bulk-toggle icon-button"
+    aria-label={ui(bulk === 'start' ? 'nav.startAll' : 'nav.stopAll')}
+    title={ui(bulk === 'start' ? 'nav.startAll' : 'nav.stopAll')}
+    disabled={bulkBusy}
+    aria-busy={bulkBusy}
+    onClick={toggleAll}
+  >{bulkBusy ? <LoaderCircle size={17}/> : bulk === 'start' ? <CirclePlay size={17}/> : <CirclePause size={17}/>}</button>
+  /* 三枚开关与「主页」打包在一起：顶栏与旧版的页内栏共用同一份标记，两处都要一起出现。 */
+  const topbarActions = allowTopbarControls ? <span className="topbar-actions"><span className="topbar-actions-hover"/><span className="topbar-actions-buttons">{modeToggle}{sizeToggle}{bulkToggle}</span><Link to="/">{ui('nav.home')}</Link></span> : <span className="topbar-actions"><Link to="/">{ui('nav.home')}</Link></span>
   const tabStrip = <InstanceTabs onCreate={() => setCreating(true)}/>
   const breadcrumbInner = <>{topbarActions}{instance ? (tabsShown ? null : <><span>/</span><InstanceSwitcher onCreate={() => setCreating(true)}/></>) : activeSection !== ui('nav.home') && <><span>/</span><strong>{activeSection}</strong></>}{tabsShown && tabStrip}{instance && (currentTask ? <><span>/</span><Link to={`${base}/task/Alas`}>{ui('nav.taskConfig')}</Link><span>/</span><Link className="breadcrumb-current" to={`${base}/task/${currentTask}`}><strong>{t(`Task.${currentTask}.name`)}</strong></Link></> : location.pathname.endsWith('/statistics') && !tabsMode && <><span>/</span><strong>{ui('nav.statistics')}</strong></>)}</>
   const topbar = <header className="topbar">
