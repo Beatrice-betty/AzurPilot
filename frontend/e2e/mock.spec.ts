@@ -69,7 +69,7 @@ test('总览三态、资源搭配记忆、日志与被动截图切换', async ({
   await expect(actionPoint.locator('.resource-heading')).toHaveText('行动力')
   await expect(actionPoint.locator('.resource-value')).toHaveText('101/ 5,301')
   await expect(actionPoint.locator('.resource-value small')).toHaveText('/ 5,301')
-  await expect(actionPoint.locator('.resource-icon-image')).toHaveAttribute('src', /dog\.webp/)
+  await expect(actionPoint.locator('.resource-icon-image')).toHaveAttribute('src', /guild_coin\.webp/)
   await page.reload()
   await expect(page.locator('.resource-card')).toHaveCount(5)
   await page.getByRole('button', {name: '启动调度器', exact: true}).click()

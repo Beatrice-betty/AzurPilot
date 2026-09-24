@@ -16,12 +16,12 @@ async function loadPrefs() {
   return import('./dashboardPrefs')
 }
 
-const DEFAULTS = {fitCards: false, fitText: false, dense: false, merged: false, totalFirst: false}
+const DEFAULTS = {fitCards: false, fitText: false, dense: false, merged: false, totalFirst: false, dogIcon: false}
 
 afterEach(() => vi.unstubAllGlobals())
 
 describe('仪表盘偏好', () => {
-  it('默认五项全关', async () => {
+  it('默认六项全关', async () => {
     const {readDashboardPrefs} = await loadPrefs()
 
     expect(readDashboardPrefs()).toEqual(DEFAULTS)

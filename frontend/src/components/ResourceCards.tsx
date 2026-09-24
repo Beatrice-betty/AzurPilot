@@ -2,7 +2,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, useSyncExternal
 import { Box, GripVertical, Plus, X } from 'lucide-react'
 import type { Resource } from '../api/types'
 import { useApp } from '../app/context'
-import { readDashboardPrefs, subscribeDashboardPrefs } from '../app/dashboardPrefs'
+import { readDashboardPrefs, subscribeDashboardPrefs, type DashboardPrefs } from '../app/dashboardPrefs'
 import type { UiKey } from '../i18n'
 
 export const resourceLabels: Record<string, UiKey> = {Oil: 'resource.Oil', Coin: 'resource.Coin', Gem: 'resource.Gem', Cube: 'resource.Cube', Pt: 'resource.Pt', ActionPoint: 'resource.ActionPoint', YellowCoin: 'resource.YellowCoin', PurpleCoin: 'resource.PurpleCoin', Core: 'resource.Core', Medal: 'resource.Medal', Merit: 'resource.Merit', GuildCoin: 'resource.GuildCoin', Chip: 'resource.Chip'}
@@ -30,7 +30,13 @@ export function isActionPointDog(resource?: Resource): boolean {
   const total = typeof resource.total === 'number' && Number.isFinite(resource.total) && resource.total >= value
     ? resource.total
     : value
-  return total > 5000
+  return total >= 10000
+}
+
+export function isDashboardDog(resources?: Resource[], prefs?: DashboardPrefs): boolean {
+  if (!prefs?.dogIcon) return false
+  const ap = resources?.find(item => item.name === 'ActionPoint')
+  return isActionPointDog(ap)
 }
 
 function ResourceIcon({resourceKey, size = 32, src}: {resourceKey: string; size?: number; src?: string}) {
@@ -144,7 +150,8 @@ export function ResourceCards({resources, selected}: {resources: Resource[]; sel
     const suffix = prefs.totalFirst && totalText ? currentText : recorded && showLimit ? limit.toLocaleString() : totalText
     const record = recordText(resource?.record)
     const foot = recorded ? (record.stale ? ui('resource.recordedTooOld') : record.text) : ui('resource.waitingSync')
-    const iconSrc = isActionPointDog(resource) ? `${iconBase}dog.webp` : undefined
+    const allDog = isDashboardDog(resources, prefs)
+    const iconSrc = allDog ? `${iconBase}dog.webp` : undefined
     return {key, index, label, displayValue, suffix, foot, iconSrc}
   })
 
@@ -166,6 +173,8 @@ export function ResourceCards({resources, selected}: {resources: Resource[]; sel
 }
 export function ResourceSettings({resources, selected, onChange}: {resources: Resource[]; selected: string[]; onChange: (keys: string[]) => void}) {
   const {ui} = useApp()
+  const prefs = useSyncExternalStore(subscribeDashboardPrefs, readDashboardPrefs, readDashboardPrefs)
+  const allDog = isDashboardDog(resources, prefs)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [draggingKey, setDraggingKey] = useState<string | null>(null)
   const [dragOrder, setDragOrder] = useState<string[] | null>(null)
@@ -497,7 +506,7 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
           }}
           onPointerCancel={event => finishDrag(event.pointerId, false)}>
           <span className="resource-editor-grip" aria-hidden="true"><GripVertical size={16}/></span>
-          <span className="resource-editor-icon resource-editor-icon-image"><ResourceIcon resourceKey={key} size={30} src={isActionPointDog(resources.find(item => item.name === key)) ? `${iconBase}dog.webp` : undefined}/></span>
+          <span className="resource-editor-icon resource-editor-icon-image"><ResourceIcon resourceKey={key} size={30} src={allDog ? `${iconBase}dog.webp` : undefined}/></span>
           <span className="resource-editor-label">{label}</span>
           <button type="button" className="resource-editor-remove" aria-label={ui('resource.remove', {label})} title={ui('resource.remove', {label})} onClick={() => remove(key)}><X size={15}/></button>
         </div>
@@ -552,7 +561,7 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
             pickerEditorRef.current = null
             markDropFrame(pickerFrameRef.current)
             setEditorDropIndex(null) }}
-          onClick={() => add(resource.name)}><span className="resource-editor-icon resource-editor-icon-image"><ResourceIcon resourceKey={resource.name} size={28} src={isActionPointDog(resource) ? `${iconBase}dog.webp` : undefined}/></span><span>{label}</span><Plus size={15}/></button></Fragment>
+          onClick={() => add(resource.name)}><span className="resource-editor-icon resource-editor-icon-image"><ResourceIcon resourceKey={resource.name} size={28} src={allDog ? `${iconBase}dog.webp` : undefined}/></span><span>{label}</span><Plus size={15}/></button></Fragment>
     })}<div className="resource-editor-card resource-drop-slot resource-drop-frame" ref={pickerFrameRef} aria-hidden="true"/>{pickerDropIndex !== null && pickerDropIndex >= pickerShown.length && <div className="resource-editor-card resource-drop-slot" aria-hidden="true"/>}</div> : <div className="resource-picker-empty">{ui('resource.allAdded')}</div>}</div>}
   </div>
 }
