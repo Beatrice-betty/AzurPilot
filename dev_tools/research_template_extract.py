@@ -104,6 +104,16 @@ SCOPE_MIN_RARITY = 4
 SPECIAL_TEMPLATE_NAMES = {
     '心智单元': 'CognitiveChips',
 }
+# 少数物品在 Lua 的英文名里缺 'T0 Design' 后缀（如试作舰载型550mm鱼雷改），
+# 由英文名推模板名的规则就失效了，中文名也进不了名称表——运行时只好显示模板名。
+# 这几个按仓库命名约定手工补，写名称表时一并收录。
+NAME_TABLE_OVERRIDES = {
+    'Prototype_Triple_550mm_Improved_Ammo_Mod_Torpedo_Mount_T0': {
+        'zh': '试作型三联装550mm鱼雷改（弹药调整）T0设计图',
+        'en': 'Prototype Triple 550mm Improved (Ammo Mod) Torpedo Mount T0 Design',
+        'rarity': 4,
+    },
+}
 
 
 def in_stats_scope(zh_name: str, rarity: Optional[int]) -> bool:
@@ -880,6 +890,10 @@ class ResearchTemplateScanner:
             hit = self.lua.by_template.get(key)
             if hit is not None:
                 rarity, en_name, zh_name = hit
+            elif key in NAME_TABLE_OVERRIDES:
+                # 英文名缺品阶后缀的少数物品，Lua 推不出来，走手工补录
+                table[stem] = dict(NAME_TABLE_OVERRIDES[key])
+                continue
             else:
                 tokens = name_tokens(key)
                 fallback = by_tokens.get(tokens)
