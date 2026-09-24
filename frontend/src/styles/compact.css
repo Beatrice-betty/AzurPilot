@@ -17,6 +17,7 @@
   --theme-radius-control: 0px;
   --theme-radius-button: 0px;
   --theme-radius-popover: 0px;
+  --instance-tab-radius: 0px;
 }
 :root[data-theme='extreme'] .sidebar,
 :root[data-theme='extreme'] .right-rail,
@@ -56,6 +57,10 @@
 :root[data-theme='extreme'] .monitor-segmented,
 :root[data-theme='extreme'] .monitor-segmented .segmented-indicator,
 :root[data-theme='extreme'] .monitor-segmented button {border-radius: 0}
+/* 标签页的新建按钮与启停/关闭悬浮钮：其它主题是 999px 与 50%，且不读变量。 */
+:root[data-theme='extreme'] .instance-tab-create,
+:root[data-theme='extreme'] .instance-tab-power,
+:root[data-theme='extreme'] .instance-tab-remove:hover {border-radius: 0}
 :root[data-theme='extreme'] .resource-heading > div,
 :root[data-theme='extreme'] .resource-image-wrap,
 :root[data-theme='extreme'] .instance-caption,
