@@ -626,7 +626,8 @@
       "DroidCast": "DroidCast",
       "DroidCast_raw": "DroidCast_raw",
       "nemu_ipc": "nemu_ipc",
-      "ldopengl": "ldopengl"
+      "ldopengl": "ldopengl",
+      "azurpilot_android": "AzurPilot Android virtual display"
     },
     "ControlMethod": {
       "name": "Select control method",
@@ -636,7 +637,8 @@
       "minitouch": "minitouch",
       "Hermit": "Hermit",
       "MaaTouch": "MaaTouch",
-      "nemu_ipc": "nemu_ipc"
+      "nemu_ipc": "nemu_ipc",
+      "azurpilot_android": "AzurPilot Android virtual display"
     },
     "GameSettings": {
       "name": "Automatically apply recommended game settings",

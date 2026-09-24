@@ -626,7 +626,8 @@
       "DroidCast": "DroidCast喵",
       "DroidCast_raw": "DroidCast_raw喵",
       "nemu_ipc": "nemu_ipc喵",
-      "ldopengl": "ldopengl喵"
+      "ldopengl": "ldopengl喵",
+      "azurpilot_android": "AzurPilot Android 虚拟屏"
     },
     "ControlMethod": {
       "name": "模拟器控制手势",
@@ -636,7 +637,8 @@
       "minitouch": "minitouch喵",
       "Hermit": "Hermit喵",
       "MaaTouch": "MaaTouch喵",
-      "nemu_ipc": "nemu_ipc"
+      "nemu_ipc": "nemu_ipc",
+      "azurpilot_android": "AzurPilot Android 虚拟屏"
     },
     "GameSettings": {
       "name": "自动应用推荐游戏设置",
