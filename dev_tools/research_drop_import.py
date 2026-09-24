@@ -9,11 +9,15 @@ ALAS 只在领奖时实时统计；手上已有的历史截图（自己留的、
     uv run python -m dev_tools.research_drop_import --folder "<截图目录>" --instance 测试 --dry-run
     # 真导入
     uv run python -m dev_tools.research_drop_import --folder "<截图目录>" --instance 测试
+    # 写另一份部署的数据（数据库路径跟代码所在目录，不是当前目录，所以要显式指定）
+    uv run python -m dev_tools.research_drop_import --folder "<截图目录>" --instance 测试 \
+        --db "D:/AzurPilot/config/cl1_data.db"
 
 说明：
-- 只有「队列页 + 获得道具」的截图会被导入；军部研究室主页那种本来就没有掉落，直接跳过。
+- 只有「队列页 + 获得道具」的截图会被导入；军部研究室主页那种多半没有掉落，归到「无掉落」。
+  （科研主页领奖也可能带收获，那类记录没有队列页，期数会是 0，只在金装、心智/物资视图里出现。）
 - 已经在库里的记录按 imgid 跳过，所以可以放心重跑；
-- 只往本地 config/cl1_data.db 追加，不联网，也不碰别的实例。
+- 只往本地 cl1_data.db 追加，不联网，也不碰别的实例。
 """
 
 import argparse
@@ -47,21 +51,20 @@ def file_time(file: str) -> datetime:
     return datetime.fromtimestamp(os.path.getmtime(file))
 
 
-def existing_imgids(instance: str, months: t.Iterable[str]) -> set:
+def existing_imgids(db, instance: str, months: t.Iterable[str]) -> set:
     """取实例在这些月份里已经记录过的 imgid。
 
     导入要可重跑：库里 `add_research_drop` 的去重只看最近 50 条，
     对一次几百上千条的历史导入不够，所以这里自己先查一遍。
 
     Args:
+        db (Cl1Database): 目标数据库。
         instance (str): ALAS 实例名。
         months (list[str]): 'YYYY-MM' 列表。
 
     Returns:
         set: 已存在的 imgid 集合。
     """
-    from module.statistics.cl1_database import db
-
     found = set()
     for month in sorted(set(months)):
         year, number = month.split('-')
@@ -83,6 +86,10 @@ def main():
                         help='写入哪个 ALAS 实例（如 测试），统计按实例隔离')
     parser.add_argument('--server', default='cn', choices=['cn', 'en', 'jp', 'tw'],
                         help='游戏服务器，影响截图资源')
+    parser.add_argument('--db', default=None,
+                        help='cl1_data.db 的路径；缺省用本仓库的 config/cl1_data.db。'
+                             '要写另一份部署的数据时显式指定——数据库路径跟的是'
+                             '**代码所在目录**，不是当前工作目录')
     parser.add_argument('--dry-run', action='store_true',
                         help='只解析并打印结果，不写库')
     args = parser.parse_args()
@@ -106,14 +113,21 @@ def main():
     logger.info(f'[科研导入] 共 {len(files)} 个文件，目标实例 {args.instance}'
                 + ('（试跑，不写库）' if args.dry_run else ''))
 
+    from pathlib import Path
+
     from module.base.utils import load_image
-    from module.statistics.cl1_database import db
+    from module.statistics.cl1_database import Cl1Database
     from module.statistics.research_drop import get_parser
+
+    # 单独建一个实例而不是用模块级的 db：数据库路径默认跟代码所在目录，
+    # 想把数据写进另一份部署就必须显式指定，所以这里把路径打出来。
+    db = Cl1Database(Path(args.db)) if args.db else Cl1Database()
+    logger.info(f'[科研导入] 数据库 {db.db_path}')
 
     parser_ = get_parser()
     if not args.dry_run:
         skipped_imgids = existing_imgids(
-            args.instance, (file_time(file).strftime('%Y-%m') for file in files))
+            db, args.instance, (file_time(file).strftime('%Y-%m') for file in files))
         if skipped_imgids:
             logger.info(f'[科研导入] 库里已有 {len(skipped_imgids)} 条同 imgid 记录，将跳过')
 
