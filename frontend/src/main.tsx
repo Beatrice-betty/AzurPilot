@@ -18,12 +18,6 @@ import { DevControls } from './pages/DevControls'
 import { ConfigManager } from './pages/ConfigManager'
 import { translateCurrentUi } from './i18n'
 
-// Android 宿主给内嵌 WebView 追加此 UA 标记。部分 System WebView 在抽屉的
-// backdrop-filter 与 transform 合成时会把正文错误绘制到抽屉上；Chrome 不受影响。
-if (navigator.userAgent.includes('AzurPilotAndroidWebView/')) {
-  document.documentElement.classList.add('azurpilot-android-webview')
-}
-
 /* 顶层兜底与路由级兜底共用同一页：路由渲染出错时 React Router 会先接住，
    没有 errorElement 就落到它自带的崩溃页（带堆栈），所以两级都要挂上。 */
 function ErrorPage() {
