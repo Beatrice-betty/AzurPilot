@@ -37,6 +37,7 @@ import { SegmentedControl } from '../components/SegmentedControl'
 import { RESEARCH_PREFIX, resolveIcon, StatisticsTable } from '../components/StatisticsTable'
 import { downloadCsv } from '../components/statisticsData'
 import type { UiKey } from '../i18n'
+import { readStatisticsPrefs, updateStatisticsPrefs } from '../app/statisticsPrefs'
 
 const metricIcons: Record<string, LucideIcon> = {
   '战斗次数': Swords,
@@ -100,17 +101,35 @@ export function Statistics() {
   const {ui, theme, language} = useApp()
   const {instance = ''} = useParams()
   const legacy = usesLegacyLayout(theme)
-  const [category, setCategory] = useState<Category>('resources')
-  const [days, setDays] = useState(7)
+  const initialPrefs = useRef(readStatisticsPrefs()).current
+  const [category, setCategoryState] = useState<Category>(initialPrefs.category)
+  const [days, setDaysState] = useState(initialPrefs.days)
   const [month, setMonth] = useState(() => {const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`})
-  const [period, setPeriod] = useState<'day' | 'week' | 'month'>('month')
-  // 科研期数：0 表示最新有记录的一期，与后端约定一致
+  const [period, setPeriodState] = useState<'day' | 'week' | 'month'>(initialPrefs.period)
   // 科研视图：'1'~'9' = 各期（默认 9 期），'gold' = 金装统计，'consumable' = 心智/物资。
   // 后两个都不分期——金装与心智物资各期混着出，只有彩装备与舰船图纸绑定期数。
-  const [researchSeries, setResearchSeries] = useState('9')
+  const [researchSeries, setResearchSeriesState] = useState(initialPrefs.researchSelect)
   const researchScope = researchSeries === 'gold' || researchSeries === 'consumable' ? researchSeries : 'series'
   // 科研的金装/心智物资视图不分期，看的是全部记录（后端 days 上限一年）；按期视图才用 days
   const requestDays = category === 'research' && researchScope !== 'series' ? 365 : days
+
+  const setCategory = useCallback((next: Category) => {
+    setCategoryState(next)
+    updateStatisticsPrefs({category: next})
+  }, [])
+  const setDays = useCallback((next: number) => {
+    setDaysState(next)
+    updateStatisticsPrefs({days: next})
+  }, [])
+  const setPeriod = useCallback((next: 'day' | 'week' | 'month') => {
+    setPeriodState(next)
+    updateStatisticsPrefs({period: next})
+  }, [])
+  const setResearchSeries = useCallback((next: string) => {
+    setResearchSeriesState(next)
+    updateStatisticsPrefs({researchSelect: next})
+  }, [])
+
   const [revision, setRevision] = useState(0)
   const [data, setData] = useState<StatisticsReport>()
   const [error, setError] = useState('')
@@ -243,7 +262,7 @@ export function Statistics() {
       </div>
       <strong>{item.value == null ? '—' : item.value.toLocaleString(undefined, {maximumFractionDigits: 2})}<small>{item.unit}</small></strong>
     </div>
-  })}</div></section>}{!!data.series.length && <Suspense fallback={<Loading/>}><StatisticsChart key={category} series={data.series} tables={condensed ? data.tables : []} heading={!condensed} expanded={expanded} onToggleExpanded={toggleExpanded} title={ui(categories[category])}/></Suspense>}{!condensed && data.tables.map(table => <section className="panel" key={table.title}><StatisticsTable data={table}/></section>)}</div>
+  })}</div></section>}{!!data.series.length && <Suspense fallback={<Loading/>}><StatisticsChart key={category} category={category} series={data.series} tables={condensed ? data.tables : []} heading={!condensed} expanded={expanded} onToggleExpanded={toggleExpanded} title={ui(categories[category])}/></Suspense>}{!condensed && data.tables.map(table => <section className="panel" key={table.title}><StatisticsTable data={table}/></section>)}</div>
 
   const content = <>
     {condensed
