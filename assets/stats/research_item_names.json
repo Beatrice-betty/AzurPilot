@@ -119,6 +119,11 @@
   "rarity": 2,
   "zh": "贼鸥T3设计图"
  },
+ "BlueprintAdmiralNakhimov": {
+  "en": "Blueprint - Admiral Nakhimov",
+  "rarity": 5,
+  "zh": "蓝图：纳希莫夫海军上将"
+ },
  "BlueprintAgir": {
   "en": "Blueprint - Ägir",
   "rarity": 5,
@@ -169,6 +174,11 @@
   "rarity": 5,
   "zh": "蓝图：吾妻"
  },
+ "BlueprintBayard": {
+  "en": "Blueprint - Bayard",
+  "rarity": 4,
+  "zh": "蓝图：贝亚德"
+ },
  "BlueprintBrest": {
   "en": "Blueprint - Brest",
   "rarity": 5,
@@ -194,6 +204,11 @@
   "rarity": 4,
   "zh": "蓝图：契卡洛夫"
  },
+ "BlueprintDaisen": {
+  "en": "Blueprint - Daisen",
+  "rarity": 4,
+  "zh": "蓝图：大山"
+ },
  "BlueprintDrake": {
   "en": "Blueprint - Drake",
   "rarity": 5,
@@ -213,6 +228,16 @@
   "en": "Blueprint - Duncan",
   "rarity": 4,
   "zh": "蓝图：邓肯"
+ },
+ "BlueprintFelixSchultz": {
+  "en": "Blueprint - Felix Schultz",
+  "rarity": 4,
+  "zh": "蓝图：菲利克斯·舒尔茨"
+ },
+ "BlueprintFlandre": {
+  "en": "Blueprint - Flandre",
+  "rarity": 4,
+  "zh": "蓝图：弗兰德尔"
  },
  "BlueprintGascogne": {
   "en": "Blueprint - Gascogne",
@@ -254,6 +279,11 @@
   "rarity": 5,
   "zh": "蓝图：白龙"
  },
+ "BlueprintHalford": {
+  "en": "Blueprint - Halford",
+  "rarity": 4,
+  "zh": "蓝图：哈尔福德"
+ },
  "BlueprintHarbin": {
   "en": "Blueprint - Harbin",
   "rarity": 4,
@@ -263,6 +293,11 @@
   "en": "Blueprint - Harbin",
   "rarity": 4,
   "zh": "蓝图：哈尔滨"
+ },
+ "BlueprintHindenburg": {
+  "en": "Blueprint - Hindenburg",
+  "rarity": 5,
+  "zh": "蓝图：兴登堡"
  },
  "BlueprintIbuki": {
   "en": "Blueprint - Ibuki",
@@ -288,6 +323,11 @@
   "en": "Blueprint - Kansas",
   "rarity": 4,
   "zh": "蓝图：堪萨斯"
+ },
+ "BlueprintKearsarge": {
+  "en": "Blueprint - Kearsarge",
+  "rarity": 5,
+  "zh": "蓝图：奇尔沙治"
  },
  "BlueprintKitakaze": {
   "en": "Blueprint - Kitakaze",
@@ -373,6 +413,11 @@
   "en": "Blueprint - Seattle",
   "rarity": 4,
   "zh": "蓝图：西雅图"
+ },
+ "BlueprintShimanto": {
+  "en": "Blueprint - Shimanto",
+  "rarity": 4,
+  "zh": "蓝图：四万十"
  },
  "BlueprintTakahashi": {
   "en": "Blueprint - Takahashi",
@@ -519,10 +564,25 @@
   "rarity": 4,
   "zh": "试作舰载型BF-109GT0设计图"
  },
+ "Prototype_Carrier_Based_Ta_152_C_1_R14_T0": {
+  "en": "Prototype Carrier-Based Ta 152 C-1/R14 T0 Design",
+  "rarity": 5,
+  "zh": "试作舰载型Ta 152C-1/R14T0设计图"
+ },
+ "Prototype_Carrier_Based_Ta_152_C_1_R14_T0_2": {
+  "en": "Prototype Carrier-Based Ta 152 C-1/R14 T0 Design",
+  "rarity": 5,
+  "zh": "试作舰载型Ta 152C-1/R14T0设计图"
+ },
  "Prototype_Quadruple_305mm_SKC39_Main_Gun_Mount_T0": {
   "en": "Prototype Quadruple 305mm SKC39 Main Gun Mount T0 Design",
   "rarity": 5,
   "zh": "试作型四联装305mmSKC39主炮T0设计图"
+ },
+ "Prototype_Quadruple_610mm_Cruiser_Torpedo_Mount_T0": {
+  "en": "Prototype Quadruple 610mm Cruiser Torpedo Mount T0 Design",
+  "rarity": 4,
+  "zh": "试作型四联装610mm鱼雷（巡洋用）T0设计图"
  },
  "Prototype_Saiun_Kai_T0": {
   "en": "Prototype Saiun Kai T0 Design",
@@ -559,16 +619,6 @@
   "rarity": 5,
   "zh": "试作舰载型天雷T0设计图"
  },
- "Prototype_Tenrai_T0_5": {
-  "en": "Prototype Tenrai T0 Design",
-  "rarity": 5,
-  "zh": "试作舰载型天雷T0设计图"
- },
- "Prototype_Tenrai_T0_6": {
-  "en": "Prototype Tenrai T0 Design",
-  "rarity": 5,
-  "zh": "试作舰载型天雷T0设计图"
- },
  "Prototype_Triple_203mm_AA_Gun_T0": {
   "en": "T0 Prototype Triple 203mm AA Gun Design",
   "rarity": 4,
@@ -580,16 +630,6 @@
   "zh": "试作型三联装380mm主炮Mle1935T0设计图"
  },
  "Prototype_Triple_381mm_AA_Gun_T0": {
-  "en": "T0 Prototype Triple 381mm AA Gun Design",
-  "rarity": 4,
-  "zh": "试作型三联装381mm主炮T0设计图"
- },
- "Prototype_Triple_381mm_AA_Gun_T0_2": {
-  "en": "T0 Prototype Triple 381mm AA Gun Design",
-  "rarity": 4,
-  "zh": "试作型三联装381mm主炮T0设计图"
- },
- "Prototype_Triple_381mm_AA_Gun_T0_3": {
   "en": "T0 Prototype Triple 381mm AA Gun Design",
   "rarity": 4,
   "zh": "试作型三联装381mm主炮T0设计图"
@@ -609,15 +649,20 @@
   "rarity": 4,
   "zh": "试作型三联装406mm主炮Model1940T0设计图"
  },
- "Prototype_Twin_234mm_Main_Gun_9_2_MK_XII_T0": {
-  "en": "Prototype Twin 234mm Main Gun (9.2\" MK XII) T0 Design",
+ "Prototype_Triple_419mm_Mk_I_Main_Gun_Mount_T0": {
+  "en": "Prototype Triple 419mm Mk. I Main Gun Mount T0 Design",
   "rarity": 4,
-  "zh": "试作型双联装234mm主炮T0设计图"
+  "zh": "试作型三联装419mm主炮MK.IT0设计图"
  },
- "Prototype_Twin_234mm_Main_Gun_9_2_MK_XII_T0_2": {
-  "en": "Prototype Twin 234mm Main Gun (9.2\" MK XII) T0 Design",
+ "Prototype_Twin_127mm_Mk_16_Dual_Purpose_Gun_Mount_T0": {
+  "en": "Prototype Twin 127mm Mk 16 Dual-Purpose Gun Mount T0 Design",
   "rarity": 4,
-  "zh": "试作型双联装234mm主炮T0设计图"
+  "zh": "试作型双联装127mm高平两用炮Mk16T0设计图"
+ },
+ "Prototype_Twin_127mm_Mle_1948_Naval_Gun_T0": {
+  "en": "Prototype Twin 127mm Mle 1948 Naval Gun T0 Design",
+  "rarity": 4,
+  "zh": "试作型双联装127mm主炮Mle1948T0设计图"
  },
  "Prototype_Twin_90mm_Model_1939_High_Angle_Gun_T0": {
   "en": "Prototype Twin 90mm Model 1939 High Angle Gun T0 Design",
