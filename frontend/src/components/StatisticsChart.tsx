@@ -256,15 +256,19 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
       /* 每条曲线落在哪个 Y 轴上：单页与统一轴都用左轴。 */
       const axisIndexFor = (item: {index: number}) => (isSingle || axisMode === 'unified' ? 0 : Math.min(item.index, yAxes.length - 1))
 
-      /* 叠涨时该曲线就地换成涨 / 跌两段上色。 */
+      /* 叠涨时该曲线按涨跌配色：折线分成两段，蜡烛线用涨跌色。 */
       const echartsSeries = shownData.map(item => {
         const color = colorFor(item)
+        const riseFall = stackedRise && isActionPointSeries(item.series, ui('resource.ActionPoint'))
         if (isCandlestick) {
           const bucketMap = new Map(item.buckets.map(b => [b.time, b]))
           if (item.index === 0) {
+            const candle = riseFall
+              ? {color: RISE_COLOR, color0: FALL_COLOR, borderColor: RISE_COLOR, borderColor0: FALL_COLOR}
+              : {color: primary, color0: secondary, borderColor: primary, borderColor0: secondary}
             return [{
               name: item.series.label, type: 'candlestick' as const, yAxisIndex: 0,
-              itemStyle: {color: primary, color0: secondary, borderColor: primary, borderColor0: secondary},
+              itemStyle: candle,
               data: categoryTimes.map(t => { const b = bucketMap.get(t); return b ? [b.open, b.close, b.low, b.high] : '-' }),
             }]
           }
@@ -274,7 +278,7 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
             data: categoryTimes.map(t => { const b = bucketMap.get(t); return b ? b.close : '-' }),
           }]
         }
-        if (stackedRise && isActionPointSeries(item.series, ui('resource.ActionPoint'))) {
+        if (riseFall) {
           const segments = riseFallSegments(item.buckets.map(b => new Date(b.time.replace(' ', 'T')).getTime()), item.buckets.map(b => b.close))
           return [
             {name: item.series.label, type: 'line' as const, yAxisIndex: axisIndexFor(item), showSymbol: false, connectNulls: false,
