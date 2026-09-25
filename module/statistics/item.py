@@ -478,6 +478,11 @@ class ItemGrid:
         self.amount_max = {}
         self.amount_default_max = None
 
+        # 数量区覆盖（按物品名前缀，按顺序取第一个命中的）。数量数字右对齐，
+        # 位数多的物品会超出默认区被切掉首位；白纸类的数字又压在图标装饰上。
+        # 一个通用区解决不了，只能按物品换区。
+        self.amount_area_rules = []
+
         self.items = []
 
     def _load_image(self, image):
@@ -668,6 +673,20 @@ class ItemGrid:
         else:
             return None
 
+    def amount_area_for(self, name):
+        """取该物品的数量区：按 amount_area_rules 匹配前缀，未命中用默认区。
+
+        Args:
+            name (str): 物品名称，如 'OperationCoin'、'GearDesignPlanGunT4'。
+
+        Returns:
+            tuple: (x1, y1, x2, y2) 数量区坐标。
+        """
+        for prefix, area in self.amount_area_rules:
+            if name.startswith(prefix):
+                return area
+        return self.amount_area
+
     def predict(self, image, name=True, amount=True, cost=False, price=False, tag=False, amount_trim=True):
         """预测截图中所有物品的属性。
 
@@ -690,7 +709,7 @@ class ItemGrid:
             for item, n in zip(self.items, name_list):
                 item.name = n
         if amount:
-            amount_images = [item.crop(self.amount_area) for item in self.items]
+            amount_images = [item.crop(self.amount_area_for(item.name)) for item in self.items]
             item_names = [item.name for item in self.items]
             amount_list = self.amount_ocr.ocr_batch_with_validation(
                 amount_images, item_names=item_names, direct_ocr=True, trim=amount_trim,
