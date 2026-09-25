@@ -696,7 +696,7 @@ class ConfigUpdater:
          'OpsiHazard1Leveling.ExecuteFixedPatrolScan',
          execute_fixed_patrol_scan_redirect),
     ]
-    # 大世界掉落截图由单一开关拆成按任务分类的 7 个开关，旧值铺给每一个，
+    # 大世界掉落截图由单一开关拆成按任务分类的 8 个开关，旧值铺给每一个，
     # 升级后各任务的截图行为与升级前保持一致。
     redirection += [
         ('Alas.DropRecord.OpsiRecord',

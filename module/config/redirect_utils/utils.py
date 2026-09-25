@@ -176,13 +176,14 @@ OPSI_RECORD_ARGS = (
     'OpsiObscure',
     'OpsiAbyssal',
     'OpsiStronghold',
+    'OpsiExplore',
     'OpsiOther',
 )
 
 
 def opsi_record_redirect(value):
     """
-    OpsiRecord → 按任务拆分的 7 个掉落截图开关。
+    OpsiRecord → 按任务拆分的 8 个掉落截图开关。
 
     旧的单一开关同时管着所有大世界任务，拆分后旧值原样铺给每一个开关，
     升级后各任务的截图行为与升级前一致，不会突然多出或丢掉截图。

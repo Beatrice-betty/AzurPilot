@@ -173,6 +173,7 @@ class GeneratedConfig:
     DropRecord_OpsiObscure = 'upload'  # do_not, save, upload, save_and_upload
     DropRecord_OpsiAbyssal = 'upload'  # do_not, save, upload, save_and_upload
     DropRecord_OpsiStronghold = 'upload'  # do_not, save, upload, save_and_upload
+    DropRecord_OpsiExplore = 'upload'  # do_not, save, upload, save_and_upload
     DropRecord_OpsiOther = 'upload'  # do_not, save, upload, save_and_upload
     DropRecord_MeowfficerBuy = 'do_not'  # do_not, save
     DropRecord_MeowfficerTalent = 'do_not'  # do_not, save, upload, save_and_upload

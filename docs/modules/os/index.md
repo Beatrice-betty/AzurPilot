@@ -246,7 +246,7 @@ OCR：行动力面板 / 黄币 / 紫币 ──▶ 决策（智能调度+ 状态�
 | `OpsiObscure/OpsiAbyssal/OpsiStronghold/OpsiArchive/OpsiMonthBoss/OpsiExplore/OpsiCrossMonth.*` | —— | 各玩法参数；后三者的 `Scheduler.Sensitive` 默认 true（异常时严格重启停机） |
 | `OpsiAshBeacon.*` | `EnsureFullyCollected`、`AttackMode` | 信标收集影响 CL1 的 AP 保留（未收满则忽略保留） |
 | `OpsiCheckLeveling.*` | `TargetLevel`、`CheckInterval` | 练度检查（非独立任务，CL1 前置调用） |
-| `Alas.DropRecord.Opsi*` | `OpsiHazard1Leveling` / `OpsiMeowfficerFarming` / `OpsiDaily` / `OpsiObscure` / `OpsiAbyssal` / `OpsiStronghold` / `OpsiOther` | 掉落记录开关，按任务拆分；运行期由 `module/os/config.py` 的 `opsi_drop_record(config)` 取当前任务的开关，未列出的任务走 `OpsiOther` |
+| `Alas.DropRecord.Opsi*` | `OpsiHazard1Leveling` / `OpsiMeowfficerFarming` / `OpsiDaily` / `OpsiObscure` / `OpsiAbyssal` / `OpsiStronghold` / `OpsiExplore` / `OpsiOther` | 掉落记录开关，按任务拆分；跨月每日跟大世界每日、档案坐标跟隐秘海域、月度Boss跟深渊海域共用开关，其余走 `OpsiOther`。运行期由 `module/os/config.py` 的 `opsi_drop_record(config)` 取当前任务的开关 |
 
 代码内手动常量在 `module/os/config.py`：`OSConfig` 覆盖 `STORY_OPTION=-2`、`MAP_SWIPE_MULTIPLY=(1.174, 1.200)`、`DETECTION_BACKEND` 等；守护模式与任务运行时都会 `merge(OSConfig())`。
 
