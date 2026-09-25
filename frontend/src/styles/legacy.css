@@ -793,6 +793,7 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 .monitor-panel .log-panel {border: 0; border-radius: 0}
 .monitor-panel .log-content {font-size: 12px; line-height: 1.8; background: var(--surface)}
 .monitor-segmented {display: inline-flex; align-items: center; gap: 0; padding: 0; border: 1px solid var(--border); border-radius: 20px; background: transparent; max-width: 100%; overflow: hidden}
+.statistics-edit-actions.monitor-segmented {border-radius: 0}
 .monitor-segmented button {display: inline-flex; align-items: center; justify-content: center; gap: 7px; flex-shrink: 0; min-height: 36px; padding: 6px 16px; border: 0; border-right: 1px solid var(--border); border-radius: 0; color: var(--muted); font-size: 13px; font-weight: 500; white-space: nowrap; transition: background-color .15s, color .15s}
 .monitor-segmented button:last-child {border-right: 0}
 .monitor-segmented button[aria-selected='true'] {background: var(--accent-soft); color: var(--accent)}

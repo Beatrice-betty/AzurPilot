@@ -20,6 +20,9 @@ export interface StatisticsPrefs {
   chartMode: ChartMode
   chartAxisMode: ChartAxisMode
   bucket: number
+  /** 图表与原始记录卡共用的时间范围，空表示不限 */
+  rangeFrom: string
+  rangeTo: string
   selectedKeys: Record<string, string[]>
 }
 
@@ -44,6 +47,8 @@ export const DEFAULT_STATISTICS_PREFS: StatisticsPrefs = {
   chartMode: 'line',
   chartAxisMode: 'separate',
   bucket: 0,
+  rangeFrom: '',
+  rangeTo: '',
   selectedKeys: {},
 }
 
@@ -79,6 +84,9 @@ export function readStatisticsPrefs(): StatisticsPrefs {
         ? obj.bucket
         : DEFAULT_STATISTICS_PREFS.bucket
 
+      const rangeFrom = typeof obj.rangeFrom === 'string' ? obj.rangeFrom : ''
+      const rangeTo = typeof obj.rangeTo === 'string' ? obj.rangeTo : ''
+
       const selectedKeys: Record<string, string[]> = {}
       if (obj.selectedKeys && typeof obj.selectedKeys === 'object') {
         for (const [key, value] of Object.entries(obj.selectedKeys as Record<string, unknown>)) {
@@ -97,6 +105,8 @@ export function readStatisticsPrefs(): StatisticsPrefs {
         chartMode,
         chartAxisMode,
         bucket,
+              rangeFrom,
+              rangeTo,
         selectedKeys,
       }
     }
@@ -107,6 +117,19 @@ export function readStatisticsPrefs(): StatisticsPrefs {
 }
 
 let snapshot: StatisticsPrefs = readStatisticsPrefs()
+
+/* 偏好是模块级快照：写入即通知订阅者，供同页的其它卡片跟着重算。 */
+let version = 0
+const listeners = new Set<() => void>()
+
+export function subscribeStatisticsPrefs(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+export function getStatisticsPrefsVersion(): number {
+  return version
+}
 
 export function getStatisticsPrefs(): StatisticsPrefs {
   return snapshot
@@ -125,6 +148,9 @@ export function updateStatisticsPrefs(partial: Partial<StatisticsPrefs>) {
   } catch {
     /* 存储不可用时本次会话内仍生效。 */
   }
+
+  version += 1
+  for (const listener of listeners) listener()
 }
 
 export function setSelectedKeysForCategory(category: string, keys: string[]) {
