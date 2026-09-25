@@ -60,6 +60,8 @@
   .monitor-panel .preview-screen {width:min(calc(100% - 32px),calc((100cqh - 32px)*16/9));max-height:none}
 }
 .statistics-controls {display:flex;flex-wrap:wrap;align-items:end;gap:14px;padding:18px 22px}.statistics-controls label {display:flex;flex-direction:column;gap:7px;font-size:11px;color:var(--muted)}.statistics-controls select,.statistics-controls input {max-width:200px;min-height:34px}.period-controls {padding:0 0 18px;align-items:center}.period-controls strong {margin-right:auto}.period-controls > span {font-size:12px;color:var(--muted)}
+/* 月份格没有上方标签，与同排带标签的控件按底边对齐，两者的下边框落在同一条水平线上。 */
+.period-controls .statistics-inline-control:has(input) {align-self:flex-end}
 /* 以下工具栏规则只服务紧凑主题：分类、时间范围与操作合并为一行并置顶，滚动时仍可切换与刷新。
    非旧版版式由 body 滚动，需让开吸顶的顶栏；旧版版式的 .instance-page-main 自身滚动，贴顶即可。 */
 :root[data-theme='extreme'] .statistics-toolbar-row {position:sticky;top:var(--topbar-height);z-index:30;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 0;margin-bottom:12px;background:var(--bg)}
@@ -151,7 +153,7 @@
    同时面板自身可滚动，滚动后标题行会滚出视口。右侧让开按钮宽度并让它吸顶。
    这里必须带 !important：紧凑主题用 padding 简写加 !important 压过面板内边距。 */
 .panel.chart-expanded .panel-heading {position:sticky;top:0;z-index:2;padding-right:160px !important;background:var(--surface)}
-.statistics-table {min-width:0}.statistics-table h3 {margin:0;font-size:14px}.table-toolbar {padding:10px 22px;margin:0;flex-wrap:wrap}.table-toolbar input {max-width:240px}.table-scroll {overflow-x:auto;overflow-y:visible;max-height:none}.statistics-table table {border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap}.statistics-table td,.statistics-table th {padding:13px 20px;text-align:left;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}.statistics-table th {position:sticky;top:0;background:var(--surface-muted);z-index:1}.statistics-table th button {border:0;background:none;color:var(--text);cursor:pointer;font:inherit}.statistics-table tbody tr:hover {background:var(--surface-muted)}.table-resource-cell {display:inline-flex;align-items:center;gap:8px;vertical-align:middle}.table-resource-icon {width:26px;height:26px;object-fit:contain;flex-shrink:0;display:block;user-select:none;pointer-events:none;filter:drop-shadow(0 1px 3px rgb(0 0 0 / .2))}.table-header-icon {width:24px;height:24px;margin-right:2px}
+.statistics-table {min-width:0}.statistics-table h3 {margin:0;font-size:14px}.table-toolbar {padding:10px 22px;margin:0;flex-wrap:wrap}.table-toolbar input {max-width:240px}.table-scroll {overflow-x:auto;overflow-y:visible;max-height:none}.statistics-table table {border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap}.statistics-table td,.statistics-table th {padding:13px 20px;text-align:left;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}.statistics-table th {position:sticky;top:0;background:var(--surface-muted);z-index:1}.statistics-table th button {border:0;background:none;color:var(--text);cursor:pointer;font:inherit;padding:0}.statistics-table tbody tr:hover {background:var(--surface-muted)}.table-resource-cell {display:inline-flex;align-items:center;gap:8px;vertical-align:middle}.table-resource-icon {width:26px;height:26px;object-fit:contain;flex-shrink:0;display:block;user-select:none;pointer-events:none;filter:drop-shadow(0 1px 3px rgb(0 0 0 / .2))}.table-header-icon {width:24px;height:24px;margin-right:2px}
 /* 卡片适应：列数由脚本按容器宽度写入，末排因此不会各自撑满整行。 */
 .resource-grid.resource-fit {display:grid}
 /* 卡片适应把网格切成多列，合并卡片仍占满整行。 */
