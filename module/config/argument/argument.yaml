@@ -197,6 +197,10 @@ Error:
     type: textarea
     mode: yaml
     value: "provider: null"
+  LowPushMode:
+    type: checkbox
+    value: false
+    option: [true, false]
   ScreenshotLength: 1
   GameStuckRestart: false
   GameStuckThreshold:

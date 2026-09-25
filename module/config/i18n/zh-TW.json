@@ -761,6 +761,12 @@
       "name": "錯誤推送設定",
       "help": "發生無法處理的異常後，使用 Onepush 推送一條錯誤資訊。設定方式見檔案：https://github.com/LmeSzinc/AzurLaneAutoScript/wiki/Onepush-configuration-%5BCN%5D"
     },
+    "LowPushMode": {
+      "name": "低推送量模式",
+      "help": "只推送需要人工介入的錯誤。遊戲未執行、模擬器離線、遊戲卡住等能自動復原的錯誤只記錄日誌，不再推送",
+      "True": "已啟用",
+      "False": "關閉"
+    },
     "ScreenshotLength": {
       "name": "出錯時，保留最後 X 張截圖",
       "help": ""

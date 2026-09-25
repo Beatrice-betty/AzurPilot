@@ -761,6 +761,12 @@
       "name": "Error push settings",
       "help": "Notification will be sent via OnePush when an error occurs. Configure the OnePush provider for use, refer to https://github.com/y1ndan/onepush"
     },
+    "LowPushMode": {
+      "name": "Low Push Mode",
+      "help": "Only push errors that require manual intervention. Recoverable errors such as the game not running, the emulator being offline or the game being stuck are only logged, not pushed",
+      "True": "Enabled",
+      "False": "Disabled"
+    },
     "ScreenshotLength": {
       "name": "On error, keep the last X screenshots",
       "help": ""

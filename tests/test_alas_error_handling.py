@@ -34,6 +34,7 @@ class TestGameNotRunningErrorHandling(unittest.TestCase):
         script._channel_float_done = True
         script.__dict__['config'] = Mock()
         script.config.cross_get.return_value = False
+        script.config.Error_LowPushMode = False
         error = GameNotRunningError('Game not running')
         script.__dict__['commission'] = Mock(side_effect=error)
 
@@ -55,6 +56,72 @@ class TestGameNotRunningErrorHandling(unittest.TestCase):
             level=30,
             with_traceback=False,
         )
+
+
+class TestLowPushMode(unittest.TestCase):
+    def build_script(self, low_push_mode):
+        script = AzurLaneAutoScript.__new__(AzurLaneAutoScript)
+        script.config_name = 'test'
+        script.__dict__['config'] = Mock()
+        script.config.cross_get.return_value = False
+        script.config.Error_LowPushMode = low_push_mode
+        return script
+
+    def test_recoverable_error_is_pushed_when_mode_disabled(self):
+        script = self.build_script(low_push_mode=False)
+
+        with (
+            patch('alas.handle_notify') as handle_notify_mock,
+            patch('alas.notify_webui') as notify_webui_mock,
+        ):
+            pushed = script._notify_recoverable(
+                title='title', content='content',
+                webui_title='webui title', webui_content='webui content',
+            )
+
+        self.assertTrue(pushed)
+        handle_notify_mock.assert_called_once_with(
+            script.config.Error_OnePushConfig, title='title', content='content',
+        )
+        notify_webui_mock.assert_called_once_with(
+            'test', title='webui title', content='webui content',
+        )
+
+    def test_recoverable_error_is_skipped_when_mode_enabled(self):
+        script = self.build_script(low_push_mode=True)
+
+        with (
+            patch('alas.handle_notify') as handle_notify_mock,
+            patch('alas.notify_webui') as notify_webui_mock,
+        ):
+            pushed = script._notify_recoverable(
+                title='title', content='content',
+                webui_title='webui title', webui_content='webui content',
+            )
+
+        self.assertFalse(pushed)
+        handle_notify_mock.assert_not_called()
+        notify_webui_mock.assert_not_called()
+
+    def test_game_not_running_still_recovers_in_low_push_mode(self):
+        """低推送量模式只减少推送，自动重启恢复不受影响。"""
+        script = self.build_script(low_push_mode=True)
+        script._channel_float_done = True
+        script.__dict__['commission'] = Mock(
+            side_effect=GameNotRunningError('Game not running')
+        )
+
+        with (
+            patch('alas.logger.error_context'),
+            patch('alas.handle_notify') as handle_notify_mock,
+            patch('alas.notify_webui') as notify_webui_mock,
+        ):
+            result = script.run('commission', skip_first_screenshot=True)
+
+        self.assertEqual('recoverable', result)
+        script.config.task_call.assert_called_once_with('Restart')
+        handle_notify_mock.assert_not_called()
+        notify_webui_mock.assert_not_called()
 
 
 class TestRestartBootstrap(unittest.TestCase):
