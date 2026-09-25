@@ -80,7 +80,7 @@ class Router:
         from module.api.statistics_service import report
         return report(self.configs, params.instance, params.category, params.month,
                       params.days, params.period, research_series=params.series,
-                      research_scope=params.scope)
+                      research_scope=params.scope, loot_task=params.task)
 
     def meowfficer_score_report(self, params):
         from module.api.meowfficer_service import report

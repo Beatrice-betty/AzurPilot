@@ -137,7 +137,8 @@ def _month_end(moment):
     return (moment.replace(day=28) + timedelta(days=4)).replace(day=1)
 
 
-def report(configs, instance, category, month, days, period, research_series=0, research_scope='series'):
+def report(configs, instance, category, month, days, period, research_series=0, research_scope='series',
+           loot_task=None):
     configs.path(instance)
     now = datetime.now()
     try:
@@ -373,6 +374,61 @@ def report(configs, instance, category, month, days, period, research_series=0, 
         ))
     elif category == 'loot':
         from module.statistics.azurstats import AzurStats
+        from module.statistics.opsi_drop_stats import collect as collect_opsi_drop
+        from module.statistics.research_stats import RARITY_LABELS
+        # 版式与科研掉落一致：上面收益卡片、中间收获明细、下面掉落记录。
+        # 「汇总周期」框时间：month 看选定月份，day/week 看今天/本周。
+        start = selected.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        end = _month_end(start)
+        if period != 'month':
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            if period == 'week':
+                start -= timedelta(days=start.weekday())
+            end = now
+        task = loot_task or None
+        summary = collect_opsi_drop(instance, start, end, task=task)
+        detail_columns = ['图标', '物品', '稀有度', '总收益', '掉落记录数', '平均每次掉落']
+        record_columns = ['时间', '任务', '海域', '掉落物']
+        title = '大世界掉落明细'
+        note = ('暂时只统计金菜（通用/主炮/鱼雷/防空炮/舰载机 部件T4）与彩图纸'
+                '（舰炮/鱼雷/防空炮/舰载机 研发图纸UR型）；其他物品照常入库，只是不在这里展示。'
+                '统计在任务跑完解析掉落时完成：把该任务的「掉落截图」设为保存或上传均可'
+                '（两者都统计，区别只是要不要把截图落盘）。')
+        # 任务筛选下拉的数据源：有掉落开关的任务固定列出，其余任务掉了东西才出现
+        result['taskOptions'] = summary['tasks']
+        if not summary['record_count']:
+            result['tables'].append(table(title, detail_columns, [], note=(
+                note + ' 这段时间里没有掉落记录——「汇总周期」选今天/本周时窗口很短，'
+                '改成「选定月份」能看得更多。')))
+        else:
+            metric('掉落记录', summary['record_count'], '次')
+            for item in summary['items']:
+                # 0 传 null：前端与委托收益一样显示「—」，区分「没有」和「真是 0」
+                metric(item['zh'], item['amount'] or None, icon=f'opsi:{item["name"]}')
+            for label, begin, finish in (
+                ('今日总计', now.replace(hour=0, minute=0, second=0, microsecond=0), now + timedelta(seconds=1)),
+                ('本月总计', now.replace(day=1, hour=0, minute=0, second=0, microsecond=0), None),
+                ('选定月份总计', selected.replace(day=1, hour=0, minute=0, second=0, microsecond=0), None),
+            ):
+                finish = _month_end(begin) if finish is None else finish
+                metric(label, collect_opsi_drop(instance, begin, finish, task=task)['total'] or None)
+            rows = [
+                [f'opsi:{item["name"]}', item['zh'], RARITY_LABELS.get(item.get('rarity'), '—'),
+                 item['amount'] or None, item['count'] or None, item['avg'] or None]
+                for item in summary['items']
+            ]
+            result['tables'].append(table(
+                title, detail_columns, rows, note=note,
+                default_sort={'index': 3, 'descending': True},
+            ))
+            result['tables'].append(table(
+                '掉落记录', record_columns, summary['records'][:200],
+                note='按时间倒序；只列掉了金菜或彩图纸的记录，其余掉落不入这张表。'
+                     + ('记录超过 200 条，只显示最近 200 条。' if len(summary['records']) > 200 else ''),
+                default_sort={'index': 0, 'descending': True},
+            ))
+
+        # 短猫按侵蚀等级的收益汇总：沿用原「短猫掉落」页的数据源，放在最下面
         rows = []
         with _loot_lock:
             cached = AzurStats.load_meowofficer_farming(instance=instance)

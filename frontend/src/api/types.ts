@@ -33,9 +33,11 @@ export interface StatTable {title: string; columns: string[]; rows: Scalar[][]; 
 export interface TableSort {index: number; descending: boolean}
 export interface StatisticsReport {
   instance: string; category: string; month: string
-  /* icon 可选：给卡片单独指定图标（科研物品写 'research:<模板名>'），缺省按 label 查内置表 */
+  /* icon 可选：给卡片单独指定图标（科研物品写 'research:<模板名>'，大世界掉落写 'opsi:<模板名>'），缺省按 label 查内置表 */
   metrics: {label: string; value: number | null; unit: string; icon?: string}[]
   series: StatSeries[]; tables: StatTable[]; notes: string[]
+  /* 大世界掉落专用：任务筛选的选项（含当前窗口内没有记录的任务），count 是窗口内掉落记录数 */
+  taskOptions?: {key: string; label: string; count: number}[]
 }
 /** 指挥喵评分的单条天赋。`kind` 为 `special`（彩天赋）时高亮，`inferred` 表示这条由识别推断而来。 */
 export interface MeowfficerTalent { name: string; level?: number; kind?: string; inferred?: boolean }

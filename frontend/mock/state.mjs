@@ -458,14 +458,66 @@ export function createMockState({ empty = false } = {}) {
             ]
           }]
         } else if (params.category === 'loot') {
-          result.tables = [{
+          // 素材与服务端 module/api/statistics_service.py 的 loot 分支对齐：
+          // 上面收益卡片（金菜/彩图纸 + 今日/本月/选定月份总计）、中间收获明细、
+          // 下面掉落记录，最后是原有的短猫按侵蚀等级的收益汇总。
+          const items = [
+            ['PlateGeneralT4', '通用部件T4', '金', 8, 5],
+            ['PlateGunT4', '主炮部件T4', '金', 8, 8],
+            ['PlateTorpedoT4', '鱼雷部件T4', '金', 6, 6],
+            ['PlateAntiAirT4', '防空炮部件T4', '金', 4, 4],
+            ['PlatePlaneT4', '舰载机部件T4', '金', 5, 5],
+            ['GearDesignPlanGunT5', '舰炮研发图纸UR型', '彩', 0, 0],
+            ['GearDesignPlanTorpedoT5', '鱼雷研发图纸UR型', '彩', 0, 0],
+            ['GearDesignPlanAntiAirT5', '防空炮研发图纸UR型', '彩', 0, 0],
+            ['GearDesignPlanPlaneT5', '舰载机研发图纸UR型', '彩', 1, 1]
+          ]
+          const empty = name === 'demo-alt'
+          result.taskOptions = [
+            { key: 'opsi_daily', label: '大世界每日Plus', count: 0 },
+            { key: 'opsi_obscure', label: '隐秘海域', count: 0 },
+            { key: 'opsi_abyssal', label: '深渊坐标', count: 0 },
+            { key: 'opsi_stronghold', label: '塞壬要塞', count: empty ? 0 : 1 },
+            { key: 'opsi_meowfficer_farming', label: '耄耋相接', count: empty ? 0 : 19 }
+          ]
+          const detail = {
+            title: '大世界掉落明细',
+            columns: ['图标', '物品', '稀有度', '总收益', '掉落记录数', '平均每次掉落'],
+            note: '暂时只统计金菜（通用/主炮/鱼雷/防空炮/舰载机 部件T4）与彩图纸（舰炮/鱼雷/防空炮/舰载机 研发图纸UR型）；其他物品照常入库，只是不在这里展示。',
+            defaultSort: { index: 3, descending: true },
+            rows: empty ? [] : items.map(([key, zh, rarity, amount, count]) => [
+              `opsi:${key}`, zh, rarity, amount || null, count || null, count ? 1.6 : null
+            ])
+          }
+          result.metrics = empty ? [] : [
+            { label: '掉落记录', value: 20, unit: '次' },
+            ...items.map(([key, zh, , amount]) => ({ label: zh, value: amount || null, unit: '', icon: `opsi:${key}` })),
+            { label: '今日总计', value: 7, unit: '' },
+            { label: '本月总计', value: 32, unit: '' },
+            { label: '选定月份总计', value: 32, unit: '' }
+          ]
+          result.tables = empty ? [detail] : [
+            detail,
+            {
+              title: '掉落记录',
+              columns: ['时间', '任务', '海域', '掉落物'],
+              note: '按时间倒序；只列掉了金菜或彩图纸的记录，其余掉落不入这张表。',
+              defaultSort: { index: 0, descending: true },
+              rows: [
+                ['2026-09-25 07:58:28', '耄耋相接', '危险海域 Mediterranee A（侵蚀5）', '鱼雷部件T4 x1'],
+                ['2026-09-25 07:30:33', '耄耋相接', '危险海域 Mediterranee A（侵蚀5）', '舰载机研发图纸UR型 x1、通用部件T4 x1、主炮部件T4 x1'],
+                ['2026-09-23 12:04:51', '塞壬要塞', '要塞海域 East Continental Shelf E（侵蚀3）', '通用部件T4 x4、主炮部件T4 x1、鱼雷部件T4 x1、防空炮部件T4 x1、舰载机部件T4 x1']
+              ]
+            }
+          ]
+          result.tables.push({
             title: '短猫掉落收益',
             columns: ['侵蚀等级', '上次记录时间', '有效战斗轮数', '平均黄币/轮', '平均金菜/轮', '平均深渊/轮', '平均隐秘/轮'],
-            rows: name === 'demo-alt' ? [] : [
+            rows: empty ? [] : [
               [3, timestamp(new Date(Date.now() - 3600000)), 210, 4.125, 0.35, 0.08, 0.12],
               [5, timestamp(new Date(Date.now() - 1800000)), 500, 5.82, 0.58, 0.15, 0.22]
             ]
-          }]
+          })
         } else if (params.category === 'research') {
           // 两个视图共用同一套形状：上面收益卡片、中间收获明细、下面原始掉落记录，
           // 区别只在期数视图按期过滤、心智/物资视图不分期。素材与服务端

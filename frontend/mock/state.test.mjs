@@ -176,13 +176,21 @@ end`
     expect(opsi.tables).toHaveLength(1)
 
     const loot = dispatch('statistics.report', {instance: 'demo-main', category: 'loot'})
-    expect(loot.tables).toHaveLength(1)
-    expect(loot.tables[0].columns).toContain('平均黄币/轮')
+    // 大世界掉落：收获明细 + 掉落记录 + 原有的短猫收益表
+    expect(loot.tables).toHaveLength(3)
+    expect(loot.tables[0].title).toBe('大世界掉落明细')
+    expect(loot.tables[0].rows[0][0]).toBe('opsi:PlateGeneralT4')
+    expect(loot.tables[1].title).toBe('掉落记录')
+    expect(loot.tables[2].columns).toContain('平均黄币/轮')
+    expect(loot.taskOptions.map(option => option.key)).toContain('opsi_meowfficer_farming')
+    expect(loot.metrics.some(metric => metric.icon === 'opsi:GearDesignPlanPlaneT5')).toBe(true)
 
     const altResources = dispatch('statistics.report', {instance: 'demo-alt', category: 'resources'})
     expect(altResources.series[0].points).toHaveLength(0)
     const altLoot = dispatch('statistics.report', {instance: 'demo-alt', category: 'loot'})
+    expect(altLoot.metrics).toHaveLength(0)
     expect(altLoot.tables[0].rows).toHaveLength(0)
+    expect(altLoot.tables.at(-1).rows).toHaveLength(0)
 
     const longRange = dispatch('statistics.report', {instance: 'demo-main', category: 'resources', days: 365})
     expect(longRange.series[0].points).toHaveLength(24)

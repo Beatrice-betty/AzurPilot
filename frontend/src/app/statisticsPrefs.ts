@@ -15,6 +15,8 @@ export interface StatisticsPrefs {
   period: CommissionPeriod
   /** 科研页面的视图：'1'~'9' 是各期，'consumable' 是心智/物资 */
   researchSelect: string
+  /** 大世界掉落页的任务筛选：'' 是全部大世界任务，其余是任务标识（opsi_xxx） */
+  lootTask: string
   chartMode: ChartMode
   chartAxisMode: ChartAxisMode
   bucket: number
@@ -30,12 +32,15 @@ export const VALID_BUCKETS: readonly number[] = [0, 5, 60, 1440]
 export const VALID_CHART_MODES: readonly ChartMode[] = ['line', 'candlestick']
 export const VALID_AXIS_MODES: readonly ChartAxisMode[] = ['separate', 'unified']
 export const VALID_RESEARCH_SELECTS: readonly string[] = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'consumable']
+/* 任务标识由后端给（opsi_xxx），这里只校验形状；下架的任务在页面里自然没有记录 */
+const LOOT_TASK_PATTERN = /^[a-z][a-z0-9_]{0,40}$/
 
 export const DEFAULT_STATISTICS_PREFS: StatisticsPrefs = {
   category: 'resources',
   days: 7,
   period: 'month',
   researchSelect: '9',
+  lootTask: '',
   chartMode: 'line',
   chartAxisMode: 'separate',
   bucket: 0,
@@ -61,6 +66,9 @@ export function readStatisticsPrefs(): StatisticsPrefs {
       const researchSelect = VALID_RESEARCH_SELECTS.includes(obj.researchSelect as string)
         ? (obj.researchSelect as string)
         : DEFAULT_STATISTICS_PREFS.researchSelect
+      const lootTask = typeof obj.lootTask === 'string' && (obj.lootTask === '' || LOOT_TASK_PATTERN.test(obj.lootTask))
+        ? obj.lootTask
+        : DEFAULT_STATISTICS_PREFS.lootTask
       const chartMode = VALID_CHART_MODES.includes(obj.chartMode as ChartMode)
         ? (obj.chartMode as ChartMode)
         : DEFAULT_STATISTICS_PREFS.chartMode
@@ -85,6 +93,7 @@ export function readStatisticsPrefs(): StatisticsPrefs {
         days,
         period,
         researchSelect,
+        lootTask,
         chartMode,
         chartAxisMode,
         bucket,

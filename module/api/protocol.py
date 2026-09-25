@@ -105,6 +105,8 @@ class StatisticsReportParams(InstanceParams):
     # 科研统计专用：视图口径。series = 按期；consumable = 心智/物资（不分期）。
     # 不分期的口径忽略 series——只有彩装备与舰船图纸绑定期数，心智与物资各期混着出。
     scope: Literal['series', 'consumable'] = 'series'
+    # 大世界掉落专用：只看某个大世界任务（任务名转下划线，如 opsi_abyssal）；空表示全部
+    task: StrictStr | None = Field(default=None, pattern=r'^[a-z][a-z0-9_]{0,40}$')
 
 
 class MeowfficerScoreReportParams(InstanceParams):
