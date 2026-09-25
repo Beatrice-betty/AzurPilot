@@ -24,7 +24,7 @@ export function useDraftInput(value: string, commit: (draft: string) => void) {
     value: draft,
     onFocus: () => setEditing(true),
     onChange: (event: {target: {value: string}}) => setDraft(event.target.value),
-    onBlur: () => {setEditing(false); if (draft.trim() === '') setDraft(value); else commit(draft)},
+    onBlur: () => {setEditing(false); if (draft !== value) commit(draft)},
     onKeyDown: (event: {key: string; currentTarget: {blur: () => void}}) => {if (event.key === 'Enter') event.currentTarget.blur()},
   }
 }
