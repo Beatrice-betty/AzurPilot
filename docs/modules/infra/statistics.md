@@ -67,8 +67,8 @@ module/azur_stats/
 ├── scene/base.py             # SceneBase：加载截图、parse_scene 骨架
 ├── scene/operation_siren.py  # SceneOperationSiren：大世界完整场景解析
 ├── image/base.py             # ImageBase：classify_server 多服务器识别
-├── image/get_items.py        # 战斗结算「获得物品」识别
-├── image/auto_search_reward.py # 自律寻敌奖励页识别（AutoSearchItemGrid）
+├── image/get_items.py        # 战斗结算「获得道具」识别（AutoSearchAmount 数量 OCR 也在这里）
+├── image/auto_search_reward.py # 自律寻敌奖励页识别（AutoSearchItemGrid）；AutoSearchAmount 从本模块导入
 ├── image/opsi_reward.py / opsi_zone.py # 大世界奖励/区域识别
 └── assets.py                 # 识别资源（生成文件）
 
@@ -77,6 +77,10 @@ module/log_res/
 ```
 
 模板资源：`assets/stats_basic/`（基础物品模板，掉落统计启动时复制到用户目录）、`assets/stats/`（opsi_items、opsi_reward_items 等场景模板）。
+
+**两个模板集不能互相顶替**：`opsi_reward_items`（自律寻敌结算页）与 `opsi_items`（获得道具页）里的图标缩放不同，跨页匹配常在 0.6~0.9，低于阈值就不会命中，金菜/图纸会退化成数字代号。`SceneOperationSiren.ITEM_TEMPLATE_FOLDER` 用的是 `opsi_items`，其中新增的模板都是从获得道具页真实截图里裁的；例外是 `opsi_items/PlatePlaneT4.png`——舰载机部件T4 在现有素材里没在获得道具页出现过，只能先复用结算奖励页的模板，跨页匹配会弱一些，拿到实机素材后应换成原生裁图。
+
+**数量区按物品换**（`ItemGrid.amount_area_rules`，前缀匹配）：获得道具页的数字右对齐，位数多时左侧会超出默认区 `(60, 71, 91, 92)`（作战补给凭证 1638 被读成 638）；而图纸/实验计划的数字压在右下角灰色齿轮上，默认区会把齿轮的齿读成「7」（1 读成 71）。两者不能用同一个区——整体左扩会让材料把底衬读成数字（氟橡胶 2 读成 12）。
 
 ## 4. 核心入口
 
@@ -329,13 +333,14 @@ CL1 库的兼容性迁移是自动的：启动时把旧位置 `log/cl1/cl1_data.
 ## 16. 修改注意事项
 
 - **不要在任务代码里直接写 `cl1_db`**。大世界事件的落库口径（侵蚀等级折算、轮次闭合、来源判定）集中在 `opsi_runtime.py`，绕过它会产生口径分裂的统计。
-- **`ItemGrid` 是被多处共享的单例状态**（`get_items.ITEM_GROUP` 是模块级实例）：`GetItemsStatistics`、`CampaignBonusStatistics`、`azur_stats.GetItems`、商店与仓库都改它的 `grids/item_class/similarity`。新增使用方时必须在使用前完整设置这些属性，如同 `_stats_get_items_load` 所做的那样，否则会带着上一场景的网格布局去匹配。
+- **`ItemGrid` 是被多处共享的单例状态**（`get_items.ITEM_GROUP` 是模块级实例）：`GetItemsStatistics`、`CampaignBonusStatistics`、`azur_stats.GetItems`、商店与仓库都改它的 `grids/item_class/similarity`。新增使用方时必须在使用前完整设置这些属性，如同 `_stats_get_items_load` 所做的那样，否则会带着上一场景的网格布局去匹配。数量侧同理：`amount_area` / `amount_area_rules` / `amount_ocr` / `amount_max` 都是按场景设置的，`azur_stats.GetItems` 会把前三个一起设好。
 - **删除是不可逆的**：`drop_cleanup` 只处理文件名匹配 `^\d{13}(_.+)?\.png$` 的文件，配置异常时按 0 处理（不清理）；`bak/` 内的备份不参与扫描（拷贝备份保留原修改时间，只看时间会被反复处理），压缩或拷贝失败时保留原文件。改清理逻辑时保持这些保守默认。
 - **日报的 `period_key` 含服务器与时区信息**，改动 `get_daily_summary_window` 的窗口语义会让已存在库里的 period_key 失配，导致重复推送。
 - **OCR 数量的修正逻辑是按具体误读样本反复校准的**（`remove_small_fragments`、`revise_item`、`AmountOcr` 截断），注释里记录了每个阈值的来源案例；调整阈值前先用真实截图回归验证，不要「顺手简化」。
 - **遥测提交只发聚合指标**（battle_count/明石次数 + MD5 前缀 instance_id），不要往 `calculate_metrics` 里加可识别个人的字段。
 - `module/statistics/assets.py` 与 `module/azur_stats/assets.py` 是 `dev_tools.button_extract` 的生成物，改按钮资源后重新生成，不要手改。
 - **科研的期数只能看队列页卡片的罗马数字角标**（`research_drop._read_series`，复用 `module/research/series.py` 的模板）。项目代号在每一期都存在、判不了期；掉落物也判不了——只有彩装备与舰船图纸绑期数，金装备各期混着出，项目还会「额外赠送」别期的图纸。
+- **科研的数量残影按「列剖面」清理，且只对图纸类启用**：科研的数量框紧挨物品图标，图标底部的白色纹理（纸角、斜边、横条）会被 `extract_white_letters` 提取成笔画拼进数字——「图纸 1 张」读成 71、超上限截断后又变成 7（六倍误差），「装备设计图 1 张」读成 9。`research_drop.ResearchAmountOcr` 在通用碎片过滤之后按列高取最右侧数字簇（数字笔画列高 12~17px，残影通常 ≤6px，两者之间隔着矮列组成的「谷」），并把两道兜底改成适配左侧残影的方向：超限时丢首位（不是截断末位）、读数为 0 时提高阈值重读。**列剖面只对数量上限 ≤10 的图纸启用**——物资、心智单元能有三位数，切列会误伤真数字（实测物资 97 被切成 7、心智 44 被切成 4）。
 - **心智单元不属于任何一期**：它有自己的「心智/物资」视图，也不计入每期的总收益。两个视图**共用同一套版式**（收益卡片 + 收获明细 + 掉落记录，只是心智/物资不分期）。**金装备已不再统计**（2026-09-24 撤掉原「金装统计」视图：它各期混着出、不绑期数，图标又与彩装备相近，容易被认成彩装）。`research_stats.should_show()` 按 `scope` 分这两套口径。
 - 科研模板的新增/重命名走 `dev_tools/research_template_extract.py`（从游戏 Lua 数据推导仓库命名，含底色变体与 `{namecode:XXX}` 占位符处理），不要手裁素材。
 - **模板改名只改了模板，改不动库里已写入的记录**：记录里存的是模板文件名，显示时才按名称表翻译，所以旧记录会张冠李戴（实测把「四联装610mm鱼雷」显示成八期彩装、把九期彩装 Ta 152C 显示成四期天雷）。名字级的历史映射救不了——一个旧名可能同时盖住两件不同装备——只能用原截图重放：`dev_tools/research_drop_repair.py`（只覆盖 `items`，不动期数与项目代号，动库前先备份）。
