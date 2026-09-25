@@ -36,6 +36,7 @@ describe('统计页与图表选项持久化', () => {
       days: 30,
       period: 'week',
       researchSelect: 'consumable',
+      lootTask: 'opsi_abyssal',
       chartMode: 'candlestick',
       chartAxisMode: 'unified',
       bucket: 60,
@@ -46,6 +47,7 @@ describe('统计页与图表选项持久化', () => {
     expect(raw).toContain('"category":"opsi"')
     expect(raw).toContain('"days":30')
     expect(raw).toContain('"bucket":60')
+    expect(raw).toContain('"lootTask":"opsi_abyssal"')
 
     vi.resetModules()
     const second = await import('./statisticsPrefs')
@@ -54,6 +56,7 @@ describe('统计页与图表选项持久化', () => {
       days: 30,
       period: 'week',
       researchSelect: 'consumable',
+      lootTask: 'opsi_abyssal',
       chartMode: 'candlestick',
       chartAxisMode: 'unified',
       bucket: 60,
@@ -90,6 +93,7 @@ describe('统计页与图表选项持久化', () => {
         days: 9999,
         period: 'year',
         researchSelect: 'nonsense',
+        lootTask: 'NOT A TASK!',
         chartMode: 'pie',
         chartAxisMode: 'random',
         bucket: 12345,
@@ -104,6 +108,7 @@ describe('统计页与图表选项持久化', () => {
     expect(loaded.days).toBe(DEFAULT_STATISTICS_PREFS.days)
     expect(loaded.period).toBe(DEFAULT_STATISTICS_PREFS.period)
     expect(loaded.researchSelect).toBe(DEFAULT_STATISTICS_PREFS.researchSelect)
+    expect(loaded.lootTask).toBe(DEFAULT_STATISTICS_PREFS.lootTask)
     expect(loaded.chartMode).toBe(DEFAULT_STATISTICS_PREFS.chartMode)
     expect(loaded.chartAxisMode).toBe(DEFAULT_STATISTICS_PREFS.chartAxisMode)
     expect(loaded.bucket).toBe(DEFAULT_STATISTICS_PREFS.bucket)

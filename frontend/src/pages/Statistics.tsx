@@ -34,7 +34,7 @@ import { useApp, useConnection } from '../app/context'
 import { usesLegacyLayout } from '../app/theme'
 import { ErrorBox, Loading, PageTitle } from '../components/ui'
 import { SegmentedControl } from '../components/SegmentedControl'
-import { RESEARCH_PREFIX, resolveIcon, StatisticsTable } from '../components/StatisticsTable'
+import { resolveIcon, StatisticsTable } from '../components/StatisticsTable'
 import { downloadCsv } from '../components/statisticsData'
 import type { UiKey } from '../i18n'
 import { readStatisticsPrefs, updateStatisticsPrefs } from '../app/statisticsPrefs'
@@ -110,6 +110,8 @@ export function Statistics() {
   // 后者不分期——心智与物资各期混着出，只有彩装备与舰船图纸绑定期数。
   const [researchSeries, setResearchSeriesState] = useState(initialPrefs.researchSelect)
   const researchScope = researchSeries === 'consumable' ? researchSeries : 'series'
+  // 大世界掉落视图：'' = 全部大世界任务，其余是任务标识（选项由后端 taskOptions 给出）
+  const [lootTask, setLootTaskState] = useState(initialPrefs.lootTask)
 
   const setCategory = useCallback((next: Category) => {
     setCategoryState(next)
@@ -126,6 +128,10 @@ export function Statistics() {
   const setResearchSeries = useCallback((next: string) => {
     setResearchSeriesState(next)
     updateStatisticsPrefs({researchSelect: next})
+  }, [])
+  const setLootTask = useCallback((next: string) => {
+    setLootTaskState(next)
+    updateStatisticsPrefs({lootTask: next})
   }, [])
 
   const [revision, setRevision] = useState(0)
@@ -146,21 +152,21 @@ export function Statistics() {
     if (connection !== 'ready') return
     let active = true
     setData(undefined); setError('')
-    void api.request('statistics.report', {instance, category, days, month, period, series: researchScope === 'series' ? Number(researchSeries) : 0, scope: researchScope}).then(value => {if (active) setData(value)}).catch(error => {if (active) setError(error.message)})
+    void api.request('statistics.report', {instance, category, days, month, period, series: researchScope === 'series' ? Number(researchSeries) : 0, scope: researchScope, task: lootTask || null}).then(value => {if (active) setData(value)}).catch(error => {if (active) setError(error.message)})
     return () => {active = false}
-  }, [instance, category, days, month, period, researchSeries, connection, revision])
+  }, [instance, category, days, month, period, researchSeries, lootTask, connection, revision])
 
   // 静默更新：后端数据更新推送到前端时平滑更新图表与指标，避免 Loading 闪烁
   const silentRefresh = useCallback(() => {
     if (connection !== 'ready') return
-    void api.request('statistics.report', {instance, category, days, month, period, series: researchScope === 'series' ? Number(researchSeries) : 0, scope: researchScope})
+    void api.request('statistics.report', {instance, category, days, month, period, series: researchScope === 'series' ? Number(researchSeries) : 0, scope: researchScope, task: lootTask || null})
       .then(value => {
         setData(value)
       })
       .catch(() => {
         // 静默更新失败时不影响当前已展示视图
       })
-  }, [connection, instance, category, days, month, period, researchSeries])
+  }, [connection, instance, category, days, month, period, researchSeries, lootTask])
 
   useEffect(() => {
     if (connection !== 'ready') return
@@ -232,18 +238,21 @@ export function Statistics() {
   const rangeControls = <>
     {category === 'resources' && <label className="statistics-inline-control" data-tip={ui('stats.range')}><span className="statistics-inline-label">{ui('stats.range')}</span><Select aria-label={ui('stats.days')} value={days} onChange={event => setDays(Number(event.target.value))}>{[1, 7, 30, 90, 365].map(value => <option value={value} key={value}>{ui('stats.recentDays', {days: value})}</option>)}</Select></label>}
     {/* 月份输入框本身就显示「2026年09月」，标签只在提示里出现 */}
-    {(['action', 'opsi', 'commission'].includes(category!) || category === 'research') && <label className="statistics-inline-control" data-tip={ui('stats.month')}><input aria-label={ui('stats.month')} type="month" min="2020-01" max="9998-12" value={month} disabled={(category === 'commission' || category === 'research') && period !== 'month'} onChange={event => {if (event.target.value) setMonth(event.target.value)}}/></label>}
+    {(['action', 'opsi', 'commission', 'loot'].includes(category!) || category === 'research') && <label className="statistics-inline-control" data-tip={ui('stats.month')}><input aria-label={ui('stats.month')} type="month" min="2020-01" max="9998-12" value={month} disabled={(category === 'commission' || category === 'research' || category === 'loot') && period !== 'month'} onChange={event => {if (event.target.value) setMonth(event.target.value)}}/></label>}
     {category === 'research' && <label className="statistics-inline-control" data-tip={ui('stats.researchSeries')}><span className="statistics-inline-label">{ui('stats.researchSeries')}</span><Select aria-label={ui('stats.researchSeries')} value={researchSeries} onChange={event => setResearchSeries(String(event.target.value))}>{[1, 2, 3, 4, 5, 6, 7, 8, 9].map(value => <option value={String(value)} key={value}>{ui('stats.seriesN', {n: value})}</option>)}<option value="consumable">{ui('stats.consumableScope')}</option></Select></label>}
     {category === 'commission' && <label className="statistics-inline-control" data-tip={ui('stats.period')}><span className="statistics-inline-label">{ui('stats.period')}</span><Select aria-label={ui('stats.commissionPeriod')} value={period} onChange={event => setPeriod(event.target.value as typeof period)}><option value="day">{ui('stats.today')}</option><option value="week">{ui('stats.thisWeek')}</option><option value="month">{ui('stats.selectedMonth')}</option></Select></label>}
     {category === 'research' && <label className="statistics-inline-control" data-tip={ui('stats.period')}><span className="statistics-inline-label">{ui('stats.period')}</span><Select aria-label={ui('stats.period')} value={period} onChange={event => setPeriod(event.target.value as typeof period)}><option value="day">{ui('stats.today')}</option><option value="week">{ui('stats.thisWeek')}</option><option value="month">{ui('stats.selectedMonth')}</option></Select></label>}
+    {/* 大世界掉落：任务筛选的选项来自后端（含当前窗口内没记录的任务），值就是任务标识 */}
+    {category === 'loot' && <label className="statistics-inline-control" data-tip={ui('stats.lootTask')}><span className="statistics-inline-label">{ui('stats.lootTask')}</span><Select aria-label={ui('stats.lootTask')} value={lootTask} onChange={event => setLootTask(String(event.target.value))}><option value="">{ui('stats.lootTaskAll')}</option>{(data?.taskOptions ?? []).map(item => <option value={item.key} key={item.key}>{item.count ? `${item.label}（${item.count}）` : item.label}</option>)}</Select></label>}
+    {category === 'loot' && <label className="statistics-inline-control" data-tip={ui('stats.period')}><span className="statistics-inline-label">{ui('stats.period')}</span><Select aria-label={ui('stats.period')} value={period} onChange={event => setPeriod(event.target.value as typeof period)}><option value="day">{ui('stats.today')}</option><option value="week">{ui('stats.thisWeek')}</option><option value="month">{ui('stats.selectedMonth')}</option></Select></label>}
   </>
   const hints = <>
     {category === 'ships' && <span>{ui('stats.shipHint')}</span>}
     {category === 'loot' && <span>{ui('stats.lootHint')}</span>}
   </>
   const dataView = error ? <ErrorBox message={error} retry={() => setRevision(value => value + 1)}/> : !data ? <Loading/> : <div className="statistics-sections">{!!data.metrics.length && <section className="panel summary-metrics-panel"><div className="stat-metrics summary-metrics">{data.metrics.map(item => {
-    const research = item.icon?.startsWith(RESEARCH_PREFIX) ? resolveIcon(item.icon) : undefined
-    const webp = research?.src ?? getMetricWebp(item.label)
+    const custom = item.icon ? resolveIcon(item.icon) : undefined
+    const webp = custom?.src ?? getMetricWebp(item.label)
     const Icon = !webp ? getMetricIcon(item.label) : undefined
     return <div key={item.label} className="summary-metric-card">
       <div className="summary-metric-head">

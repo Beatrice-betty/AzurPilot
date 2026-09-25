@@ -8,7 +8,7 @@ AzurPilot 在执行任务时天然经过大量战斗结算与资源画面。这�
 
 这一层由三条相对独立的链路组成：
 
-- **掉落统计链路**：战斗结算截图经 `AzurStats` 保存或解析入库。实时侧（`azurstats.py`）在战斗结束的上下文里收集截图；离线侧（`drop_statistics.py`）对历史截图文件夹做批量模板匹配与 OCR，导出 CSV。
+- **掉落统计链路**：战斗结算截图经 `AzurStats` 保存或解析入库。实时侧（`azurstats.py`）在战斗结束的上下文里收集截图；离线侧（`drop_statistics.py`）对历史截图文件夹做批量模板匹配与 OCR，导出 CSV。大世界掉落（除侵蚀1练级外）在「保存」与「上传」两个档位都会解析入库，`opsi_drop_stats.py` 把它们按窗口聚合成「大世界掉落」页的金菜与彩图纸收益。
 - **CL1 统计链路**：`Cl1Database` 按「实例 × 月份」记录大世界侵蚀 1（CL1）与耄耋相接的战斗、明石、行动力等指标；`Cl1DataSubmitter` 把当月汇总匿名化后提交到官方遥测端点。
 - **日报链路**：`DailySummaryStore` 持续采集任务运行与侵蚀 1 战斗事件，`DailySummaryService` 在触发窗口聚合事实、调用 LLM 生成文案并经 OnePush 推送。
 
@@ -55,6 +55,7 @@ module/statistics/
 ├── ship_exp_stats.py         # ShipExpStats：战斗计时与经验效率
 ├── opsi_month.py             # OpsiMonthStats：月度大世界汇总与时间线
 ├── opsi_runtime.py           # 大世界运行期事件 → 落库的集中入口
+├── opsi_drop_stats.py        # 大世界掉落聚合（金菜/彩图纸口径，供「大世界掉落」页）
 ├── drop_statistics.py        # 离线批量掉落分析（可独立运行）
 ├── drop_cleanup.py           # 掉落截图保留天数清理与备份
 ├── get_items.py / item.py / battle_status.py / campaign_bonus.py
@@ -110,7 +111,9 @@ module/log_res/
 | `DropImage` | `handle_add(main, before)` | 处理信息栏遮挡后等待 `WAIT_BEFORE_SAVING_SCREEN_SHOT` 秒再截图加入 |
 | `AzurStats` | `commit(images, genre, save, local, combat_count)` | 垂直拼接截图，save 走后台线程，local 持 `_record_lock` 同步解析 |
 | `AzurStats` | `LOCAL_DB = './config/azurstats_local.db'` | 掉落明细库（opsi_items 表，带 device_id/genre/hazard_level 维度） |
-| `AzurStats` | `get_meowofficer_farming()` | 从明细库重算 6 侵蚀等级的「平均黄币/轮、平均金菜/轮……」写入 `log/azurstat_meowofficer_farming.csv`，WebUI「短猫掉落收益」表直接读取 |
+| `AzurStats` | `get_meowofficer_farming()` | 从明细库重算 6 侵蚀等级的「平均黄币/轮、平均金菜/轮……」写入 `log/azurstat_meowofficer_farming.csv`，WebUI「大世界掉落」页最下面的「短猫掉落收益」表直接读取 |
+| `AzurStats` | `is_opsi_drop_genre()` | 判定某个 genre 是否要解析入库：大世界任务都算，唯侵蚀1练级除外（它的收益在「大世界总结」页看） |
+| `AzurStats` | `load_opsi_drop_rows()` | 按实例/时间窗口/任务读明细，供 `opsi_drop_stats.collect()` 汇总；任务范围直接由上面那套常量生成 |
 
 ### CL1 月度库（cl1_database.py）
 
@@ -153,10 +156,11 @@ flowchart LR
     D -->|local=True| F[SceneOperationSiren 解析]
     F --> G[opsi_items 明细入 SQLite]
     G --> H[get_meowofficer_farming 重算 CSV]
+    G --> J[opsi_drop_stats.collect<br/>统计页「大世界掉落」]
     D --> I[cleanup_drop_screenshots_if_due<br/>节流 1 小时]
 ```
 
-关键分叉在 `new()` 的 `method` 参数：配置值 `do_not` 产生空的 DropImage（零开销）；`save` 只存图；`upload` 对 `LOCAL_GENRES`（目前仅 `opsi_meowfficer_farming`）触发本地解析——`upload` 这个名字是远程 AzurStats 时代的遗留，现在的「上传」就是解析入本地库。解析中发现只有数字代号的未识别物品时，把结算截图画上红框另存到 `screenshots/unknown_items/`，供人工补模板。
+关键分叉在 `new()` 的 `method` 参数：配置值 `do_not` 产生空的 DropImage（零开销）；大世界掉落（`is_opsi_drop_genre()` 认可的任务，侵蚀1练级除外）的 `save` 与 `upload` **都会**解析入库，区别只在要不要把截图落盘——`upload` 这个名字是远程 AzurStats 时代的遗留，现在的「上传」就是「解析入本地库、不落盘」。解析中发现只有数字代号的未识别物品时，把结算截图画上红框另存到 `screenshots/unknown_items/`，供人工补模板。
 
 ### 日报流程
 
@@ -210,6 +214,7 @@ flowchart TD
       ├─ save → {DropRecord_SaveFolder}/{genre}/{ts}.png（后台线程）
       └─ local → SceneOperationSiren.parse_scene() → DataOpsiItems
               → opsi_items 表（azurstats_local.db）→ 重算 farming CSV
+              └─ 统计页「大世界掉落」= opsi_drop_stats.collect()（金菜/彩图纸口径）
               └─ 有未识别物品 → unknown_items/ 红框标注图
 
 任务事件（alas.py 打点）          → daily_summary_task_runs
@@ -257,7 +262,7 @@ stateDiagram-v2
 | `Alas.DropRecord.RetentionDays` | int | 0 | 截图保留天数，0 = 不清理 |
 | `Alas.DropRecord.BackUpMethod` / `ZipMethod` | option | zip / zip | 过期截图的处理方式（delete / zip / copy）与压缩格式（bz2 / gzip / xz / zip）；备份落在各来源目录下的 `bak/` |
 | `Alas.DropRecord.CombatRecord` / `ResearchRecord` / `CommissionRecord` | option | do_not | 各场景掉落记录方式（do_not / save / upload / save_and_upload） |
-| `Alas.DropRecord.OpsiHazard1Leveling` / `OpsiMeowfficerFarming` / `OpsiDaily` / `OpsiObscure` / `OpsiAbyssal` / `OpsiStronghold` / `OpsiExplore` / `OpsiOther` | option | upload | 大世界掉落记录方式，按任务拆分（前七项依次为侵蚀1练级、耄耋相接、大世界每日、隐秘海域、深渊海域、塞壬要塞、每月开荒）：跨月每日跟大世界每日、档案坐标跟隐秘海域、月度Boss跟深渊海域共用开关，`OpsiOther` 兜底没列出的任务；运行期由 `opsi_drop_record(config)` 按 `config.task.command` 取用 |
+| `Alas.DropRecord.OpsiHazard1Leveling` / `OpsiMeowfficerFarming` / `OpsiDaily` / `OpsiObscure` / `OpsiAbyssal` / `OpsiStronghold` / `OpsiExplore` / `OpsiOther` | option | upload | 大世界掉落记录方式，按任务拆分（前七项依次为侵蚀1练级、耄耋相接、大世界每日、隐秘海域、深渊海域、塞壬要塞、每月开荒）：跨月每日跟大世界每日、档案坐标跟隐秘海域、月度Boss跟深渊海域共用开关，`OpsiOther` 兜底没列出的任务；运行期由 `opsi_drop_record(config)` 按 `config.task.command` 取用。除侵蚀1练级外，`save` / `upload` / `save_and_upload` 都会解析入库（区别只在要不要把截图落盘），侵蚀1练级只落盘截图、不入掉落统计 |
 | `Alas.DropRecord.CommissionIncomeScreenshot` | option | save | 委托收益截图开关 |
 | `Alas.DropRecord.ResearchRecord` | option | do_not | 科研掉落截图开关；`save` / `upload` / `save_and_upload` 都会统计（区别只在要不要把截图落盘） |
 | `Alas.DropRecord.TelemetryReport` | bool | true | CL1 遥测提交开关（hazard_leveling 里检查） |

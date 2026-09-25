@@ -483,6 +483,19 @@
             ],
             "title": "Scope",
             "type": "string"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z][a-z0-9_]{0,40}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Task"
           }
         },
         "required": [

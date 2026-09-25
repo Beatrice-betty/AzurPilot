@@ -1010,7 +1010,7 @@
     },
     "OpsiHazard1Leveling": {
       "name": "Corrosion 1 drop screenshot",
-      "help": "Upload currently only takes effect on Meowfficer farming",
+      "help": "Corrosion 1 leveling is not counted here (its profit is on the \"Operation Siren summary\" page); Save only keeps the screenshot, Upload does nothing",
       "do_not": "No action",
       "save": "Save",
       "upload": "Upload",
@@ -1018,7 +1018,7 @@
     },
     "OpsiMeowfficerFarming": {
       "name": "Meowfficer farming drop screenshot",
-      "help": "Upload parses drops into the local statistics database, which the profit stats under the \"Meowfficer loot\" category rely on",
+      "help": "Save and Upload both parse drops into the \"Operation Siren drops\" page; the only difference is whether the screenshot is kept",
       "do_not": "No action",
       "save": "Save",
       "upload": "Upload",
@@ -1026,7 +1026,7 @@
     },
     "OpsiDaily": {
       "name": "Operation Siren daily drop screenshot",
-      "help": "Upload currently only takes effect on Meowfficer farming\nCross-Month Daily shares this switch",
+      "help": "Save and Upload both parse drops into the \"Operation Siren drops\" page; the only difference is whether the screenshot is kept\nCross-Month Daily shares this switch",
       "do_not": "No action",
       "save": "Save",
       "upload": "Upload",
@@ -1034,7 +1034,7 @@
     },
     "OpsiObscure": {
       "name": "Obscured zone drop screenshot",
-      "help": "Upload currently only takes effect on Meowfficer farming\nArchive Coordinates shares this switch",
+      "help": "Save and Upload both parse drops into the \"Operation Siren drops\" page; the only difference is whether the screenshot is kept\nArchive Coordinates shares this switch",
       "do_not": "No action",
       "save": "Save",
       "upload": "Upload",
@@ -1042,7 +1042,7 @@
     },
     "OpsiAbyssal": {
       "name": "Abyssal zone drop screenshot",
-      "help": "Upload currently only takes effect on Meowfficer farming\nMonthly Boss shares this switch",
+      "help": "Save and Upload both parse drops into the \"Operation Siren drops\" page; the only difference is whether the screenshot is kept\nMonthly Boss shares this switch",
       "do_not": "No action",
       "save": "Save",
       "upload": "Upload",
@@ -1050,7 +1050,7 @@
     },
     "OpsiStronghold": {
       "name": "Siren stronghold drop screenshot",
-      "help": "Upload currently only takes effect on Meowfficer farming",
+      "help": "Save and Upload both parse drops into the \"Operation Siren drops\" page; the only difference is whether the screenshot is kept",
       "do_not": "No action",
       "save": "Save",
       "upload": "Upload",
@@ -1058,7 +1058,7 @@
     },
     "OpsiExplore": {
       "name": "Monthly exploration drop screenshot",
-      "help": "Its own switch for Monthly Exploration Plus, not shared with other tasks",
+      "help": "Its own switch for Monthly Exploration Plus, not shared with other tasks\nSave and Upload both parse drops into the \"Operation Siren drops\" page; the only difference is whether the screenshot is kept",
       "do_not": "No action",
       "save": "Save",
       "upload": "Upload",
@@ -1066,7 +1066,7 @@
     },
     "OpsiOther": {
       "name": "Other Operation Siren drop screenshot",
-      "help": "Fallback for Operation Siren tasks without a switch of their own\nUpload currently only takes effect on Meowfficer farming",
+      "help": "Fallback for Operation Siren tasks without a switch of their own\nSave and Upload both parse drops into the \"Operation Siren drops\" page; the only difference is whether the screenshot is kept",
       "do_not": "No action",
       "save": "Save",
       "upload": "Upload",

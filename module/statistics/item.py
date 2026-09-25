@@ -30,6 +30,17 @@ ITEM_AMOUNT_MAX = {
     # 民用电子元件单次掉落 1~10，超上限读数（如 3 被读成 73）
     # 会触发抹灰版兜底重试修正
     'Consumer_Grade_Electronic_Components': 50,
+    # 装备设计图（白纸类，T4 金 / T5 彩）单次掉落 1~10，与军械测试报告同样的
+    # 误读规律：纸面白色纹理被拼进数量框，实测「舰载机研发图纸UR型 1 张」
+    # 首轮读成 51，加上限后重试修正回 1。
+    'GearDesignPlanGunT4': 50,
+    'GearDesignPlanGunT5': 50,
+    'GearDesignPlanTorpedoT4': 50,
+    'GearDesignPlanTorpedoT5': 50,
+    'GearDesignPlanAntiAirT4': 50,
+    'GearDesignPlanAntiAirT5': 50,
+    'GearDesignPlanPlaneT4': 50,
+    'GearDesignPlanPlaneT5': 50,
 }
 DEFAULT_AMOUNT_MAX = 2147483645
 

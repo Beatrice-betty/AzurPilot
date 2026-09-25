@@ -6,19 +6,23 @@ import { parseArgs } from 'node:util'
 import { WebSocketServer, WebSocket } from 'ws'
 import { createMockState, fail } from './state.mjs'
 
-// 科研物品图标：真实后端把 assets/stats/research_items 挂在这个前缀下（见
-// module/api/statistics_service.py 的 research-items 静态目录）。mock 也照挂，
-// 否则科研统计页的图标列全是裂图，看不出图标布局对不对。
-const RESEARCH_ICON_DIR = fileURLToPath(new URL('../../assets/stats/research_items/', import.meta.url))
+// 物品图标：真实后端把 assets/stats 下的模板目录挂在这两个前缀上（见
+// module/api/statistics_service.py 的 research-items / opsi-items 静态目录）。
+// mock 也照挂，否则统计页的图标列全是裂图，看不出图标布局对不对。
+const ICON_DIRS = {
+  '/research-items/': fileURLToPath(new URL('../../assets/stats/research_items/', import.meta.url)),
+  '/opsi-items/': fileURLToPath(new URL('../../assets/stats/opsi_reward_items/', import.meta.url)),
+}
 
 export function createMockServer({password = '', empty = false} = {}) {
   const state = createMockState({empty})
   const server = createServer((request, response) => {
-    if (request.url?.startsWith('/research-items/')) {
+    const iconPrefix = Object.keys(ICON_DIRS).find(prefix => request.url?.startsWith(prefix))
+    if (iconPrefix) {
       // basename 挡住 ../ 之类的越权路径，只认目录里的单层文件名
       const name = path.basename(decodeURIComponent(request.url))
       if (name.endsWith('.png')) {
-        readFile(path.join(RESEARCH_ICON_DIR, name)).then(buffer => {
+        readFile(path.join(ICON_DIRS[iconPrefix], name)).then(buffer => {
           response.setHeader('Content-Type', 'image/png')
           response.writeHead(200)
           response.end(buffer)

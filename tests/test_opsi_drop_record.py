@@ -12,6 +12,8 @@
 
 import unittest
 
+import inflection
+
 from module.config.config import AzurLaneConfig, Function
 from module.config.config_generated import GeneratedConfig
 from module.config.config_updater import ConfigUpdater
@@ -188,12 +190,16 @@ class TestMigrationThroughConfigUpdate(unittest.TestCase):
 
 
 class TestMeowfficerStatisticsStayWired(FakeConfigTestCase):
-    """短猫掉落截图这个开关就是统计页短猫收益的数据源，档位语义不能漂移。"""
+    """短猫掉落截图这个开关就是掉落统计的数据源，档位语义不能漂移。
+
+    2026-09-25 起改口径：除侵蚀1练级外的所有大世界任务都解析入库，
+    且「保存」与「上传」都统计，区别只在要不要把截图落盘（与科研同口径）。
+    """
 
     def test_method_matrix_drives_save_and_local(self):
         cases = (
             ('do_not', False, False),
-            ('save', True, False),
+            ('save', True, True),
             ('upload', False, True),
             ('save_and_upload', True, True),
         )
@@ -208,13 +214,30 @@ class TestMeowfficerStatisticsStayWired(FakeConfigTestCase):
                 self.assertIs(drop.local, local)
                 self.assertIs(bool(drop), save or local)
 
-    def test_other_tasks_upload_stays_inert(self):
-        """其余大世界任务的 upload 等于无操作：不落盘也不解析（LOCAL_GENRES 只放行短猫）。"""
-        config = self.make_config('OpsiAbyssal', {'OpsiAbyssal': 'upload'})
-        drop = AzurStats(config).new('opsi_abyssal', method=opsi_drop_record(config))
+    def test_other_tasks_are_recorded_too(self):
+        """别的大世界任务同样入库：不再是「只对短猫相接生效」。"""
+        for task in ('OpsiAbyssal', 'OpsiDaily', 'OpsiObscure', 'OpsiStronghold'):
+            for value in ('save', 'upload'):
+                with self.subTest(task=task, value=value):
+                    config = self.make_config(task, {task: value})
+                    method = opsi_drop_record(config)
+                    drop = AzurStats(config).new(
+                        inflection.underscore(task), method=method)
+                    self.assertTrue(drop.local)
+                    self.assertIs(drop.save, value == 'save')
+
+    def test_hazard1_leveling_stays_out_of_drop_statistics(self):
+        """侵蚀1练级不进掉落统计：任何档位都不解析，「保存」只落盘截图。"""
+        config = self.make_config('OpsiHazard1Leveling', {'OpsiHazard1Leveling': 'upload'})
+        drop = AzurStats(config).new('opsi_hazard1_leveling', method=opsi_drop_record(config))
         self.assertFalse(drop.save)
         self.assertFalse(drop.local)
         self.assertFalse(bool(drop))
+
+        config = self.make_config('OpsiHazard1Leveling', {'OpsiHazard1Leveling': 'save'})
+        drop = AzurStats(config).new('opsi_hazard1_leveling', method=opsi_drop_record(config))
+        self.assertTrue(drop.save)
+        self.assertFalse(drop.local)
 
 
 if __name__ == '__main__':
