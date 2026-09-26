@@ -9,11 +9,14 @@ from module.runtime.account_vault import AccountVault, OPERATIONS, sensitive_ope
 from module.runtime.process_manager import ProcessManager
 
 
-def device_for(configs, instance):
+def device_for(configs, instance, device=None):
     data, _ = configs.read(instance)
     emulator = data.get('Alas', {}).get('Emulator', {})
     if emulator.get('PackageName') != PACKAGE:
         raise ApiError('ACCOUNT_UNSUPPORTED', '账号管理目前只支持国服 B 站客户端')
+    # worker 使用设备层实际连接成功的地址和 ADB，避免绕过连接与模拟器冷启动。
+    if device is not None:
+        return AccountDevice(device.serial, device.adb_binary)
     from module.runtime.setting import State
     from deploy.config import DeployConfig
     adb = DeployConfig().filepath('AdbExecutable') if State.deploy_config is None else State.deploy_config.filepath('AdbExecutable')
@@ -187,8 +190,8 @@ def prepare_worker(instance):
 
 
 @sensitive_operation
-def restore_worker(instance):
+def restore_worker(instance, device=None):
     from module.api.config_service import ConfigService
     with OPERATIONS:
         if vault.startup_key(instance) is not None:
-            vault.restore(instance, device_for(ConfigService(), instance))
+            vault.restore(instance, device_for(ConfigService(), instance, device=device))

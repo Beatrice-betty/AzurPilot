@@ -131,8 +131,6 @@ class AppControl(AzurPilotAndroid, Adb, WSA, Uiautomator2):
         """
         method = self.config.Emulator_ControlMethod
         logger.info(f'应用启动: {self.package}')
-        from module.api.account_service import restore_worker
-        restore_worker(self.config.config_name)
         if method == 'azurpilot_android':
             self.app_start_azurpilot_android()
         elif self.config.Emulator_Serial == 'wsa-0':

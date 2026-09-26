@@ -95,8 +95,6 @@ class AzurLaneAutoScript:
     def __init__(self, config_name=DEFAULT_CONFIG_NAME):
         logger.hr('Start', level=0)
         self.config_name = config_name
-        from module.api.account_service import restore_worker
-        restore_worker(config_name)
         # 跳过启动后的第一次 Restart 任务
         self.is_first_task = True
         # 任务失败计数器，key 为任务名，value 为连续失败次数
