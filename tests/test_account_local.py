@@ -85,14 +85,15 @@ print('unlocked')
         self.assertEqual(key.value, cold.authenticate('localtest', PASSWORD)[1].value)
         self.assertTrue(cold.path('localtest').exists())
 
-    def test_changed_host_destroys_vault_and_external_key(self):
+    def test_changed_host_preserves_vault_and_external_key_for_password_recovery(self):
         self.bind()
         with patch.object(LocalProtector, 'host_identity', return_value='different-host'):
-            self.assertTrue(self.vault.status('localtest')['destroyed'])
-        self.assertFalse(self.vault.path('localtest').exists())
-        self.assertFalse(list(self.keys.glob('*.key')))
-        with self.assertRaises(ApiError):
-            self.vault.authenticate('localtest', PASSWORD)
+            self.assertFalse(self.vault.status('localtest')['destroyed'])
+            with self.assertRaises(ApiError):
+                self.vault.startup_key('localtest')
+            self.assertTrue(self.vault.authenticate('localtest', PASSWORD)[2]['profiles'])
+        self.assertTrue(self.vault.path('localtest').exists())
+        self.assertEqual(1, len(list(self.keys.glob('*.key'))))
 
     def test_project_copy_cannot_use_original_automatic_binding(self):
         self.bind()

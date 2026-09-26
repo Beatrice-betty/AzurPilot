@@ -141,14 +141,14 @@ class AccountVault:
         if failed:
             raise ApiError('VAULT_DESTROY_FAILED', '保险库已禁止使用，但部分文件未能销毁；请检查文件占用或磁盘权限') from None
 
-    def invalidate_tpm(self, instance):
-        self.destroy(instance)
-        raise ApiError('VAULT_DESTROYED', 'TPM 验证失败或本机绑定不匹配，账号保险库的盐和数据库已销毁，无法使用密码恢复')
+    def block_binding(self, instance):
+        self.forget(instance)
+        raise ApiError('VAULT_BINDING_UNAVAILABLE', '本机自动解锁验证失败，数据已保留；请用实例密码解除绑定后重新绑定') from None
 
     def require_active(self, instance):
         if instance in self.revoked or self.marker(instance).exists():
-            # 其他进程看到标记也清除缓存；上次被占用的文件在这里再次尝试销毁。
-            self.destroy(instance)
+            # 兼容旧版标记，但不再重试销毁磁盘上的剩余数据。
+            self.forget(instance)
             raise ApiError('VAULT_DESTROYED', '账号保险库已销毁，请重新设置实例密码并备份账号')
 
     def checked_record(self, instance):
@@ -158,11 +158,8 @@ class AccountVault:
             if is_local(row[5]):
                 try:
                     self.protector(instance, row[5]).binding(row[5])
-                except ApiError as error:
-                    if error.code == 'LOCAL_DEVICE_CHANGED':
-                        self.destroy(instance)
-                        raise ApiError('VAULT_DESTROYED', '本机自动解锁检测到主机或用户改变，盐和数据库已销毁') from None
-                    raise
+                except Exception:
+                    self.block_binding(instance)
                 return row
             key = None
             failed = False
@@ -175,7 +172,7 @@ class AccountVault:
                 if key is not None:
                     key.clear()
             if failed:
-                self.invalidate_tpm(instance)
+                self.block_binding(instance)
         return row
 
     def protector(self, instance, blob):
@@ -201,10 +198,10 @@ class AccountVault:
 
     def status(self, instance):
         if instance in self.revoked or self.marker(instance).exists():
-            self.destroy(instance)
+            self.forget(instance)
             return {'initialized': False, 'enabled': False, 'unlocked': False, 'tpm_bound': False, 'destroyed': True}
         try:
-            row = self.checked_record(instance)
+            row = self.record(instance)
         except ApiError as error:
             if error.code != 'VAULT_DESTROYED':
                 raise
@@ -233,7 +230,8 @@ class AccountVault:
             raise ApiError('VAULT_AUTH_FAILED', '实例密码不正确或保险库已被篡改') from None
 
     def authenticate(self, instance, password):
-        row = self.checked_record(instance)
+        # 人工密码路径独立于自动解锁，允许无 TPM 主机解除旧绑定。
+        row = self.record(instance)
         until = self.failures.get(instance, 0)
         if time.monotonic() < until:
             raise ApiError('RATE_LIMITED', '密码验证失败，请稍后重试')
@@ -274,9 +272,7 @@ class AccountVault:
 
     def create(self, instance, password):
         destroyed = instance in self.revoked or self.marker(instance).exists()
-        if destroyed:
-            self.destroy(instance)
-        elif self.checked_record(instance) is not None:
+        if not destroyed and self.record(instance) is not None:
             raise ApiError('VAULT_EXISTS', '实例密码已设置，请使用修改密码')
         self.check_password(password)
         salt = os.urandom(256)
@@ -320,7 +316,7 @@ class AccountVault:
             if failed:
                 if key is not None:
                     key.clear()
-                self.invalidate_tpm(instance)
+                self.block_binding(instance)
             self.cache_key(instance, key)
         if key is None:
             raise ApiError('VAULT_LOCKED', '账号恢复已启用，请先用实例密码解锁；服务重启后需重新解锁')

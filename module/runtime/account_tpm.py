@@ -140,5 +140,5 @@ finally {
                     raise ValueError()
             except (ValueError, TypeError, KeyError, UnicodeError):
                 raise ApiError('TPM_UNAVAILABLE', 'TPM 绑定数据无效') from None
-        # 旧版 256 字节绑定通过实际 TPM 解封校验，失败同样销毁保险库。
+        # 旧版 256 字节绑定通过实际 TPM 解封校验，失败只阻止自动解锁，保留密码恢复路径。
         return self.execute('unwrap', blob)

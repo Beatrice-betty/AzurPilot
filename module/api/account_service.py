@@ -105,7 +105,7 @@ class AccountService:
                         key.clear()
                         if is_local(machine):
                             raise
-                        self.vault.invalidate_tpm(instance)
+                        self.vault.block_binding(instance)
             elif action == 'bind_local':
                 if machine:
                     raise ApiError('AUTOUNLOCK_BOUND', '请先解除已有自动解锁绑定，再选择其他方式')
@@ -133,7 +133,7 @@ class AccountService:
                     failed = True
                 if failed:
                     key.clear()
-                    self.vault.invalidate_tpm(instance)
+                    self.vault.block_binding(instance)
             elif action == 'unbind_tpm':
                 if is_local(machine):
                     raise ApiError('INVALID_PARAMS', '当前绑定的是本机密钥，请使用解除本机绑定')
@@ -156,7 +156,7 @@ class AccountService:
             self.vault.cache_key(instance, key)
             result = self.status_result(instance)
             if result['destroyed']:
-                raise ApiError('VAULT_DESTROYED', '本机绑定验证失败，盐和数据库已销毁，账号信息不再返回')
+                raise ApiError('VAULT_DESTROYED', '检测到旧版保险库禁用标记，账号信息不再返回')
             # 只有显式查看列表返回账号身份；不会返回 token、密码或数据库内容。
             if action == 'list':
                 result.update(profiles=[{k: p[k] for k in ('id', 'label', 'users')} for p in data['profiles']],

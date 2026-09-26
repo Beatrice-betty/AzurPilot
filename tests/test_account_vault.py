@@ -99,24 +99,19 @@ class VaultTests(unittest.TestCase):
         self.assertNotIn('synthetic-secret-token', text)
         self.assertNotIn('unsafe-key-bytes', repr(SecretKey(b'unsafe-key-bytes')))
 
-    def test_tpm_unlock_only_with_original_hardware_and_authenticated_blob(self):
-        row, key, data = self.vault.authenticate('testpilot', PASSWORD)
-        data.update(profiles=[{'id': 'profile'}], selected='profile')
-        self.vault.save('testpilot', row[0], key, data, True, b'wrapped-hardware-key')
+    def test_tpm_unavailable_blocks_auto_unlock_but_password_can_recover(self):
+        key = self.bind_fixture()
         cold = AccountVault(self.root)
         with patch('module.runtime.account_tpm.TpmProtector') as tpm:
             tpm.return_value.unwrap.return_value = key.value
             self.assertEqual(key.value, cold.startup_key('testpilot').value)
-        cold.keys.clear()
-        with patch('module.runtime.account_tpm.TpmProtector') as tpm:
-            tpm.return_value.unwrap.side_effect = ApiError('TPM_UNAVAILABLE', '绑定失效')
-            with self.assertRaises(ApiError):
+            tpm.return_value.unwrap.side_effect = ApiError('TPM_UNAVAILABLE', '合成故障')
+            with self.assertRaises(ApiError) as error:
                 cold.startup_key('testpilot')
-        self.assertFalse(cold.path('testpilot').exists())
-        self.assertTrue(cold.status('testpilot')['destroyed'])
-        with self.assertRaises(ApiError) as error:
-            cold.authenticate('testpilot', PASSWORD)
-        self.assertEqual('VAULT_DESTROYED', error.exception.code)
+        self.assertEqual('VAULT_BINDING_UNAVAILABLE', error.exception.code)
+        self.assertTrue(cold.path('testpilot').exists())
+        self.assertFalse(cold.status('testpilot')['destroyed'])
+        self.assertTrue(cold.authenticate('testpilot', PASSWORD)[2]['profiles'])
 
     def bind_fixture(self, enabled=True):
         row, key, data = self.vault.authenticate('testpilot', PASSWORD)
@@ -124,45 +119,32 @@ class VaultTests(unittest.TestCase):
         self.vault.save('testpilot', row[0], key, data, enabled, b'wrapped-hardware-key')
         return key
 
-    def test_tpm_failure_destroys_salt_sidecars_and_cached_key_before_device_write(self):
+    def test_tpm_failure_preserves_database_and_clears_cached_key_before_device_write(self):
         self.bind_fixture()
         cached = self.vault.keys['testpilot']
         path = self.vault.path('testpilot')
-        for suffix in ('-journal', '-wal', '-shm'):
-            # 空边文件不会被 SQLite 误判为待恢复事务，确保走到 TPM 故障分支。
-            path.with_name(path.name + suffix).write_bytes(b'')
-        neighbor = path.parent / 'unrelated.txt'
-        neighbor.write_bytes(b'keep-neighbor')
+        original = path.read_bytes()
         device = Mock()
         with patch('module.runtime.account_tpm.TpmProtector') as tpm:
-            tpm.return_value.unwrap.side_effect = ApiError('TPM_UNAVAILABLE', '临时故障')
+            tpm.return_value.unwrap.side_effect = ApiError('TPM_UNAVAILABLE', '合成故障')
             with self.assertRaises(ApiError) as error:
                 self.vault.restore('testpilot', device)
-            self.assertEqual('VAULT_DESTROYED', error.exception.code)
-            tpm.return_value.unwrap.assert_called_once()
+        self.assertEqual('VAULT_BINDING_UNAVAILABLE', error.exception.code)
         device.restore.assert_not_called()
         self.assertEqual(bytes(32), cached.value)
         self.assertNotIn('testpilot', self.vault.keys)
-        for suffix in ('', '-journal', '-wal', '-shm'):
-            self.assertFalse(path.with_name(path.name + suffix).exists())
-        self.assertEqual(b'keep-neighbor', neighbor.read_bytes())
-        self.assertTrue(self.vault.marker('testpilot').exists())
-        cold = AccountVault(self.root)
-        with self.assertRaises(ApiError) as error:
-            cold.startup_key('testpilot')
-        self.assertEqual('VAULT_DESTROYED', error.exception.code)
-        cold.create('testpilot', NEW_PASSWORD)
-        self.assertFalse(cold.status('testpilot')['destroyed'])
-        self.assertEqual([], cold.authenticate('testpilot', NEW_PASSWORD)[2]['profiles'])
+        self.assertEqual(original, path.read_bytes())
+        self.assertFalse(self.vault.marker('testpilot').exists())
 
-    def test_disabled_tpm_binding_is_still_verified_with_correct_password(self):
+    def test_host_change_preserves_password_recovery_and_blocks_auto_start(self):
         self.bind_fixture(enabled=False)
         with patch('module.runtime.account_tpm.TpmProtector') as tpm:
-            tpm.return_value.unwrap.side_effect = ApiError('TPM_DEVICE_CHANGED', '已更换设备')
-            with self.assertRaises(ApiError) as error:
-                self.vault.authenticate('testpilot', PASSWORD)
-        self.assertEqual('VAULT_DESTROYED', error.exception.code)
-        self.assertTrue(self.vault.status('testpilot')['destroyed'])
+            tpm.return_value.unwrap.side_effect = ApiError('TPM_DEVICE_CHANGED', '合成主机变化')
+            with self.assertRaises(ApiError):
+                self.vault.startup_key('testpilot')
+            self.assertTrue(self.vault.authenticate('testpilot', PASSWORD)[2]['profiles'])
+        self.assertFalse(self.vault.status('testpilot')['destroyed'])
+        self.assertTrue(self.vault.path('testpilot').exists())
 
     def test_valid_tpm_wrong_password_does_not_destroy_data(self):
         key = self.bind_fixture()
@@ -174,36 +156,26 @@ class VaultTests(unittest.TestCase):
         self.assertTrue(self.vault.path('testpilot').exists())
         self.assertFalse(self.vault.marker('testpilot').exists())
 
-    def test_tpm_decrypt_authentication_failure_also_destroys_data(self):
+    def test_tpm_decrypt_authentication_failure_preserves_data(self):
         self.bind_fixture()
         with patch('module.runtime.account_tpm.TpmProtector') as tpm:
             tpm.return_value.unwrap.return_value = bytes(32)
-            self.assertTrue(self.vault.status('testpilot')['destroyed'])
-        self.assertFalse(self.vault.path('testpilot').exists())
+            with self.assertRaises(ApiError):
+                self.vault.startup_key('testpilot')
+        self.assertTrue(self.vault.path('testpilot').exists())
+        self.assertFalse(self.vault.marker('testpilot').exists())
 
-    def test_failed_wipe_remains_blocked_and_retries_without_password_fallback(self):
+    def test_legacy_destroyed_marker_never_retries_wiping_remaining_data(self):
         self.bind_fixture()
         path = self.vault.path('testpilot')
-        sidecar = path.with_name(path.name + '-wal')
-        sidecar.write_bytes(b'synthetic-sensitive-sidecar')
-        wipe = self.vault.wipe_file
-        def fail_main(target):
-            if target == path:
-                raise PermissionError('模拟文件占用')
-            return wipe(target)
-        with patch.object(self.vault, 'wipe_file', side_effect=fail_main), patch('module.runtime.account_tpm.TpmProtector') as tpm:
-            tpm.return_value.unwrap.side_effect = ApiError('TPM_UNAVAILABLE', '验证失败')
-            with self.assertRaises(ApiError) as error:
-                self.vault.startup_key('testpilot')
-            self.assertEqual('VAULT_DESTROY_FAILED', error.exception.code)
-            self.assertTrue(self.vault.marker('testpilot').exists())
-            self.assertFalse(sidecar.exists())
-            tpm.reset_mock()
+        original = path.read_bytes()
+        self.vault.marker('testpilot').write_bytes(b'legacy marker')
+        with patch.object(self.vault, 'wipe_file') as wipe:
+            self.assertTrue(self.vault.status('testpilot')['destroyed'])
             with self.assertRaises(ApiError):
-                self.vault.authenticate('testpilot', PASSWORD)
-            tpm.return_value.unwrap.assert_not_called()
-        self.assertTrue(self.vault.status('testpilot')['destroyed'])
-        self.assertFalse(path.exists())
+                self.vault.startup_key('testpilot')
+            wipe.assert_not_called()
+        self.assertEqual(original, path.read_bytes())
 
     def test_wipe_overwrites_and_truncates_before_unlink(self):
         path = self.vault.path('testpilot')
@@ -306,6 +278,16 @@ class AccountApiTests(unittest.TestCase):
             AccountVault(self.configs.root).startup_key('testpilot')
         self.assertEqual('VAULT_LOCKED', error.exception.code)
 
+    def test_local_host_change_allows_password_unbind_and_keeps_profiles(self):
+        self.manage('create')
+        self.manage('bind_local')
+        with patch('module.api.account_service.LocalProtector.host_identity', return_value='changed-host'):
+            result = self.manage('unbind_local')
+        self.assertFalse(result['local_bound'])
+        self.assertTrue(self.service.vault.path('testpilot').exists())
+        self.assertFalse(list(Path(self.local_temp.name).rglob('*.key')))
+        self.manage('list')
+
     def test_local_initial_failure_preserves_password_vault(self):
         self.manage('create')
         with patch('module.api.account_service.LocalProtector.wrap', side_effect=ApiError('LOCAL_KEY_UNAVAILABLE', '合成失败')):
@@ -316,18 +298,18 @@ class AccountApiTests(unittest.TestCase):
         self.assertFalse(self.service.vault.status('testpilot')['local_bound'])
         self.manage('list')
 
-    def test_tpm_failure_during_final_status_never_returns_sensitive_list(self):
+    def test_password_unbind_recovers_without_tpm_and_status_does_not_decrypt(self):
         self.manage('create')
         row, key, data = self.service.vault.authenticate('testpilot', PASSWORD)
-        data.update(profiles=[{'id': 'profile', 'label': '私密账号', 'users': [{'uid': 'synthetic'}]}])
+        data.update(profiles=[{'id': 'profile', 'label': '合成账号', 'users': [{'uid': 'synthetic'}]}])
         self.service.vault.save('testpilot', row[0], key, data, False, b'wrapped-hardware-key')
         with patch('module.runtime.account_tpm.TpmProtector') as tpm:
-            tpm.return_value.unwrap.side_effect = [bytes(key.value), ApiError('TPM_UNAVAILABLE', '临时故障')]
-            with self.assertRaises(ApiError) as error:
-                self.manage('list')
-        self.assertEqual('VAULT_DESTROYED', error.exception.code)
-        self.assertFalse(self.service.vault.path('testpilot').exists())
-        self.assertNotIn('testpilot', self.service.vault.keys)
+            tpm.return_value.unwrap.side_effect = ApiError('TPM_UNAVAILABLE', '合成故障')
+            self.assertNotIn('profiles', self.service.status(InstanceParams(instance='testpilot')))
+            self.assertEqual(1, len(self.manage('list')['profiles']))
+            self.assertFalse(self.manage('unbind_tpm')['tpm_bound'])
+            tpm.return_value.unwrap.assert_not_called()
+        self.assertTrue(self.service.vault.path('testpilot').exists())
 
     def test_password_required_before_identity_and_every_sensitive_action(self):
         self.manage('create')
@@ -366,17 +348,17 @@ class AccountApiTests(unittest.TestCase):
         self.assertNotIn(PASSWORD, repr(params))
         self.assertNotIn(NEW_PASSWORD, repr(params))
 
-    def test_host_change_during_first_binding_destroys_existing_vault(self):
+    def test_host_change_during_first_binding_preserves_existing_vault(self):
         from module.runtime.account_tpm import TpmProtector
         self.manage('create')
         with patch.object(TpmProtector, 'available', return_value=True), \
                 patch.object(TpmProtector, 'host_identity', side_effect=['old-host', 'new-host']), \
-                patch.object(TpmProtector, 'execute', return_value=bytes(256)) as execute:
+                patch.object(TpmProtector, 'execute', return_value=bytes(256)):
             with self.assertRaises(ApiError) as error:
                 self.manage('bind_tpm')
-        self.assertEqual('VAULT_DESTROYED', error.exception.code)
-        self.assertEqual(1, execute.call_count)
-        self.assertTrue(self.service.status(InstanceParams(instance='testpilot'))['destroyed'])
+        self.assertEqual('VAULT_BINDING_UNAVAILABLE', error.exception.code)
+        self.assertTrue(self.service.vault.path('testpilot').exists())
+        self.manage('list')
 
     def test_unavailable_tpm_rejects_binding_without_destroying_vault(self):
         self.manage('create')
@@ -389,14 +371,15 @@ class AccountApiTests(unittest.TestCase):
         self.assertFalse(self.service.status(InstanceParams(instance='testpilot'))['tpm_available'])
         self.manage('list')
 
-    def test_failed_first_binding_does_not_keep_password_recovery(self):
+    def test_failed_first_binding_keeps_password_recovery(self):
         self.manage('create')
         with patch('module.runtime.account_tpm.TpmProtector') as tpm:
-            tpm.return_value.wrap.side_effect = ApiError('TPM_UNAVAILABLE', '硬件不可用')
+            tpm.return_value.wrap.side_effect = ApiError('TPM_UNAVAILABLE', '合成故障')
             with self.assertRaises(ApiError) as error:
                 self.manage('bind_tpm')
-        self.assertEqual('VAULT_DESTROYED', error.exception.code)
-        self.assertFalse(self.service.vault.path('testpilot').exists())
+        self.assertEqual('VAULT_BINDING_UNAVAILABLE', error.exception.code)
+        self.assertTrue(self.service.vault.path('testpilot').exists())
+        self.manage('list')
 
 
 class DeviceTests(unittest.TestCase):

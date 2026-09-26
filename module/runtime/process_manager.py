@@ -768,9 +768,19 @@ class ProcessManager:
         except FileNotFoundError:
             pass
 
+        from module.api.protocol import ApiError
+
         for process in _instances:
             logger.info(f"启动中 [{process.config_name}]")
-            process.start(func=get_config_mod(process.config_name), ev=ev)
+            try:
+                process.start(func=get_config_mod(process.config_name), ev=ev)
+            except ApiError as error:
+                process.exit_result = WorkerResult.ERROR
+                logger.error(f'[{process.config_name}] 自动恢复被阻止（{error.code}）；请在 WebUI 检查账号管理，其他实例继续启动')
+            except Exception:
+                process.exit_result = WorkerResult.ERROR
+                # 启动异常可能带有账号上下文，只记录安全的通用说明。
+                logger.error(f'[{process.config_name}] 自动恢复失败；该实例保持停止，其他实例和 WebUI 继续启动')
 
         try:
             os.remove("./config/reloadalas")
