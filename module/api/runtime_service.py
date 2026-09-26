@@ -12,6 +12,36 @@ from module.runtime.process_manager import ProcessManager
 STATES = {1: 'running', 2: 'stopped', 3: 'error', 4: 'updating'}
 
 
+def timeline_latest(timeline, field):
+    """取时间线里该字段按时间最近的一个非空值所在的行（末点未必带这个字段）。"""
+    best = None
+    for row in timeline:
+        if row.get(field) is None:
+            continue
+        if best is None or (row.get('ts') or '') >= (best.get('ts') or ''):
+            best = row
+    return best or {}
+
+
+def monthly_statistics_resources(instance):
+    """总览补两项统计口径的本月累计：海里数与行动力资产。"""
+    from module.config.time_source import now as current_time
+    from module.statistics.opsi_month import get_ap_timeline
+
+    today = current_time()
+    timeline = get_ap_timeline(today.year, today.month, instance)
+    if not timeline:
+        return []
+    distance = timeline_latest(timeline, 'distance')
+    asset = timeline_latest(timeline, 'asset')
+    return [
+        {'name': 'Distance', 'label': '海里数', 'value': distance.get('distance'),
+         'limit': None, 'total': None, 'record': str(distance.get('ts', '')).replace('T', ' ')[:19]},
+        {'name': 'ActionAsset', 'label': '行动力资产', 'value': asset.get('asset'),
+         'limit': None, 'total': None, 'record': str(asset.get('ts', '')).replace('T', ' ')[:19]},
+    ]
+
+
 class RuntimeService:
     def __init__(self, configs):
         self.configs = configs
@@ -55,6 +85,7 @@ class RuntimeService:
                       'value': values.get('Value'), 'limit': values.get('Limit'), 'total': values.get('Total'),
                       'record': values.get('Record')}
                      for name, values in data.get('Dashboard', {}).items() if 'Value' in values]
+        resources.extend(monthly_statistics_resources(instance))
         return {'instance': instance, 'revision': revision,
                 'status': STATES.get(manager.state, 'stopped') if manager else 'stopped',
                 'tasks': tasks, 'resources': resources,
