@@ -211,7 +211,7 @@ def report(configs, instance, category, month, days, period, research_series=0, 
         result['tables'].append(table('短猫运行统计', ['侵蚀等级', '战斗次数', '有效轮数', '平均战斗秒数', '平均每轮秒数', '研究装置', '获取率（%）', '统计来源'], rows))
         # 收获卡片在列表视图下排成一整行：列名是指标名，唯一一行是数值。
         result['tables'].append(table('收获', [item['label'] for item in result['metrics']],
-                                      [[item['value'] if item['value'] is None else f"{item['value']}{item['unit']}" for item in result['metrics']]]))
+                                      [[item['value'] for item in result['metrics']]]))
     elif category == 'action':
         from module.statistics.opsi_month import get_ap_timeline, get_coins_timeline
         ap = get_ap_timeline(year, month_number, instance)
