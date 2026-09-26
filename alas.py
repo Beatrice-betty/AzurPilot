@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import sys
 import threading
 import time
 from datetime import datetime, timedelta
@@ -24,6 +25,7 @@ from module.config.utils import (
     filepath_config,
     get_server_last_update,
     get_server_next_update,
+    parse_config_name,
     read_file,
 )
 from module.exception import *
@@ -2470,5 +2472,14 @@ class AzurLaneAutoScript:
                 time.sleep(wait_seconds)
 
 if __name__ == '__main__':
-    alas = AzurLaneAutoScript()
+    try:
+        config_name = parse_config_name(sys.argv[1:])
+    except ValueError as error:
+        logger.error(f'[Alas] 无法启动调度器：{error}')
+        logger.info(
+            f'[Alas] 用法：python alas.py [实例名]，省略实例名时使用 {DEFAULT_CONFIG_NAME}'
+        )
+        exit(2)
+
+    alas = AzurLaneAutoScript(config_name=config_name)
     alas.loop()

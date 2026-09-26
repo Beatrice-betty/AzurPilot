@@ -68,12 +68,26 @@
 
 | 入口 | 用途 |
 | --- | --- |
-| `AzurLaneAutoScript(config_name).loop()` | 主入口。WebUI 经 `ProcessManager` 创建 worker 进程后调用；直接运行 `python alas.py` 也走这里（默认配置 `alas`） |
+| `python alas.py [实例名]` | 命令行入口。不传实例名时用 `DEFAULT_CONFIG_NAME`（`ap`）；实例名经 `parse_config_name()` 校验，非法或不存在时以退出码 2 失败，不会回退到默认实例 |
+| `AzurLaneAutoScript(config_name).loop()` | 主入口。WebUI 经 `ProcessManager` 创建 worker 进程后调用；`python alas.py` 也走这里 |
 | `AzurLaneAutoScript(config_name).run(command, skip_first_screenshot=True)` | 单任务入口。WebUI「立即执行」某任务时跳过调度循环直接运行 |
 | `config.task_call('Restart')` | 跨任务注入入口。业务模块以此请求恢复，效果是把目标任务 `NextRun` 置为现在并强制启用 |
 | `AzurLaneAutoScript.stop_event` | 类属性。WebUI 注入由 `State.manager.Event()` 创建的跨进程事件代理，调度器在轮询点响应停止信号 |
 
 追代码建议从 `loop()` 开始读，它是全部生命周期的汇聚点；单次任务的行为再看 `run()`。
+
+### 外部调度器接入契约
+
+AUTO-MAS 一类外部调度器把 AzurPilot 当黑箱驱动，只用以下四个面，不触碰内部状态：
+
+| 面 | 约定 |
+| --- | --- |
+| 启动 | `python alas.py <实例名>`，在 AzurPilot 根目录下创建且已配置的实例 |
+| 配置 | 读写 `./config/<实例名>.json`，字段语义归配置系统所有 |
+| 日志 | `get_log_file_path(实例名)` → `./log/{日期}_{实例名}.txt`，当天追加；`[Alas] 调度器: 开始任务/结束任务` 可作任务边界标记 |
+| 停止 | 外部工具终止进程树。调度器不主动退出，也没有停止文件；长跑与卡死恢复由自身机制负责 |
+
+`module/logger.py` 在导入时把工作目录切到项目根，因此外部工具无需设置工作目录，但一个实例必须独占一个进程。
 
 ## 5. 核心组件
 
