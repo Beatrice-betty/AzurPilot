@@ -47,6 +47,13 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ruff",
+    # tests/shop_event/ 使用 pytest 编写
+    "pytest",
+    # dev_tools 脚本依赖
+    "pandas",
+    "pyperclip",
+    # module/debug/web_debug_server.py 的调试服务依赖；运行时缺失会降级告警
+    "flask",
 ]
 
 [tool.uv]
@@ -64,3 +71,7 @@ override-dependencies = [
     # imports the removed stdlib distutils module on Python 3.14.
     "packaging==24.2",
 ]
+
+[tool.pytest.ini_options]
+# tests/ 不是包，pytest 需要仓库根目录在 sys.path 才能导入 module/
+pythonpath = ["."]
