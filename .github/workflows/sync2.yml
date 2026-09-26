@@ -12,11 +12,15 @@ jobs:
       gitcode_token: ${{ secrets.GITCODE_TOKEN }}
       gitcode_user: ${{ secrets.GITCODE_USER }}
     runs-on: ubuntu-latest
+    concurrency:
+      group: gitcode-sync-${{ github.ref }}
+      cancel-in-progress: false
+    # 初次浅克隆 300 层；不足以覆盖固定基线时，脚本按需加深。
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          fetch-depth: 0
+          fetch-depth: 300
 
       - name: Mask sensitive values
         env:
@@ -32,20 +36,24 @@ jobs:
         with:
           python-version: '3.14'
 
-      # gitcode 镜像配额 1 GiB，历史里被替换掉的大文件必须移除，否则很快用满。
-      # 变换对同一份输入是确定的，各次同步产出的 SHA 因此稳定，客户端可以正常 pull。
-      - name: Trim dead history
+      # 普通服务端可能拒绝浅仓库推送，因此先截断父链接，生成独立的普通仓库。
+      # 基线写死在脚本中，同一提交的镜像 SHA 稳定，新增提交继续往后累加。
+      - name: Build fixed baseline mirror history
+        env:
+          MIRROR_OUTPUT: ${{ runner.temp }}/gitcode-mirror.git
+          MIRROR_BRANCH: ${{ github.ref_name }}
         run: |
-          python -m pip install --quiet git-filter-repo
-          python .github/scripts/trim_dead_history.py
+          python .github/scripts/build_mirror_history.py \
+            --fetch-branch "$MIRROR_BRANCH" --output "$MIRROR_OUTPUT"
 
       - name: sync
         if: env.gitcode_key && env.gitcode_token && env.gitcode_user
         run: |
-          git remote remove upstream-mirror 2>/dev/null || true
+          cd "$MIRROR_OUTPUT"
           git remote add upstream-mirror "https://${GITCODE_USER}:${GITCODE_TOKEN}@gitcode.com/${GITCODE_USER}/${REPO_NAME}.git"
           git push --force --progress upstream-mirror "HEAD:${GITHUB_REF_NAME}"
         env:
           GITCODE_USER: ${{ secrets.GITCODE_USER }}
           GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
           REPO_NAME: ${{ secrets.GITCODE_REPO_NAME }}
+          MIRROR_OUTPUT: ${{ runner.temp }}/gitcode-mirror.git
