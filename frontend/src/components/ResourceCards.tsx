@@ -20,7 +20,7 @@ const iconImages: Record<string, string> = {
   Medal: `${iconBase}honor_medal.webp`,
   Merit: `${iconBase}merit.webp`,
   GuildCoin: `${iconBase}stamina.webp`,
-  Chip: `${iconBase}core_data.webp`,
+  Chip: `${iconBase}cognitive_chips.webp`,
 }
 
 /* 行动力越高换越大的狗图，四档从高到低取第一张命中的；未达第一档不换图。 */

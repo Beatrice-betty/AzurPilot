@@ -26,6 +26,8 @@ export function InterfaceSettings() {
               <option value="minimal">{ui('settings.themeMinimal')}</option>
               <option value="legacy-light">{ui('settings.themeLegacyLight')}</option>
               <option value="legacy-dark">{ui('settings.themeLegacyDark')}</option>
+              <option value="legacy-glass-light">{ui('settings.themeLegacyGlassLight')}</option>
+              <option value="legacy-glass-dark">{ui('settings.themeLegacyGlassDark')}</option>
               <option value="extreme">{ui('settings.themeExtreme')}</option>
             </Select>
           </div>

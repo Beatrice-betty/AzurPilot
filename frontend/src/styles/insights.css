@@ -131,6 +131,11 @@
 .statistics-page-section.is-chain-linked > .statistics-sections > *:last-child > .stat-card > .panel {border-bottom-left-radius:0;border-bottom-right-radius:0}
 .statistics-page-section.is-chain-linked + .statistics-page-section > .statistics-sections > *:first-child > .panel,
 .statistics-page-section.is-chain-linked + .statistics-page-section > .statistics-sections > *:first-child > .stat-card > .panel {border-top-left-radius:0;border-top-right-radius:0}
+/* 隐藏卡留在链内会生成接缝条：接缝条占了分区的末位或首位时，圆角要抹在它前后那张真实卡片上。 */
+.statistics-page-section.is-chain-linked > .statistics-sections > *:has(+ .stat-card-seam:last-child) > .panel,
+.statistics-page-section.is-chain-linked > .statistics-sections > *:has(+ .stat-card-seam:last-child) > .stat-card > .panel {border-bottom-left-radius:0;border-bottom-right-radius:0}
+.statistics-page-section.is-chain-linked + .statistics-page-section > .statistics-sections > .stat-card-seam:first-child + * > .panel,
+.statistics-page-section.is-chain-linked + .statistics-page-section > .statistics-sections > .stat-card-seam:first-child + * > .stat-card > .panel {border-top-left-radius:0;border-top-right-radius:0}
 .statistics-page-section.is-chain-linked .stat-card-junction.is-linked {margin-top:0}
 /* 两张卡片之间的接缝：在流内，卡片间距与隐藏卡占位条由它承担，连接符在它内部居中。 */
 .stat-card-seam {position:relative;z-index:5;margin:14px 0}
@@ -253,7 +258,10 @@
    同时面板自身可滚动，滚动后标题行会滚出视口。右侧让开按钮宽度并让它吸顶。
    这里必须带 !important：紧凑主题用 padding 简写加 !important 压过面板内边距。 */
 .panel.chart-expanded .panel-heading {position:sticky;top:0;z-index:2;padding-right:160px !important;background:var(--surface)}
-.statistics-table {min-width:0}.statistics-table h3,.summary-metrics-panel h3 {margin:0;font-size:14px}.table-toolbar {padding:10px 22px;margin:0;flex-wrap:wrap}.table-toolbar input {max-width:240px}.table-scroll {overflow-x:auto;overflow-y:visible;max-height:none}.statistics-table table {border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap}.statistics-table td,.statistics-table th {padding:13px 20px;text-align:center;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}.statistics-table th {position:sticky;top:0;background:var(--surface-muted);z-index:1}.statistics-table th button {border:0;background:none;color:var(--text);cursor:pointer;font:inherit;padding:0}.statistics-table tbody tr:hover {background:var(--surface-muted)}.table-resource-cell {display:inline-flex;align-items:center;gap:8px;vertical-align:middle}.table-resource-icon {width:26px;height:26px;object-fit:contain;flex-shrink:0;display:block;user-select:none;pointer-events:none;filter:drop-shadow(0 1px 3px rgb(0 0 0 / .2))}.table-header-icon {width:24px;height:24px;margin-right:2px}
+.statistics-table {min-width:0}.statistics-table h3,.summary-metrics-panel h3 {margin:0;font-size:14px}.table-toolbar {padding:10px 22px;margin:0;flex-wrap:wrap}.table-toolbar input {max-width:240px}.table-scroll {overflow-x:auto;overflow-y:visible;max-height:none}.statistics-table table {border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap}.statistics-table td,.statistics-table th {padding:13px 20px;text-align:center;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}
+/* 单行表格把一批指标排成一横排：压缩内边距，并补上列与列之间的分隔。 */
+.statistics-table.is-single-row td,.statistics-table.is-single-row th {padding:7px 10px}
+.statistics-table.is-single-row th:not(:first-child),.statistics-table.is-single-row td:not(:first-child) {border-left:1px solid var(--border)}.statistics-table th {position:sticky;top:0;background:var(--surface-muted);z-index:1}.statistics-table th button {border:0;background:none;color:var(--text);cursor:pointer;font:inherit;padding:0}.statistics-table tbody tr:hover {background:var(--surface-muted)}.table-resource-cell {display:inline-flex;align-items:center;gap:8px;vertical-align:middle}.table-resource-icon {width:26px;height:26px;object-fit:contain;flex-shrink:0;display:block;user-select:none;pointer-events:none;filter:drop-shadow(0 1px 3px rgb(0 0 0 / .2))}.table-header-icon {width:24px;height:24px;margin-right:2px}
 /* 卡片适应：列数由脚本按容器宽度写入，末排因此不会各自撑满整行。 */
 .resource-grid.resource-fit {display:grid}
 /* 卡片适应把网格切成多列，合并卡片仍占满整行。 */

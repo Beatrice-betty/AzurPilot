@@ -12,7 +12,7 @@ const resourceIcons: Record<string, string> = {
   '钻石': `${iconBase}diamond.webp`,
   '心智魔方': `${iconBase}cube.webp`,
   '魔方': `${iconBase}cube.webp`,
-  '心智单元': `${iconBase}core_data.webp`,
+  '心智单元': `${iconBase}cognitive_chips.webp`,
   '石油': `${iconBase}oil.webp`,
   '物资': `${iconBase}gold.webp`,
   '完成委托': `${iconBase}honor_medal.webp`,
@@ -87,7 +87,8 @@ function numericValue(value: StatTable['rows'][number][number]): number | undefi
   const perPage = rowsPerPage > 0 ? rowsPerPage : Math.max(rows.length, 1)
   const pages = Math.max(1, Math.ceil(rows.length / perPage))
   const current = Math.min(page, pages - 1)
-  return <section className="statistics-table"><div className="panel-heading"><h3>{data.title}</h3><div className="stat-card-actions">{editControls}{foldControl}<button className="text-button" disabled={!rows.length} onClick={() => downloadCsv(data.title, [data.columns, ...rows])}>{ui('stats.exportDetails')}</button></div></div>{data.note && <p className="panel-note">{data.note}</p>}<div className="table-toolbar"><input aria-label={ui('stats.searchTable', {title: data.title})} value={search} onChange={event => {setSearch(event.target.value); setPage(0)}} placeholder={ui('stats.searchPlaceholder')}/><span>{ui('stats.records', {count: rows.length})}</span></div><div className="table-scroll">{plain ? (<div className="table-lines">{rows.slice(current * perPage, (current + 1) * perPage).map((row, index) => (
+  const singleRow = rows.length === 1
+  return <section className={`statistics-table${singleRow ? ' is-single-row' : ''}`}><div className="panel-heading"><h3>{data.title}</h3><div className="stat-card-actions">{editControls}{foldControl}<button className="text-button" disabled={!rows.length} onClick={() => downloadCsv(data.title, [data.columns, ...rows])}>{ui('stats.exportDetails')}</button></div></div>{data.note && <p className="panel-note">{data.note}</p>}<div className="table-toolbar"><input aria-label={ui('stats.searchTable', {title: data.title})} value={search} onChange={event => {setSearch(event.target.value); setPage(0)}} placeholder={ui('stats.searchPlaceholder')}/><span>{ui('stats.records', {count: rows.length})}</span></div><div className="table-scroll">{plain ? (<div className="table-lines">{rows.slice(current * perPage, (current + 1) * perPage).map((row, index) => (
               <p className="table-line" key={index}>
                 <span className="table-line-first">{cellText(row[0])}：</span>
                 {row.slice(1).map((value, cell) => {const icon = typeof value === 'string' ? resolveIcon(value, false) : undefined

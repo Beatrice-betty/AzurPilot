@@ -1,5 +1,5 @@
 import type {ReactNode, KeyboardEvent as ReactKeyboardEvent} from 'react'
-import { Select } from './FormControls'
+import { Checkbox, Select } from './FormControls'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as echarts from 'echarts/core'
 import { LineChart, CandlestickChart } from 'echarts/charts'
@@ -48,9 +48,10 @@ const chartResourceIcons: Record<string, string> = {
   '荣誉勋章': `${iconBase}honor_medal.webp`,
   '功勋': `${iconBase}merit.webp`,
   '舰队币': `${iconBase}stamina.webp`,
-  '心智单元': `${iconBase}core_data.webp`,
+  '心智单元': `${iconBase}cognitive_chips.webp`,
   '行动力': `${iconBase}guild_coin.webp`,
-  '行动力资产': `${iconBase}guild_coin.webp`,
+  '行动力资产': `${iconBase}action_asset.webp`,
+  '海里数': `${iconBase}nautical_miles.webp`,
   '作战补给凭证': `${iconBase}supply_token.webp`,
   '特别兑换凭证': `${iconBase}special_token.webp`,
   '完成委托': `${iconBase}honor_medal.webp`,
@@ -120,6 +121,11 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
   }, [])
 
   const [axisMode, setAxisModeState] = useState<ChartAxisMode>(() => readStatisticsPrefs().chartAxisMode)
+  const [zeroBase, setZeroBaseState] = useState(() => readStatisticsPrefs().chartZeroBase)
+  const setZeroBase = useCallback((next: boolean) => {
+    setZeroBaseState(next)
+    updateStatisticsPrefs({chartZeroBase: next})
+  }, [])
   const setAxisMode = useCallback((next: 'separate' | 'unified') => {
     setAxisModeState(next)
     updateStatisticsPrefs({chartAxisMode: next})
@@ -157,18 +163,13 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
       return
     }
     const resize = () => {
-      let above = 0
-      for (const child of panel.children) {
-        if (child === canvas) break
-        above += child.getBoundingClientRect().height
-      }
-      const panelBefore = panel.clientHeight
-      const canvasBefore = canvas.getBoundingClientRect().height
-      const next = Math.max(240, panelBefore - above)
-      if (Math.abs(next - canvasBefore) < 1) return
+      const panelBox = panel.getBoundingClientRect()
+      const canvasBox = canvas.getBoundingClientRect()
+      /* 画布上方的高度按坐标量：画布是面板的孙节点，不是直接子节点。 */
+      const above = canvasBox.top - panelBox.top + panel.scrollTop
+      const next = Math.max(240, Math.round(panel.clientHeight - above))
+      if (Math.abs(next - canvasBox.height) < 1) return
       canvas.style.height = `${next}px`
-      /* 面板跟着长高，说明它的高度由内容决定，此时写高会无限增高，于是退回原高度。 */
-      if (panel.clientHeight > panelBefore + 1) canvas.style.height = `${canvasBefore}px`
     }
     resize()
     /* 面板高度、上方内容高度（换语言会让芯片换行）变化时都要重算。 */
@@ -253,6 +254,8 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
         })
       }
 
+      if (zeroBase) yAxes = yAxes.map(axis => ({...axis, min: 0}))
+
       /* 每条曲线落在哪个 Y 轴上：单页与统一轴都用左轴。 */
       const axisIndexFor = (item: {index: number}) => (isSingle || axisMode === 'unified' ? 0 : Math.min(item.index, yAxes.length - 1))
 
@@ -280,11 +283,12 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
         }
         if (riseFall) {
           const segments = riseFallSegments(item.buckets.map(b => new Date(b.time.replace(' ', 'T')).getTime()), item.buckets.map(b => b.close))
+          /* 拐点同属上涨与下跌两个系列，高亮会在同一坐标叠两个符号。 */
           return [
             {name: item.series.label, type: 'line' as const, yAxisIndex: axisIndexFor(item), showSymbol: false, connectNulls: false,
-              lineStyle: {width: 2, color: RISE_COLOR}, data: segments.rise},
+              emphasis: {disabled: true}, lineStyle: {width: 2, color: RISE_COLOR}, data: segments.rise},
             {name: item.series.label, type: 'line' as const, yAxisIndex: axisIndexFor(item), showSymbol: false, connectNulls: false,
-              lineStyle: {width: 2, color: FALL_COLOR}, data: segments.fall},
+              emphasis: {disabled: true}, lineStyle: {width: 2, color: FALL_COLOR}, data: segments.fall},
           ]
         }
         return [{
@@ -348,7 +352,7 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
       observer.disconnect()
       themeObserver.disconnect()
     }
-  }, [shownData, hasPoints, isCandlestick, axisMode, isSingle, categoryTimes, language, ui, theme, stackedRise])
+  }, [shownData, hasPoints, isCandlestick, axisMode, isSingle, categoryTimes, language, ui, theme, stackedRise, zeroBase])
 
 
   /* 图表设置（类型、坐标轴、采样粒度、时间范围）排在图表下方：先看数据，再决定怎么画。 */
@@ -380,6 +384,8 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
         </Select>
       </label>
     )}
+
+    <Checkbox checked={zeroBase} onChange={event => setZeroBase(event.target.checked)}>{ui('stats.zeroBase')}</Checkbox>
 
     <label>
       {ui('stats.bucket')}
@@ -413,13 +419,16 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
   const rangeError = from && to && from > to ? <p className="preview-error" role="alert">{ui('stats.invalidRange')}</p> : null
 
 
+  /* 组合页里两张图卡标题相同、分不出是哪一张，带短名前缀后可以区分。 */
+  const headingLabel = category === 'resources' ? ui('stats.chartHeading.resources') : category === 'action' ? ui('stats.chartHeading.action') : ui('stats.trendDetails')
+
   return (
     <section className={`panel statistics-chart ${expanded ? 'chart-expanded' : ''}`}>
       {/* 紧凑主题把标题与「放大查看」上提到页面工具栏：分类切换已经说明了这是什么，
           面板里再写一遍「趋势与细节」是重复的。但放大视图会盖住整页工具栏（含分区切换），
           所以放大时必须把标题行放回来，否则只剩 Esc 能退出。 */}
       {(heading || expanded) && <div className="panel-heading">
-        <h2>{expanded && title ? title : ui('stats.trendDetails')}</h2>
+        <h2>{expanded && title ? title : headingLabel}</h2>
         <div className="stat-card-actions">{foldControl}<button className="text-button" onClick={onToggleExpanded}>{expanded ? ui('stats.collapseChart') : ui('stats.expandChart')}</button></div>
       </div>}
 

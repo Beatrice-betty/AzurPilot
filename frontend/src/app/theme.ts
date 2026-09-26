@@ -1,6 +1,7 @@
 import { palettes, paletteColors, paletteTokens, readCustomPalettes, colorModes, fixedColorModes, type Palette, type ColorMode, type ResolvedMode, type CustomPalette } from './palettes'
 export type Theme = 'light' | 'dark' | 'minimal' | 'extreme'
   | 'legacy-light' | 'legacy-dark'
+  | 'legacy-glass-light' | 'legacy-glass-dark'
 export { palettes } from './palettes'
 export type { Palette, ColorMode, CustomPalette } from './palettes'
 
@@ -22,7 +23,7 @@ const defaults: Preference = {
 }
 
 /** 走 Apple 玻璃/壁纸/装饰动画一档的主题；旧版浅色与深色是朴素风格，不在此列。 */
-const MATERIAL_THEMES: readonly Theme[] = ['light', 'dark']
+const MATERIAL_THEMES: readonly Theme[] = ['light', 'dark', 'legacy-glass-light', 'legacy-glass-dark']
 export const usesMaterial = (theme: Theme) => MATERIAL_THEMES.includes(theme)
 
 /** 走配色方案机制的主题（界面上显示「主题模式」与「配色方案」两块）。 */
@@ -30,7 +31,7 @@ const PALETTE_THEMES: readonly Theme[] = ['minimal', 'extreme']
 export const usesPaletteOptions = (theme: Theme) => PALETTE_THEMES.includes(theme)
 
 /** 走旧版版式的主题：实例视图的顶栏跨全宽、总览页两列、右栏让位。 */
-const LEGACY_LAYOUT_THEMES: readonly Theme[] = ['legacy-light', 'legacy-dark']
+const LEGACY_LAYOUT_THEMES: readonly Theme[] = ['legacy-light', 'legacy-dark', 'legacy-glass-light', 'legacy-glass-dark']
 export const usesLegacyLayout = (theme: Theme) => LEGACY_LAYOUT_THEMES.includes(theme)
 
 /** 实例视图是否换用旧版外壳；主页视图（没有实例）一律沿用新版外壳。 */
@@ -40,7 +41,7 @@ export const usesLegacyShell = (theme: Theme, instance?: string) => Boolean(inst
 export const showsRightRail = (theme: Theme, instance?: string) => Boolean(instance) && !usesLegacyLayout(theme)
 
 const VALID_THEMES: readonly string[] = ['light', 'dark', 'minimal', 'extreme',
-  'legacy-light', 'legacy-dark']
+  'legacy-light', 'legacy-dark', 'legacy-glass-light', 'legacy-glass-dark']
 
 export function readThemePreference(): Preference {
   try {
@@ -130,14 +131,21 @@ function applyCompactLayout(root: HTMLElement, next: Preference) {
 const skinLoaders = {
   minimal: () => import('../styles/minimal.css?inline'),
   legacy: () => import('../styles/legacy.css?inline'),
+  legacyGlass: () => import('../styles/legacy-material.css?inline'),
   classic: () => import('../styles/classic.css?inline'),
 } as const
 type Skin = keyof typeof skinLoaders
+
+/** 高级材质两个主题沿用基础主题值下发属性，玻璃层由 data-material 生效。 */
+const GLASS_THEMES: readonly Theme[] = ['legacy-glass-light', 'legacy-glass-dark']
+const isGlassTheme = (theme: Theme) => GLASS_THEMES.includes(theme)
+const baseThemeFor = (theme: Theme): Theme => (theme === 'legacy-glass-light' ? 'legacy-light' : theme === 'legacy-glass-dark' ? 'legacy-dark' : theme)
 
 /** 浅色与深色各自是独立主题值，但共用同一份 CSS：明暗靠 data-theme 选择器切换。 */
 function skinFor(theme: Theme): Skin {
   if (theme === 'minimal' || theme === 'extreme') return 'minimal'
   if (theme === 'legacy-light' || theme === 'legacy-dark') return 'legacy'
+  if (theme === 'legacy-glass-light' || theme === 'legacy-glass-dark') return 'legacyGlass'
   return 'classic'
 }
 
@@ -174,7 +182,11 @@ export async function applyTheme(next: Preference) {
     }
   } else custom?.remove()
   const root = document.documentElement
-  if (root.dataset.theme !== next.theme) root.dataset.theme = next.theme
+  const attribute = baseThemeFor(next.theme)
+  if (root.dataset.theme !== attribute) root.dataset.theme = attribute
+  const material = isGlassTheme(next.theme) ? 'glass' : ''
+  if (material && root.dataset.material !== material) root.dataset.material = material
+  if (!material && root.dataset.material !== undefined) delete root.dataset.material
   if (root.dataset.palette !== next.palette) root.dataset.palette = next.palette
   const resolvedMode = applyColorMode(next)
   applyCompactLayout(root, next)
