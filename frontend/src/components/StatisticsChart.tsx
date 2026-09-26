@@ -1,5 +1,5 @@
 import type {ReactNode, KeyboardEvent as ReactKeyboardEvent} from 'react'
-import { Checkbox, Select } from './FormControls'
+import { Select } from './FormControls'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as echarts from 'echarts/core'
 import { LineChart, CandlestickChart } from 'echarts/charts'
@@ -67,7 +67,7 @@ function getChartIcon(label: string): string | undefined {
 
 /** 图表主体。紧凑主题把标题行与「放大查看」上提到页面工具栏（`heading=false`），
     并把报表附带的表格并进同一面板，避免同一页出现两个顶层区域。 */
-export function StatisticsChart({series, heading = true, expanded = false, onToggleExpanded, title, initialMode, category = 'resources', foldControl, plotFoldControl, compact = false, compactControl, showPicker = true, pickerControl, pickerMuted = false, stackedRise = false, stackedControl, filtered = [], onToggleFilter}: {
+export function StatisticsChart({series, heading = true, expanded = false, onToggleExpanded, title, initialMode, category = 'resources', foldControl, plotFoldControl, compact = false, compactControl, showPicker = true, pickerControl, pickerMuted = false, stackedRise = false, stackedControl, zeroBase = false, zeroBaseControl, filtered = [], onToggleFilter}: {
   series: StatSeries[]
   heading?: boolean
   foldControl?: ReactNode
@@ -86,6 +86,10 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
   stackedRise?: boolean
   /** 表头容器内的叠涨开关。 */
   stackedControl?: ReactNode
+  /** 纵轴起点是否固定为 0：关闭时轴跟随可见数据范围。 */
+  zeroBase?: boolean
+  /** 表头容器内的纵轴起点开关。 */
+  zeroBaseControl?: ReactNode
   /** 被点掉曲线的资源键：表头保留并淡色，不画进图里。 */
   filtered?: string[]
   /** 点表头卡片切换该资源的曲线显示。 */
@@ -121,11 +125,6 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
   }, [])
 
   const [axisMode, setAxisModeState] = useState<ChartAxisMode>(() => readStatisticsPrefs().chartAxisMode)
-  const [zeroBase, setZeroBaseState] = useState(() => readStatisticsPrefs().chartZeroBase)
-  const setZeroBase = useCallback((next: boolean) => {
-    setZeroBaseState(next)
-    updateStatisticsPrefs({chartZeroBase: next})
-  }, [])
   const setAxisMode = useCallback((next: 'separate' | 'unified') => {
     setAxisModeState(next)
     updateStatisticsPrefs({chartAxisMode: next})
@@ -385,7 +384,6 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
       </label>
     )}
 
-    <Checkbox checked={zeroBase} onChange={event => setZeroBase(event.target.checked)}>{ui('stats.zeroBase')}</Checkbox>
 
     <label>
       {ui('stats.bucket')}
@@ -473,6 +471,7 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
           {compactControl}
           {stackedControl}
           {pickerControl}
+          {zeroBaseControl}
         </div>
       </div> : null}
 

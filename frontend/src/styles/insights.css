@@ -313,6 +313,7 @@
 .resource-editor-card.resource-picker-card {cursor: pointer; font-size: inherit; color: inherit}
 /* 目录栏末尾的单页视图开关：选中态用强调色标出。 */
 .statistics-single-view[aria-pressed="true"] {color:var(--accent)}
+.statistics-zero-base[aria-pressed='true'] {color:var(--accent)}
 /* 图表表头的紧凑排列：一行一个资源，靠容器网格对齐，行内不画表格与边框。 */
 .stat-multi-metrics.is-compact {display:grid; grid-template-columns:minmax(0, max-content) repeat(4, max-content); align-items:center; column-gap:16px; row-gap:2px; padding:10px 22px}
 .stat-multi-metrics.is-compact .stat-metric-row, .stat-multi-metrics.is-compact .stat-metric-labels {display:contents}
