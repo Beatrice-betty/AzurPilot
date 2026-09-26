@@ -124,6 +124,29 @@ class TestLowPushMode(unittest.TestCase):
         notify_webui_mock.assert_not_called()
 
 
+class TestLowPushModeConfigWiring(unittest.TestCase):
+    """用真实配置对象验证键名。
+
+    上面的用例都用 Mock 假配置，键名写错也会静默返回 Mock 属性；
+    这一组走真实的 config_update + bind，确保配置项真的叫 Error_LowPushMode。
+    """
+
+    def make_config(self, **error):
+        from module.config.config import AzurLaneConfig
+
+        config = AzurLaneConfig('template')
+        config.auto_update = False
+        config.data = config.config_update({'Alas': {'Error': error}})
+        config.bind('Alas')
+        return config
+
+    def test_default_is_disabled(self):
+        self.assertFalse(self.make_config().Error_LowPushMode)
+
+    def test_reads_value_from_real_config(self):
+        self.assertTrue(self.make_config(LowPushMode=True).Error_LowPushMode)
+
+
 class TestRestartBootstrap(unittest.TestCase):
     def test_restart_skips_pre_task_screenshot(self):
         """Restart 必须能在游戏未运行、虚拟屏尚无首帧时先执行启动逻辑。"""
