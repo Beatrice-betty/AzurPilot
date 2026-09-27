@@ -1,11 +1,12 @@
 import { Select } from './FormControls'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
-import { ArrowDownUp, Download, Pause, Play, Search, Terminal, Trash2 } from 'lucide-react'
+import { ArrowDownUp, Download, LayoutGrid, Pause, Play, Search, Terminal, Trash2 } from 'lucide-react'
 import { api } from '../api/client'
 import type { Logs as LogsData, LogEntry } from '../api/types'
 import { useApp, useConnection } from '../app/context'
 import { Empty } from '../components/ui'
+import { LogCardView } from './LogCardView'
 
 export const LOG_LINE_RE = /^([A-Z]{4,8})\s+(?:(\d{4}-\d{2}-\d{2})\s+)?(\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)\s*│\s*([\s\S]*)$/
 export const RULE_RE = /^[═─]{3,}\s*(.*?)\s*[═─]{3,}$/
@@ -193,6 +194,14 @@ function loadLogDescending(instance: string): boolean {
   try { return localStorage.getItem(`azurpilot.log.order.${instance}`) === 'desc' } catch { return false }
 }
 
+function loadLogViewMode(): 'cards' | 'classic' {
+  try {
+    const saved = localStorage.getItem('azurpilot.log.viewMode')
+    if (saved === 'cards' || saved === 'classic') return saved
+  } catch { /* 存储不可用时默认卡片视图 */ }
+  return 'cards'
+}
+
 export function LogPanel({active = true}: {active?: boolean}) {
   const {instance = ''} = useParams()
   const [entries, setEntries] = useState<LogEntry[]>([])
@@ -201,6 +210,7 @@ export function LogPanel({active = true}: {active?: boolean}) {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [follow, setFollow] = useState(true)
   const [descending, setDescending] = useState(() => loadLogDescending(instance))
+  const [viewMode, setViewMode] = useState<'cards' | 'classic'>(() => loadLogViewMode())
   const [floor, setFloor] = useState(0)
   const connection = useConnection()
   const {notify, ui} = useApp()
@@ -216,6 +226,14 @@ export function LogPanel({active = true}: {active?: boolean}) {
   function updateLevel(next: string) {
     setLevel(next)
     try { localStorage.setItem(`azurpilot.log.level.${instance}`, next) } catch { /* 无存储权限时仅本页生效。 */ }
+  }
+
+  function toggleViewMode() {
+    setViewMode(prev => {
+      const next = prev === 'cards' ? 'classic' : 'cards'
+      try { localStorage.setItem('azurpilot.log.viewMode', next) } catch { /* 同上 */ }
+      return next
+    })
   }
 
   function toggleOrder() {
@@ -293,6 +311,14 @@ export function LogPanel({active = true}: {active?: boolean}) {
           title={descending ? ui('log.orderDesc') : ui('log.orderAsc')}>
           <ArrowDownUp size={15} />
         </button>
+        <button
+          className={`icon-button ${viewMode === 'cards' ? 'filter-active' : ''}`}
+          onClick={toggleViewMode}
+          aria-label={viewMode === 'cards' ? '切换为经典终端' : '切换为卡片视图'}
+          title={viewMode === 'cards' ? '当前：全部卡片式视图（点击切换经典终端）' : '当前：经典终端视图（点击切换卡片视图）'}
+        >
+          <LayoutGrid size={15} />
+        </button>
         <button className="icon-button" onClick={() => setFloor(entries.at(-1)?.id ?? 0)} aria-label={ui('log.clearView')}>
           <Trash2 size={15} />
         </button>
@@ -314,26 +340,30 @@ export function LogPanel({active = true}: {active?: boolean}) {
       </div>}
       <div className="log-content" ref={scroll} aria-label={ui('log.content')}>
         {visible.length ? (
-          ordered.map((entry, index) => {
-            const prev = ordered[index - 1]
-            const next = ordered[index + 1]
-            const isCenterByContext = Boolean(
-              prev && next &&
-              PURE_RULE_RE.test(prev.text.trim()) && prev.text.includes('═') &&
-              PURE_RULE_RE.test(next.text.trim()) && next.text.includes('═') &&
-              !PURE_RULE_RE.test(entry.text.trim()) &&
-              !LOG_LINE_RE.test(entry.text.trim())
-            )
-            return (
-              <LogLine
-                key={entry.id}
-                entry={entry}
-                search={search}
-                isCenter={isCenterByContext}
-                fresh={freshFrom.current !== null && entry.id > freshFrom.current}
-              />
-            )
-          })
+          viewMode === 'cards' ? (
+            <LogCardView entries={ordered} search={search} />
+          ) : (
+            ordered.map((entry, index) => {
+              const prev = ordered[index - 1]
+              const next = ordered[index + 1]
+              const isCenterByContext = Boolean(
+                prev && next &&
+                PURE_RULE_RE.test(prev.text.trim()) && prev.text.includes('═') &&
+                PURE_RULE_RE.test(next.text.trim()) && next.text.includes('═') &&
+                !PURE_RULE_RE.test(entry.text.trim()) &&
+                !LOG_LINE_RE.test(entry.text.trim())
+              )
+              return (
+                <LogLine
+                  key={entry.id}
+                  entry={entry}
+                  search={search}
+                  isCenter={isCenterByContext}
+                  fresh={freshFrom.current !== null && entry.id > freshFrom.current}
+                />
+              )
+            })
+          )
         ) : (
           <Empty icon={<Terminal size={26} />} title={entries.length ? ui('log.noMatch') : ui('log.ready')}>
             {entries.length ? ui('log.adjustFilter') : ui('log.waiting')}

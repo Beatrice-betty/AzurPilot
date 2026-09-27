@@ -109,6 +109,151 @@
 .log-search-match {background: #fbbf2445; color: inherit; border-radius: 2px; padding: 0 1px}
 .log-filters {display: flex; align-items: center; gap: 12px; padding: 14px 20px; font-size: 11px; color: var(--muted); flex-shrink: 0}
 .log-filters .input-icon {flex: 1}
+
+/* 卡片式日志体系 (Log Card View) */
+.log-cards-container {display: flex; flex-direction: column; gap: 10px; padding: 4px 0}
+.log-card {border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden; transition: all 0.2s}
+.log-card:hover {border-color: var(--accent-soft)}
+.card-header {display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface-muted); cursor: pointer; user-select: none}
+.card-title {display: flex; align-items: center; gap: 8px; font-size: 11px}
+.title-bold {font-weight: 600; color: var(--text)}
+.card-time {font-size: 10px; color: #06b6d4; font-family: var(--theme-font-mono)}
+.card-actions {display: flex; align-items: center; gap: 6px}
+.card-btn-action {display: inline-flex; align-items: center; gap: 4px; font-size: 10px; padding: 2px 7px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer}
+.card-btn-action:hover {color: var(--text); border-color: var(--accent)}
+.card-btn-icon {padding: 3px; border-radius: 4px; border: 0; background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center}
+.card-body {padding: 10px 14px}
+.badge-shape {font-size: 9px; padding: 1px 5px; border-radius: 4px; background: var(--surface-muted); border: 1px solid var(--border); color: var(--muted); font-family: var(--theme-font-mono)}
+.badge-pill {font-size: 9px; padding: 1px 6px; border-radius: 9px; font-weight: 500}
+.badge-pill.duration {background: #0ea5e920; color: #0ea5e9}
+
+/* 海图网格卡片 */
+.map-grid-viewport {overflow-x: auto; max-width: 100%; padding-bottom: 4px}
+.map-ascii-table {border-collapse: collapse; font-family: var(--theme-font-mono); font-size: 11px; line-height: 1.4}
+.map-th-col {text-align: center; min-width: 28px; color: var(--muted); padding: 2px 4px; font-weight: 600}
+.map-th-corner {width: 24px; color: var(--muted); text-align: right; padding-right: 6px}
+.map-td-row {color: var(--muted); text-align: right; padding-right: 6px; font-size: 10px; font-weight: 500}
+.map-td-cell {text-align: center; padding: 2px 3px}
+.map-badge {display: inline-block; min-width: 24px; padding: 1px 3px; border-radius: 3px; font-size: 11px; font-weight: 600; text-align: center; cursor: default; transition: transform 0.1s}
+.map-badge:hover {transform: scale(1.15); z-index: 2}
+
+.cell-fleet-1 {background: #0284c7; color: #fff; box-shadow: 0 0 6px #0284c780}
+.cell-fleet-2 {background: #0891b2; color: #fff}
+.cell-submarine {background: #4f46e5; color: #fff}
+.cell-boss {background: #d97706; color: #fff; font-weight: 700; box-shadow: 0 0 8px #f59e0b80}
+.cell-enemy {background: #dc2626; color: #fff}
+.cell-mystery {background: #059669; color: #fff}
+.cell-ammo {background: #ca8a04; color: #fff}
+.cell-land {background: #374151; color: #9ca3af}
+.cell-sea {background: transparent; color: #38bdf8; opacity: 0.8}
+.cell-cleared {background: transparent; color: #6b7280; opacity: 0.6}
+.cell-caught {background: #991b1b; color: #fecaca; border: 1px dashed #ef4444}
+.cell-akashi {background: #15803d; color: #dcfce7}
+.cell-resource {background: #16a34a; color: #fff}
+.cell-event {background: #eab308; color: #000}
+.cell-meowfficer {background: #06b6d4; color: #fff}
+.cell-question {background: #6366f1; color: #fff}
+.cell-device {background: #8b5cf6; color: #fff}
+.cell-fortress {background: #64748b; color: #fff}
+.cell-missile {background: #f97316; color: #fff}
+.cell-blind {background: transparent; color: var(--muted); opacity: 0.4}
+.cell-default {background: var(--surface-muted); color: var(--text)}
+
+.map-legend-bar {display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--border); font-size: 10px; color: var(--muted)}
+.legend-item {display: inline-flex; align-items: center}
+.legend-dot {width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 4px}
+.dot-fleet {background: #0284c7}
+.dot-boss {background: #d97706}
+.dot-enemy {background: #dc2626}
+.dot-mystery {background: #059669}
+.dot-land {background: #374151}
+.dot-sea {background: #38bdf8}
+
+/* 透视与边界卡片 */
+.perspective-body {display: flex; gap: 20px; align-items: center; flex-wrap: wrap}
+.trapezoid-visual {width: 130px; padding: 6px; border-radius: 6px; background: var(--surface-muted); border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; font-size: 9px}
+.edge-line {display: flex; justify-content: center; align-items: center; transition: all 0.2s}
+.edge-active {color: #10b981; font-weight: 600}
+.edge-dim {color: var(--muted); opacity: 0.3}
+.edge-top {width: 60px; border-top: 2px solid currentColor; padding-top: 1px}
+.edge-bottom {width: 105px; border-bottom: 2px solid currentColor; padding-bottom: 1px}
+.edge-middle {display: flex; align-items: center; justify-content: space-between; width: 100%; margin: 3px 0}
+.edge-left {transform: rotate(-22deg); border-left: 2px solid currentColor; height: 30px; display: flex; align-items: center; padding-left: 2px}
+.edge-right {transform: rotate(22deg); border-right: 2px solid currentColor; height: 30px; display: flex; align-items: center; padding-right: 2px}
+.trapezoid-core {font-family: var(--theme-font-mono); font-size: 13px; font-weight: bold; text-align: center; color: #0ea5e9}
+.trapezoid-sub {font-size: 10px; display: block; line-height: 1}
+.perspective-metrics {flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 5px; font-size: 11px}
+.metric-row {display: flex; gap: 8px}
+.metric-label {color: var(--muted); min-width: 65px}
+.metric-val {color: var(--text); font-family: var(--theme-font-mono)}
+.metric-tags {display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px}
+.status-chip {font-size: 10px; padding: 2px 6px; border-radius: 4px; background: var(--surface-muted); border: 1px solid var(--border); color: var(--muted)}
+.status-chip.active {background: #10b98115; border-color: #10b98140; color: #10b981; font-weight: 600}
+
+/* 属性清单卡片 */
+.property-grid {display: flex; flex-direction: column; gap: 4px}
+.property-row {display: flex; gap: 8px; font-size: 11px; align-items: baseline}
+.prop-key {color: var(--muted); min-width: 100px; text-align: right; font-weight: 500}
+.prop-divider {color: var(--border); user-select: none}
+.prop-val {color: var(--text); flex: 1}
+
+/* 数据表格卡片 */
+.data-table-viewport {overflow-x: auto; max-width: 100%}
+.native-log-table {width: 100%; border-collapse: collapse; font-size: 11px; font-family: var(--theme-font-mono)}
+.native-log-table th {background: var(--surface-muted); padding: 6px 12px; border-bottom: 2px solid var(--border); text-align: left; font-weight: 600; color: var(--text)}
+.native-log-table td {padding: 6px 12px; border-bottom: 1px solid var(--border); color: var(--text)}
+.native-log-table tr:hover td {background: #ffffff05}
+
+/* 错误与自愈指南卡片 */
+.error-card {border-left: 3px solid #ef4444}
+.error-header {background: #ef444410}
+.error-title {color: #ef4444; font-weight: 600}
+.error-body {display: flex; flex-direction: column; gap: 8px}
+.error-section {display: flex; gap: 8px; font-size: 11px; align-items: flex-start}
+.error-tag {min-width: 52px; text-align: center; font-size: 10px; font-weight: 600; padding: 1px 4px; border-radius: 3px; flex-shrink: 0}
+.tag-reason {background: #f9731620; color: #f97316}
+.tag-impact {background: #eab30820; color: #eab308}
+.tag-action {background: #22c55e20; color: #22c55e}
+.tag-exc {background: #ef444420; color: #ef4444}
+.section-action {background: #22c55e10; padding: 6px 10px; border-radius: 6px; border: 1px dashed #22c55e40}
+.text-action {font-weight: 600; color: #15803d}
+.error-stack-wrapper {margin-top: 6px}
+.stack-toggle-btn {display: flex; align-items: center; gap: 4px; font-size: 10px; background: transparent; border: 0; color: var(--muted); cursor: pointer; padding: 0}
+.stack-toggle-btn:hover {color: var(--text)}
+.error-stack-content {font-size: 10px; padding: 8px; margin: 6px 0 0; background: var(--surface-muted); border-radius: 6px; border: 1px solid var(--border); line-height: 1.4}
+
+/* 异常堆栈卡片 */
+.traceback-card {border-left: 3px solid #eab308}
+.traceback-pre {font-size: 10px; padding: 8px; margin: 0; line-height: 1.4; color: var(--text); background: var(--surface-muted); border-radius: 6px}
+
+/* LLM 智能诊断卡片 */
+.llm-card {border-left: 3px solid #8b5cf6}
+.llm-header {background: #8b5cf610}
+.text-llm {color: #8b5cf6}
+.llm-model {background: #8b5cf620; color: #8b5cf6}
+.llm-markdown-text {white-space: pre-wrap; word-break: break-word; font-family: var(--theme-font-mono); font-size: 11px; margin: 0; line-height: 1.6; color: var(--text)}
+
+/* 寻路代价与矩阵网格 */
+.cost-origin {color: #10b981; font-weight: 700}
+.cost-path {color: #0ea5e9}
+.cost-wall {color: var(--muted); opacity: 0.35}
+.matrix-grid-rows {display: flex; flex-direction: column; gap: 2px}
+.matrix-row {display: flex; gap: 4px}
+
+/* 系统横幅与阶段卡片 */
+.system-banner-card {text-align: center; padding: 10px 0; margin: 6px 0; border: 0; background: transparent; box-shadow: none}
+.banner-double-rule {height: 2px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin: 4px 0}
+.banner-title-text {font-size: 13px; font-weight: 700; letter-spacing: 2px; color: var(--accent)}
+.stage-header-card {display: flex; align-items: center; gap: 12px; margin: 6px 0; border: 0; background: transparent; box-shadow: none}
+.stage-rule-bar {flex: 1; height: 1px; background: var(--border)}
+.stage-title-wrap {display: flex; align-items: center; gap: 8px}
+.stage-title {font-weight: 700; font-size: 12px; color: var(--text); padding: 0 4px}
+.stage-time {font-size: 10px; color: #06b6d4}
+
+/* 常规单行卡片 */
+.log-card-line {padding: 3px 6px; border-radius: 4px; background: transparent}
+.log-card-line:hover {background: #ffffff05}
+
 .empty {flex: 0 1 auto; min-height: 160px; padding: 35px 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); gap: 12px; text-align: center; line-height: 1.8; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; font-size: 11px}
 .empty > svg {color: #a7b9c1; margin-bottom: 3px}
 .empty strong {font-weight: 500; font-size: 12px; color: #8398a5}
