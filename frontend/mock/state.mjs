@@ -201,14 +201,110 @@ export function createMockState({ empty = false } = {}) {
   }
   const get = name => instances.get(name) ?? fail('NOT_FOUND', '实例不存在')
   const snapshot = name => ({ instance: name, revision: revision(get(name).values), values: structuredClone(get(name).values) })
+  // 日志时间与真实后端一致使用本地时区（timestamp() 供调度比较，保持 UTC）。
+  const logTime = date => [date.getHours(), date.getMinutes(), date.getSeconds()].map(n => String(n).padStart(2, '0')).join(':')
+    + '.' + String(date.getMilliseconds()).padStart(3, '0')
   function log(name, text, level = 'INFO') {
     const instance = get(name)
-    instance.logs.push({ id: ++instance.cursor, level, text: `${timestamp(new Date())} [${name}] ${text}` })
+    const now = new Date()
+    instance.logs.push({
+      id: ++instance.cursor, level,
+      // 与真实后端 web_formatter 一致：级别列宽 8、时分秒加毫秒、竖线分隔；多行文本只挂首行前缀。
+      text: `${level.padEnd(8)} ${logTime(now)} │ ${text}`,
+    })
+    instance.logs = instance.logs.slice(-400)
+  }
+  // 独立渲染对象（分割线、居中标题等）不带级别与时间前缀，与真实后端一致。
+  function logRaw(name, text, level = 'INFO') {
+    const instance = get(name)
+    instance.logs.push({ id: ++instance.cursor, level, text })
     instance.logs = instance.logs.slice(-400)
   }
   function add(name, values) {
     instances.set(name, { values: structuredClone(values), status: 'stopped', logs: [], cursor: 0 })
     log(name, '测试实例已就绪，所有操作均为模拟。')
+  }
+  // 中文与全角字符按两列计宽，保证演示日志里的 Rich 框线在等宽字体下右缘对齐。
+  const displayWidth = text => [...text].reduce((sum, ch) => sum + (/[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/.test(ch) ? 2 : 1), 0)
+  const padDisplay = (text, size) => text + ' '.repeat(Math.max(0, size - displayWidth(text)))
+  // 按真实 Rich 排版生成异常堆栈：外层框含源码行与 locals 子框，框内嵌套框。
+  function stackTraceText() {
+    const W = 149
+    const box = (title, rows, w = W) => [
+      title
+        ? `╭${'─'.repeat(Math.floor((w - 2 - displayWidth(title) - 2) / 2))} ${title} ${'─'.repeat(Math.ceil((w - 2 - displayWidth(title) - 2) / 2))}╮`
+        : `╭${'─'.repeat(w - 2)}╮`,
+      ...rows.map(row => `│ ${padDisplay(row, w - 4)} │`),
+      `╰${'─'.repeat(w - 2)}╯`,
+    ]
+    const locals = box('locals', [
+      `command = 'opsi_ash_beacon'`,
+      `set_task = <function set_task at 0x0000015959B907D0>`,
+      `skip_first_screenshot = False`,
+    ], W - 10)
+    const metaLocals = box('locals', [`self = <module.os_ash.meta.OpsiAshBeacon object at 0x0000015941D4AFD0>`], W - 10)
+    const rows = [
+      ...box('Traceback (most recent call last)', [
+        ``,
+        `E:\\AzurPilot\\alas.py:1019 in run`,
+        ``,
+        `  1017 │   │   │   elif not self._channel_float_done:`,
+        `  1018 │   │   │   │   self.handle_channel_float()`,
+        `❱ 1019 │   │   │   self.__getattribute__(command)()`,
+        `  1020 │   │   │   return True`,
+        `  1021 │   │   except TaskEnd:`,
+        ``,
+        ...locals,
+        ``,
+        `E:\\AzurPilot\\module\\os_ash\\meta.py:616 in run`,
+        ``,
+        `  614 │   │   """执行信标攻击任务主流程：进入 META 页面、攻击、领取奖励、延迟到下次服务器更新。"""`,
+        `  615 │   │   self.ui_ensure(page_reward)`,
+        `❱ 616 │   │   self._begin_beacon()`,
+        `  617 │   │   self.ui_goto_main()`,
+        ``,
+        ...metaLocals,
+        ``,
+      ]),
+      `ScriptEnd: [心情-保底] 计算模式红脸弹窗，心情清零并延时`,
+    ]
+    return rows.join('\n')
+  }
+  // 注入覆盖各种真实日志形态的演示数据：各级别、分割线、居中标题、属性对齐、多行消息与异常堆栈。
+  function seedLogShowcase(name) {
+    const seed = (text, level = 'INFO') => log(name, text, level)
+    const bare = (text, level = 'INFO') => logRaw(name, text, level)
+    const W = 160
+    const rule = (char, title) => {
+      if (!title) return char.repeat(W)
+      const span = W - displayWidth(title) - 2
+      return char.repeat(Math.floor(span / 2)) + ' ' + title + ' ' + char.repeat(Math.ceil(span / 2))
+    }
+    const indent = ' '.repeat(9)
+
+    bare(rule('═'))
+    bare(padDisplay('调度器', Math.floor((W - displayWidth('调度器')) / 2) * 2 + displayWidth('调度器')))
+    bare(rule('═'))
+    seed('调度器已就绪，开始按任务队列执行')
+    bare(rule('═', 'COMMISSION'))
+    seed('COMMISSION')
+    bare(rule('─', 'SUB_STAGE'))
+    seed('SUB_STAGE')
+    seed('<<< HR3 >>>')
+    seed('[META作战] 战斗结束并回到正确页面')
+    seed(`${'flag'.padStart(22)}: True`)
+    seed('带有路径 E:\\AzurPilot\\module\\os_ash\\meta.py 和 True/False/None', 'WARNING')
+    seed('大括号 { [ ( ) ] }，相对路径 ./relative/path/log.txt')
+    seed(`多行消息：当前任务队列\n${indent}Commission（进行中）\n${indent}Research（等待下一轮）`)
+    seed('[错误] 任务执行发生未处理异常（opsi_ash_beacon）\n'
+      + `${indent}原因：程序抛出了 ScriptEnd，具体原因需要结合下方堆栈定位。\n`
+      + `${indent}影响：当前任务无法确认执行结果，调度器将尝试重启恢复。\n`
+      + `${indent}建议：查看错误现场中的 log.txt、截图和完整堆栈，确认是否需要更新资源或提交问题。\n`
+      + `${indent}异常：ScriptEnd: [心情-保底] 计算模式红脸弹窗，心情清零并延时\n`
+      + stackTraceText().split('\n').map(line => indent + line).join('\n'), 'ERROR')
+    seed('CRITICAL 级别消息，用于验证最高级别配色', 'CRITICAL')
+    seed('DEBUG 级别消息，级别筛选为 ALL 时同样可见', 'DEBUG')
+    bare(rule('─'))
   }
   if (!empty) {
     for (const [index, name] of ['demo-main', 'demo-alt', 'demo-error', 'demo-dog'].entries()) {
@@ -241,6 +337,7 @@ export function createMockState({ empty = false } = {}) {
         values[task].Scheduler.NextRun = timestamp(new Date(Date.now() + (order - 1) * 1800000))
       }
       add(name, values)
+      seedLogShowcase(name)
     }
     get('demo-error').status = 'error'
     get('demo-error').values.Alas.Storage.Storage = { failureCount: 3, lastError: '模拟器连接失败', retry: { enabled: false, remaining: 0 }, tasks: ['Commission', 'Research'] }
