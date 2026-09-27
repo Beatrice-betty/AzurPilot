@@ -216,11 +216,16 @@
 .prop-badge-false {background: #ef444415; color: #ef4444; border: 1px solid #ef444440}
 .prop-val-plain {color: var(--text)}
 
-/* 数据表格卡片 */
+/* 数据表格卡片 (紧凑型，消除全屏拉伸与冗余留白) */
+.table-card {width: fit-content; max-width: 100%; align-self: flex-start}
+.table-card-header {padding: 4px 10px}
+.table-card-body {padding: 0}
 .data-table-viewport {overflow-x: auto; max-width: 100%}
-.native-log-table {width: 100%; border-collapse: collapse; font-size: 11px; font-family: var(--theme-font-mono)}
-.native-log-table th {background: var(--surface-muted); padding: 6px 12px; border-bottom: 2px solid var(--border); text-align: left; font-weight: 600; color: var(--text)}
-.native-log-table td {padding: 6px 12px; border-bottom: 1px solid var(--border); color: var(--text)}
+.native-log-table {width: auto; border-collapse: collapse; font-size: 11px; font-family: var(--theme-font-mono); white-space: nowrap}
+.native-log-table th {background: var(--surface-muted); padding: 5px 14px; border-bottom: 1px solid var(--border); font-weight: 600; color: var(--muted); font-size: 11px}
+.native-log-table td {padding: 4px 14px; border-bottom: 1px solid var(--border); color: var(--text); font-size: 11px; line-height: 1.4}
+.native-log-table tbody tr:last-child td {border-bottom: none}
+.native-log-table tbody tr:nth-child(even) {background: color-mix(in srgb, var(--surface-muted) 35%, transparent)}
 
 /* 错误与自愈指南卡片 */
 .error-header {background: #ef444410}

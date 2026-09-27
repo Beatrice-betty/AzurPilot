@@ -969,11 +969,29 @@ export function PropertySheetCard({ card, search }: { card: Extract<CardItem, { 
 
 // 4. 原生数据表格卡片 (Benchmark / Score)
 export function DataTableCard({ card }: { card: Extract<CardItem, { type: 'data_table' }> }) {
+  // 智能推断列对齐方式：若该列非空值多为数字或测量单位，则右对齐，否则左对齐
+  const colAlignments = useMemo(() => {
+    return card.headers.map((_, cIdx) => {
+      let numericCount = 0
+      let totalCount = 0
+      for (const row of card.rows) {
+        const val = row[cIdx]?.trim() || ''
+        if (val) {
+          totalCount++
+          if (/^[-+]?[\d.,]+([a-zA-Z%]+|\/[0-9]+)?$/.test(val)) {
+            numericCount++
+          }
+        }
+      }
+      return totalCount > 0 && numericCount / totalCount >= 0.6 ? 'right' : 'left'
+    })
+  }, [card.headers, card.rows])
+
   return (
     <div className="log-card table-card">
-      <div className="card-header">
+      <div className="card-header table-card-header">
         <div className="card-title">
-          <TableIcon size={16} className="text-accent" />
+          <TableIcon size={14} className="text-accent" />
           <span className="title-bold">{card.title}</span>
           <span className="card-time">{card.time}</span>
         </div>
@@ -981,13 +999,15 @@ export function DataTableCard({ card }: { card: Extract<CardItem, { type: 'data_
           <CopyButton text={card.rawText} />
         </div>
       </div>
-      <div className="card-body">
+      <div className="card-body table-card-body">
         <div className="data-table-viewport">
           <table className="native-log-table">
             <thead>
               <tr>
                 {card.headers.map((h, i) => (
-                  <th key={i}>{h}</th>
+                  <th key={i} style={{ textAlign: colAlignments[i] }}>
+                    {h}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -995,7 +1015,9 @@ export function DataTableCard({ card }: { card: Extract<CardItem, { type: 'data_
               {card.rows.map((row, rIdx) => (
                 <tr key={rIdx}>
                   {row.map((cell, cIdx) => (
-                    <td key={cIdx}>{cell}</td>
+                    <td key={cIdx} style={{ textAlign: colAlignments[cIdx] }}>
+                      {cell}
+                    </td>
                   ))}
                 </tr>
               ))}
