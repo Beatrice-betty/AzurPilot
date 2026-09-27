@@ -129,10 +129,15 @@ export function readBackgroundPreference(material: Material): BackgroundPreferen
 /** 某条记录当前实际铺的地址（URL 模式取生效那条，其余为空）。 */
 export const activeBackgroundUrl = (preference: BackgroundPreference) => preference.source === 'url' ? preference.urls[preference.active] ?? '' : ''
 
+/** 这一条地址本身就是图片/视频文件时才可直接铺；随机图 API 端点每次请求都换图，必须先解析。 */
+const directMediaUrl = (url: string) => /.(?:jpe?g|png|webp|gif|bmp|avif|mp4|webm)(?:[?#]|$)/i.test(url) ? url : ''
+/** 记着上一张真正铺出来的图：解析失败时保留它，避免回退到随机端点换出新图。 */
+let lastGoodAssetUrl = ''
+
 const initial = readBackgroundPreference(getThemePreference().material)
 let snapshot: BackgroundSnapshot = {
   ...initial,
-  assetUrl: initial.source === 'upload' && initial.entry ? galleryUrl(initial.entry) : activeBackgroundUrl(initial),
+  assetUrl: initial.source === 'upload' && initial.entry ? galleryUrl(initial.entry) : directMediaUrl(activeBackgroundUrl(initial)),
   directUrl: '',
   resolving: false,
   resolveError: '',
@@ -235,7 +240,7 @@ subscribeTheme(() => {
   const next = readBackgroundPreference(getThemePreference().material)
   if (next.source === snapshot.source && activeBackgroundUrl(next) === activeBackgroundUrl(snapshot) && next.name === snapshot.name) return
   replaceObjectUrl()
-  publish({...next, assetUrl: activeBackgroundUrl(next), loading: next.source === 'upload'})
+  publish({...next, assetUrl: directMediaUrl(activeBackgroundUrl(next)), loading: next.source === 'upload'})
   if (next.source === 'upload') void loadUploadedBackground()
 })
 
@@ -277,10 +282,11 @@ export async function resolveActiveBackground() {
     const result = await api.request('background.resolve', {url})
     if (activeBackgroundUrl(snapshot) !== url) return
     /* 解析成功：壁纸改用直链 —— 同一个地址同时用于预览与"存入图库"，不会出现两次随机。 */
-    publish({assetUrl: proxyUrl(result.final_url), directUrl: result.final_url, resolving: false, resolveError: ''})
+    lastGoodAssetUrl = proxyUrl(result.final_url)
+    publish({assetUrl: lastGoodAssetUrl, directUrl: result.final_url, resolving: false, resolveError: ''})
   } catch (error) {
     /* 解析失败就退回原地址直接当图片用（很多 API 本身就是图片），并把原因留给界面显示。 */
-    publish({resolving: false, resolveError: (error as Error).message})
+    publish({assetUrl: lastGoodAssetUrl, resolving: false, resolveError: (error as Error).message})
   }
 }
 
@@ -290,7 +296,7 @@ export function setBackgroundUrls(values: string[], kind: BackgroundKind) {
   const preference: BackgroundPreference = {source: 'url', kind, urls, active: pickActive(urls.length), name: ''}
   replaceObjectUrl()
   savePreference(preference)
-  publish({...preference, assetUrl: urls[preference.active], directUrl: '', resolveError: '', loading: false})
+  publish({...preference, assetUrl: directMediaUrl(urls[preference.active]), directUrl: '', resolveError: '', loading: false})
   void deleteStoredFile()
   void resolveActiveBackground()
 }

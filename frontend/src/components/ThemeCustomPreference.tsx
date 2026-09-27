@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { useApp } from '../app/context'
 import { applyCustomLayer, familyOf } from '../app/theme'
 import { MaterialDetailModal } from './MaterialDetailModal'
@@ -66,6 +66,8 @@ export function MaterialDetailPanel({regions, custom, ui, onKnob, onResetKnob, o
               max={knob.max}
               step={knob.step}
               value={value}
+              /* 已填充比例：滑块轨道的进度渐变按它绘制。 */
+              style={{['--knob-fill']: `${Math.round(((value - knob.min) / (knob.max - knob.min)) * 100)}%`} as CSSProperties}
               /* 只认真实用户操作：表单值恢复或脚本派发的合成事件不应改写用户偏好。 */
               onChange={event => { if (event.nativeEvent.isTrusted) onKnob(knob.id, Number(event.target.value)) }}
             />

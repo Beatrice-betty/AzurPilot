@@ -437,18 +437,9 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 /* 旧版实例页的页名由顶栏居中显示，内容区只留一个给读屏的标题。 */
 .legacy-sr-title {position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap}
 /* 传统模式：1:1 对齐用户参考图的 Edge/Chrome 沉浸式现代浏览器标签页：
-   - 标签栏带浅灰蓝/暗色顶栏槽道底色（--tab-strip-bg）；
    - 激活标签纯白底色，顶部 9px 圆角，底部完全无下横线开口融入下方内容区；
    - 激活标签左右底脚采用经典 radial-gradient 反向倒角，呈现完美的流线型连接；
    - 关闭 × 按钮默认不绘制，标签悬停微亮、按钮悬停高亮，带精致居中分割线。 */
-:root[data-theme='legacy-light'] {
-  /* 标签槽道底色归二级贴片：玻璃材质下跟着材质走，普通材质下即 surface-muted；
-     --tab-strip-bg 仍是可覆盖的入口。 */
-  --tab-strip-bg: var(--theme-plate-bg);
-}
-:root[data-theme='legacy-dark'] {
-  --tab-strip-bg: var(--theme-plate-bg);
-}
 
 /* 导航条基础排版：必须严格垂直居中（align-items: center），上下内边距归零，
    彻底根除图标与文字沉在底部“往下掉”的问题，保证下拉菜单与常规导航绝对居中 */
@@ -460,20 +451,11 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
   display: flex !important;
   align-items: center !important;
   /* 底色走变量：标签页模式下由下面那条规则把它换成二级贴片，不靠提升优先级打架。 */
-  background: var(--legacy-page-nav-bg, var(--surface)) !important;
+  background: var(--surface) !important;
   border-bottom: 1px solid var(--border) !important;
   box-sizing: border-box !important;
 }
 .legacy-page-nav .instance-picker {margin: 0}
-
-/* 仅在平铺标签页模式（存在 .instance-tabs）时呈现浅灰蓝浏览器槽道底色，下拉模式保持常规纯白背景 */
-:root[data-theme='legacy-light'] .legacy-page-nav:has(.instance-tabs),
-:root[data-theme='legacy-dark'] .legacy-page-nav:has(.instance-tabs),
-.app-shell.legacy-shell .legacy-page-nav:has(.instance-tabs) {
-  --legacy-page-nav-bg: var(--tab-strip-bg, var(--theme-plate-bg));
-  -webkit-backdrop-filter: var(--theme-plate-filter);
-  backdrop-filter: var(--theme-plate-filter);
-}
 
 :root[data-tab-size] .app-shell.legacy-shell .legacy-page-nav .breadcrumb,
 .app-shell.legacy-shell .legacy-page-nav .breadcrumb {

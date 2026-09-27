@@ -107,9 +107,6 @@
 .instance-tab {display: inline-flex; align-items: center; gap: .5em; flex-shrink: 0; max-width: var(--instance-tab-max); height: var(--instance-tab-height); padding: 0 var(--instance-tab-pad); border: 1px solid var(--border); border-bottom: 0; border-radius: var(--instance-tab-radius, 7px); background: var(--surface); color: var(--muted); font-size: var(--instance-tab-font); transition: color .15s, background-color .15s}
 /* 相邻标签之间留一条细线作分隔。 */
 .instance-tab + .instance-tab {border-left-color: var(--border)}
-/* 顶栏实例标签页：整条走二级贴片、每个标签走控件区；当前标签的强调色高亮是品牌色，不参与材质。 */
-.instance-tabs {background: var(--theme-plate-bg); -webkit-backdrop-filter: var(--theme-plate-filter); backdrop-filter: var(--theme-plate-filter); border-radius: var(--theme-plate-radius); padding: 2px}
-.instance-tab {background: var(--theme-control-bg); -webkit-backdrop-filter: var(--theme-control-filter); backdrop-filter: var(--theme-control-filter)}
 .instance-tab:hover {color: var(--accent); background: var(--accent-soft); border-color: var(--border); border-bottom: 0}
 .instance-tab-name {font-size: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap}
 /* 尺寸与标签页同高，并自己垂直居中：标签条是 stretch 对齐，不写 align-self 这个圆钮会顶对齐。 */
