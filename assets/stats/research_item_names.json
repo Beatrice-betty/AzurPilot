@@ -54,6 +54,11 @@
   "rarity": 3,
   "zh": "四联装610mm鱼雷T2设计图"
  },
+ "610mm_Quadruple_Torpedo_Mount_T2_3": {
+  "en": "T2 Quadruple 610mm Torpedo Design",
+  "rarity": 3,
+  "zh": "四联装610mm鱼雷T2设计图"
+ },
  "610mm_Quadruple_Torpedo_Mount_T3": {
   "en": "T3 Quadruple 610mm Torpedo Design",
   "rarity": 4,
@@ -194,17 +199,30 @@
   "rarity": 4,
   "zh": "梭鱼T3设计图"
  },
- "Barracuda_T3_3": {
-  "en": "T3 Barracuda Design",
-  "rarity": 4,
-  "zh": "梭鱼T3设计图"
- },
  "Blackburn_Skua_T3": {
   "en": "T3 Blackburn Skua Design",
   "rarity": 2,
   "zh": "贼鸥T3设计图"
  },
  "BlueprintAdmiralNakhimov": {
+  "en": "Blueprint - Admiral Nakhimov",
+  "rarity": 5,
+  "series": 7,
+  "zh": "蓝图：纳希莫夫海军上将"
+ },
+ "BlueprintAdmiralNakhimov_2": {
+  "en": "Blueprint - Admiral Nakhimov",
+  "rarity": 5,
+  "series": 7,
+  "zh": "蓝图：纳希莫夫海军上将"
+ },
+ "BlueprintAdmiralNakhimov_3": {
+  "en": "Blueprint - Admiral Nakhimov",
+  "rarity": 5,
+  "series": 7,
+  "zh": "蓝图：纳希莫夫海军上将"
+ },
+ "BlueprintAdmiralNakhimov_4": {
   "en": "Blueprint - Admiral Nakhimov",
   "rarity": 5,
   "series": 7,
@@ -271,6 +289,12 @@
   "zh": "蓝图：吾妻"
  },
  "BlueprintBayard": {
+  "en": "Blueprint - Bayard",
+  "rarity": 4,
+  "series": 7,
+  "zh": "蓝图：贝亚德"
+ },
+ "BlueprintBayard_2": {
   "en": "Blueprint - Bayard",
   "rarity": 4,
   "series": 7,
@@ -378,6 +402,12 @@
   "series": 2,
   "zh": "蓝图：佐治亚"
  },
+ "BlueprintGoudenLeeuw": {
+  "en": "Blueprint - Gouden Leeuw",
+  "rarity": 5,
+  "series": 8,
+  "zh": "蓝图：金狮"
+ },
  "BlueprintHakuryuu": {
   "en": "Blueprint - Hakuryuu",
   "rarity": 5,
@@ -421,6 +451,12 @@
   "zh": "蓝图：哈尔滨"
  },
  "BlueprintHindenburg": {
+  "en": "Blueprint - Hindenburg",
+  "rarity": 5,
+  "series": 6,
+  "zh": "蓝图：兴登堡"
+ },
+ "BlueprintHindenburg_2": {
   "en": "Blueprint - Hindenburg",
   "rarity": 5,
   "series": 6,
@@ -835,15 +871,23 @@
   "series": 8,
   "zh": "试作型四联装305mmSKC39主炮T0设计图"
  },
- "Prototype_Quadruple_533mm_Si_270_Torpedo_Mount_T0": {
-  "en": "Prototype Quadruple 533mm Si 270 Torpedo Mount T0 Design",
-  "rarity": 4,
-  "zh": "试作型四联装533毫米鱼雷Si 270T0设计图"
+ "Prototype_Quadruple_305mm_SKC39_Main_Gun_Mount_T0_2": {
+  "en": "Prototype Quadruple 305mm SKC39 Main Gun Mount T0 Design",
+  "rarity": 5,
+  "series": 8,
+  "zh": "试作型四联装305mmSKC39主炮T0设计图"
  },
- "Prototype_Quadruple_610mm_Cruiser_Torpedo_Mount_T0": {
-  "en": "Prototype Quadruple 610mm Cruiser Torpedo Mount T0 Design",
-  "rarity": 4,
-  "zh": "试作型四联装610mm鱼雷（巡洋用）T0设计图"
+ "Prototype_Quadruple_305mm_SKC39_Main_Gun_Mount_T0_3": {
+  "en": "Prototype Quadruple 305mm SKC39 Main Gun Mount T0 Design",
+  "rarity": 5,
+  "series": 8,
+  "zh": "试作型四联装305mmSKC39主炮T0设计图"
+ },
+ "Prototype_Quadruple_305mm_SKC39_Main_Gun_Mount_T0_4": {
+  "en": "Prototype Quadruple 305mm SKC39 Main Gun Mount T0 Design",
+  "rarity": 5,
+  "series": 8,
+  "zh": "试作型四联装305mmSKC39主炮T0设计图"
  },
  "Prototype_Saiun_Kai_T0": {
   "en": "Prototype Saiun Kai T0 Design",
@@ -916,6 +960,41 @@
   "rarity": 4,
   "zh": "试作型三联装381mm主炮T0设计图"
  },
+ "Prototype_Triple_381mm_AA_Gun_T0_2": {
+  "en": "T0 Prototype Triple 381mm AA Gun Design",
+  "rarity": 4,
+  "zh": "试作型三联装381mm主炮T0设计图"
+ },
+ "Prototype_Triple_381mm_AA_Gun_T0_3": {
+  "en": "T0 Prototype Triple 381mm AA Gun Design",
+  "rarity": 4,
+  "zh": "试作型三联装381mm主炮T0设计图"
+ },
+ "Prototype_Triple_381mm_AA_Gun_T0_4": {
+  "en": "T0 Prototype Triple 381mm AA Gun Design",
+  "rarity": 4,
+  "zh": "试作型三联装381mm主炮T0设计图"
+ },
+ "Prototype_Triple_381mm_AA_Gun_T0_5": {
+  "en": "T0 Prototype Triple 381mm AA Gun Design",
+  "rarity": 4,
+  "zh": "试作型三联装381mm主炮T0设计图"
+ },
+ "Prototype_Triple_381mm_AA_Gun_T0_6": {
+  "en": "T0 Prototype Triple 381mm AA Gun Design",
+  "rarity": 4,
+  "zh": "试作型三联装381mm主炮T0设计图"
+ },
+ "Prototype_Triple_381mm_AA_Gun_T0_7": {
+  "en": "T0 Prototype Triple 381mm AA Gun Design",
+  "rarity": 4,
+  "zh": "试作型三联装381mm主炮T0设计图"
+ },
+ "Prototype_Triple_381mm_AA_Gun_T0_8": {
+  "en": "T0 Prototype Triple 381mm AA Gun Design",
+  "rarity": 4,
+  "zh": "试作型三联装381mm主炮T0设计图"
+ },
  "Prototype_Triple_406mm_50_Main_Gun_Mount_T0": {
   "en": "Prototype Triple 406mm/50 Main Gun T0 Design",
   "rarity": 4,
@@ -936,25 +1015,20 @@
   "rarity": 4,
   "zh": "试作型三联装406mm主炮Model1940T0设计图"
  },
- "Prototype_Triple_419mm_Mk_I_Main_Gun_Mount_T0": {
-  "en": "Prototype Triple 419mm Mk. I Main Gun Mount T0 Design",
+ "Prototype_Twin_234mm_Main_Gun_9_2_MK_XII_T0": {
+  "en": "Prototype Twin 234mm Main Gun (9.2\" MK XII) T0 Design",
   "rarity": 4,
-  "zh": "试作型三联装419mm主炮MK.IT0设计图"
+  "zh": "试作型双联装234mm主炮T0设计图"
  },
- "Prototype_Triple_550mm_Improved_Ammo_Mod_Torpedo_Mount_T0": {
-  "en": "Prototype Triple 550mm Improved (Ammo Mod) Torpedo Mount T0 Design",
+ "Prototype_Twin_234mm_Main_Gun_9_2_MK_XII_T0_2": {
+  "en": "Prototype Twin 234mm Main Gun (9.2\" MK XII) T0 Design",
   "rarity": 4,
-  "zh": "试作型三联装550mm鱼雷改（弹药调整）T0设计图"
+  "zh": "试作型双联装234mm主炮T0设计图"
  },
- "Prototype_Twin_127mm_Mk_16_Dual_Purpose_Gun_Mount_T0": {
-  "en": "Prototype Twin 127mm Mk 16 Dual-Purpose Gun Mount T0 Design",
+ "Prototype_Twin_234mm_Main_Gun_9_2_MK_XII_T0_3": {
+  "en": "Prototype Twin 234mm Main Gun (9.2\" MK XII) T0 Design",
   "rarity": 4,
-  "zh": "试作型双联装127mm高平两用炮Mk16T0设计图"
- },
- "Prototype_Twin_127mm_Mle_1948_Naval_Gun_T0": {
-  "en": "Prototype Twin 127mm Mle 1948 Naval Gun T0 Design",
-  "rarity": 4,
-  "zh": "试作型双联装127mm主炮Mle1948T0设计图"
+  "zh": "试作型双联装234mm主炮T0设计图"
  },
  "Prototype_Twin_410mm_mod_A_Main_Gun_Mount_T0": {
   "en": "Prototype Twin 410mm mod.A Main Gun Mount T0 Design",
@@ -975,11 +1049,6 @@
   "en": "Prototype Twin 90mm Model 1939 High Angle Gun T0 Design",
   "rarity": 4,
   "zh": "试作型双联90mm高角炮Model1939T0设计图"
- },
- "Prototype_VIT_2_Mode_Change_T0": {
-  "en": "Prototype VIT-2 (Mode Change) T0 Design",
-  "rarity": 4,
-  "zh": "试作型VIT-2（模式调整）T0设计图"
  },
  "Quadruple_356mm_Main_Gun_Mount_T2": {
   "en": "T2 Quadruple 356mm Main Gun Design",
@@ -1135,6 +1204,11 @@
   "en": "T3 Triple 406mm Main Gun Design",
   "rarity": 4,
   "zh": "三联装406mm主炮T3设计图"
+ },
+ "Triple_533mm_Torpedo_T3": {
+  "en": "T3 Triple 533mm Torpedo Design",
+  "rarity": 2,
+  "zh": "三联装533mm鱼雷T3设计图"
  },
  "Twin_102mm_Secondary_Gun_Mount_T3": {
   "en": "T3 Twin 102mm Secondary Gun Design",

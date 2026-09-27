@@ -17,6 +17,8 @@ class Method:
 class Router:
     def __init__(self, configs, runtime):
         self.configs, self.runtime = configs, runtime
+        self._accounts = None
+        self.access_password = ''
         self.methods = {
             'system.ping': Method(p.Params, lambda _: {'pong': True}),
             'schema.get': Method(p.SchemaParams, lambda x: configs.schema(x.language)),
@@ -44,6 +46,8 @@ class Router:
             'settings.patch': Method(p.DeployParams, self.save_settings, True),
             'startup.get': Method(p.InstanceParams, self.get_startup),
             'startup.set': Method(p.StartupParams, self.set_startup, True),
+            'accounts.status': Method(p.InstanceParams, lambda x: self.accounts.status(x)),
+            'accounts.manage': Method(p.AccountParams, lambda x: self.accounts.manage(x, self.access_password), True),
             'updater.status': Method(p.Params, lambda _: self.updates.status()),
             'updater.commits': Method(p.CommitsParams, lambda x: self.updates.commits(x.offset, x.limit)),
             'updater.fetch': Method(p.Params, lambda _: self.updates.start('fetch'), True),
@@ -51,6 +55,13 @@ class Router:
             'updater.cancel': Method(p.Params, lambda _: self.updates.cancel(), True),
             'announcement.get': Method(p.AnnouncementParams, lambda x: self.announcements.get(force=x.force)),
         }
+
+    @property
+    def accounts(self):
+        if self._accounts is None:
+            from module.api.account_service import AccountService
+            self._accounts = AccountService(self.configs)
+        return self._accounts
 
     @property
     def announcements(self):
@@ -105,6 +116,17 @@ class Router:
             if manager.alive:
                 raise p.ApiError('INSTANCE_RUNNING', '请先停止实例再删除')
             result = self.configs.delete(params.instance, params.revision)
+            from module.runtime.account_vault import OPERATIONS
+            with OPERATIONS:
+                account_vault = self.accounts.vault
+                account_vault.destroy(params.instance)
+                path = account_vault.path(params.instance)
+                for suffix in ('', '-journal', '-wal', '-shm'):
+                    path.with_name(path.name + suffix).unlink(missing_ok=True)
+                account_vault.marker(params.instance).unlink(missing_ok=True)
+                account_vault.revoked.discard(params.instance)
+                if path.parent.is_dir() and not any(path.parent.iterdir()):
+                    path.parent.rmdir()
             manager.run_id = None
             ProcessManager.remove_manager(params.instance)
             self.runtime.logs_cache.pop(params.instance, None)

@@ -19,6 +19,7 @@ import { TaskQueue } from '../components/TaskQueue'
 import { useInstanceOverview } from '../components/useInstanceOverview'
 import { editor, prepareValue } from '../config/editors'
 import { EditStatus } from '../components/EditStatus'
+import { AccountPanel } from '../components/AccountPanel'
 import { isFieldVisible } from './configVisibility'
 
 export function TaskConfig() {
@@ -262,7 +263,7 @@ export function TaskConfig() {
     </div>
   </section>
 
-  const groupCardsBlock = <div className="config-groups">{startupPanel}{groupCards}</div>
+  const groupCardsBlock = <div className="config-groups">{startupPanel}{task === 'Alas' && !search && <AccountPanel key={instance} instance={instance}/>} {groupCards}</div>
   const groupNav = <nav className="group-nav">
     {visibleGroups.map(({group}) => (
       <a

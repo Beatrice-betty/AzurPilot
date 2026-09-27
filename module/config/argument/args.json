@@ -491,6 +491,14 @@
         "value": "provider: null",
         "mode": "yaml"
       },
+      "LowPushMode": {
+        "type": "checkbox",
+        "value": false,
+        "option": [
+          true,
+          false
+        ]
+      },
       "ScreenshotLength": {
         "type": "input",
         "value": 1

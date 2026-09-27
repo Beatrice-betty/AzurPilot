@@ -17,7 +17,7 @@ WebUI 不是一个目录，而是一个跨四层协作的体系：
 
 **历史**：2026-09 前后，旧版 PyWebIO 界面（`module/webui/` 的页面代码与 `webapp/`）整体移除，迁移到 React 前端 + WebSocket API v1；运行服务从旧 `module/webui` 迁往 `module/runtime`。`module/webui/` 现仅剩 `webui_prefs.py` 一个遗留文件（现状见第 16、17 节）。阅读 `.agent/` 下历史文档时注意这一迁移边界：旧架构的页面与协议代码已不存在。
 
-本篇是 WebUI 文档体系的导航篇：画全貌、定边界、解释跨层机制；各层细节见 [WebUI 启动器](../entry/gui.md)、[API 服务](api.md)、[运行时服务](runtime.md)、[前端](frontend.md)。
+本篇是 WebUI 文档体系的导航篇：画全貌、定边界、解释跨层机制；各层细节见 [WebUI 启动器](../entry/gui.md)、[API 服务](api.md)、[运行时服务](runtime.md)、[前端](frontend.md)。独立实例密码、账号快照及 TPM 自动解锁见 [实例账号管理](accounts.md)。
 
 ## 2. 模块职责
 

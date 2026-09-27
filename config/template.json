@@ -98,6 +98,7 @@
       "SaveErrorBackUpMethod": "zip",
       "SaveErrorZipMethod": "zip",
       "OnePushConfig": "provider: null",
+      "LowPushMode": false,
       "ScreenshotLength": 1,
       "GameStuckRestart": false,
       "GameStuckThreshold": 3,

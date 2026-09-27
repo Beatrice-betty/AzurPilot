@@ -108,6 +108,15 @@ SPECIAL_TEMPLATE_NAMES = {
 # 由英文名推模板名的规则就失效了，中文名也进不了名称表——运行时只好显示模板名。
 # 这几个按仓库命名约定手工补，写名称表时一并收录。
 NAME_TABLE_OVERRIDES = {
+    # 八期 DR 彩图纸「蓝图：金狮」：它的图纸不在 technology_data_template 的
+    # drop_client 里（DR 船与彩装一样走通用发放），名字与期数都推不出来。
+    # 期数取自 Lua `ship_data_blueprint[119901].blueprint_version = 8`。
+    'BlueprintGoudenLeeuw': {
+        'zh': '蓝图：金狮',
+        'en': 'Blueprint - Gouden Leeuw',
+        'rarity': 5,
+        'series': 8,
+    },
     'Prototype_Triple_550mm_Improved_Ammo_Mod_Torpedo_Mount_T0': {
         'zh': '试作型三联装550mm鱼雷改（弹药调整）T0设计图',
         'en': 'Prototype Triple 550mm Improved (Ammo Mod) Torpedo Mount T0 Design',

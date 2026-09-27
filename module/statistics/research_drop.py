@@ -25,7 +25,9 @@ from datetime import datetime
 
 import numpy as np
 
+from module.base.utils import extract_white_letters
 from module.logger import logger
+from module.statistics.item import AmountOcr, remove_small_fragments, resolve_amount_max
 
 # 队列页卡片上的项目代号区域（1280x720 实测坐标）。
 # 卡 3~5 因处于「等待进行」状态被半透明遮罩压暗而读不出来，但不影响结论：
@@ -77,6 +79,129 @@ def research_amount_default_max(item_name: str) -> int:
     if item_name.startswith(RESEARCH_SURE_PREFIXES) or RESEARCH_SURE_PATTERN.search(item_name):
         return RESEARCH_SURE_MAX
     return DEFAULT_AMOUNT_MAX
+
+
+def right_digit_column_left(image, min_height=8, max_valley=2, dark=120):
+    """按「每列墨迹高度」从右往左定位最右侧的数字簇，返回其左边界列号。
+
+    科研的数量框紧挨物品图标，图标底部的白色纹理（纸角、斜边、横条）会被
+    ``extract_white_letters`` 提取成笔画，拼进数字里：实测「图纸 1 张」被读成 71
+    （超过上限后又被截断末位兜底成 7，六倍误差）、「装备设计图 1 张」被读成 9。
+
+    数量数字是右对齐的，残影总在数字左侧；数字笔画的列高 12~17px，残影的列高
+    通常不超过 6px，即便残影较高（如斜角）也会与数字之间隔着一道矮列组成的
+    「谷」。因此从最右侧的笔画列往左扫，遇到超过 ``max_valley`` 个连续矮列即停。
+
+    比按连通域形状筛选更稳：图标残影与数字粘连时连通域会合并变宽，按形状筛选
+    会把整段（含真数字）丢掉；列剖面只看高度，真数字不会被误伤——实测物资的
+    「72」在连通域法下被拆坏读成 1，列剖面读数不变。
+
+    Args:
+        image (np.ndarray): ``extract_white_letters`` 的输出（深色字 + 白底）。
+        min_height (int): 视为「笔画列」的最小墨迹高度（px）。
+        max_valley (int): 数字之间允许的连续矮列数。
+        dark (int): 判定为字的灰度上限。
+
+    Returns:
+        int: 数字簇的左边界列号（含）；找不到笔画列时返回 None。
+    """
+    heights = (image < dark).sum(axis=0)
+    index = len(heights) - 1
+    while index >= 0 and heights[index] < min_height:
+        index -= 1
+    if index < 0:
+        return None
+
+    left = index
+    valley = 0
+    for column in range(index - 1, -1, -1):
+        if heights[column] >= min_height:
+            left = column
+            valley = 0
+        else:
+            valley += 1
+            if valley > max_valley:
+                break
+    return left
+
+
+class ResearchAmountOcr(AmountOcr):
+    """科研掉落的数量读数器。
+
+    在通用 ``AmountOcr`` 的碎片过滤之上，再按列剖面只保留最右侧的数字簇
+    （见 ``right_digit_column_left``），并把两道兜底改成适配左侧残影的方向。
+    科研网格专用：不动全局 AMOUNT_OCR，战斗掉落那边的行为保持原样。
+
+    Attributes:
+        digit_min_height (int): 数字笔画的最小列高。
+        digit_max_valley (int): 数字之间允许的连续矮列数（谷宽）。
+        retry_threshold (int): 首轮读数为 0 时的重读阈值。
+    """
+
+    threshold = 96
+    digit_min_height = 8
+    digit_max_valley = 2
+    # 兜底截断方向：科研的数量残影总在数字左侧，超限读数里多出来的正是首位。
+    # 列剖面漏掉的残影（与数字无「谷」相隔时）会走这条兜底：实测「真值 3 被读成
+    # 73」时截断末位留下 7（错），丢首位得 3（对）。
+    drop_leading_on_overflow = True
+    # 首轮读数为 0 时的兜底阈值：数字被灰色残影加粗成「I」时，中等阈值下
+    # 整块都被当成字，只有近白像素能还原出「1」（实测 9 格 96 读空、180 全读出 1）。
+    retry_threshold = 180
+    # 本次识别是否启用列剖面，由 ocr_with_validation 按数量上限设置
+    apply_column = False
+
+    def ocr_with_validation(self, image, item_name=None, direct_ocr=False, trim=True,
+                            amount_max=None, amount_default_max=None):
+        """同 AmountOcr，另加两道科研专属处理。
+
+        一、只有「图纸」这类**个位数掉落**（数量上限 ≤10）才启用列剖面：
+        它们的真值最多两位数，读数里的多位数必然含残影；物资、心智单元能有
+        三位数，切列会误伤真数字——实测物资 97 被切成 7、心智 44 被切成 4。
+        二、首轮读数为 0 时提高阈值重读一次。
+
+        Args:
+            image: 单张图像或图像列表。
+            item_name: 物品名称，用于查找最大值。
+            direct_ocr: 为 True 时跳过裁剪。
+            trim: 是否调用 crop_to_text 裁剪空白边框。
+            amount_max (dict): 按场景覆盖的数量上限表。
+            amount_default_max (int): 未命中时的默认上限。
+
+        Returns:
+            int: 验证后的数量。
+        """
+        max_val = resolve_amount_max(item_name, amount_max, amount_default_max)
+        self.apply_column = max_val <= RESEARCH_SURE_MAX
+        amount = super().ocr_with_validation(
+            image, item_name=item_name, direct_ocr=direct_ocr, trim=trim,
+            amount_max=amount_max, amount_default_max=amount_default_max)
+        if amount == 0:
+            threshold, self.threshold = self.threshold, self.retry_threshold
+            try:
+                amount = super().ocr_with_validation(
+                    image, item_name=item_name, direct_ocr=direct_ocr, trim=trim,
+                    amount_max=amount_max, amount_default_max=amount_default_max)
+            finally:
+                self.threshold = threshold
+        return amount
+
+    def pre_process(self, image):
+        image = extract_white_letters(image, threshold=self.threshold)
+        image = remove_small_fragments(
+            image,
+            min_height=self.fragment_min_height,
+            min_area=self.fragment_min_area,
+            max_digit_gap=self.fragment_max_digit_gap,
+        )
+        if not self.apply_column:
+            return image.astype(np.uint8)
+        left = right_digit_column_left(image, self.digit_min_height, self.digit_max_valley)
+        if left is None or left == 0:
+            return image.astype(np.uint8)
+        image = image.copy()
+        image[:, :left] = 255
+        return image.astype(np.uint8)
 
 
 def levenshtein(a: str, b: str, limit: int = 3) -> int:
@@ -142,7 +267,7 @@ class ResearchDropParser:
         from module.ocr.ocr import Ocr
         from module.research.project_data import LIST_RESEARCH_PROJECT
         from module.statistics.get_items import GetItemsStatistics
-        from module.statistics.item import AmountOcr, ItemGrid
+        from module.statistics.item import ItemGrid
 
         Ocr.SHOW_LOG = False
         # 独立网格：科研有一套自己的物品模板，不能和战斗掉落共用全局网格，
@@ -151,13 +276,10 @@ class ResearchDropParser:
         grid.load_template_folder(ITEM_TEMPLATE_FOLDER)
         grid.amount_max = dict(RESEARCH_AMOUNT_MAX)
         grid.amount_default_max = research_amount_default_max
-        # 数量识别单独配一个开了碎片过滤的实例，不动全局 AMOUNT_OCR（战斗掉落那边的
-        # 行为要原样保留）。科研的数量框紧挨物品图标，图标底部的白色纹理会被拼进数字：
-        # 实测「图纸 1 张」被读成 71、超上限截断后又变成 7（六倍误差，14/14 复现），
-        # 开过滤后读数与图上真值一致。委托收入与自律寻敌场景同样开着它。
-        amount_ocr = AmountOcr([], threshold=96, name='RESEARCH_AMOUNT_OCR')
-        amount_ocr.remove_fragments = True
-        grid.amount_ocr = amount_ocr
+        # 数量识别用科研自己的读数器：碎片过滤 + 列剖面取最右数字簇，专门对付
+        # 图标底部白色纹理被拼进数字（「图纸 1 张」读成 71）。不动全局
+        # AMOUNT_OCR，战斗掉落那边要原样保留。委托收入与自律寻敌场景同样开了碎片过滤。
+        grid.amount_ocr = ResearchAmountOcr([], threshold=96, name='RESEARCH_AMOUNT_OCR')
 
         self.stats = GetItemsStatistics()
         self.stats.grid = grid

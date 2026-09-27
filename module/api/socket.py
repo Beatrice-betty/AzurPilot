@@ -24,6 +24,8 @@ class Gateway:
     def __init__(self, router, password):
         self.router = router
         self.password = str(password or '')
+        if self.router is not None:
+            self.router.access_password = self.password
         self.connections = 0
         self.workers = asyncio.Semaphore(8)
         self.failures = OrderedDict()
@@ -147,6 +149,7 @@ class Session:
         while True:
             raw = await asyncio.wait_for(self.ws.receive_text(), timeout=60 if self.authorized else 30)
             request_id = None
+            decoded = None
             try:
                 if len(raw.encode()) > 1024 * 1024:
                     raise ApiError('INVALID_REQUEST', '请求超过 1 MiB 限制')
@@ -161,6 +164,8 @@ class Session:
                     request_id = decoded['id'][:100]
                 request = Request.model_validate(decoded)
                 request_id = request.id
+                if request.method == 'accounts.manage' and not self.gateway.is_local(self.ws) and self.ws.url.scheme != 'wss':
+                    raise ApiError('TLS_REQUIRED', '远程账号操作必须通过 HTTPS/WSS 连接')
                 if request_id in self.responses:
                     raise ApiError('DUPLICATE_REQUEST', '请求 ID 已使用，请检查状态后使用新 ID')
                 if request.method == 'auth.login':
@@ -196,7 +201,10 @@ class Session:
             except (ValueError, PermissionError) as exc:
                 reply = failure(request_id, ApiError('INVALID_PARAMS', str(exc)))
             except Exception:
-                logger.exception('WebSocket API 执行失败')
+                if isinstance(decoded, dict) and decoded.get('method') == 'accounts.manage':
+                    logger.error('账号 API 执行失败，敏感上下文已隐藏')
+                else:
+                    logger.exception('WebSocket API 执行失败')
                 reply = failure(request_id, ApiError('INTERNAL_ERROR', '服务暂时无法完成请求，请检查服务日志'))
             if request_id:
                 self.responses[request_id] = True

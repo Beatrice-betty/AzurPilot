@@ -40,6 +40,8 @@ describe('统计页与图表选项持久化', () => {
       chartMode: 'candlestick',
       chartAxisMode: 'unified',
       bucket: 60,
+      rangeFrom: '',
+      rangeTo: '',
     })
 
     const raw = localStorage.getItem(PREFS_KEY)
@@ -59,7 +61,10 @@ describe('统计页与图表选项持久化', () => {
       lootTask: 'opsi_abyssal',
       chartMode: 'candlestick',
       chartAxisMode: 'unified',
+      chartZeroBase: false,
       bucket: 60,
+      rangeFrom: '',
+      rangeTo: '',
       selectedKeys: {},
     })
   })
@@ -97,6 +102,8 @@ describe('统计页与图表选项持久化', () => {
         chartMode: 'pie',
         chartAxisMode: 'random',
         bucket: 12345,
+        rangeFrom: '',
+        rangeTo: '',
         selectedKeys: 'not_an_object',
       }),
     )
@@ -113,5 +120,21 @@ describe('统计页与图表选项持久化', () => {
     expect(loaded.chartAxisMode).toBe(DEFAULT_STATISTICS_PREFS.chartAxisMode)
     expect(loaded.bucket).toBe(DEFAULT_STATISTICS_PREFS.bucket)
     expect(loaded.selectedKeys).toEqual({})
+  })
+})
+
+describe('统计偏好订阅', () => {
+  it('写入偏好通知订阅者，退订后不再通知', async () => {
+    const prefs = await import('./statisticsPrefs')
+    let calls = 0
+    const stop = prefs.subscribeStatisticsPrefs(() => { calls += 1 })
+    const before = prefs.getStatisticsPrefsVersion()
+    prefs.updateStatisticsPrefs({days: 30})
+    expect(calls).toBe(1)
+    expect(prefs.getStatisticsPrefsVersion()).not.toBe(before)
+    stop()
+    prefs.updateStatisticsPrefs({days: 7})
+    expect(calls).toBe(1)
+    prefs.resetStatisticsPrefsForTest()
   })
 })

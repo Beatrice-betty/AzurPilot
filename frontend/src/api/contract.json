@@ -686,6 +686,94 @@
         "type": "object"
       }
     },
+    "accounts.status": {
+      "mutates": false,
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "instance": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Instance",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instance"
+        ],
+        "title": "InstanceParams",
+        "type": "object"
+      }
+    },
+    "accounts.manage": {
+      "mutates": true,
+      "params": {
+        "additionalProperties": false,
+        "description": "独立实例密码只用于当前请求，禁止进入普通配置系统。",
+        "properties": {
+          "instance": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Instance",
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "create",
+              "unlock",
+              "lock",
+              "list",
+              "capture",
+              "select",
+              "enable",
+              "password",
+              "delete",
+              "bind_tpm",
+              "unbind_tpm",
+              "bind_local",
+              "unbind_local"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "password": {
+            "default": "",
+            "maxLength": 256,
+            "title": "Password",
+            "type": "string"
+          },
+          "new_password": {
+            "default": "",
+            "maxLength": 256,
+            "title": "New Password",
+            "type": "string"
+          },
+          "label": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Label",
+            "type": "string"
+          },
+          "profile": {
+            "default": "",
+            "maxLength": 32,
+            "title": "Profile",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "instance",
+          "action"
+        ],
+        "title": "AccountParams",
+        "type": "object"
+      }
+    },
     "updater.status": {
       "mutates": false,
       "params": {

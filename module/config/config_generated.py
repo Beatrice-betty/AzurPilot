@@ -120,6 +120,7 @@ class GeneratedConfig:
     Error_SaveErrorBackUpMethod = 'zip'  # delete, zip, copy
     Error_SaveErrorZipMethod = 'zip'  # bz2, gzip, xz, zip
     Error_OnePushConfig = 'provider: null'
+    Error_LowPushMode = False  # True, False
     Error_ScreenshotLength = 1
     Error_GameStuckRestart = False
     Error_GameStuckThreshold = 3

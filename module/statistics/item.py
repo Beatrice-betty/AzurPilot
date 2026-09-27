@@ -189,6 +189,9 @@ class AmountOcr(Digit):
     # 右侧数字簇的最大水平间隙（None 关闭）。奖励页图标中的竖笔画
     # 会被误读成数字（如 2 变 12），按间隙阈值把它排除在数字簇外。
     fragment_max_digit_gap = None
+    # 超限兜底时丢首位还是截断末位。图标残影在数字左侧的场景（科研掉落）
+    # 应丢首位：实测「真值 3 被读成 73」时截断末位留下 7（错），丢首位得 3（对）。
+    drop_leading_on_overflow = False
 
     def pre_process(self, image):
         """预处理图像，提取白色文字。
@@ -284,9 +287,18 @@ class AmountOcr(Digit):
                 return amount
 
         if amount > max_val and amount >= 10:
-            truncated = int(str(amount)[:-1])
-            logger.warning(f'{item_name} amount {amount} still 超过最大值 after {self.MAX_RETRY} retries, '
-                          f'truncating to {truncated}')
+            if self.drop_leading_on_overflow:
+                # 残影在数字左侧，多出来的正是首位；可能不止一位，丢到不超限为止
+                digits = str(amount)
+                while len(digits) > 1 and int(digits) > max_val:
+                    digits = digits[1:]
+                truncated = int(digits)
+                logger.warning(f'{item_name} amount {amount} still 超过最大值 after {self.MAX_RETRY} retries, '
+                              f'dropping leading digit to {truncated}')
+            else:
+                truncated = int(str(amount)[:-1])
+                logger.warning(f'{item_name} amount {amount} still 超过最大值 after {self.MAX_RETRY} retries, '
+                              f'truncating to {truncated}')
             return truncated
 
         return amount

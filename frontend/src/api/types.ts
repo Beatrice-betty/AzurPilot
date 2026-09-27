@@ -6,6 +6,8 @@ export interface Instance { name: string; status: Status; serial: string; server
 export interface UpdateStatus {
   state: string; localHead: string | null; upstreamHead: string | null; branch: string
   ahead: number; behind: number; available: boolean; busy: boolean; canApply: boolean; canCancel: boolean; error: string
+  /* 本地与更新源历史互不包含（例如镜像重写历史导致 SHA 分离），更新前需弹窗确认 */
+  shaMismatch?: boolean
   managedByAndroid?: boolean
 }
 export interface Commit { sha: string; author: string; date: string; message: string }
@@ -79,6 +81,8 @@ export interface Announcement {
   url?: string
 }
 export interface Results {
+  'accounts.status': AccountStatus
+  'accounts.manage': AccountStatus
   'announcement.get': Announcement | null
   'updater.status': UpdateStatus
   'updater.commits': CommitHistory
@@ -112,4 +116,13 @@ export interface Results {
   'settings.patch': {updated: string[]}
   'startup.get': {enabled: boolean; remember: boolean}
   'startup.set': {enabled: boolean; remember: boolean}
+}
+
+export interface AccountStatus {
+  destroyed?: boolean
+  local_bound?: boolean
+  tpm_available?: boolean
+  initialized: boolean; enabled: boolean; unlocked: boolean; tpm_bound: boolean
+  profiles?: Array<{id: string; label: string; users: Array<{uid: string; name: string}>}>
+  selected?: string | null
 }

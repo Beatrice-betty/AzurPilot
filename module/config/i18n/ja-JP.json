@@ -761,6 +761,12 @@
       "name": "プッシュ通知設定",
       "help": "未処理の例外が発生した後、Onepushを使用してエラーメッセージをプッシュします。設定方法についてはドキュメントを参照してください: https://github.com/LmeSzinc/AzurLaneAutoScript/wiki/Onepush-configuration-%5BCN%5D"
     },
+    "LowPushMode": {
+      "name": "低通知モード",
+      "help": "手動対応が必要なエラーのみ通知します。ゲーム未起動、エミュレータのオフライン、ゲームのフリーズなど自動復旧できるエラーはログに記録するだけで通知しません",
+      "True": "有効",
+      "False": "無効"
+    },
     "ScreenshotLength": {
       "name": "エラー発生時に最後のX枚のスクリーンショットを保存する",
       "help": ""

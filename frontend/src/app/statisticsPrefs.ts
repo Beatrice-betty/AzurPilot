@@ -19,7 +19,12 @@ export interface StatisticsPrefs {
   lootTask: string
   chartMode: ChartMode
   chartAxisMode: ChartAxisMode
+  /** 纵轴起始值固定为 0，缩放后不跟着可见范围浮动 */
+  chartZeroBase: boolean
   bucket: number
+  /** 图表与原始记录卡共用的时间范围，空表示不限 */
+  rangeFrom: string
+  rangeTo: string
   selectedKeys: Record<string, string[]>
 }
 
@@ -43,7 +48,10 @@ export const DEFAULT_STATISTICS_PREFS: StatisticsPrefs = {
   lootTask: '',
   chartMode: 'line',
   chartAxisMode: 'separate',
+  chartZeroBase: false,
   bucket: 0,
+  rangeFrom: '',
+  rangeTo: '',
   selectedKeys: {},
 }
 
@@ -75,9 +83,13 @@ export function readStatisticsPrefs(): StatisticsPrefs {
       const chartAxisMode = VALID_AXIS_MODES.includes(obj.chartAxisMode as ChartAxisMode)
         ? (obj.chartAxisMode as ChartAxisMode)
         : DEFAULT_STATISTICS_PREFS.chartAxisMode
+      const chartZeroBase = typeof obj.chartZeroBase === 'boolean' ? obj.chartZeroBase : DEFAULT_STATISTICS_PREFS.chartZeroBase
       const bucket = typeof obj.bucket === 'number' && VALID_BUCKETS.includes(obj.bucket)
         ? obj.bucket
         : DEFAULT_STATISTICS_PREFS.bucket
+
+      const rangeFrom = typeof obj.rangeFrom === 'string' ? obj.rangeFrom : ''
+      const rangeTo = typeof obj.rangeTo === 'string' ? obj.rangeTo : ''
 
       const selectedKeys: Record<string, string[]> = {}
       if (obj.selectedKeys && typeof obj.selectedKeys === 'object') {
@@ -96,7 +108,10 @@ export function readStatisticsPrefs(): StatisticsPrefs {
         lootTask,
         chartMode,
         chartAxisMode,
+        chartZeroBase,
         bucket,
+              rangeFrom,
+              rangeTo,
         selectedKeys,
       }
     }
@@ -107,6 +122,19 @@ export function readStatisticsPrefs(): StatisticsPrefs {
 }
 
 let snapshot: StatisticsPrefs = readStatisticsPrefs()
+
+/* 偏好是模块级快照：写入即通知订阅者，供同页的其它卡片跟着重算。 */
+let version = 0
+const listeners = new Set<() => void>()
+
+export function subscribeStatisticsPrefs(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+export function getStatisticsPrefsVersion(): number {
+  return version
+}
 
 export function getStatisticsPrefs(): StatisticsPrefs {
   return snapshot
@@ -125,6 +153,9 @@ export function updateStatisticsPrefs(partial: Partial<StatisticsPrefs>) {
   } catch {
     /* 存储不可用时本次会话内仍生效。 */
   }
+
+  version += 1
+  for (const listener of listeners) listener()
 }
 
 export function setSelectedKeysForCategory(category: string, keys: string[]) {

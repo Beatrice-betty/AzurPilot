@@ -192,6 +192,15 @@ def report(configs, instance, category, month, days, period, research_series=0, 
             ('净行动力', purchased - cost, ''), ('循环效率', round((purchased - cost) / cost * 100, 2) if cost else None, '%'),
         ]:
             metric(label, value, unit)
+        # 收获卡片同时给出舰船经验侧的效率与今日进度，与「舰船经验」页同一批数据。
+        from module.statistics.ship_exp_stats import ShipExpStats
+        exp_stats = ShipExpStats(instance_name=instance)
+        today_exp = exp_stats.get_today_stats() or {}
+        metric('平均战斗时长', exp_stats.get_average_battle_time(), '秒')
+        metric('预估经验效率', exp_stats.get_exp_per_hour(), '/小时')
+        metric('今日战斗', today_exp.get('battle_count'), '场')
+        metric('今日经验', today_exp.get('total_exp_gained'))
+        metric('今日运行', round(today_exp['total_run_time'] / 60, 1) if 'total_run_time' in today_exp else None, '分钟')
         rows = []
         for hazard in (3, 5):
             data = db.get_meow_stats(instance, year, month_number, hazard_level=hazard)
@@ -200,6 +209,9 @@ def report(configs, instance, category, month, days, period, research_series=0, 
                          data.get('siren_research_devices'), round(data.get('siren_research_rate', 0) * 100, 2),
                          {'exact': '实测', 'estimated': '估算', 'none': '暂无记录'}.get(data.get('by_hazard', {}).get(str(hazard), {}).get('source', 'none'))])
         result['tables'].append(table('短猫运行统计', ['侵蚀等级', '战斗次数', '有效轮数', '平均战斗秒数', '平均每轮秒数', '研究装置', '获取率（%）', '统计来源'], rows))
+        # 收获卡片在列表视图下排成一整行：列名是指标名，唯一一行是数值。
+        result['tables'].append(table('收获', [item['label'] for item in result['metrics']],
+                                      [[item['value'] for item in result['metrics']]]))
     elif category == 'action':
         from module.statistics.opsi_month import get_ap_timeline, get_coins_timeline
         ap = get_ap_timeline(year, month_number, instance)

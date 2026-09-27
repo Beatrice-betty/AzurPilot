@@ -126,7 +126,8 @@ class ProcessManager:
                 logger.info(f"[{self.config_name}] WebUI 清理进行中，拒绝启动 worker")
                 return
             try:
-                with self._get_lifecycle_lock(self.config_name):
+                from module.runtime.account_vault import OPERATIONS
+                with self._get_lifecycle_lock(self.config_name), OPERATIONS:
                     if State._restart_requested or State._clearup:
                         logger.warning(
                             f"[{self.config_name}] WebUI 正在重启或已清理，拒绝启动 worker"
@@ -144,6 +145,8 @@ class ProcessManager:
                         return
                     if func is None:
                         func = get_config_mod(self.config_name)
+                    from module.api.account_service import prepare_worker
+                    account_key = prepare_worker(self.config_name)
                     self.started_func = func
                     with self._runtime_lock:
                         self.current_task = None
@@ -162,6 +165,7 @@ class ProcessManager:
                         ev,
                         self._preview_queue,
                         self.run_id,
+                        account_key,
                     )
                     process = Process(
                         target=ProcessManager.run_process,
@@ -592,11 +596,15 @@ class ProcessManager:
         e: threading.Event | None = None,
         preview_queue=None,
         run_id=None,
+        account_key=None,
     ) -> None:
         """统一发布最终结果，包括调度器通过 SystemExit 退出的路径。"""
         from module.runtime.worker_events import initialize
 
         initialize(q.put, run_id)
+        if account_key is not None:
+            from module.runtime.account_vault import vault
+            vault.keys[config_name] = account_key
         result = WorkerResult.ERROR
         try:
             result = ProcessManager._run_process(config_name, func, q, e, preview_queue, run_id)
@@ -760,9 +768,19 @@ class ProcessManager:
         except FileNotFoundError:
             pass
 
+        from module.api.protocol import ApiError
+
         for process in _instances:
             logger.info(f"启动中 [{process.config_name}]")
-            process.start(func=get_config_mod(process.config_name), ev=ev)
+            try:
+                process.start(func=get_config_mod(process.config_name), ev=ev)
+            except ApiError as error:
+                process.exit_result = WorkerResult.ERROR
+                logger.error(f'[{process.config_name}] 自动恢复被阻止（{error.code}）；请在 WebUI 检查账号管理，其他实例继续启动')
+            except Exception:
+                process.exit_result = WorkerResult.ERROR
+                # 启动异常可能带有账号上下文，只记录安全的通用说明。
+                logger.error(f'[{process.config_name}] 自动恢复失败；该实例保持停止，其他实例和 WebUI 继续启动')
 
         try:
             os.remove("./config/reloadalas")
