@@ -171,18 +171,15 @@
 
 /* 透视与边界卡片 (向前倾斜，近大远小) */
 .perspective-body {display: flex; gap: 20px; align-items: center; flex-wrap: wrap}
-.trapezoid-visual {width: 184px; padding: 6px 8px; border-radius: 8px; background: var(--surface-muted); border: 1px solid var(--border); display: flex; justify-content: center; align-items: center}
-.trapezoid-svg {overflow: visible}
-.trapezoid-fill {fill: #10b98108; transition: fill 0.2s}
-.trapezoid-fill.fill-all {fill: #10b98115}
-.trapezoid-fill.fill-broken {fill: #ef444405}
-.grid-depth-line {stroke: var(--border); stroke-dasharray: 2 3; stroke-width: 1; opacity: 0.6}
-.edge-stroke {stroke-width: 3.5; stroke-linecap: round; transition: stroke 0.2s, filter 0.2s}
-.edge-stroke.edge-active {stroke: #10b981; filter: drop-shadow(0 0 3px #10b981aa)}
-.edge-stroke.edge-missing {stroke: #ef4444; stroke-width: 2.5; stroke-dasharray: 4 3; opacity: 0.9; filter: drop-shadow(0 0 3px #ef444477)}
-.edge-svg-text {font-size: 9px; font-weight: 600; font-family: sans-serif; user-select: none; transition: fill 0.2s}
-.edge-svg-text.text-active {fill: #10b981}
-.edge-svg-text.text-missing {fill: #ef4444; font-weight: 700}
+.trapezoid-visual {width: 156px; height: 84px; padding: 4px; border-radius: 8px; background: var(--surface-muted); border: 1px solid var(--border); display: flex; justify-content: center; align-items: center}
+.trapezoid-svg {overflow: visible; display: block}
+.trapezoid-fill {fill: transparent; transition: fill 0.2s}
+.trapezoid-fill.fill-all {fill: #10b98110}
+.trapezoid-fill.fill-broken {fill: #ef444406}
+.grid-depth-line {stroke: var(--border); stroke-dasharray: 2 3; stroke-width: 1; opacity: 0.45}
+.edge-stroke {stroke-linecap: round; transition: stroke 0.2s}
+.edge-stroke.edge-active {stroke: #10b981; stroke-width: 3.5}
+.edge-stroke.edge-missing {stroke: #ef4444; stroke-width: 2.5; stroke-dasharray: 5 4}
 .edge-status-full {background: #10b98120; color: #10b981; font-weight: 600}
 .edge-status-missing {background: #ef444420; color: #ef4444; font-weight: 600}
 .perspective-metrics {flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 5px; font-size: 11px}

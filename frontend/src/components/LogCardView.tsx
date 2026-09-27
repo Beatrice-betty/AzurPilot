@@ -706,53 +706,41 @@ export function PerspectiveCard({ card }: { card: Extract<CardItem, { type: 'per
       <div className="card-body perspective-body">
         {/* 梯形视口微型几何模型 (向前倾斜，近大远小) */}
         <div className="trapezoid-visual" title="海域 2.5D 透视边界视口 (向前倾斜)">
-          <svg width="168" height="96" viewBox="0 0 168 96" className="trapezoid-svg">
+          <svg width="156" height="80" viewBox="0 0 156 80" className="trapezoid-svg">
             {/* 梯形底面浅色半透明背景 (仅完全闭合时填充) */}
             <polygon
-              points="48,20 120,20 152,78 16,78"
+              points="44,14 112,14 144,68 12,68"
               className={`trapezoid-fill ${allActive ? 'fill-all' : 'fill-broken'}`}
             />
             {/* 纵深透视虚线网格（向前方地平线收拢） */}
-            <line x1="66" y1="20" x2="52" y2="78" className="grid-depth-line" />
-            <line x1="84" y1="20" x2="84" y2="78" className="grid-depth-line" />
-            <line x1="102" y1="20" x2="116" y2="78" className="grid-depth-line" />
-            <line x1="33" y1="49" x2="135" y2="49" className="grid-depth-line" />
+            <line x1="60" y1="14" x2="48" y2="68" className="grid-depth-line" />
+            <line x1="78" y1="14" x2="78" y2="68" className="grid-depth-line" />
+            <line x1="96" y1="14" x2="108" y2="68" className="grid-depth-line" />
+            <line x1="28" y1="41" x2="128" y2="41" className="grid-depth-line" />
 
             {/* 上边界 (远处，较短) */}
             <line
-              x1="48" y1="20" x2="120" y2="20"
+              x1="44" y1="14" x2="112" y2="14"
               className={`edge-stroke ${card.upperEdge ? 'edge-active' : 'edge-missing'}`}
             />
-            <text x="84" y="13" textAnchor="middle" className={`edge-svg-text ${card.upperEdge ? 'text-active' : 'text-missing'}`}>
-              {card.upperEdge ? '上边界' : '上(缺失)'}
-            </text>
 
             {/* 下边界 (近处，较宽) */}
             <line
-              x1="16" y1="78" x2="152" y2="78"
+              x1="12" y1="68" x2="144" y2="68"
               className={`edge-stroke ${card.lowerEdge ? 'edge-active' : 'edge-missing'}`}
             />
-            <text x="84" y="90" textAnchor="middle" className={`edge-svg-text ${card.lowerEdge ? 'text-active' : 'text-missing'}`}>
-              {card.lowerEdge ? '下边界' : '下(缺失)'}
-            </text>
 
             {/* 左边界 (向前倾斜收拢) */}
             <line
-              x1="16" y1="78" x2="48" y2="20"
+              x1="12" y1="68" x2="44" y2="14"
               className={`edge-stroke ${card.leftEdge ? 'edge-active' : 'edge-missing'}`}
             />
-            <text x="20" y="47" textAnchor="middle" className={`edge-svg-text ${card.leftEdge ? 'text-active' : 'text-missing'}`}>
-              {card.leftEdge ? '左' : '左(缺失)'}
-            </text>
 
             {/* 右边界 (向前倾斜收拢) */}
             <line
-              x1="120" y1="20" x2="152" y2="78"
+              x1="112" y1="14" x2="144" y2="68"
               className={`edge-stroke ${card.rightEdge ? 'edge-active' : 'edge-missing'}`}
             />
-            <text x="148" y="47" textAnchor="middle" className={`edge-svg-text ${card.rightEdge ? 'text-active' : 'text-missing'}`}>
-              {card.rightEdge ? '右' : '右(缺失)'}
-            </text>
           </svg>
         </div>
 

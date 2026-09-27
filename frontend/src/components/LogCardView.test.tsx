@@ -80,8 +80,6 @@ describe('LogCardView 块级聚合器与卡片组件', () => {
       const html = renderToStaticMarkup(<PerspectiveCard card={cards[0]} />)
       expect(html).toContain('edge-missing')
       expect(html).toContain('缺失 2 边')
-      expect(html).toContain('右(缺失)')
-      expect(html).toContain('下(缺失)')
       expect(html).toContain('右边缘 ✗ 缺失')
       expect(html).toContain('下边缘 ✗ 缺失')
     }
