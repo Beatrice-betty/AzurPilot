@@ -116,7 +116,7 @@
 .card-header {display: flex; justify-content: space-between; align-items: center; padding: 7px 12px; border-bottom: 1px solid var(--border); background: var(--surface-muted); cursor: pointer; user-select: none}
 .card-title {display: flex; align-items: center; gap: 8px; font-size: 11px}
 .title-bold {font-weight: 600; color: var(--text)}
-.card-time {font-size: 10px; color: #06b6d4; font-family: var(--theme-font-mono)}
+.card-time {font-size: 10px; color: var(--theme-log-time, #06b6d4); font-family: var(--theme-font-mono)}
 .card-actions {display: flex; align-items: center; gap: 6px}
 .card-btn-action {display: inline-flex; align-items: center; gap: 4px; font-size: 10px; padding: 2px 7px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer}
 .card-btn-icon {padding: 3px; border-radius: 4px; border: 0; background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center}
@@ -244,7 +244,7 @@
 .tag-action {background: #22c55e20; color: #22c55e}
 .tag-exc {background: #ef444420; color: #ef4444}
 .section-action {background: #22c55e10; padding: 6px 10px; border-radius: 6px; border: 1px dashed #22c55e40}
-.text-action {font-weight: 600; color: #15803d}
+.text-action {font-weight: 600; color: var(--theme-success, #15803d)}
 /* 异常堆栈追踪 (Traceback Viewer: 结构化多帧展示与源码高亮) */
 .error-stack-wrapper {margin-top: 8px}
 .traceback-viewer {border-radius: 6px; border: 1px solid var(--border); background: var(--surface-muted); overflow: hidden}
@@ -318,7 +318,7 @@
 .stage-rule-bar {flex: 1; height: 1px; background: var(--border)}
 .stage-title-wrap {display: flex; align-items: center; gap: 8px}
 .stage-title {font-weight: 700; font-size: 12px; color: var(--text); padding: 0 4px}
-.stage-time {font-size: 10px; color: #06b6d4}
+.stage-time {font-size: 10px; color: var(--theme-log-time, #06b6d4)}
 
 /* 常规单行卡片 */
 .log-card-line {padding: 3px 6px; border-radius: 4px; background: transparent}

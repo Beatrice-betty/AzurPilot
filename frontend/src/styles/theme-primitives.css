@@ -128,7 +128,8 @@ button:focus-visible, a:focus-visible, summary:focus-visible {outline-color: var
 .lvl-warning {color: var(--theme-log-warning)}
 .lvl-error {color: var(--theme-log-error)}
 .lvl-critical {color: var(--theme-log-critical)}
-.log-ts, .hl-time {color: var(--theme-log-time)}
+.log-ts, .hl-time, .card-time, .stage-time {color: var(--theme-log-time)}
+.text-action {color: var(--theme-success)}
 .hl-bool-true {color: var(--theme-log-true)}
 .hl-bool-false {color: var(--theme-log-false)}
 .hl-none {color: var(--theme-log-null)}

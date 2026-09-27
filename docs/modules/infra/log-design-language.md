@@ -686,3 +686,121 @@ logger.table(title="跑分结果", columns=[...], rows=[...])
 3. **双模自由切换与多语言覆盖**：
    - 顶栏常驻卡片视图 (`<LayoutGrid />`) 与经典黑框终端 (`<Terminal />`) 切换按钮，偏好设置持久化至 `localStorage`（默认激活现代卡片模式）。
    - 全面支持 `zh-CN`、`zh-TW`、`en-US`、`ja-JP`、`zh-MIAO` 五种语言的无缝国际化切换。
+
+---
+
+## 9. 多主题系统适配规范 (Multi-Theme Synchronization)
+
+LDL 卡片式日志系统已全面完成对 AzurPilot 全量 6 套主题（Classic Light、Classic Dark、Minimal、Extreme Compact、Legacy Light、Legacy Dark）的统一样式同步与设计契约绑定。通过解耦主题底层变量与表现层卡片组件，实现一套业务组件在不同主题风格下的无缝原生呈现。
+
+### 9.1 全量主题适配原则 (Theme Adaptation Principles)
+
+| 主题族类 | 包含主题 | 设计哲学与核心材质 | 几何形态与空间排版 | 视觉层级与对比度策略 |
+|---|---|---|---|---|
+| **Classic 材质主题** | `Classic Light`<br>`Classic Dark` | Apple 材质设计语言 (Apple Material Glass)，半透明毛玻璃底色 (`var(--theme-glass)`)，微发光内轮廓与高光边框 (`var(--theme-glass-edge)`) | 10px 控件圆角 / 12px 卡片圆角 (`--theme-radius-card: 12px`)，呼吸感内边距 | 浅色强调玻璃晶莹通透感；深色模式采用深黑高对比背景，增强文本与状态徽章辨识度，避免眩光 |
+| **Minimal 简约主题** | `Minimal` | 现代平面工程风格，扁平无阴影 (`box-shadow: none`)，移除所有滤镜与模糊层 | 8px 平面几何圆角 (`--theme-radius-control: 8px`)，标准工作台间隙 | 卡片使用实色背景 (`var(--surface)`)，外层容器与卡片头部采用凹陷背景色 `var(--surface-muted)` 托衬卡片，边界纯净硬朗 |
+| **Extreme 紧凑主题** | `Extreme Compact` | 极致信息密度与专业监控，最大化屏幕信息吞吐量，消除一切视觉留白 | 强制全量 **0px 零圆角** (`border-radius: 0 !important`)，超紧凑边距，容器内边距深度压缩 | 排版字号下探至 10px / 9px，行高高度收紧；滚动条压至 0 宽或外挂浮层轨道，保证日志横向空间最大化 |
+| **Legacy MD3 主题** | `Legacy Light`<br>`Legacy Dark` | Material Design 3 经典规范，传承老版视觉记忆与纯色对比基调 | 12px 卡片圆角 / 8px 控件圆角 (`--theme-radius-control: 8px`) | 采用表面高度 (Surface Elevation) 体系，不透明实色对比结合细腻的浮层微阴影 (`0 1px 2px rgb(0 0 0 / .05)`)，经典靛紫沉稳基调 |
+
+#### 1. Classic 材质主题（Light / Dark）
+- **材质质感**：基于 Apple 毛玻璃材质，底层使用 `backdrop-filter: var(--theme-material-filter)` 与半透明背景 `var(--theme-glass)`。
+- **边缘细节**：边框采用微发光边框 `var(--theme-glass-edge)` 与内发光阴影 `var(--theme-glass-shadow)`，卡片在暗色模式下能够清晰勾勒轮廓而不过分刺眼。
+- **几何与空间**：采用 10px 控件与 12px 卡片圆角，视觉轻盈、富有空间纵深感。
+
+#### 2. Minimal 简约主题
+- **平面几何**：完全摒弃拟态与投影，全局 `--theme-shadow-*: none`，无任何毛玻璃或高光特效。
+- **凹陷底色托衬**：为解决扁平化带来的视觉层级扁平问题，外层日志滚动视口与卡片头部均使用凹陷背景色 `var(--surface-muted)`，卡片主体采用纯白/纯黑 `var(--surface)`，通过冷暖明暗底色对比形成明确的几何卡片边界。
+- **几何圆角**：统一为精致利落的 8px 平面圆角。
+
+#### 3. Extreme 紧凑主题 (Extreme Compact)
+- **极限吞吐量**：专为多实例监控与密集自动化排查设计，单位屏幕高度内容纳最多日志条目。
+- **绝对零圆角**：强制覆盖所有卡片、徽标、视口边框圆角为 `0px`（`border-radius: 0`），消除圆角带来的边缘留白浪费。
+- **压缩排版**：
+  * 内边距压缩：卡片内边距从默认 10px~14px 缩减至 4px~6px。
+  * 字体与行高：代码块、属性清单等下探至 10px 与 9px，行高压至 1.35~1.45。
+  * 网格自适应：海图网格与热力图单元格无缝紧贴，剔除外围冗余 Margin。
+
+#### 4. Legacy MD3 主题（Light / Dark）
+- **规范继承**：严格复刻经典 Material Design 3 容器标准与色板规范。
+- **微阴影与纯色对比**：不使用半透明毛玻璃，而是采用纯色表面（Light: `#ffffff`，Dark: `#1e1e1e`）与细腻的低扩散微阴影（`0 1px 2px rgb(0 0 0 / .05)`）营造层次感。
+- **圆角规则**：遵循 MD3 Medium 规格（卡片 12px、内嵌控件与按钮 8px/20px）。
+
+---
+
+### 9.2 主题颜色契约变量继承机制 (Contract Tokens & Variable Inheritance)
+
+为了实现 6 套主题的无缝切换与扩展，LDL 组件**严禁硬编码任何绝对颜色值**（如 `#ffffff`、`#000000`、`rgba(...)`），所有颜色、边框、阴影与字体必须严格通过 `--theme-*` 契约变量进行消费。
+
+#### 9.2.1 核心契约变量映射表
+
+```
+┌────────────────────────────────────────────────────────┐
+│             主题定制源 (theme.css / palettes.ts)         │
+│  Classic Material / Minimal Palettes / Legacy CSS      │
+└───────────────────────────┬────────────────────────────┘
+                            │ 注入基础契约变量
+┌───────────────────────────▼────────────────────────────┐
+│                 全局设计契约层 (Design Tokens)           │
+│   --theme-surface* / --theme-border / --theme-log-*    │
+└───────────────────────────┬────────────────────────────┘
+                            │ 驱动组件样式
+┌───────────────────────────▼────────────────────────────┐
+│              LDL 卡片渲染器 (LogCardView.tsx)           │
+│  .log-card / .map-badge / .traceback-viewer / ...      │
+└────────────────────────────────────────────────────────┘
+```
+
+| 契约变量族 | 变量名称 | 语义职责与 LDL 映射组件 |
+|---|---|---|
+| **表面与容器** | `--theme-surface` | 卡片核心背景色（`.log-card` 主体、展开面板、堆栈查看器） |
+| | `--theme-surface-muted` | 凹陷背景色、卡片头部底色（`.card-header`、局部变量容器、空状态） |
+| | `--theme-border` | 卡片边框、网格分割线、表格行列分隔线 |
+| | `--theme-text` | 日志正文主色、卡片标题、属性值、代码字符 |
+| | `--theme-muted` | 次级辅助文本、时间戳标签、属性键名、行号（Gutter） |
+| | `--theme-accent` | 重点高亮色、主操作按钮、标题装饰条、寻路路径航向 |
+| | `--theme-accent-soft` | 强调色浅色衬底、选区背景、当前高亮步骤背景 |
+| **日志等级与状态** | `--theme-log-debug` | DEBUG 等级标记、调试性低优输出 |
+| | `--theme-log-info` | INFO 等级标记、常规业务推进日志、普通链接 |
+| | `--theme-log-warning` | WARNING 等级标记、非致命异常、重试警示、轻微滞后 |
+| | `--theme-log-error` | ERROR 等级标记、故障中断、四段式错误卡片头部警报 |
+| | `--theme-log-critical` | CRITICAL 等级标记、敏感任务熔断停机、框架崩溃 |
+| **词法 Token 与数据** | `--theme-log-time` | 时间戳着色（HH:MM:SS.mmm）、耗时统计徽章 |
+| | `--theme-log-true` | 布尔真值（True）、操作成功、闭合完整边界 |
+| | `--theme-log-false` | 布尔假值（False）、操作失败、断裂缺失边界 |
+| | `--theme-log-null` | 空值（None/Null）、未初始化状态 |
+| | `--theme-log-path` | 文件路径、模块调用栈、资源标识符 |
+| | `--theme-log-attr` | 属性名称键、OCR 识别置信度值、坐标标识 |
+| | `--theme-log-search` | 日志全文检索与关键词过滤匹配高亮底色 |
+| **字体契约** | `--theme-font-sans` | 卡片标题、说明文本、自愈指南动作建议 |
+| | `--theme-font-mono` | ASCII 海图网格、移动代价热力图、等宽数据表格、Traceback 源码帧 |
+
+#### 9.2.2 动态热重载与零代价重绘
+当用户在 WebUI 切换主题、更换调色板（Palette）或切换深浅模式时：
+1. 框架仅在根节点 `<html>` 或 `:root` 动态变更 `data-theme` 与 `data-color-mode` 属性，或通过内联样式批量刷新契约 CSS 变量；
+2. 虚拟滚动列表内部的数百个日志卡片节点无需触发 React 虚拟 DOM 树重新挂载或全量重建；
+3. 浏览器依据 CSS 自定义属性继承树完成原生硬件加速重绘（Repaint），重绘耗时低于 16ms，确保流畅不掉帧。
+
+---
+
+### 9.3 工业级性能与交互约束 (Zero-Hover & Zero-Motion Constraints)
+
+作为面向 7×24 小时无人值守运行、每秒可能吞吐数十上百条事件的工业级自动化系统，LDL 日志界面必须保证极端严苛的性能基线与视觉抗疲劳要求。因此，**在全量 6 套主题中一律强制推行「零悬停特效、零过渡动效」的工业级硬约束**：
+
+#### 1. 全主题一律禁用 Hover 特效 (Zero Hover Transformations)
+- **绝对禁止项**：
+  * 严禁在日志卡片上添加悬停位移（`translateY(-2px)`）、缩放（`transform: scale(1.01)`）或边框发光扩散（`box-shadow: 0 8px 24px ...`）。
+  * 严禁海图网格单元格在鼠标掠过时触发上浮或背景爆亮效果。
+  * 严禁属性表格行在 hover 时触发高对比度跳动。
+- **工程约束依据**：
+  * **防止图层重排与掉帧**：日志列表处于高速追加流中，频繁的 hover 复合图层提升会打断浏览器的合成器线程优化，造成虚拟滚动卡顿。
+  * **保证文本选取精准度**：排查问题时，运维人员常需跨行划选日志文本、报错信息或网格坐标。卡片上浮或抖动会直接破坏操作系统的文本选择光标位置，导致复制错位。
+
+#### 2. 全主题一律禁用过渡动效 (Zero Transitions & Zero Animation)
+- **绝对禁止项**：
+  * 卡片与子元素严禁配置 `transition: all 0.2s`、`transition: height` 等补间缓动。
+  * 卡片折叠/展开、异常堆栈展开、查看原始文本等交互，一律采用**即时状态切换（0ms 响应）**，禁止风琴式伸缩滑行动画。
+  * 新增日志卡片流式推入时，严禁使用淡入（Fade-in）、滑动切入（Slide-in）或尺寸伸展动画。
+- **工程约束依据**：
+  * **消除界面呈现延迟**：在排查严重故障时，运维人员需要第一眼看到完整调用栈与自愈建议，任何 200ms~300ms 的过度动画都是对排障效率的消耗。
+  * **消除 CPU / GPU 冗余开销**：7×24 小时常驻运行中，后台多开实例的 WebUI 界面若持续计算 CSS 动效插值，会产生不必要的资源占用，违背低功耗自动化框架的设计初衷。
+

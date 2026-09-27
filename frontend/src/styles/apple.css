@@ -263,6 +263,47 @@ main:focus {outline: none}
   border: 0;
   border-radius: inherit;
 }
+/* 经典玻璃主题卡片式日志适配 (LogCardView Apple Glass) */
+.log-card {
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  border-color: color-mix(in srgb, var(--glass-edge) 54%, var(--border));
+  border-radius: 10px;
+}
+.card-header {
+  background: color-mix(in srgb, var(--surface) 50%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--glass-edge) 54%, var(--border));
+}
+.card-btn-action {
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  border-color: color-mix(in srgb, var(--glass-edge) 45%, var(--border));
+}
+.card-btn-icon {
+  border-radius: 6px;
+}
+.trapezoid-visual {
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 40%, transparent);
+  border-color: color-mix(in srgb, var(--glass-edge) 54%, var(--border));
+}
+.traceback-viewer {
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 40%, transparent);
+  border-color: color-mix(in srgb, var(--glass-edge) 54%, var(--border));
+}
+.traceback-toolbar {
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--glass-edge) 54%, var(--border));
+}
+.traceback-frame-card {
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  border-color: color-mix(in srgb, var(--glass-edge) 45%, var(--border));
+}
+.traceback-frame-header {
+  background: color-mix(in srgb, var(--surface) 45%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--glass-edge) 45%, var(--border));
+}
 .statistics-note {border-left-color: var(--accent); border-radius: 12px}
 .group-nav {border: 0; padding: 6px; gap: 3px; border-radius: 16px; background: var(--surface-muted)}
 .group-nav a {border-radius: 10px}

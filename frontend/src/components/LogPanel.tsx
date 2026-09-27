@@ -338,7 +338,7 @@ export function LogPanel({active = true}: {active?: boolean}) {
         </Select>
         <span>{ui('log.recent', {count: entries.length})}</span>
       </div>}
-      <div className="log-content" ref={scroll} aria-label={ui('log.content')}>
+      <div className={`log-content ${viewMode === 'cards' ? 'log-cards-mode' : ''}`} ref={scroll} aria-label={ui('log.content')}>
         {visible.length ? (
           viewMode === 'cards' ? (
             <LogCardView entries={ordered} search={search} />

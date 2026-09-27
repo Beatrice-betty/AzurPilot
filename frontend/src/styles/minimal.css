@@ -104,6 +104,51 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 .monitor-panel .log-toolbar {display: flex; align-items: center; margin-left: auto; gap: 4px}
 .monitor-panel .log-panel {border: 0; border-radius: 0}
 .monitor-panel .log-content {font-size: 12px; line-height: 1.8; background: var(--surface)}
+/* 简约主题卡片式日志体系适配 (LogCardView Minimal) */
+.log-content.log-cards-mode,
+.monitor-panel .log-content.log-cards-mode {
+  background: var(--surface-muted);
+}
+.log-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: none !important;
+}
+.card-header {
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
+}
+.card-btn-action {
+  border-radius: 6px;
+  box-shadow: none;
+}
+.card-btn-icon {
+  border-radius: 6px;
+}
+.trapezoid-visual {
+  border-radius: 8px;
+  box-shadow: none;
+}
+.traceback-viewer {
+  border-radius: 8px;
+  box-shadow: none;
+}
+.traceback-frame-card {
+  border-radius: 6px;
+  box-shadow: none;
+}
+.section-action {
+  border-radius: 6px;
+}
+.badge-shape,
+.badge-pill,
+.prop-pill,
+.prop-badge,
+.error-tag,
+.traceback-exc-banner {
+  border-radius: 4px;
+}
 .log-filters {background: var(--surface-muted)}
 .monitor-segmented {display: inline-flex; align-items: center; gap: 3px; padding: 3px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-muted); max-width: 100%; overflow-x: auto}
 .statistics-edit-actions.monitor-segmented {border-radius: 0}
