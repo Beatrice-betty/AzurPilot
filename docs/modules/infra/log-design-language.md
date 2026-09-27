@@ -1,7 +1,7 @@
 # AzurPilot 日志设计语言规范 (Log Design Language, LDL)
 
 > 适用于 AzurPilot / Alas 自动化框架的全项目标准化日志体系、通信协议与 WebUI 解析渲染规范。
-> 版本：2.0.0-draft | 状态：设计规范 | 日期：2026-09-27
+> 版本：2.0.0 | 状态：正式实现 (Implemented) | 日期：2026-09-27
 
 ---
 
@@ -666,23 +666,23 @@ logger.table(title="跑分结果", columns=[...], rows=[...])
 
 ---
 
-## 8. 实施路线图 (Roadmap)
+## 8. 落地实施总结与交互标准 (Implementation & Acceptance Summary)
 
-1. **第一阶段：协议与类型契约（Contract & Types）**
-   - 在前端 `frontend/src/api/types.ts` 中引入完整的 `LogEntry` 联合类型。
-   - 在后端新增 `module/logger/event.py` 模型定义。
+在前端 WebUI (`LogPanel.tsx` 与 `LogCardView.tsx`) 中，已全面完成卡片式聚合引擎的生产级实现与交付验收：
 
-2. **第二阶段：WebUI 流式聚合器与特殊组件库（Frontend UI）**
-   - 在前端引入 `aggregateLogEntries` 流式聚合状态机，实现对海图块、连续属性块、三行横幅的无缝聚合。
-   - 实现 `<LogMapBlock />`（支持 Tooltip 释义、图例、绝对对齐与水平保护滚动）。
-   - 为异常堆栈增加折叠组件与独立横向滚动容器。
-   - 增加大纲提取（Outline Drawer）与多维过滤器。
+1. **流式块级聚合状态机 (`aggregateEntriesToCards`)**：
+   - 实现了对 160 列无颜色终端日志流的高性能线性聚合（单趟扫描 $O(N)$）。
+   - 涵盖 11 种标准化卡片形态：系统横幅 (`system_banner`)、任务阶段标题 (`stage_header`)、2.5D 海域透视拓扑 (`perspective`)、海域战术地图 (`map_grid`)、寻路移动代价热力图 (`cost_grid`)、局部/雷达扫描矩阵 (`matrix_grid`)、紧凑状态属性清单 (`property_sheet`)、原生数据表格 (`data_table`)、四段式错误上下文 (`error_context`)、AI 智能诊断报告 (`llm_report`) 及经典单行高亮 (`single`)。
 
-3. **第三阶段：后端管道改造与双模协商（Backend Pipeline）**
-   - 升级 `ProcessManager` 的日志收集管道，支持传输 `LogEvent`。
-   - 在 `RuntimeService.logs()` 中实现客户端版本协商（`schemaVersion: '2.0'`）。
-   - 将 `logger.hr`、`logger.attr`、`logger.error_context` 输出无损注入结构化载荷。
+2. **核心视觉约束与工业级质感**：
+   - **零动效准则**：移除所有不必要的 CSS 动画、渐变过渡与悬停高亮效果，界面响应零延迟，维持工程级高信息密度。
+   - **海域 2.5D 透视视口**：梯形视口采用物理前倾（近大远小，短顶宽底），缺失边界以鲜明红色虚线标注，闭合边界以翠绿实线标注。
+   - **战术地图网格**：海域纯蓝基底，单元格间距无缝合并（`gap: 0; padding: 0; border: none;`），全面覆盖大世界图例（`ME`、`EX`、`SD`、`AR`、`PO`、`MI`、`AM`、`FL`、`BO` 等），剔除波浪图标干扰。
+   - **寻路移动代价热力图**：9999 障碍物直接呈现为纯黑背景（`#000000`），起点 0 呈现为高亮翡翠绿，移动步数代价自适应多阶平滑热力色谱。
+   - **紧凑原生数据表格**：消除全屏 100% 弹性拉伸与冗余留白，采用自适应紧凑排版（`width: fit-content; align-self: flex-start;`），支持 Unicode 全格式边框与经典 ASCII `+---+---+` 边框，数值列自动右对齐。
+   - **结构化异常追踪**：默认直接展开堆栈，精准高亮 `▶` 故障代码行与局部变量表（locals），剔除无意义的帧号徽标。
+   - **Markdown 智能诊断**：集成 `MarkdownView` 原生渲染器，支持 KaTeX 数学公式、Markdown 列表代码块与安全 HTML 清理。
 
-4. **第四阶段：全项目特性推广（Feature Rollout）**
-   - 将海图 `map.show()`、跑分 `benchmark`、指挥喵 `meowfficer_score` 迁移至结构化输出。
-   - 离线测试与 mock 场景覆盖验证。
+3. **双模自由切换与多语言覆盖**：
+   - 顶栏常驻卡片视图 (`<LayoutGrid />`) 与经典黑框终端 (`<Terminal />`) 切换按钮，偏好设置持久化至 `localStorage`（默认激活现代卡片模式）。
+   - 全面支持 `zh-CN`、`zh-TW`、`en-US`、`ja-JP`、`zh-MIAO` 五种语言的无缝国际化切换。
