@@ -684,6 +684,8 @@ export function MapGridCard({ card }: { card: Extract<CardItem, { type: 'map_gri
 
 // 2. 海域透视与边缘线识别卡片
 export function PerspectiveCard({ card }: { card: Extract<CardItem, { type: 'perspective' }> }) {
+  const allActive = card.leftEdge && card.upperEdge && card.rightEdge && card.lowerEdge
+
   return (
     <div className="log-card perspective-card motion-enter">
       <div className="card-header">
@@ -698,26 +700,56 @@ export function PerspectiveCard({ card }: { card: Extract<CardItem, { type: 'per
         </div>
       </div>
       <div className="card-body perspective-body">
-        {/* 梯形视口微型几何模型 */}
-        <div className="trapezoid-visual" title="海域 2.5D 透视边界视口">
-          <div className={`edge-line edge-top ${card.upperEdge ? 'edge-active' : 'edge-dim'}`}>
-            <span>上边界</span>
-          </div>
-          <div className="edge-middle">
-            <div className={`edge-line edge-left ${card.leftEdge ? 'edge-active' : 'edge-dim'}`}>
-              <span>左</span>
-            </div>
-            <div className="trapezoid-core">
-              <span className="trapezoid-code">{card.leftEdge ? '/' : ' '} {card.upperEdge ? '_' : ' '} {card.rightEdge ? '\\' : ' '}</span>
-              <span className="trapezoid-sub">{card.lowerEdge ? '___' : ''}</span>
-            </div>
-            <div className={`edge-line edge-right ${card.rightEdge ? 'edge-active' : 'edge-dim'}`}>
-              <span>右</span>
-            </div>
-          </div>
-          <div className={`edge-line edge-bottom ${card.lowerEdge ? 'edge-active' : 'edge-dim'}`}>
-            <span>下边界</span>
-          </div>
+        {/* 梯形视口微型几何模型 (向前倾斜，近大远小) */}
+        <div className="trapezoid-visual" title="海域 2.5D 透视边界视口 (向前倾斜)">
+          <svg width="156" height="88" viewBox="0 0 156 88" className="trapezoid-svg">
+            {/* 梯形底面浅色半透明背景 */}
+            <polygon
+              points="44,18 112,18 142,74 14,74"
+              className={`trapezoid-fill ${allActive ? 'fill-all' : ''}`}
+            />
+            {/* 纵深透视虚线网格（向前方地平线收拢） */}
+            <line x1="60" y1="18" x2="48" y2="74" className="grid-depth-line" />
+            <line x1="78" y1="18" x2="78" y2="74" className="grid-depth-line" />
+            <line x1="96" y1="18" x2="108" y2="74" className="grid-depth-line" />
+            <line x1="31" y1="46" x2="125" y2="46" className="grid-depth-line" />
+
+            {/* 上边界 (远处，较短) */}
+            <line
+              x1="44" y1="18" x2="112" y2="18"
+              className={`edge-stroke ${card.upperEdge ? 'edge-active' : 'edge-dim'}`}
+            />
+            <text x="78" y="12" textAnchor="middle" className={`edge-svg-text ${card.upperEdge ? 'text-active' : 'text-dim'}`}>
+              上边界
+            </text>
+
+            {/* 下边界 (近处，较宽) */}
+            <line
+              x1="14" y1="74" x2="142" y2="74"
+              className={`edge-stroke ${card.lowerEdge ? 'edge-active' : 'edge-dim'}`}
+            />
+            <text x="78" y="85" textAnchor="middle" className={`edge-svg-text ${card.lowerEdge ? 'text-active' : 'text-dim'}`}>
+              下边界
+            </text>
+
+            {/* 左边界 (向前倾斜收拢) */}
+            <line
+              x1="14" y1="74" x2="44" y2="18"
+              className={`edge-stroke ${card.leftEdge ? 'edge-active' : 'edge-dim'}`}
+            />
+            <text x="18" y="44" textAnchor="middle" className={`edge-svg-text ${card.leftEdge ? 'text-active' : 'text-dim'}`}>
+              左
+            </text>
+
+            {/* 右边界 (向前倾斜收拢) */}
+            <line
+              x1="112" y1="18" x2="142" y2="74"
+              className={`edge-stroke ${card.rightEdge ? 'edge-active' : 'edge-dim'}`}
+            />
+            <text x="138" y="44" textAnchor="middle" className={`edge-svg-text ${card.rightEdge ? 'text-active' : 'text-dim'}`}>
+              右
+            </text>
+          </svg>
         </div>
 
         {/* 识别指标清单 */}

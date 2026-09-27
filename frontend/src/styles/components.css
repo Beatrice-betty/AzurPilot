@@ -169,19 +169,19 @@
 .dot-land {background: #374151}
 .dot-sea {background: #38bdf8}
 
-/* 透视与边界卡片 */
+/* 透视与边界卡片 (向前倾斜，近大远小) */
 .perspective-body {display: flex; gap: 20px; align-items: center; flex-wrap: wrap}
-.trapezoid-visual {width: 130px; padding: 6px; border-radius: 6px; background: var(--surface-muted); border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; font-size: 9px}
-.edge-line {display: flex; justify-content: center; align-items: center; transition: all 0.2s}
-.edge-active {color: #10b981; font-weight: 600}
-.edge-dim {color: var(--muted); opacity: 0.3}
-.edge-top {width: 60px; border-top: 2px solid currentColor; padding-top: 1px}
-.edge-bottom {width: 105px; border-bottom: 2px solid currentColor; padding-bottom: 1px}
-.edge-middle {display: flex; align-items: center; justify-content: space-between; width: 100%; margin: 3px 0}
-.edge-left {transform: rotate(-22deg); border-left: 2px solid currentColor; height: 30px; display: flex; align-items: center; padding-left: 2px}
-.edge-right {transform: rotate(22deg); border-right: 2px solid currentColor; height: 30px; display: flex; align-items: center; padding-right: 2px}
-.trapezoid-core {font-family: var(--theme-font-mono); font-size: 13px; font-weight: bold; text-align: center; color: #0ea5e9}
-.trapezoid-sub {font-size: 10px; display: block; line-height: 1}
+.trapezoid-visual {width: 172px; padding: 6px 8px; border-radius: 8px; background: var(--surface-muted); border: 1px solid var(--border); display: flex; justify-content: center; align-items: center}
+.trapezoid-svg {overflow: visible}
+.trapezoid-fill {fill: #10b98108; transition: fill 0.2s}
+.trapezoid-fill.fill-all {fill: #10b98115}
+.grid-depth-line {stroke: var(--border); stroke-dasharray: 2 3; stroke-width: 1; opacity: 0.6}
+.edge-stroke {stroke-width: 3.5; stroke-linecap: round; transition: stroke 0.2s, filter 0.2s}
+.edge-stroke.edge-active {stroke: #10b981; filter: drop-shadow(0 0 3px #10b981aa)}
+.edge-stroke.edge-dim {stroke: var(--border); opacity: 0.35}
+.edge-svg-text {font-size: 9px; font-weight: 600; font-family: sans-serif; user-select: none; transition: fill 0.2s}
+.edge-svg-text.text-active {fill: #10b981}
+.edge-svg-text.text-dim {fill: var(--muted); opacity: 0.45}
 .perspective-metrics {flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 5px; font-size: 11px}
 .metric-row {display: flex; gap: 8px}
 .metric-label {color: var(--muted); min-width: 65px}
