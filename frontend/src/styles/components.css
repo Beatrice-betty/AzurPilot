@@ -112,6 +112,7 @@
 
 /* 卡片式日志体系 (Log Card View) */
 .log-cards-container {display: flex; flex-direction: column; gap: 8px; padding: 4px 0}
+.log-card-virtual-item {display: flex; flex-direction: column; width: 100%; min-width: 0}
 .log-card {border: 1px solid var(--border); border-radius: 6px; background: var(--surface); box-shadow: none; overflow: hidden}
 .card-header {display: flex; justify-content: space-between; align-items: center; padding: 7px 12px; border-bottom: 1px solid var(--border); background: var(--surface-muted); cursor: pointer; user-select: none}
 .card-title {display: flex; align-items: center; gap: 8px; font-size: 11px}

@@ -1,4 +1,13 @@
-import { useState, useMemo, type ReactNode } from 'react'
+import {
+  useState,
+  useMemo,
+  useEffect,
+  useRef,
+  useCallback,
+  memo,
+  type ReactNode,
+  type RefObject,
+} from 'react'
 import {
   AlertCircle,
   Anchor,
@@ -37,17 +46,62 @@ export function extractLogMessage(raw: string): { level: string; time: string; m
   return { level: 'INFO', time: '', message: raw }
 }
 
-// 词法高亮辅助
-function renderTokens(text: string, search = ''): ReactNode {
+// 词法高亮正则常量（避免重复实例化 RegExp）
+const TOKEN_REGEX = /(\b(?:True|False|None)\b)|(<<<[\s\S]*?>>>)|(\[[a-zA-Z0-9_.\u4e00-\u9fff-]+\])|([\{\}\[\]\(\)])|((?:[a-zA-Z]:[/\\]|(?:\.{1,2}[/\\]|[/\\]))[\w.\-/\\]+)|(\b\d{2}:\d{2}:\d{2}(?:\.\d+)?\b)/g
+
+// 词法解析与高亮 LRU 缓存（最大 2000 项，以 text + '\0' + search 为 key）
+export const TOKEN_CACHE_MAX = 2000
+const tokenCache = new Map<string, ReactNode>()
+
+export function clearTokenCache(): void {
+  tokenCache.clear()
+}
+
+export function getTokenCacheSize(): number {
+  return tokenCache.size
+}
+
+function getCachedTokens(key: string): ReactNode | undefined {
+  const cached = tokenCache.get(key)
+  if (cached !== undefined) {
+    // 提升最近访问项到尾部
+    tokenCache.delete(key)
+    tokenCache.set(key, cached)
+    return cached
+  }
+  return undefined
+}
+
+function setCachedTokens(key: string, node: ReactNode): void {
+  if (tokenCache.has(key)) {
+    tokenCache.delete(key)
+  } else if (tokenCache.size >= TOKEN_CACHE_MAX) {
+    // 淘汰最久未访问的首项
+    const oldestKey = tokenCache.keys().next().value
+    if (oldestKey !== undefined) {
+      tokenCache.delete(oldestKey)
+    }
+  }
+  tokenCache.set(key, node)
+}
+
+// 词法高亮辅助（带高效 LRU / Map 缓存与正则复用）
+export function renderTokens(text: string, search = ''): ReactNode {
   if (!text) return null
+  const cacheKey = text + '\0' + search
+  const cached = getCachedTokens(cacheKey)
+  if (cached !== undefined) {
+    return cached
+  }
+
   const searchLower = search.trim().toLowerCase()
-  const tokenRegex = /(\b(?:True|False|None)\b)|(<<<[\s\S]*?>>>)|(\[[a-zA-Z0-9_.\u4e00-\u9fff-]+\])|([\{\}\[\]\(\)])|((?:[a-zA-Z]:[/\\]|(?:\.{1,2}[/\\]|[/\\]))[\w.\-/\\]+)|(\b\d{2}:\d{2}:\d{2}(?:\.\d+)?\b)/g
+  TOKEN_REGEX.lastIndex = 0
 
   const nodes: ReactNode[] = []
   let lastIndex = 0
   let match: RegExpExecArray | null
 
-  while ((match = tokenRegex.exec(text)) !== null) {
+  while ((match = TOKEN_REGEX.exec(text)) !== null) {
     if (match.index > lastIndex) {
       nodes.push(renderSearchHighlights(text.slice(lastIndex, match.index), searchLower, `seg-${lastIndex}`))
     }
@@ -76,7 +130,10 @@ function renderTokens(text: string, search = ''): ReactNode {
   if (lastIndex < text.length) {
     nodes.push(renderSearchHighlights(text.slice(lastIndex), searchLower, `seg-${lastIndex}`))
   }
-  return <>{nodes}</>
+
+  const result = <>{nodes}</>
+  setCachedTokens(cacheKey, result)
+  return result
 }
 
 function renderSearchHighlights(text: string, searchLower: string, keyPrefix: string): ReactNode {
@@ -239,11 +296,22 @@ export type CardItem =
 // 流式块级聚合状态机 (Stream Aggregator)
 // ==========================================
 
-export function aggregateEntriesToCards(entries: LogEntry[]): CardItem[] {
+export interface CardRange {
+  card: CardItem
+  start: number
+  end: number
+}
+
+function aggregateSlice(
+  entries: LogEntry[],
+  startIndex = 0
+): { cards: CardItem[]; ranges: CardRange[] } {
   const cards: CardItem[] = []
-  let index = 0
+  const ranges: CardRange[] = []
+  let index = startIndex
 
   while (index < entries.length) {
+    const cardStart = index
     const entry = entries[index]
     const raw = entry.text.replace(/[\r\n]+$/, '')
     const { level, time, message } = extractLogMessage(raw)
@@ -257,14 +325,16 @@ export function aggregateEntriesToCards(entries: LogEntry[]): CardItem[] {
       const next1 = extractLogMessage(entries[index + 1].text).message.trim()
       const next2 = extractLogMessage(entries[index + 2].text).message.trim()
       if (next2.includes('═'.repeat(10)) && next1 && !next1.includes('═')) {
-        cards.push({
+        const card: CardItem = {
           type: 'system_banner',
           id: entry.id,
           time,
           title: next1,
           rawText: [entry.text, entries[index + 1].text, entries[index + 2].text].join('\n'),
-        })
+        }
         index += 3
+        cards.push(card)
+        ranges.push({ card, start: cardStart, end: index })
         continue
       }
     }
@@ -283,15 +353,17 @@ export function aggregateEntriesToCards(entries: LogEntry[]): CardItem[] {
           index++
         }
       }
-      cards.push({
+      index++
+      const card: CardItem = {
         type: 'stage_header',
         id: entry.id,
         time,
         title,
         level: isDouble ? 1 : 2,
         rawText,
-      })
-      index++
+      }
+      cards.push(card)
+      ranges.push({ card, start: cardStart, end: index })
       continue
     }
 
@@ -302,7 +374,7 @@ export function aggregateEntriesToCards(entries: LogEntry[]): CardItem[] {
       const nextPersp = /^\[地图-(透视|单应性)\]\s+边缘:\s*([\/ _\\]*?)\s+(垂直:.*|单应位置:.*)$/.exec(nextMsg.trim())
       if (nextPersp) {
         const edgesStr = nextPersp[2]
-        cards.push({
+        const card: CardItem = {
           type: 'perspective',
           id: entry.id,
           time,
@@ -315,8 +387,10 @@ export function aggregateEntriesToCards(entries: LogEntry[]): CardItem[] {
           info1: perspMatch[4],
           info2: nextPersp[3],
           rawText: entry.text + '\n' + entries[index + 1].text,
-        })
+        }
         index += 2
+        cards.push(card)
+        ranges.push({ card, start: cardStart, end: index })
         continue
       }
     }
@@ -344,15 +418,17 @@ export function aggregateEntriesToCards(entries: LogEntry[]): CardItem[] {
       }
 
       if (rows.length > 0) {
-        cards.push({
+        index = rIdx
+        const card: CardItem = {
           type: 'map_grid',
           id: entry.id,
           time,
           cols,
           rows,
           rawText: rawLines.join('\n'),
-        })
-        index = rIdx
+        }
+        cards.push(card)
+        ranges.push({ card, start: cardStart, end: index })
         continue
       }
     }
@@ -380,15 +456,17 @@ export function aggregateEntriesToCards(entries: LogEntry[]): CardItem[] {
       }
 
       if (rows.length > 0) {
-        cards.push({
+        index = rIdx
+        const card: CardItem = {
           type: 'cost_grid',
           id: entry.id,
           time,
           cols,
           rows,
           rawText: rawLines.join('\n'),
-        })
-        index = rIdx
+        }
+        cards.push(card)
+        ranges.push({ card, start: cardStart, end: index })
         continue
       }
     }
@@ -412,15 +490,17 @@ export function aggregateEntriesToCards(entries: LogEntry[]): CardItem[] {
       }
 
       if (rows.length >= 3) {
-        cards.push({
+        index = rIdx
+        const card: CardItem = {
           type: 'matrix_grid',
           id: entry.id,
           time,
           title: rows[0].includes('..') ? '局部海域扫描切片 (Local View)' : '大世界战略雷达扫描 (Radar Map)',
           rows,
           rawText: rawLines.join('\n'),
-        })
-        index = rIdx
+        }
+        cards.push(card)
+        ranges.push({ card, start: cardStart, end: index })
         continue
       }
     }
@@ -445,14 +525,16 @@ export function aggregateEntriesToCards(entries: LogEntry[]): CardItem[] {
       }
 
       if (items.length >= 2) {
-        cards.push({
+        index = rIdx
+        const card: CardItem = {
           type: 'property_sheet',
           id: entry.id,
           time,
           items,
           rawText: rawLines.join('\n'),
-        })
-        index = rIdx
+        }
+        cards.push(card)
+        ranges.push({ card, start: cardStart, end: index })
         continue
       }
     }
@@ -500,7 +582,8 @@ export function aggregateEntriesToCards(entries: LogEntry[]): CardItem[] {
       }
 
       if (headers.length > 0) {
-        cards.push({
+        index++
+        const card: CardItem = {
           type: 'data_table',
           id: entry.id,
           time,
@@ -508,8 +591,9 @@ export function aggregateEntriesToCards(entries: LogEntry[]): CardItem[] {
           headers,
           rows,
           rawText: raw,
-        })
-        index++
+        }
+        cards.push(card)
+        ranges.push({ card, start: cardStart, end: index })
         continue
       }
     }
@@ -543,7 +627,8 @@ export function aggregateEntriesToCards(entries: LogEntry[]): CardItem[] {
         }
       }
 
-      cards.push({
+      index++
+      const card: CardItem = {
         type: 'error_context',
         id: entry.id,
         time,
@@ -554,22 +639,25 @@ export function aggregateEntriesToCards(entries: LogEntry[]): CardItem[] {
         exception,
         stackTrace: stackLines.join('\n'),
         rawText: raw,
-      })
-      index++
+      }
+      cards.push(card)
+      ranges.push({ card, start: cardStart, end: index })
       continue
     }
 
     // 10. 独立异常堆栈 (Traceback)
     if (raw.includes('Traceback (most recent call last)')) {
       const excMatch = /([a-zA-Z0-9_]+Error|[a-zA-Z0-9_]+Exception|ScriptEnd):\s*(.*)$/.exec(raw)
-      cards.push({
+      index++
+      const card: CardItem = {
         type: 'traceback',
         id: entry.id,
         time,
         excName: excMatch ? `${excMatch[1]}: ${excMatch[2]}` : 'Python 异常堆栈',
         rawText: raw,
-      })
-      index++
+      }
+      cards.push(card)
+      ranges.push({ card, start: cardStart, end: index })
       continue
     }
 
@@ -590,20 +678,23 @@ export function aggregateEntriesToCards(entries: LogEntry[]): CardItem[] {
       }
       const content = filtered.join('\n').trim()
 
-      cards.push({
+      index++
+      const card: CardItem = {
         type: 'llm_report',
         id: entry.id,
         time,
         model,
         content,
         rawText: raw,
-      })
-      index++
+      }
+      cards.push(card)
+      ranges.push({ card, start: cardStart, end: index })
       continue
     }
 
     // 12. 默认：常规单行日志卡片
-    cards.push({
+    index++
+    const card: CardItem = {
       type: 'single',
       id: entry.id,
       entry,
@@ -611,11 +702,97 @@ export function aggregateEntriesToCards(entries: LogEntry[]): CardItem[] {
       level,
       message,
       rawText: raw,
-    })
-    index++
+    }
+    cards.push(card)
+    ranges.push({ card, start: cardStart, end: index })
   }
 
-  return cards
+  return { cards, ranges }
+}
+
+// 增量聚合缓存状态
+let lastEntries: LogEntry[] = []
+let lastRanges: CardRange[] = []
+let lastCards: CardItem[] = []
+
+export function clearAggregationCache(): void {
+  lastEntries = []
+  lastRanges = []
+  lastCards = []
+}
+
+export function getAggregationCacheInfo(): {
+  cachedCardsCount: number
+  cachedEntriesCount: number
+} {
+  return {
+    cachedCardsCount: lastCards.length,
+    cachedEntriesCount: lastEntries.length,
+  }
+}
+
+export function aggregateEntriesToCards(entries: LogEntry[]): CardItem[] {
+  if (!entries || entries.length === 0) {
+    lastEntries = []
+    lastRanges = []
+    lastCards = []
+    return []
+  }
+
+  // 1. 若完全是同一引用数组且长度相同，直接返回上次结果
+  if (entries === lastEntries) {
+    return lastCards
+  }
+
+  // 2. 检查前缀匹配与增量复用
+  const prevLen = lastEntries.length
+  let canReuse = false
+
+  if (prevLen > 0 && entries.length >= prevLen) {
+    let isPrefixMatch = true
+    for (let i = 0; i < prevLen; i++) {
+      const e = entries[i]
+      const cached = lastEntries[i]
+      if (e !== cached && (e.id !== cached.id || e.text !== cached.text)) {
+        isPrefixMatch = false
+        break
+      }
+    }
+
+    if (isPrefixMatch) {
+      if (entries.length === prevLen) {
+        // 前缀与长度完全一致，直接复用已有卡片
+        return lastCards
+      }
+      canReuse = true
+    }
+  }
+
+  // 末尾安全保留裕量：丢弃最后 4 张卡片重新聚合，防止多行块（地图、横幅、属性清单）跨追加边界未闭合
+  const REUSE_TAIL_MARGIN = 4
+  const safeCardIndex = canReuse && lastRanges.length > REUSE_TAIL_MARGIN
+    ? lastRanges.length - REUSE_TAIL_MARGIN
+    : 0
+
+  if (canReuse && safeCardIndex > 0) {
+    const reusedRanges = lastRanges.slice(0, safeCardIndex)
+    const reusedCards = lastCards.slice(0, safeCardIndex)
+    const startEntryIndex = reusedRanges[reusedRanges.length - 1].end
+
+    const tailResult = aggregateSlice(entries, startEntryIndex)
+
+    lastCards = reusedCards.concat(tailResult.cards)
+    lastRanges = reusedRanges.concat(tailResult.ranges)
+    lastEntries = entries.slice()
+    return lastCards
+  }
+
+  // 3. 全量重新聚合
+  const fullResult = aggregateSlice(entries, 0)
+  lastCards = fullResult.cards
+  lastRanges = fullResult.ranges
+  lastEntries = entries.slice()
+  return lastCards
 }
 
 // ==========================================
@@ -812,181 +989,190 @@ export function renderCellContent(code: string): ReactNode {
 // ==========================================
 
 // 1. 全局海图战术卡片
-export function MapGridCard({ card }: { card: Extract<CardItem, { type: 'map_grid' }> }) {
-  const [expanded, setExpanded] = useState(true)
-  const shapeStr = `${card.cols.length}×${card.rows.length}`
+export const MapGridCard = memo(
+  function MapGridCard({ card }: { card: Extract<CardItem, { type: 'map_grid' }> }) {
+    const [expanded, setExpanded] = useState(true)
+    const shapeStr = `${card.cols.length}×${card.rows.length}`
 
-  return (
-    <div className="log-card map-card">
-      <div className="card-header" onClick={() => setExpanded(!expanded)}>
-        <div className="card-title">
-          <MapIcon size={16} className="text-accent" />
-          <span className="title-bold">海域战术地图快照</span>
-          <span className="badge-shape">{shapeStr}</span>
-          <span className="card-time">{card.time}</span>
+    return (
+      <div className="log-card map-card">
+        <div className="card-header" onClick={() => setExpanded(!expanded)}>
+          <div className="card-title">
+            <MapIcon size={16} className="text-accent" />
+            <span className="title-bold">海域战术地图快照</span>
+            <span className="badge-shape">{shapeStr}</span>
+            <span className="card-time">{card.time}</span>
+          </div>
+          <div className="card-actions">
+            <CopyButton text={card.rawText} label="复制矩阵" />
+            <button className="card-btn-icon" aria-label="展开或折叠">
+              {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+          </div>
         </div>
-        <div className="card-actions">
-          <CopyButton text={card.rawText} label="复制矩阵" />
-          <button className="card-btn-icon" aria-label="展开或折叠">
-            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          </button>
-        </div>
-      </div>
 
-      {expanded && (
-        <div className="card-body">
-          <div className="map-grid-viewport">
-            <table className="map-ascii-table">
-              <thead>
-                <tr>
-                  <th className="map-th-corner">#</th>
-                  {card.cols.map((col, idx) => (
-                    <th key={idx} className="map-th-col">{col}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {card.rows.map((row) => (
-                  <tr key={row.rowNum}>
-                    <td className="map-td-row">{row.rowNum}</td>
-                    {row.cells.map((cell, cIdx) => {
-                      const meta = getCellMeta(cell)
-                      return (
-                        <td key={cIdx} className="map-td-cell">
-                          <span
-                            className={`map-badge ${meta.cls}`}
-                            title={`[${card.cols[cIdx]}${row.rowNum}] ${meta.label}`}
-                          >
-                            {renderCellContent(cell)}
-                          </span>
-                        </td>
-                      )
-                    })}
+        {expanded && (
+          <div className="card-body">
+            <div className="map-grid-viewport">
+              <table className="map-ascii-table">
+                <thead>
+                  <tr>
+                    <th className="map-th-corner">#</th>
+                    {card.cols.map((col, idx) => (
+                      <th key={idx} className="map-th-col">{col}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {card.rows.map((row) => (
+                    <tr key={row.rowNum}>
+                      <td className="map-td-row">{row.rowNum}</td>
+                      {row.cells.map((cell, cIdx) => {
+                        const meta = getCellMeta(cell)
+                        return (
+                          <td key={cIdx} className="map-td-cell">
+                            <span
+                              className={`map-badge ${meta.cls}`}
+                              title={`[${card.cols[cIdx]}${row.rowNum}] ${meta.label}`}
+                            >
+                              {renderCellContent(cell)}
+                            </span>
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-          <div className="map-legend-bar">
-            <span className="legend-item"><Ship size={12} className="legend-icon text-fleet" /> 旗舰 (FL)</span>
-            <span className="legend-item"><Crown size={12} className="legend-icon text-boss" /> Boss (BO)</span>
-            <span className="legend-item"><Swords size={12} className="legend-icon text-enemy" /> 敌舰 (1M/EN)</span>
-            <span className="legend-item"><Package size={12} className="legend-icon text-mystery" /> 物资/箱 (MY/RE)</span>
-            <span className="legend-item"><PawPrint size={12} className="legend-icon text-meowfficer" /> 指挥喵 (ME)</span>
-            <span className="legend-item"><AlertCircle size={12} className="legend-icon text-event" /> 事件 (EX)</span>
-            <span className="legend-item"><Radar size={12} className="legend-icon text-device" /> 装置 (SD)</span>
-            <span className="legend-item"><Ban size={12} className="legend-icon text-impassable" /> 不可走 (++)</span>
-            <span className="legend-item"><span className="legend-dot dot-sea" /> 海域 (--)</span>
+            <div className="map-legend-bar">
+              <span className="legend-item"><Ship size={12} className="legend-icon text-fleet" /> 旗舰 (FL)</span>
+              <span className="legend-item"><Crown size={12} className="legend-icon text-boss" /> Boss (BO)</span>
+              <span className="legend-item"><Swords size={12} className="legend-icon text-enemy" /> 敌舰 (1M/EN)</span>
+              <span className="legend-item"><Package size={12} className="legend-icon text-mystery" /> 物资/箱 (MY/RE)</span>
+              <span className="legend-item"><PawPrint size={12} className="legend-icon text-meowfficer" /> 指挥喵 (ME)</span>
+              <span className="legend-item"><AlertCircle size={12} className="legend-icon text-event" /> 事件 (EX)</span>
+              <span className="legend-item"><Radar size={12} className="legend-icon text-device" /> 装置 (SD)</span>
+              <span className="legend-item"><Ban size={12} className="legend-icon text-impassable" /> 不可走 (++)</span>
+              <span className="legend-item"><span className="legend-dot dot-sea" /> 海域 (--)</span>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
-  )
-}
+        )}
+      </div>
+    )
+  },
+  (prev, next) => prev.card === next.card
+)
 
 // 2. 海域透视与边缘线识别卡片
-export function PerspectiveCard({ card }: { card: Extract<CardItem, { type: 'perspective' }> }) {
-  const allActive = card.leftEdge && card.upperEdge && card.rightEdge && card.lowerEdge
+export const PerspectiveCard = memo(
+  function PerspectiveCard({ card }: { card: Extract<CardItem, { type: 'perspective' }> }) {
+    const allActive = card.leftEdge && card.upperEdge && card.rightEdge && card.lowerEdge
 
-  return (
-    <div className={`log-card perspective-card ${allActive ? 'perspective-complete' : 'perspective-has-missing'}`}>
-      <div className="card-header">
-        <div className="card-title">
-          <Compass size={16} className={allActive ? 'text-secondary' : 'text-warning'} />
-          <span className="title-bold">海域{card.model}与边界线拓扑</span>
-          <span className="badge-pill duration">{card.duration}</span>
-          <span className="card-time">{card.time}</span>
-        </div>
-        <div className="card-actions">
-          <CopyButton text={card.rawText} />
-        </div>
-      </div>
-      <div className="card-body perspective-body">
-        {/* 梯形视口微型几何模型 (向前倾斜，近大远小) */}
-        <div className="trapezoid-visual" title="海域 2.5D 透视边界视口 (向前倾斜)">
-          <svg width="156" height="80" viewBox="0 0 156 80" className="trapezoid-svg">
-            {/* 梯形底面浅色半透明背景 (仅完全闭合时填充) */}
-            <polygon
-              points="44,14 112,14 144,68 12,68"
-              className={`trapezoid-fill ${allActive ? 'fill-all' : 'fill-broken'}`}
-            />
-            {/* 纵深透视虚线网格（向前方地平线收拢） */}
-            <line x1="60" y1="14" x2="48" y2="68" className="grid-depth-line" />
-            <line x1="78" y1="14" x2="78" y2="68" className="grid-depth-line" />
-            <line x1="96" y1="14" x2="108" y2="68" className="grid-depth-line" />
-            <line x1="28" y1="41" x2="128" y2="41" className="grid-depth-line" />
-
-            {/* 上边界 (远处，较短) */}
-            <line
-              x1="44" y1="14" x2="112" y2="14"
-              className={`edge-stroke ${card.upperEdge ? 'edge-active' : 'edge-missing'}`}
-            />
-
-            {/* 下边界 (近处，较宽) */}
-            <line
-              x1="12" y1="68" x2="144" y2="68"
-              className={`edge-stroke ${card.lowerEdge ? 'edge-active' : 'edge-missing'}`}
-            />
-
-            {/* 左边界 (向前倾斜收拢) */}
-            <line
-              x1="12" y1="68" x2="44" y2="14"
-              className={`edge-stroke ${card.leftEdge ? 'edge-active' : 'edge-missing'}`}
-            />
-
-            {/* 右边界 (向前倾斜收拢) */}
-            <line
-              x1="112" y1="14" x2="144" y2="68"
-              className={`edge-stroke ${card.rightEdge ? 'edge-active' : 'edge-missing'}`}
-            />
-          </svg>
-        </div>
-
-        {/* 识别指标清单 */}
-        <div className="perspective-metrics">
-          <div className="metric-row">
-            <span className="metric-label">水平状态:</span>
-            <span className="metric-val">{card.info1}</span>
+    return (
+      <div className={`log-card perspective-card ${allActive ? 'perspective-complete' : 'perspective-has-missing'}`}>
+        <div className="card-header">
+          <div className="card-title">
+            <Compass size={16} className={allActive ? 'text-secondary' : 'text-warning'} />
+            <span className="title-bold">海域{card.model}与边界线拓扑</span>
+            <span className="badge-pill duration">{card.duration}</span>
+            <span className="card-time">{card.time}</span>
           </div>
-          <div className="metric-row">
-            <span className="metric-label">垂直/定位:</span>
-            <span className="metric-val">{card.info2}</span>
+          <div className="card-actions">
+            <CopyButton text={card.rawText} />
           </div>
         </div>
+        <div className="card-body perspective-body">
+          {/* 梯形视口微型几何模型 (向前倾斜，近大远小) */}
+          <div className="trapezoid-visual" title="海域 2.5D 透视边界视口 (向前倾斜)">
+            <svg width="156" height="80" viewBox="0 0 156 80" className="trapezoid-svg">
+              {/* 梯形底面浅色半透明背景 (仅完全闭合时填充) */}
+              <polygon
+                points="44,14 112,14 144,68 12,68"
+                className={`trapezoid-fill ${allActive ? 'fill-all' : 'fill-broken'}`}
+              />
+              {/* 纵深透视虚线网格（向前方地平线收拢） */}
+              <line x1="60" y1="14" x2="48" y2="68" className="grid-depth-line" />
+              <line x1="78" y1="14" x2="78" y2="68" className="grid-depth-line" />
+              <line x1="96" y1="14" x2="108" y2="68" className="grid-depth-line" />
+              <line x1="28" y1="41" x2="128" y2="41" className="grid-depth-line" />
+
+              {/* 上边界 (远处，较短) */}
+              <line
+                x1="44" y1="14" x2="112" y2="14"
+                className={`edge-stroke ${card.upperEdge ? 'edge-active' : 'edge-missing'}`}
+              />
+
+              {/* 下边界 (近处，较宽) */}
+              <line
+                x1="12" y1="68" x2="144" y2="68"
+                className={`edge-stroke ${card.lowerEdge ? 'edge-active' : 'edge-missing'}`}
+              />
+
+              {/* 左边界 (向前倾斜收拢) */}
+              <line
+                x1="12" y1="68" x2="44" y2="14"
+                className={`edge-stroke ${card.leftEdge ? 'edge-active' : 'edge-missing'}`}
+              />
+
+              {/* 右边界 (向前倾斜收拢) */}
+              <line
+                x1="112" y1="14" x2="144" y2="68"
+                className={`edge-stroke ${card.rightEdge ? 'edge-active' : 'edge-missing'}`}
+              />
+            </svg>
+          </div>
+
+          {/* 识别指标清单 */}
+          <div className="perspective-metrics">
+            <div className="metric-row">
+              <span className="metric-label">水平状态:</span>
+              <span className="metric-val">{card.info1}</span>
+            </div>
+            <div className="metric-row">
+              <span className="metric-label">垂直/定位:</span>
+              <span className="metric-val">{card.info2}</span>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
-  )
-}
+    )
+  },
+  (prev, next) => prev.card === next.card
+)
 
 // 3. 连续属性对齐卡片 (Property Sheet)
-export function PropertySheetCard({ card, search }: { card: Extract<CardItem, { type: 'property_sheet' }>; search: string }) {
-  return (
-    <div className="log-card property-card">
-      <div className="card-header">
-        <div className="card-title">
-          <Layers size={15} className="text-muted" />
-          <span className="title-bold">状态属性清单</span>
-          <span className="card-time">{card.time}</span>
+export const PropertySheetCard = memo(
+  function PropertySheetCard({ card, search }: { card: Extract<CardItem, { type: 'property_sheet' }>; search: string }) {
+    return (
+      <div className="log-card property-card">
+        <div className="card-header">
+          <div className="card-title">
+            <Layers size={15} className="text-muted" />
+            <span className="title-bold">状态属性清单</span>
+            <span className="card-time">{card.time}</span>
+          </div>
+          <div className="card-actions">
+            <CopyButton text={card.rawText} />
+          </div>
         </div>
-        <div className="card-actions">
-          <CopyButton text={card.rawText} />
+        <div className="card-body">
+          <div className="property-grid">
+            {card.items.map((item, idx) => (
+              <div key={idx} className="property-row">
+                <span className="prop-key">{item.key}</span>
+                <span className="prop-divider">:</span>
+                <span className="prop-val">{renderTokens(item.value, search)}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-      <div className="card-body">
-        <div className="property-grid">
-          {card.items.map((item, idx) => (
-            <div key={idx} className="property-row">
-              <span className="prop-key">{item.key}</span>
-              <span className="prop-divider">:</span>
-              <span className="prop-val">{renderTokens(item.value, search)}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
+    )
+  },
+  (prev, next) => prev.card === next.card && prev.search === next.search
+)
 
 function renderTableCell(cell: string): ReactNode {
   const trimmed = cell.trim()
@@ -1009,66 +1195,69 @@ function renderTableCell(cell: string): ReactNode {
 }
 
 // 4. 原生数据表格卡片 (Benchmark / Score)
-export function DataTableCard({ card }: { card: Extract<CardItem, { type: 'data_table' }> }) {
-  // 智能推断列对齐方式：若该列非空值多为数字或测量单位，则右对齐，否则左对齐
-  const colAlignments = useMemo(() => {
-    return card.headers.map((_, cIdx) => {
-      let numericCount = 0
-      let totalCount = 0
-      for (const row of card.rows) {
-        const val = row[cIdx]?.trim() || ''
-        if (val) {
-          totalCount++
-          if (/^[-+]?[\d.,]+([a-zA-Z%]+|\/[0-9]+)?$/.test(val)) {
-            numericCount++
+export const DataTableCard = memo(
+  function DataTableCard({ card }: { card: Extract<CardItem, { type: 'data_table' }> }) {
+    // 智能推断列对齐方式：若该列非空值多为数字或测量单位，则右对齐，否则左对齐
+    const colAlignments = useMemo(() => {
+      return card.headers.map((_, cIdx) => {
+        let numericCount = 0
+        let totalCount = 0
+        for (const row of card.rows) {
+          const val = row[cIdx]?.trim() || ''
+          if (val) {
+            totalCount++
+            if (/^[-+]?[\d.,]+([a-zA-Z%]+|\/[0-9]+)?$/.test(val)) {
+              numericCount++
+            }
           }
         }
-      }
-      return totalCount > 0 && numericCount / totalCount >= 0.6 ? 'right' : 'left'
-    })
-  }, [card.headers, card.rows])
+        return totalCount > 0 && numericCount / totalCount >= 0.6 ? 'right' : 'left'
+      })
+    }, [card.headers, card.rows])
 
-  return (
-    <div className="log-card table-card">
-      <div className="card-header table-card-header">
-        <div className="card-title">
-          <TableIcon size={14} className="text-accent" />
-          <span className="title-bold">{card.title}</span>
-          <span className="card-time">{card.time}</span>
+    return (
+      <div className="log-card table-card">
+        <div className="card-header table-card-header">
+          <div className="card-title">
+            <TableIcon size={14} className="text-accent" />
+            <span className="title-bold">{card.title}</span>
+            <span className="card-time">{card.time}</span>
+          </div>
+          <div className="card-actions">
+            <CopyButton text={card.rawText} />
+          </div>
         </div>
-        <div className="card-actions">
-          <CopyButton text={card.rawText} />
-        </div>
-      </div>
-      <div className="card-body table-card-body">
-        <div className="data-table-viewport">
-          <table className="native-log-table">
-            <thead>
-              <tr>
-                {card.headers.map((h, i) => (
-                  <th key={i} style={{ textAlign: colAlignments[i] }}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {card.rows.map((row, rIdx) => (
-                <tr key={rIdx}>
-                  {row.map((cell, cIdx) => (
-                    <td key={cIdx} style={{ textAlign: colAlignments[cIdx] }}>
-                      {renderTableCell(cell)}
-                    </td>
+        <div className="card-body table-card-body">
+          <div className="data-table-viewport">
+            <table className="native-log-table">
+              <thead>
+                <tr>
+                  {card.headers.map((h, i) => (
+                    <th key={i} style={{ textAlign: colAlignments[i] }}>
+                      {h}
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {card.rows.map((row, rIdx) => (
+                  <tr key={rIdx}>
+                    {row.map((cell, cIdx) => (
+                      <td key={cIdx} style={{ textAlign: colAlignments[cIdx] }}>
+                        {renderTableCell(cell)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
-    </div>
-  )
-}
+    )
+  },
+  (prev, next) => prev.card === next.card
+)
 
 // ==========================================
 // 异常堆栈解析与结构化渲染引擎 (Traceback Engine)
@@ -1210,274 +1399,289 @@ export function parseTraceback(raw: string): ParsedTraceback {
   return { frames, excLine, rawText: raw }
 }
 
-export function TracebackViewer({ rawText }: { rawText: string }) {
-  const [viewMode, setViewMode] = useState<'structured' | 'raw'>('structured')
-  const parsed = useMemo(() => parseTraceback(rawText), [rawText])
+export const TracebackViewer = memo(
+  function TracebackViewer({ rawText }: { rawText: string }) {
+    const [viewMode, setViewMode] = useState<'structured' | 'raw'>('structured')
+    const parsed = useMemo(() => parseTraceback(rawText), [rawText])
 
-  const cleanedRaw = useMemo(() => {
-    return rawText.replace(/^\s{4,10}/gm, '')
-  }, [rawText])
+    const cleanedRaw = useMemo(() => {
+      return rawText.replace(/^\s{4,10}/gm, '')
+    }, [rawText])
 
-  if (parsed.frames.length === 0 || viewMode === 'raw') {
+    if (parsed.frames.length === 0 || viewMode === 'raw') {
+      return (
+        <div className="traceback-viewer">
+          <div className="traceback-toolbar">
+            <div className="traceback-tool-info">
+              <Terminal size={14} className="text-danger" />
+              <span className="traceback-tool-title">Python 异常堆栈追踪 (Traceback)</span>
+              {parsed.frames.length > 0 && (
+                <span className="badge-pill duration">{parsed.frames.length} 个栈帧</span>
+              )}
+            </div>
+            <div className="traceback-tool-actions">
+              {parsed.frames.length > 0 && (
+                <button
+                  type="button"
+                  className="card-btn-action"
+                  onClick={() => setViewMode('structured')}
+                >
+                  查看结构化视图
+                </button>
+              )}
+              <CopyButton text={cleanedRaw} label="复制堆栈" />
+            </div>
+          </div>
+          <pre className="traceback-raw-pre">{cleanedRaw}</pre>
+        </div>
+      )
+    }
+
     return (
       <div className="traceback-viewer">
         <div className="traceback-toolbar">
           <div className="traceback-tool-info">
             <Terminal size={14} className="text-danger" />
             <span className="traceback-tool-title">Python 异常堆栈追踪 (Traceback)</span>
-            {parsed.frames.length > 0 && (
-              <span className="badge-pill duration">{parsed.frames.length} 个栈帧</span>
-            )}
+            <span className="badge-pill duration">{parsed.frames.length} 个栈帧</span>
           </div>
           <div className="traceback-tool-actions">
-            {parsed.frames.length > 0 && (
-              <button
-                type="button"
-                className="card-btn-action"
-                onClick={() => setViewMode('structured')}
-              >
-                查看结构化视图
-              </button>
-            )}
+            <button
+              type="button"
+              className="card-btn-action"
+              onClick={() => setViewMode('raw')}
+            >
+              查看原始文本
+            </button>
             <CopyButton text={cleanedRaw} label="复制堆栈" />
           </div>
         </div>
-        <pre className="traceback-raw-pre">{cleanedRaw}</pre>
-      </div>
-    )
-  }
 
-  return (
-    <div className="traceback-viewer">
-      <div className="traceback-toolbar">
-        <div className="traceback-tool-info">
-          <Terminal size={14} className="text-danger" />
-          <span className="traceback-tool-title">Python 异常堆栈追踪 (Traceback)</span>
-          <span className="badge-pill duration">{parsed.frames.length} 个栈帧</span>
-        </div>
-        <div className="traceback-tool-actions">
-          <button
-            type="button"
-            className="card-btn-action"
-            onClick={() => setViewMode('raw')}
-          >
-            查看原始文本
-          </button>
-          <CopyButton text={cleanedRaw} label="复制堆栈" />
-        </div>
-      </div>
-
-      <div className="traceback-frames-list">
-        {parsed.frames.map((frame, idx) => (
-          <div key={idx} className="traceback-frame-card">
-            <div className="traceback-frame-header">
-              <div className="frame-header-left">
-                <span className="frame-filename">{frame.fileName}</span>
-                <span className="frame-line-badge">:{frame.line}</span>
-                <span className="frame-func">in <span className="func-name">{frame.func}()</span></span>
+        <div className="traceback-frames-list">
+          {parsed.frames.map((frame, idx) => (
+            <div key={idx} className="traceback-frame-card">
+              <div className="traceback-frame-header">
+                <div className="frame-header-left">
+                  <span className="frame-filename">{frame.fileName}</span>
+                  <span className="frame-line-badge">:{frame.line}</span>
+                  <span className="frame-func">in <span className="func-name">{frame.func}()</span></span>
+                </div>
+                <span className="frame-filepath" title={frame.file}>{frame.file}</span>
               </div>
-              <span className="frame-filepath" title={frame.file}>{frame.file}</span>
-            </div>
 
-            {frame.codeLines.length > 0 && (
-              <div className="traceback-code-block">
-                {frame.codeLines.map((line, lIdx) => (
-                  <div
-                    key={lIdx}
-                    className={`traceback-code-row ${line.isFault ? 'fault-row' : ''}`}
-                  >
-                    <div className="gutter-col">
-                      {line.isFault ? (
-                        <span className="fault-marker">▶</span>
-                      ) : (
-                        <span className="gutter-spacer" />
-                      )}
-                      <span className="line-num">{line.lineNum}</span>
-                    </div>
-                    <div className="code-col">
-                      <span className="code-text">{line.code}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {frame.locals.length > 0 && (
-              <div className="traceback-locals-block">
-                <div className="locals-title">局部变量 (locals)</div>
-                <div className="locals-list">
-                  {frame.locals.map((v, vIdx) => (
-                    <div key={vIdx} className="local-var-row">
-                      <span className="local-key">{v.name}</span>
-                      <span className="local-eq">=</span>
-                      <span className="local-val">{v.value}</span>
+              {frame.codeLines.length > 0 && (
+                <div className="traceback-code-block">
+                  {frame.codeLines.map((line, lIdx) => (
+                    <div
+                      key={lIdx}
+                      className={`traceback-code-row ${line.isFault ? 'fault-row' : ''}`}
+                    >
+                      <div className="gutter-col">
+                        {line.isFault ? (
+                          <span className="fault-marker">▶</span>
+                        ) : (
+                          <span className="gutter-spacer" />
+                        )}
+                        <span className="line-num">{line.lineNum}</span>
+                      </div>
+                      <div className="code-col">
+                        <span className="code-text">{line.code}</span>
+                      </div>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+              )}
 
-      {parsed.excLine && (
-        <div className="traceback-exc-banner">
-          <AlertCircle size={15} className="text-danger flex-shrink-0" />
-          <span className="exc-banner-text">{parsed.excLine}</span>
+              {frame.locals.length > 0 && (
+                <div className="traceback-locals-block">
+                  <div className="locals-title">局部变量 (locals)</div>
+                  <div className="locals-list">
+                    {frame.locals.map((v, vIdx) => (
+                      <div key={vIdx} className="local-var-row">
+                        <span className="local-key">{v.name}</span>
+                        <span className="local-eq">=</span>
+                        <span className="local-val">{v.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
-      )}
-    </div>
-  )
-}
+
+        {parsed.excLine && (
+          <div className="traceback-exc-banner">
+            <AlertCircle size={15} className="text-danger flex-shrink-0" />
+            <span className="exc-banner-text">{parsed.excLine}</span>
+          </div>
+        )}
+      </div>
+    )
+  },
+  (prev, next) => prev.rawText === next.rawText
+)
 
 // 5. 四段式统一错误上下文卡片 (error_context: 包含完整堆栈直接展开渲染)
-export function ErrorContextCard({ card }: { card: Extract<CardItem, { type: 'error_context' }> }) {
-  return (
-    <div className="log-card error-card">
-      <div className="card-header error-header">
-        <div className="card-title">
-          <AlertCircle size={18} className="text-danger" />
-          <span className="title-bold error-title">{card.title}</span>
-          <span className="card-time">{card.time}</span>
+export const ErrorContextCard = memo(
+  function ErrorContextCard({ card }: { card: Extract<CardItem, { type: 'error_context' }> }) {
+    return (
+      <div className="log-card error-card">
+        <div className="card-header error-header">
+          <div className="card-title">
+            <AlertCircle size={18} className="text-danger" />
+            <span className="title-bold error-title">{card.title}</span>
+            <span className="card-time">{card.time}</span>
+          </div>
+          <div className="card-actions">
+            <CopyButton text={card.rawText} label="复制错误现场" />
+          </div>
         </div>
-        <div className="card-actions">
-          <CopyButton text={card.rawText} label="复制错误现场" />
+
+        <div className="card-body error-body">
+          {card.reason && (
+            <div className="error-section">
+              <span className="error-tag tag-reason">原因</span>
+              <span className="error-text">{card.reason}</span>
+            </div>
+          )}
+          {card.impact && (
+            <div className="error-section">
+              <span className="error-tag tag-impact">影响</span>
+              <span className="error-text">{card.impact}</span>
+            </div>
+          )}
+          {card.action && (
+            <div className="error-section section-action">
+              <span className="error-tag tag-action">建议操作</span>
+              <span className="error-text text-action">{card.action}</span>
+            </div>
+          )}
+          {card.exception && (
+            <div className="error-section">
+              <span className="error-tag tag-exc">底层异常</span>
+              <span className="error-text text-mono text-muted">{card.exception}</span>
+            </div>
+          )}
+
+          {card.stackTrace && (
+            <div className="error-stack-wrapper">
+              <TracebackViewer rawText={card.stackTrace} />
+            </div>
+          )}
         </div>
       </div>
-
-      <div className="card-body error-body">
-        {card.reason && (
-          <div className="error-section">
-            <span className="error-tag tag-reason">原因</span>
-            <span className="error-text">{card.reason}</span>
-          </div>
-        )}
-        {card.impact && (
-          <div className="error-section">
-            <span className="error-tag tag-impact">影响</span>
-            <span className="error-text">{card.impact}</span>
-          </div>
-        )}
-        {card.action && (
-          <div className="error-section section-action">
-            <span className="error-tag tag-action">建议操作</span>
-            <span className="error-text text-action">{card.action}</span>
-          </div>
-        )}
-        {card.exception && (
-          <div className="error-section">
-            <span className="error-tag tag-exc">底层异常</span>
-            <span className="error-text text-mono text-muted">{card.exception}</span>
-          </div>
-        )}
-
-        {card.stackTrace && (
-          <div className="error-stack-wrapper">
-            <TracebackViewer rawText={card.stackTrace} />
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
+    )
+  },
+  (prev, next) => prev.card === next.card
+)
 
 // 6. 异常堆栈卡片 (Traceback)
-export function TracebackCard({ card }: { card: Extract<CardItem, { type: 'traceback' }> }) {
-  return (
-    <div className="log-card traceback-card">
-      <div className="card-header">
-        <div className="card-title">
-          <Terminal size={15} className="text-warning" />
-          <span className="title-bold">{card.excName}</span>
-          <span className="card-time">{card.time}</span>
+export const TracebackCard = memo(
+  function TracebackCard({ card }: { card: Extract<CardItem, { type: 'traceback' }> }) {
+    return (
+      <div className="log-card traceback-card">
+        <div className="card-header">
+          <div className="card-title">
+            <Terminal size={15} className="text-warning" />
+            <span className="title-bold">{card.excName}</span>
+            <span className="card-time">{card.time}</span>
+          </div>
+          <div className="card-actions">
+            <CopyButton text={card.rawText} label="复制堆栈" />
+          </div>
         </div>
-        <div className="card-actions">
-          <CopyButton text={card.rawText} label="复制堆栈" />
+        <div className="card-body">
+          <TracebackViewer rawText={card.rawText} />
         </div>
       </div>
-      <div className="card-body">
-        <TracebackViewer rawText={card.rawText} />
-      </div>
-    </div>
-  )
-}
+    )
+  },
+  (prev, next) => prev.card === next.card
+)
 
 // 7. LLM 智能分析报告卡片 (MarkdownView 格式化渲染)
-export function LlmReportCard({ card }: { card: Extract<CardItem, { type: 'llm_report' }> }) {
-  return (
-    <div className="log-card llm-card">
-      <div className="card-header llm-header">
-        <div className="card-title">
-          <Sparkles size={16} className="text-llm" />
-          <span className="title-bold">AI 错误智能分析诊断报告</span>
-          <span className="badge-pill llm-model">{card.model}</span>
-          <span className="card-time">{card.time}</span>
+export const LlmReportCard = memo(
+  function LlmReportCard({ card }: { card: Extract<CardItem, { type: 'llm_report' }> }) {
+    return (
+      <div className="log-card llm-card">
+        <div className="card-header llm-header">
+          <div className="card-title">
+            <Sparkles size={16} className="text-llm" />
+            <span className="title-bold">AI 错误智能分析诊断报告</span>
+            <span className="badge-pill llm-model">{card.model}</span>
+            <span className="card-time">{card.time}</span>
+          </div>
+          <div className="card-actions">
+            <CopyButton text={card.content} label="复制报告" />
+          </div>
         </div>
-        <div className="card-actions">
-          <CopyButton text={card.content} label="复制报告" />
+        <div className="card-body">
+          <MarkdownView content={card.content} className="llm-markdown-view" />
         </div>
       </div>
-      <div className="card-body">
-        <MarkdownView content={card.content} className="llm-markdown-view" />
-      </div>
-    </div>
-  )
-}
+    )
+  },
+  (prev, next) => prev.card === next.card
+)
 
 // 8. 矩阵切片卡片 (Radar / View)
-export function MatrixGridCard({ card }: { card: Extract<CardItem, { type: 'matrix_grid' }> }) {
-  const [open, setOpen] = useState(true)
+export const MatrixGridCard = memo(
+  function MatrixGridCard({ card }: { card: Extract<CardItem, { type: 'matrix_grid' }> }) {
+    const [open, setOpen] = useState(true)
 
-  return (
-    <div className="log-card matrix-card">
-      <div className="card-header" onClick={() => setOpen(!open)}>
-        <div className="card-title">
-          <MapIcon size={15} className="text-secondary" />
-          <span className="title-bold">{card.title}</span>
-          <span className="card-time">{card.time}</span>
+    return (
+      <div className="log-card matrix-card">
+        <div className="card-header" onClick={() => setOpen(!open)}>
+          <div className="card-title">
+            <MapIcon size={15} className="text-secondary" />
+            <span className="title-bold">{card.title}</span>
+            <span className="card-time">{card.time}</span>
+          </div>
+          <div className="card-actions">
+            <CopyButton text={card.rawText} />
+            <button className="card-btn-icon" aria-label="展开或折叠">
+              {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+          </div>
         </div>
-        <div className="card-actions">
-          <CopyButton text={card.rawText} />
-          <button className="card-btn-icon" aria-label="展开或折叠">
-            {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          </button>
-        </div>
-      </div>
-      {open && (
-        <div className="card-body">
-          <div className="map-grid-viewport">
-            <div className="matrix-grid-rows">
-              {card.rows.map((row, rIdx) => (
-                <div key={rIdx} className="matrix-row">
-                  {row.map((cell, cIdx) => {
-                    const meta = getCellMeta(cell)
-                    return (
-                      <span key={cIdx} className={`map-badge ${meta.cls}`} title={meta.label}>
-                        {renderCellContent(cell)}
-                      </span>
-                    )
-                  })}
-                </div>
-              ))}
+        {open && (
+          <div className="card-body">
+            <div className="map-grid-viewport">
+              <div className="matrix-grid-rows">
+                {card.rows.map((row, rIdx) => (
+                  <div key={rIdx} className="matrix-row">
+                    {row.map((cell, cIdx) => {
+                      const meta = getCellMeta(cell)
+                      return (
+                        <span key={cIdx} className={`map-badge ${meta.cls}`} title={meta.label}>
+                          {renderCellContent(cell)}
+                        </span>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="map-legend-bar">
+              <span className="legend-item"><Ship size={12} className="legend-icon text-fleet" /> 旗舰 (FL)</span>
+              <span className="legend-item"><Crown size={12} className="legend-icon text-boss" /> Boss (BO)</span>
+              <span className="legend-item"><Swords size={12} className="legend-icon text-enemy" /> 敌舰 (1M/EN)</span>
+              <span className="legend-item"><Package size={12} className="legend-icon text-mystery" /> 物资/箱 (MY/RE)</span>
+              <span className="legend-item"><PawPrint size={12} className="legend-icon text-meowfficer" /> 指挥喵 (ME)</span>
+              <span className="legend-item"><AlertCircle size={12} className="legend-icon text-event" /> 事件 (EX)</span>
+              <span className="legend-item"><Radar size={12} className="legend-icon text-device" /> 装置 (SD)</span>
+              <span className="legend-item"><Ban size={12} className="legend-icon text-impassable" /> 不可走 (++)</span>
+              <span className="legend-item"><span className="legend-dot dot-sea" /> 海域 (--)</span>
             </div>
           </div>
-
-          <div className="map-legend-bar">
-            <span className="legend-item"><Ship size={12} className="legend-icon text-fleet" /> 旗舰 (FL)</span>
-            <span className="legend-item"><Crown size={12} className="legend-icon text-boss" /> Boss (BO)</span>
-            <span className="legend-item"><Swords size={12} className="legend-icon text-enemy" /> 敌舰 (1M/EN)</span>
-            <span className="legend-item"><Package size={12} className="legend-icon text-mystery" /> 物资/箱 (MY/RE)</span>
-            <span className="legend-item"><PawPrint size={12} className="legend-icon text-meowfficer" /> 指挥喵 (ME)</span>
-            <span className="legend-item"><AlertCircle size={12} className="legend-icon text-event" /> 事件 (EX)</span>
-            <span className="legend-item"><Radar size={12} className="legend-icon text-device" /> 装置 (SD)</span>
-            <span className="legend-item"><Ban size={12} className="legend-icon text-impassable" /> 不可走 (++)</span>
-            <span className="legend-item"><span className="legend-dot dot-sea" /> 海域 (--)</span>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
+        )}
+      </div>
+    )
+  },
+  (prev, next) => prev.card === next.card
+)
 
 function interpolateColor(
   c1: [number, number, number],
@@ -1532,179 +1736,475 @@ export function getCostHeatmapStyle(num: number, maxCost: number): React.CSSProp
 }
 
 // 9. 寻路代价网格卡片 (Cost Grid)
-export function CostGridCard({ card }: { card: Extract<CardItem, { type: 'cost_grid' }> }) {
-  const [open, setOpen] = useState(true)
-  const shapeStr = `${card.cols.length}×${card.rows.length}`
+export const CostGridCard = memo(
+  function CostGridCard({ card }: { card: Extract<CardItem, { type: 'cost_grid' }> }) {
+    const [open, setOpen] = useState(true)
+    const shapeStr = `${card.cols.length}×${card.rows.length}`
 
-  const maxCost = useMemo(() => {
-    let max = 1
-    for (const row of card.rows) {
-      for (const val of row.values) {
-        const n = parseInt(val, 10)
-        if (!isNaN(n) && n < 9000 && n > max) {
-          max = n
+    const maxCost = useMemo(() => {
+      let max = 1
+      for (const row of card.rows) {
+        for (const val of row.values) {
+          const n = parseInt(val, 10)
+          if (!isNaN(n) && n < 9000 && n > max) {
+            max = n
+          }
         }
       }
-    }
-    return max
-  }, [card.rows])
+      return max
+    }, [card.rows])
 
-  return (
-    <div className="log-card cost-card">
-      <div className="card-header" onClick={() => setOpen(!open)}>
-        <div className="card-title">
-          <Compass size={15} className="text-accent" />
-          <span className="title-bold">寻路移动代价热力图 (Cost Map)</span>
-          <span className="badge-shape">{shapeStr}</span>
-          <span className="card-time">{card.time}</span>
+    return (
+      <div className="log-card cost-card">
+        <div className="card-header" onClick={() => setOpen(!open)}>
+          <div className="card-title">
+            <Compass size={15} className="text-accent" />
+            <span className="title-bold">寻路移动代价热力图 (Cost Map)</span>
+            <span className="badge-shape">{shapeStr}</span>
+            <span className="card-time">{card.time}</span>
+          </div>
+          <div className="card-actions">
+            <CopyButton text={card.rawText} label="复制矩阵" />
+            <button className="card-btn-icon" aria-label="展开或折叠">
+              {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+          </div>
         </div>
-        <div className="card-actions">
-          <CopyButton text={card.rawText} label="复制矩阵" />
-          <button className="card-btn-icon" aria-label="展开或折叠">
-            {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          </button>
-        </div>
-      </div>
-      {open && (
-        <div className="card-body">
-          <div className="map-grid-viewport">
-            <table className="map-ascii-table cost-table">
-              <thead>
-                <tr>
-                  <th className="map-th-corner">#</th>
-                  {card.cols.map((col, idx) => (
-                    <th key={idx} className="map-th-col">{col}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {card.rows.map((row) => (
-                  <tr key={row.rowNum}>
-                    <td className="map-td-row">{row.rowNum}</td>
-                    {row.values.map((val, cIdx) => {
-                      const num = parseInt(val, 10)
-                      const isObstacle = num >= 9000
-                      const isOrigin = num === 0
-                      const cellStyle = getCostHeatmapStyle(num, maxCost)
-                      const title = isObstacle
-                        ? '不可达障碍 (9999)'
-                        : isOrigin
-                        ? '寻路起点 (0 步)'
-                        : `移动代价: ${num} 步`
-
-                      return (
-                        <td key={cIdx} className="map-td-cell">
-                          <span
-                            className={`cost-cell ${isObstacle ? 'cost-wall' : isOrigin ? 'cost-origin' : 'cost-path'}`}
-                            style={cellStyle}
-                            title={title}
-                          >
-                            {val}
-                          </span>
-                        </td>
-                      )
-                    })}
+        {open && (
+          <div className="card-body">
+            <div className="map-grid-viewport">
+              <table className="map-ascii-table cost-table">
+                <thead>
+                  <tr>
+                    <th className="map-th-corner">#</th>
+                    {card.cols.map((col, idx) => (
+                      <th key={idx} className="map-th-col">{col}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {card.rows.map((row) => (
+                    <tr key={row.rowNum}>
+                      <td className="map-td-row">{row.rowNum}</td>
+                      {row.values.map((val, cIdx) => {
+                        const num = parseInt(val, 10)
+                        const isObstacle = num >= 9000
+                        const isOrigin = num === 0
+                        const cellStyle = getCostHeatmapStyle(num, maxCost)
+                        const title = isObstacle
+                          ? '不可达障碍 (9999)'
+                          : isOrigin
+                          ? '寻路起点 (0 步)'
+                          : `移动代价: ${num} 步`
 
-          <div className="map-legend-bar">
-            <span className="legend-item"><span className="legend-dot dot-origin" /> 起点 (0)</span>
-            <span className="legend-item"><span className="legend-dot dot-cost-low" /> 近距/低代价</span>
-            <span className="legend-item"><span className="legend-dot dot-cost-mid" /> 中距代价</span>
-            <span className="legend-item"><span className="legend-dot dot-cost-high" /> 远距代价 (最高: {maxCost})</span>
-            <span className="legend-item"><span className="legend-dot dot-cost-wall" /> 不可达障碍 (9999)</span>
+                        return (
+                          <td key={cIdx} className="map-td-cell">
+                            <span
+                              className={`cost-cell ${isObstacle ? 'cost-wall' : isOrigin ? 'cost-origin' : 'cost-path'}`}
+                              style={cellStyle}
+                              title={title}
+                            >
+                              {val}
+                            </span>
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="map-legend-bar">
+              <span className="legend-item"><span className="legend-dot dot-origin" /> 起点 (0)</span>
+              <span className="legend-item"><span className="legend-dot dot-cost-low" /> 近距/低代价</span>
+              <span className="legend-item"><span className="legend-dot dot-cost-mid" /> 中距代价</span>
+              <span className="legend-item"><span className="legend-dot dot-cost-high" /> 远距代价 (最高: {maxCost})</span>
+              <span className="legend-item"><span className="legend-dot dot-cost-wall" /> 不可达障碍 (9999)</span>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
-  )
-}
+        )}
+      </div>
+    )
+  },
+  (prev, next) => prev.card === next.card
+)
 
 // 10. 系统横幅卡片
-export function SystemBannerCard({ card }: { card: Extract<CardItem, { type: 'system_banner' }> }) {
-  return (
-    <div className="log-card system-banner-card">
-      <div className="banner-double-rule" />
-      <div className="banner-title-text">{card.title}</div>
-      <div className="banner-double-rule" />
-    </div>
-  )
-}
+export const SystemBannerCard = memo(
+  function SystemBannerCard({ card }: { card: Extract<CardItem, { type: 'system_banner' }> }) {
+    return (
+      <div className="log-card system-banner-card">
+        <div className="banner-double-rule" />
+        <div className="banner-title-text">{card.title}</div>
+        <div className="banner-double-rule" />
+      </div>
+    )
+  },
+  (prev, next) => prev.card === next.card
+)
 
 // 11. 任务阶段卡片
-export function StageHeaderCard({ card }: { card: Extract<CardItem, { type: 'stage_header' }> }) {
-  return (
-    <div className={`log-card stage-header-card level-${card.level}`}>
-      <div className="stage-rule-bar" />
-      <div className="stage-title-wrap">
-        <span className="stage-title">{card.title}</span>
-        {card.time && <span className="stage-time">{card.time}</span>}
+export const StageHeaderCard = memo(
+  function StageHeaderCard({ card }: { card: Extract<CardItem, { type: 'stage_header' }> }) {
+    return (
+      <div className={`log-card stage-header-card level-${card.level}`}>
+        <div className="stage-rule-bar" />
+        <div className="stage-title-wrap">
+          <span className="stage-title">{card.title}</span>
+          {card.time && <span className="stage-time">{card.time}</span>}
+        </div>
+        <div className="stage-rule-bar" />
       </div>
-      <div className="stage-rule-bar" />
-    </div>
-  )
-}
+    )
+  },
+  (prev, next) => prev.card === next.card
+)
 
 // 12. 常规单行日志行
-export function SingleLogLineCard({ card, search }: { card: Extract<CardItem, { type: 'single' }>; search: string }) {
-  const lvlKey = card.level.toLowerCase()
-  return (
-    <div className={`log-line log-entry-line level-${lvlKey} log-card-line`}>
-      <span className={`log-lvl lvl-${lvlKey}`}>{card.level}</span>
-      <span className="log-ts">{card.time}</span>
-      <span className="log-divider">│</span>
-      <span className="log-msg">{renderTokens(card.message, search)}</span>
-    </div>
-  )
+export const SingleLogLineCard = memo(
+  function SingleLogLineCard({ card, search }: { card: Extract<CardItem, { type: 'single' }>; search: string }) {
+    const lvlKey = card.level.toLowerCase()
+    return (
+      <div className={`log-line log-entry-line level-${lvlKey} log-card-line`}>
+        <span className={`log-lvl lvl-${lvlKey}`}>{card.level}</span>
+        <span className="log-ts">{card.time}</span>
+        <span className="log-divider">│</span>
+        <span className="log-msg">{renderTokens(card.message, search)}</span>
+      </div>
+    )
+  },
+  (prev, next) => prev.card === next.card && prev.search === next.search
+)
+
+// ==========================================
+// 虚拟化窗口与卡片高度预估 (Virtual Windowing Engine)
+// ==========================================
+
+export const VIRTUAL_THRESHOLD = 40
+export const OVERSCAN_BUFFER_PX = 800
+export const CARD_GAP_PX = 8
+
+const safeRaf = (cb: FrameRequestCallback): number => {
+  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+    return window.requestAnimationFrame(cb)
+  }
+  return setTimeout(cb, 16) as unknown as number
+}
+
+const safeCancelRaf = (id: number | null) => {
+  if (id === null) return
+  if (typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+    window.cancelAnimationFrame(id)
+  } else {
+    clearTimeout(id)
+  }
+}
+
+/**
+ * 依据卡片类型与内部数据结构预估卡片渲染高度（包含 CSS padding/border 等）
+ */
+export function getCardEstimatedHeight(card: CardItem): number {
+  switch (card.type) {
+    case 'single':
+      return 34
+    case 'stage_header':
+      return 44
+    case 'system_banner':
+      return 74
+    case 'perspective':
+      return 172
+    case 'map_grid':
+      return Math.max(120, 52 + card.rows.length * 28 + 48)
+    case 'cost_grid':
+      return Math.max(120, 52 + card.rows.length * 28 + 48)
+    case 'matrix_grid':
+      return Math.max(100, 52 + card.rows.length * 24 + 48)
+    case 'property_sheet':
+      return Math.max(70, 48 + card.items.length * 26)
+    case 'data_table':
+      return Math.max(90, 48 + card.rows.length * 28 + 36)
+    case 'error_context':
+      return 280
+    case 'traceback':
+      return 220
+    case 'llm_report':
+      return 260
+    default:
+      return 34
+  }
+}
+
+/**
+ * 二分查找当前视口区域 [visibleTop, visibleBottom] 所覆盖的卡片索引范围 [startIndex, endIndex]
+ */
+export function findVisibleRange(
+  offsets: number[],
+  heights: number[],
+  visibleTop: number,
+  visibleBottom: number,
+  totalCount: number
+): [number, number] {
+  if (totalCount === 0) return [0, 0]
+
+  // 若视口顶部已经超出全部卡片总底部，直接锁定末尾卡片
+  const lastBottom = (offsets[totalCount - 1] ?? 0) + (heights[totalCount - 1] ?? 0)
+  if (visibleTop >= lastBottom) {
+    return [totalCount - 1, totalCount - 1]
+  }
+
+  // 若视口底部小于等于 0，直接锁定第一张卡片
+  if (visibleBottom <= 0) {
+    return [0, 0]
+  }
+
+  // 二分查找满足 offsets[i] + heights[i] >= visibleTop 的最小 i (startIndex)
+  let low = 0
+  let high = totalCount - 1
+  let startIndex = 0
+
+  while (low <= high) {
+    const mid = (low + high) >> 1
+    const itemBottom = offsets[mid] + heights[mid]
+    if (itemBottom >= visibleTop) {
+      startIndex = mid
+      high = mid - 1
+    } else {
+      low = mid + 1
+    }
+  }
+
+  // 二分查找满足 offsets[i] <= visibleBottom 的最大 i (endIndex)
+  low = startIndex
+  high = totalCount - 1
+  let endIndex = startIndex
+
+  while (low <= high) {
+    const mid = (low + high) >> 1
+    if (offsets[mid] <= visibleBottom) {
+      endIndex = mid
+      low = mid + 1
+    } else {
+      high = mid - 1
+    }
+  }
+
+  return [Math.max(0, startIndex), Math.min(totalCount - 1, Math.max(startIndex, endIndex))]
+}
+
+/**
+ * 单个卡片类型分发渲染
+ */
+export function renderCardItem(card: CardItem, search: string): ReactNode {
+  switch (card.type) {
+    case 'map_grid':
+      return <MapGridCard key={card.id} card={card} />
+    case 'perspective':
+      return <PerspectiveCard key={card.id} card={card} />
+    case 'cost_grid':
+      return <CostGridCard key={card.id} card={card} />
+    case 'matrix_grid':
+      return <MatrixGridCard key={card.id} card={card} />
+    case 'property_sheet':
+      return <PropertySheetCard key={card.id} card={card} search={search} />
+    case 'data_table':
+      return <DataTableCard key={card.id} card={card} />
+    case 'error_context':
+      return <ErrorContextCard key={card.id} card={card} />
+    case 'traceback':
+      return <TracebackCard key={card.id} card={card} />
+    case 'llm_report':
+      return <LlmReportCard key={card.id} card={card} />
+    case 'system_banner':
+      return <SystemBannerCard key={card.id} card={card} />
+    case 'stage_header':
+      return <StageHeaderCard key={card.id} card={card} />
+    case 'single':
+    default:
+      return <SingleLogLineCard key={card.id} card={card} search={search} />
+  }
 }
 
 // ==========================================
 // 统一卡片模式渲染主容器 (LogCardView Container)
 // ==========================================
 
+export interface LogCardViewProps {
+  entries: LogEntry[]
+  search: string
+  scrollRef?: RefObject<HTMLDivElement | null>
+}
+
 export function LogCardView({
   entries,
   search,
-}: {
-  entries: LogEntry[]
-  search: string
-}) {
+  scrollRef,
+}: LogCardViewProps) {
   const cards = useMemo(() => aggregateEntriesToCards(entries), [entries])
+  const containerRef = useRef<HTMLDivElement>(null)
+  const isVirtual = cards.length >= VIRTUAL_THRESHOLD
+
+  // 动态测量的高度缓存 (按 card.id 记录实际渲染的高度)
+  const heightCacheRef = useRef<Map<number, number>>(new Map())
+  const [, setMeasureVersion] = useState(0)
+  const measureRafRef = useRef<number | null>(null)
+
+  // 调度高度重测更新
+  const requestMeasureUpdate = useCallback(() => {
+    if (measureRafRef.current !== null) return
+    measureRafRef.current = safeRaf(() => {
+      measureRafRef.current = null
+      setMeasureVersion(v => v + 1)
+    })
+  }, [])
+
+  // 视口与滚动位置
+  const [scrollState, setScrollState] = useState({ scrollTop: 0, clientHeight: 800 })
+
+  // 获取外层滚动容器（优先传入的 scrollRef，其次通过 DOM 寻找最近的父级）
+  const getScrollElement = useCallback(() => {
+    return scrollRef?.current ?? containerRef.current?.parentElement ?? null
+  }, [scrollRef])
+
+  // 监听外部滚动容器的滚动与 Resize
+  useEffect(() => {
+    if (!isVirtual) return
+    const scrollEl = getScrollElement()
+    if (!scrollEl) return
+
+    setScrollState({
+      scrollTop: scrollEl.scrollTop,
+      clientHeight: scrollEl.clientHeight || 800,
+    })
+
+    let scrollRafId: number | null = null
+    const onScroll = () => {
+      if (scrollRafId !== null) return
+      scrollRafId = safeRaf(() => {
+        scrollRafId = null
+        if (!scrollEl) return
+        setScrollState({
+          scrollTop: scrollEl.scrollTop,
+          clientHeight: scrollEl.clientHeight || 800,
+        })
+      })
+    }
+
+    scrollEl.addEventListener('scroll', onScroll, { passive: true })
+
+    let resizeObserver: ResizeObserver | null = null
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver((observerEntries) => {
+        for (const entry of observerEntries) {
+          const h = entry.contentRect.height
+          if (h > 0) {
+            setScrollState(prev => (prev.clientHeight === h ? prev : { ...prev, clientHeight: h }))
+          }
+        }
+      })
+      resizeObserver.observe(scrollEl)
+    }
+
+    return () => {
+      scrollEl.removeEventListener('scroll', onScroll)
+      if (scrollRafId !== null) safeCancelRaf(scrollRafId)
+      resizeObserver?.disconnect()
+    }
+  }, [getScrollElement, isVirtual])
+
+  // ResizeObserver 用于观察可见卡片实际高度变动（折叠/展开/动态排版）
+  const cardObserverRef = useRef<ResizeObserver | null>(null)
+  useEffect(() => {
+    if (!isVirtual || typeof ResizeObserver === 'undefined') return
+
+    cardObserverRef.current = new ResizeObserver((observerEntries) => {
+      let changed = false
+      for (const entry of observerEntries) {
+        const el = entry.target as HTMLElement
+        const idAttr = el.getAttribute('data-card-id')
+        if (!idAttr) continue
+        const cardId = parseInt(idAttr, 10)
+        const measured = entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height
+        if (measured > 0) {
+          const prev = heightCacheRef.current.get(cardId)
+          if (prev === undefined || Math.abs(prev - measured) >= 2) {
+            heightCacheRef.current.set(cardId, measured)
+            changed = true
+          }
+        }
+      }
+      if (changed) {
+        requestMeasureUpdate()
+      }
+    })
+
+    return () => {
+      cardObserverRef.current?.disconnect()
+      cardObserverRef.current = null
+      if (measureRafRef.current !== null) {
+        safeCancelRaf(measureRafRef.current)
+        measureRafRef.current = null
+      }
+    }
+  }, [isVirtual, requestMeasureUpdate])
+
+  // 绑定 DOM 节点到 ResizeObserver
+  const registerCardRef = useCallback((node: HTMLDivElement | null) => {
+    if (!node || !cardObserverRef.current) return
+    cardObserverRef.current.observe(node)
+  }, [])
+
+  // 1. 卡片数量较少（如 < 40 张）：直接全量渲染，零计算开销
+  if (!isVirtual) {
+    return (
+      <div ref={containerRef} className="log-cards-container">
+        {cards.map((card) => renderCardItem(card, search))}
+      </div>
+    )
+  }
+
+  // 2. 虚拟化窗口计算
+  const totalCount = cards.length
+  const heights = new Array<number>(totalCount)
+  const offsets = new Array<number>(totalCount)
+  let currentOffset = 0
+
+  for (let i = 0; i < totalCount; i++) {
+    const card = cards[i]
+    // 包含卡片自身高度以及 flex gap 占位
+    const baseHeight = heightCacheRef.current.get(card.id) ?? getCardEstimatedHeight(card)
+    const effectiveHeight = baseHeight + CARD_GAP_PX
+    heights[i] = effectiveHeight
+    offsets[i] = currentOffset
+    currentOffset += effectiveHeight
+  }
+  const totalHeight = Math.max(0, currentOffset - CARD_GAP_PX)
+
+  const visibleTop = Math.max(0, scrollState.scrollTop - OVERSCAN_BUFFER_PX)
+  const visibleBottom = scrollState.scrollTop + scrollState.clientHeight + OVERSCAN_BUFFER_PX
+
+  const [startIndex, endIndex] = findVisibleRange(offsets, heights, visibleTop, visibleBottom, totalCount)
+  const paddingTop = offsets[startIndex] ?? 0
+  const bottomItemEnd = Math.max(0, (offsets[endIndex] ?? 0) + (heights[endIndex] ?? 0) - CARD_GAP_PX)
+  const paddingBottom = Math.max(0, totalHeight - bottomItemEnd)
+
+  const visibleCards = cards.slice(startIndex, endIndex + 1)
 
   return (
-    <div className="log-cards-container">
-      {cards.map((card) => {
-        switch (card.type) {
-          case 'map_grid':
-            return <MapGridCard key={card.id} card={card} />
-          case 'perspective':
-            return <PerspectiveCard key={card.id} card={card} />
-          case 'cost_grid':
-            return <CostGridCard key={card.id} card={card} />
-          case 'matrix_grid':
-            return <MatrixGridCard key={card.id} card={card} />
-          case 'property_sheet':
-            return <PropertySheetCard key={card.id} card={card} search={search} />
-          case 'data_table':
-            return <DataTableCard key={card.id} card={card} />
-          case 'error_context':
-            return <ErrorContextCard key={card.id} card={card} />
-          case 'traceback':
-            return <TracebackCard key={card.id} card={card} />
-          case 'llm_report':
-            return <LlmReportCard key={card.id} card={card} />
-          case 'system_banner':
-            return <SystemBannerCard key={card.id} card={card} />
-          case 'stage_header':
-            return <StageHeaderCard key={card.id} card={card} />
-          case 'single':
-          default:
-            return <SingleLogLineCard key={card.id} card={card} search={search} />
-        }
-      })}
+    <div
+      ref={containerRef}
+      className="log-cards-container"
+      style={{
+        paddingTop: `${paddingTop}px`,
+        paddingBottom: `${paddingBottom}px`,
+        boxSizing: 'border-box',
+      }}
+    >
+      {visibleCards.map((card) => (
+        <div key={card.id} data-card-id={card.id} ref={registerCardRef} className="log-card-virtual-item">
+          {renderCardItem(card, search)}
+        </div>
+      ))}
     </div>
   )
 }

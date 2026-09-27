@@ -17,6 +17,45 @@ export const LOG_ENTRY_LIMIT = 1000
 /** 日志跟随的每帧步长上限（像素）；距离更近时按距离收比例。 */
 export const MAX_FOLLOW_STEP = 24
 
+export const safeRaf = (cb: FrameRequestCallback): number => {
+  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+    return window.requestAnimationFrame(cb)
+  }
+  return setTimeout(cb, 16) as unknown as number
+}
+
+export const safeCancelRaf = (id: number | null) => {
+  if (id === null) return
+  if (typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+    window.cancelAnimationFrame(id)
+  } else {
+    clearTimeout(id)
+  }
+}
+
+export interface LogBufferState {
+  entries: LogEntry[]
+  reset: boolean
+  cursor: number | null
+}
+
+/**
+ * 将高频推送的流式日志加入微批缓冲队列
+ * 若收到 reset 信号，则清除前置缓冲并标记 reset，后序同一批次的 entries 连续追加
+ */
+export function queueLogEvent(
+  buffer: LogBufferState,
+  data: { entries: LogEntry[]; reset?: boolean; cursor: number }
+): void {
+  if (data.reset) {
+    buffer.reset = true
+    buffer.entries = [...data.entries]
+  } else {
+    buffer.entries.push(...data.entries)
+  }
+  buffer.cursor = data.cursor
+}
+
 /** 跟随步长：远时按上限匀速，近时按距离收比例，新日志逐帧滚入而不跳到末尾。 */
 export function followStep(remaining: number, maxStep = MAX_FOLLOW_STEP) {
   return Math.sign(remaining) * Math.min(maxStep, Math.max(1, Math.abs(remaining) * .35))
@@ -218,6 +257,36 @@ export function LogPanel({active = true}: {active?: boolean}) {
   /* 已渲染到的最大日志 id：大于它的增量行做入场动画（初始加载不播）。 */
   const freshFrom = useRef<number | null>(null)
 
+  /** 流式日志微批处理缓冲队列，防止高频 WebSocket 推送造成密集 React 重绘 */
+  const logBuffer = useRef<LogBufferState & { rafId: number | null }>({
+    entries: [],
+    reset: false,
+    cursor: null,
+    rafId: null,
+  })
+
+  const flushBuffer = useRef(() => {})
+  flushBuffer.current = () => {
+    const buf = logBuffer.current
+    if (buf.rafId !== null) {
+      safeCancelRaf(buf.rafId)
+      buf.rafId = null
+    }
+    const { entries: bufEntries, reset: bufReset, cursor: bufCursor } = buf
+    if (bufEntries.length === 0 && !bufReset && bufCursor === null) return
+
+    buf.entries = []
+    buf.reset = false
+    buf.cursor = null
+
+    if (bufCursor !== null) {
+      setFloor(previous => bufCursor < previous ? 0 : previous)
+    }
+    if (bufEntries.length > 0 || bufReset) {
+      setEntries(previous => mergeLogEntries(previous, bufEntries, bufReset))
+    }
+  }
+
   useEffect(() => {
     setLevel(loadLogLevel(instance))
     setDescending(loadLogDescending(instance))
@@ -247,21 +316,61 @@ export function LogPanel({active = true}: {active?: boolean}) {
   useEffect(() => {
     if (connection !== 'ready') return
     let active = true
+    const buf = logBuffer.current
+    if (buf.rafId !== null) {
+      safeCancelRaf(buf.rafId)
+      buf.rafId = null
+    }
+    buf.entries = []
+    buf.reset = false
+    buf.cursor = null
+
     setFloor(0)
     setEntries([])
     void api.request('logs.get', {instance}).then(value => {
       if (active) setEntries(previous => mergeLogEntries(previous, value.entries))
     }).catch(error => notify(error.message, true))
-    return () => { active = false }
+    return () => {
+      active = false
+      if (buf.rafId !== null) {
+        safeCancelRaf(buf.rafId)
+        buf.rafId = null
+      }
+      buf.entries = []
+      buf.reset = false
+      buf.cursor = null
+    }
   }, [connection, instance, notify])
 
-  useEffect(() => api.onEvent(event => {
-    if (event.topic !== 'logs') return
-    const data = event.data as LogsData
-    if (data.instance !== instance) return
-    setFloor(previous => data.cursor < previous ? 0 : previous)
-    setEntries(previous => mergeLogEntries(previous, data.entries, data.reset))
-  }), [instance])
+  useEffect(() => {
+    const unsubscribe = api.onEvent(event => {
+      if (event.topic !== 'logs') return
+      const data = event.data as LogsData
+      if (data.instance !== instance) return
+
+      const buf = logBuffer.current
+      queueLogEvent(buf, data)
+
+      if (buf.rafId === null) {
+        buf.rafId = safeRaf(() => {
+          buf.rafId = null
+          flushBuffer.current()
+        })
+      }
+    })
+
+    return () => {
+      unsubscribe()
+      const buf = logBuffer.current
+      if (buf.rafId !== null) {
+        safeCancelRaf(buf.rafId)
+        buf.rafId = null
+      }
+      buf.entries = []
+      buf.reset = false
+      buf.cursor = null
+    }
+  }, [instance])
 
   useLayoutEffect(() => {
     freshFrom.current = entries.at(-1)?.id ?? null
@@ -292,6 +401,7 @@ export function LogPanel({active = true}: {active?: boolean}) {
   const ordered = descending ? [...visible].reverse().slice(0, LOG_ENTRY_LIMIT) : visible.slice(-LOG_ENTRY_LIMIT)
 
   function download() {
+    flushBuffer.current()
     const url = URL.createObjectURL(new Blob([visible.map(entry => entry.text).join('\n')], {type: 'text/plain;charset=utf-8'}))
     const link = document.createElement('a')
     link.href = url
@@ -319,7 +429,18 @@ export function LogPanel({active = true}: {active?: boolean}) {
         >
           {viewMode === 'cards' ? <LayoutGrid size={15} /> : <Terminal size={15} />}
         </button>
-        <button className="icon-button" onClick={() => setFloor(entries.at(-1)?.id ?? 0)} aria-label={ui('log.clearView')}>
+        <button
+          className="icon-button"
+          onClick={() => {
+            const lastId = Math.max(
+              entries.at(-1)?.id ?? 0,
+              logBuffer.current.entries.at(-1)?.id ?? 0
+            )
+            flushBuffer.current()
+            setFloor(lastId)
+          }}
+          aria-label={ui('log.clearView')}
+        >
           <Trash2 size={15} />
         </button>
         <button className="text-button" onClick={download} aria-label={ui('log.export')}>
@@ -341,7 +462,7 @@ export function LogPanel({active = true}: {active?: boolean}) {
       <div className={`log-content ${viewMode === 'cards' ? 'log-cards-mode' : ''}`} ref={scroll} aria-label={ui('log.content')}>
         {visible.length ? (
           viewMode === 'cards' ? (
-            <LogCardView entries={ordered} search={search} />
+            <LogCardView entries={ordered} search={search} scrollRef={scroll} />
           ) : (
             ordered.map((entry, index) => {
               const prev = ordered[index - 1]

@@ -804,3 +804,47 @@ LDL 卡片式日志系统已全面完成对 AzurPilot 全量 6 套主题（Class
   * **消除界面呈现延迟**：在排查严重故障时，运维人员需要第一眼看到完整调用栈与自愈建议，任何 200ms~300ms 的过度动画都是对排障效率的消耗。
   * **消除 CPU / GPU 冗余开销**：7×24 小时常驻运行中，后台多开实例的 WebUI 界面若持续计算 CSS 动效插值，会产生不必要的资源占用，违背低功耗自动化框架的设计初衷。
 
+---
+
+## 10. 高性能前端渲染与流式批处理架构 (High-Performance Virtualization & Stream Pipeline)
+
+在高频日志推送或密集复杂卡片渲染场景下（如包含 ASCII 视锥图、代价热力图、大型数据表格与异常调用栈时），单纯的全量 DOM 渲染会导致数万个节点驻留内存，引发严重的重排（Reflow）阻塞与掉帧卡顿。为保证 60 FPS 的丝滑交互体验与低 CPU 占用，前端实现了全链路的高性能渲染架构：
+
+### 10.1 视口虚拟化窗口裁剪与动态测高 (Virtual Windowing & Slicing)
+- **零开销自适应阈值 (`VIRTUAL_THRESHOLD = 40`)**：
+  * 当卡片总数 $\le 40$ 时，直接执行纯扁平渲染，完全避免虚拟窗口计算、滚动监听和占位计算的开销。
+  * 当卡片总数 $> 40$ 时，自动无缝切换为虚拟视口裁剪模式。
+- **动态预估与测量高度表 (Dynamic Height Cache)**：
+  * 针对不同类型的卡片（如单行卡片、海图、透视梯形、热力图、表格、Traceback、LLM 报告等）设置不同的初始估算高度（42px ~ 420px），结合数据行数动态微调。
+  * 真实渲染时通过组件回调动态更新实测高度，实现高度缓存自愈。
+- **$O(\log N)$ 二分查找与过采样缓冲 (`OVERSCAN_BUFFER_PX = 800`)**：
+  * 借助前缀高度累加表（Prefix Sum Offset），滚动时通过二分查找（`findVisibleRange`）在毫秒级时间内定位视口当前可见范围。
+  * 上下各提供 800px 的过采样安全缓冲区，消除快速滚屏时的白屏走样感。
+- **无感上下占位与平滑跟随 (Spacer & Auto-Follow Integration)**：
+  * 容器首尾使用 `paddingTop` 与 `paddingBottom` 模拟全量列表高度，保持滚动条轨道比例与物理真实感。
+  * 与 `LogPanel` 的 RAF 平滑跟随算法完美协同，即使在视口虚拟化动态剔除/挂载 DOM 节点的情况下，也能精准锚定最底端最新卡片，无任何跳动或抖动。
+
+### 10.2 流式日志 RAF 微批处理缓冲队列 (RequestAnimationFrame Micro-batching)
+- **高频推流冲突**：WebSocket 可能在 1 秒内触发 20~50 次日志事件推送。若每次推送都直接调用 `setEntries` 触发 React 调度与 Reconciliation，会形成渲染风暴。
+- **微批队列设计 (`queueLogEvent` & `flushBuffer`)**：
+  * 所有入站的 `logs` 事件先推入 `logBuffer` 缓冲队列中累积。
+  * 利用 `requestAnimationFrame`（附带环境降级垫片 `safeRaf`）将渲染提交频率严格节流并与浏览器刷新率（~16.6ms / 60 FPS）硬同步。
+  * 在导出日志（Download）或清空日志（Clear）时，主动执行同步 `flushBuffer`，防止流式缓冲区滞留数据丢失。
+
+### 10.3 增量尾部聚合与不可变对象复用 (Incremental Tail Aggregation)
+- **历史前缀复用 (`REUSE_TAIL_MARGIN = 4`)**：
+  * 当新日志追加到末尾时，避免对前 $N$ 条历史日志做全量正则状态机重新扫描。
+  * `aggregateEntriesToCards` 会比对已有日志切片引用，仅回溯未闭合的末尾 4 条记录进行增量解析，并将新卡片安全追加到历史不可变卡片列表末尾。
+  * 该机制将流式追加卡片的时间复杂度从 $O(N)$ 降低为 $O(1)$，并最大程度维持卡片对象引用的唯一性（Referential Equality）。
+
+### 10.4 词法分词 LRU 高速缓存 (Lexical Token Cache)
+- **模块级预编译正则与分词池 (`TOKEN_CACHE_MAX = 2000`)**：
+  * 静态预编译多合一 Token 正则表达式（`TOKEN_REGEX`），杜绝运行时重复动态编译正则。
+  * 高频字符串分词结果缓存在模块级 `tokenCache`（LRU 策略，最大 2000 项），同一行或相似特征的日志直接复用预构建的 React 节点，减少垃圾回收（GC）频率。
+
+### 10.5 精细化组件记忆化 (Component Memoization)
+- **全量卡片封装 `React.memo`**：
+  * 12 种不同卡片组件（`SingleLogLineCard`、`MapGridCard`、`PerspectiveCard`、`CostGridCard`、`MatrixGridCard`、`PropertySheetCard`、`DataTableCard`、`ErrorContextCard`、`TracebackCard`、`LlmReportCard`、`SystemBannerCard`、`StageHeaderCard`）均用 `memo` 严密包裹。
+  * 自定义 Props 浅比对函数（`prev.card === next.card && prev.search === next.search`），确保当日志微批刷新追加新卡片时，视口内所有已有历史卡片节点跳过重渲染，DOM 更新操作量降至最低。
+
+

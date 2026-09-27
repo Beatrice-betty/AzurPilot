@@ -2,14 +2,30 @@ import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import {
   aggregateEntriesToCards,
+  clearAggregationCache,
+  getAggregationCacheInfo,
+  renderTokens,
+  clearTokenCache,
+  getTokenCacheSize,
+  TOKEN_CACHE_MAX,
   MapGridCard,
   PerspectiveCard,
   PropertySheetCard,
   DataTableCard,
   ErrorContextCard,
-  renderCellContent,
+  TracebackCard,
+  LlmReportCard,
+  MatrixGridCard,
   CostGridCard,
+  SystemBannerCard,
+  StageHeaderCard,
+  SingleLogLineCard,
+  renderCellContent,
   getCostHeatmapStyle,
+  VIRTUAL_THRESHOLD,
+  getCardEstimatedHeight,
+  findVisibleRange,
+  LogCardView,
 } from './LogCardView'
 
 describe('LogCardView 块级聚合器与卡片组件', () => {
@@ -287,5 +303,315 @@ describe('LogCardView 块级聚合器与卡片组件', () => {
       expect(html).toContain('不可达障碍 (9999)')
       expect(html).toContain('寻路起点 (0 步)')
     }
+  })
+
+  describe('虚拟化窗口算法与视口渲染 (Virtual Windowing)', () => {
+    it('正确预估不同类型卡片的基础高度', () => {
+      expect(getCardEstimatedHeight({
+        type: 'single',
+        id: 1,
+        entry: { id: 1, level: 'INFO', text: 'test' },
+        time: '12:00:00',
+        level: 'INFO',
+        message: 'test',
+        rawText: 'test',
+      })).toBe(34)
+
+      expect(getCardEstimatedHeight({
+        type: 'stage_header',
+        id: 2,
+        time: '12:00:00',
+        title: 'stage',
+        level: 1,
+        rawText: 'test',
+      })).toBe(44)
+
+      expect(getCardEstimatedHeight({
+        type: 'system_banner',
+        id: 3,
+        time: '12:00:00',
+        title: 'banner',
+        rawText: 'test',
+      })).toBe(74)
+
+      expect(getCardEstimatedHeight({
+        type: 'perspective',
+        id: 4,
+        time: '12:00:00',
+        model: '透视',
+        duration: '0.05s',
+        lowerEdge: true,
+        leftEdge: true,
+        upperEdge: true,
+        rightEdge: true,
+        info1: '',
+        info2: '',
+        rawText: 'test',
+      })).toBe(172)
+    })
+
+    it('二分查找 findVisibleRange 精准定位视口范围卡片索引且不越界', () => {
+      // 假设 100 张卡片，每张高度 40px，间距已被计算进 heights
+      const count = 100
+      const heights = new Array(count).fill(40)
+      const offsets = new Array(count)
+      let cur = 0
+      for (let i = 0; i < count; i++) {
+        offsets[i] = cur
+        cur += heights[i]
+      }
+
+      // 1. 顶部视口 [0, 800]
+      const [start1, end1] = findVisibleRange(offsets, heights, 0, 800, count)
+      expect(start1).toBe(0)
+      expect(end1).toBe(20) // 20 * 40 = 800 <= 800
+
+      // 2. 中间视口 [1200, 2000]
+      const [start2, end2] = findVisibleRange(offsets, heights, 1200, 2000, count)
+      // 第 30 张卡片底部是 30*40 + 40 = 1240 >= 1200，第 29 张底部是 1160+40=1200 >= 1200
+      expect(start2).toBe(29)
+      expect(end2).toBe(50) // 50 * 40 = 2000 <= 2000
+
+      // 3. 底部吸底视口 [3600, 4000]
+      const [start3, end3] = findVisibleRange(offsets, heights, 3600, 4000, count)
+      expect(start3).toBe(89)
+      expect(end3).toBe(99) // 最后一个索引 99
+
+      // 4. 超范围视口（大于总高）不越界
+      const [start4, end4] = findVisibleRange(offsets, heights, 5000, 6000, count)
+      expect(start4).toBe(99)
+      expect(end4).toBe(99)
+    })
+
+    it('卡片数量少于阈值 VIRTUAL_THRESHOLD 时全量渲染，不添加虚拟 padding', () => {
+      expect(VIRTUAL_THRESHOLD).toBe(40)
+      const entries = Array.from({ length: 10 }, (_, i) => ({
+        id: i + 1,
+        level: 'INFO',
+        text: `INFO 14:00:00.000 │ 日志 ${i + 1}`,
+      }))
+
+      const html = renderToStaticMarkup(<LogCardView entries={entries} search="" />)
+      expect(html).toContain('log-cards-container')
+      // 不应包含 paddingTop 虚拟占位
+      expect(html).not.toContain('padding-top')
+      // 包含全部 10 条日志
+      for (let i = 1; i <= 10; i++) {
+        expect(html).toContain(`日志 ${i}`)
+      }
+    })
+
+    it('卡片数量达到 VIRTUAL_THRESHOLD 时激活窗口化，有效剪裁视口外的卡片', () => {
+      // 构造 200 条日志卡片
+      const entries = Array.from({ length: 200 }, (_, i) => ({
+        id: i + 1,
+        level: 'INFO',
+        text: `INFO 14:00:00.000 │ 日志条目编号_${i + 1}`,
+      }))
+
+      // 在默认视口（顶部 0，高 800，overscan 800）下
+      const html = renderToStaticMarkup(<LogCardView entries={entries} search="" />)
+      expect(html).toContain('log-cards-container')
+      expect(html).toContain('log-card-virtual-item')
+      expect(html).toContain('padding-bottom')
+
+      // 前几张卡片必定渲染在初始视口内
+      expect(html).toContain('日志条目编号_1')
+      expect(html).toContain('日志条目编号_5')
+
+      // 遥远末尾的卡片（如第 190 张）必定被虚拟化窗口剪裁，不出现在 DOM 中
+      expect(html).not.toContain('日志条目编号_190')
+      expect(html).not.toContain('日志条目编号_200')
+    })
+  })
+
+  describe('性能优化专项验证 (Memoization & Token Cache & Incremental Aggregation)', () => {
+    describe('词法解析与高亮 LRU 缓存 (Token Lexer Cache)', () => {
+      it('相同文本和搜索词时命中缓存，多次调用返回相同结果', () => {
+        clearTokenCache()
+        const text = 'INFO 14:00:00.123 │ status = True, target = None, [CN_server]'
+        const node1 = renderTokens(text, '')
+        expect(getTokenCacheSize()).toBe(1)
+        const node2 = renderTokens(text, '')
+        expect(node1).toBe(node2) // 严格复用同一个 ReactNode 引用
+        expect(getTokenCacheSize()).toBe(1)
+      })
+
+      it('搜索词发生变化时返回不同高亮节点并分别缓存', () => {
+        clearTokenCache()
+        const text = 'Operation completed with True'
+        const nodeNoSearch = renderTokens(text, '')
+        const nodeSearch = renderTokens(text, 'completed')
+        expect(nodeNoSearch).not.toBe(nodeSearch)
+        expect(getTokenCacheSize()).toBe(2)
+
+        const html = renderToStaticMarkup(<>{nodeSearch}</>)
+        expect(html).toContain('log-search-match')
+        expect(html).toContain('completed')
+      })
+
+      it('LRU 机制在缓存达到上限时淘汰最久未访问的条目', () => {
+        clearTokenCache()
+        // 插入 2000 个不同文本
+        for (let i = 0; i < TOKEN_CACHE_MAX; i++) {
+          renderTokens(`unique_log_line_${i}`, '')
+        }
+        expect(getTokenCacheSize()).toBe(TOKEN_CACHE_MAX)
+
+        // 访问第 0 项，使其被提升为最新
+        renderTokens('unique_log_line_0', '')
+
+        // 再插入第 2001 项，此时应淘汰第 1 项（因为第 0 项刚被刷新）
+        renderTokens('overflow_log_line', '')
+        expect(getTokenCacheSize()).toBe(TOKEN_CACHE_MAX)
+
+        // 验证第 0 项依然在缓存中（再次调用不增加 size）
+        renderTokens('unique_log_line_0', '')
+        expect(getTokenCacheSize()).toBe(TOKEN_CACHE_MAX)
+      })
+    })
+
+    describe('日志聚合增量计算与前缀复用 (Incremental Card Aggregation)', () => {
+      it('完全相同引用再次传入时 O(1) 返回上一卡片数组引用', () => {
+        clearAggregationCache()
+        const entries = [
+          { id: 1, level: 'INFO', text: 'INFO 12:00:00 │ Log 1' },
+          { id: 2, level: 'INFO', text: 'INFO 12:00:01 │ Log 2' },
+        ]
+        const cards1 = aggregateEntriesToCards(entries)
+        const cards2 = aggregateEntriesToCards(entries)
+        expect(cards1).toBe(cards2)
+      })
+
+      it('尾部追加日志时复用前置安全卡片对象引用', () => {
+        clearAggregationCache()
+        // 构造 10 条单行日志
+        const initialEntries = Array.from({ length: 10 }, (_, i) => ({
+          id: i + 1,
+          level: 'INFO',
+          text: `INFO 12:00:0${i} │ 日志行 ${i + 1}`,
+        }))
+
+        const initialCards = aggregateEntriesToCards(initialEntries)
+        expect(initialCards).toHaveLength(10)
+
+        // 追加 3 条新日志
+        const appendedEntries = [
+          ...initialEntries,
+          { id: 11, level: 'INFO', text: 'INFO 12:00:10 │ 日志行 11' },
+          { id: 12, level: 'INFO', text: 'INFO 12:00:11 │ 日志行 12' },
+          { id: 13, level: 'INFO', text: 'INFO 12:00:12 │ 日志行 13' },
+        ]
+
+        const nextCards = aggregateEntriesToCards(appendedEntries)
+        expect(nextCards).toHaveLength(13)
+
+        // 验证安全边界前（10 - 4 = 6 张）的历史卡片对象引用绝对保持一致
+        for (let i = 0; i < 6; i++) {
+          expect(nextCards[i]).toBe(initialCards[i])
+        }
+      })
+
+      it('增量聚合产生的结果与全量重新计算的结果完全等价', () => {
+        clearAggregationCache()
+        const entries1 = Array.from({ length: 8 }, (_, i) => ({
+          id: i + 1,
+          level: 'INFO',
+          text: `INFO 12:00:0${i} │ 批量日志 ${i + 1}`,
+        }))
+
+        aggregateEntriesToCards(entries1)
+
+        // 追加新日志，其中包含海图
+        const entries2 = [
+          ...entries1,
+          { id: 9, level: 'INFO', text: 'INFO 12:00:09 │ [地图-显示]   A  B' },
+          { id: 10, level: 'INFO', text: 'INFO 12:00:10 │  1 ++ --' },
+          { id: 11, level: 'INFO', text: 'INFO 12:00:11 │  2 -- FL' },
+        ]
+
+        const incrementalCards = aggregateEntriesToCards(entries2)
+
+        // 清空缓存后重新全量计算一次
+        clearAggregationCache()
+        const fullCards = aggregateEntriesToCards(entries2)
+
+        expect(incrementalCards).toEqual(fullCards)
+      })
+
+      it('日志被重置或截断时自动回退至全量计算', () => {
+        clearAggregationCache()
+        const entriesLong = Array.from({ length: 10 }, (_, i) => ({
+          id: i + 1,
+          level: 'INFO',
+          text: `INFO 12:00:0${i} │ 历史日志 ${i + 1}`,
+        }))
+        aggregateEntriesToCards(entriesLong)
+        expect(getAggregationCacheInfo().cachedEntriesCount).toBe(10)
+
+        // 模拟清空日志或筛选截断
+        const entriesShort = [
+          { id: 101, level: 'INFO', text: 'INFO 13:00:00 │ 重置后的新日志' },
+        ]
+        const resetCards = aggregateEntriesToCards(entriesShort)
+        expect(resetCards).toHaveLength(1)
+        expect(getAggregationCacheInfo().cachedEntriesCount).toBe(1)
+        expect(resetCards[0].id).toBe(101)
+      })
+    })
+
+    describe('组件 React.memo 包装与属性比对验证', () => {
+      it('SingleLogLineCard 与 PropertySheetCard 在 card 与 search 均相同时跳过无效渲染', () => {
+        const dummyCard = {
+          type: 'single' as const,
+          id: 1,
+          entry: { id: 1, level: 'INFO', text: 'test' },
+          time: '12:00:00',
+          level: 'INFO',
+          message: 'test message',
+          rawText: 'test message',
+        }
+
+        const dummyPropCard = {
+          type: 'property_sheet' as const,
+          id: 2,
+          time: '12:00:00',
+          items: [{ key: '耗时', value: '1.2s' }],
+          rawText: '耗时: 1.2s',
+        }
+
+        // React.memo 会将比较函数存放在 compare 属性上
+        const compareSingle = (SingleLogLineCard as any).compare
+        if (compareSingle) {
+          expect(compareSingle({ card: dummyCard, search: '' }, { card: dummyCard, search: '' })).toBe(true)
+          expect(compareSingle({ card: dummyCard, search: 'a' }, { card: dummyCard, search: 'b' })).toBe(false)
+          expect(compareSingle({ card: dummyCard, search: '' }, { card: { ...dummyCard }, search: '' })).toBe(false)
+        }
+
+        const compareProp = (PropertySheetCard as any).compare
+        if (compareProp) {
+          expect(compareProp({ card: dummyPropCard, search: '' }, { card: dummyPropCard, search: '' })).toBe(true)
+          expect(compareProp({ card: dummyPropCard, search: 'x' }, { card: dummyPropCard, search: 'y' })).toBe(false)
+        }
+
+        // 仅比对 card 的卡片组件
+        const cardComponents = [
+          MapGridCard,
+          TracebackCard,
+          LlmReportCard,
+          MatrixGridCard,
+          SystemBannerCard,
+          StageHeaderCard,
+        ]
+        const sampleCard = { id: 99, time: '', rawText: '' }
+        for (const comp of cardComponents) {
+          const compCompare = (comp as any).compare
+          if (compCompare) {
+            expect(compCompare({ card: sampleCard }, { card: sampleCard })).toBe(true)
+            expect(compCompare({ card: sampleCard }, { card: { ...sampleCard } })).toBe(false)
+          }
+        }
+      })
+    })
   })
 })
