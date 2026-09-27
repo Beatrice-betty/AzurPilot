@@ -684,8 +684,7 @@ export function MapGridCard({ card }: { card: Extract<CardItem, { type: 'map_gri
 
 // 2. 海域透视与边缘线识别卡片
 export function PerspectiveCard({ card }: { card: Extract<CardItem, { type: 'perspective' }> }) {
-  const missingCount = [card.leftEdge, card.upperEdge, card.rightEdge, card.lowerEdge].filter(e => !e).length
-  const allActive = missingCount === 0
+  const allActive = card.leftEdge && card.upperEdge && card.rightEdge && card.lowerEdge
 
   return (
     <div className={`log-card perspective-card ${allActive ? 'perspective-complete' : 'perspective-has-missing'} motion-enter`}>
@@ -694,9 +693,6 @@ export function PerspectiveCard({ card }: { card: Extract<CardItem, { type: 'per
           <Compass size={16} className={allActive ? 'text-secondary' : 'text-warning'} />
           <span className="title-bold">海域{card.model}与边界线拓扑</span>
           <span className="badge-pill duration">{card.duration}</span>
-          <span className={`badge-pill ${allActive ? 'edge-status-full' : 'edge-status-missing'}`}>
-            {allActive ? '4 边完整闭合' : `缺失 ${missingCount} 边`}
-          </span>
           <span className="card-time">{card.time}</span>
         </div>
         <div className="card-actions">

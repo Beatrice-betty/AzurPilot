@@ -180,8 +180,6 @@
 .edge-stroke {stroke-linecap: round; transition: stroke 0.2s}
 .edge-stroke.edge-active {stroke: #10b981; stroke-width: 3.5}
 .edge-stroke.edge-missing {stroke: #ef4444; stroke-width: 2.5; stroke-dasharray: 5 4}
-.edge-status-full {background: #10b98120; color: #10b981; font-weight: 600}
-.edge-status-missing {background: #ef444420; color: #ef4444; font-weight: 600}
 .perspective-metrics {flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 5px; font-size: 11px}
 .metric-row {display: flex; gap: 8px}
 .metric-label {color: var(--muted); min-width: 65px}
