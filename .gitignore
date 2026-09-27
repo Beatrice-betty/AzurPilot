@@ -38,6 +38,7 @@ docs/*
 !docs/modules/
 .claude
 .dsh
+.agents
 # Created by .ignore support plugin (hsz.mobi)
 
 ### JetBrains template
