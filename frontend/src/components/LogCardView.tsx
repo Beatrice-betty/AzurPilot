@@ -13,6 +13,7 @@ import {
   Terminal,
 } from 'lucide-react'
 import type { LogEntry } from '../api/types'
+import { MarkdownView } from './MarkdownView'
 
 // 提取日志消息正文（剥离 LEVEL HH:MM:SS.mmm │ 前缀）
 export function extractLogMessage(raw: string): { level: string; time: string; message: string } {
@@ -540,12 +541,27 @@ export function aggregateEntriesToCards(entries: LogEntry[]): CardItem[] {
 
     // 11. LLM 智能分析报告
     if (raw.includes('[LLM 分析报告') || raw.includes('[LLM] LLM 错误分析')) {
+      const lines = raw.split('\n')
+      const filtered: string[] = []
+      let model = 'gpt-4o-mini'
+      for (const line of lines) {
+        const trimmed = line.trim()
+        const modelMatch = trimmed.match(/由\s*([a-zA-Z0-9_.-]+)\s*提供/)
+        if (modelMatch) {
+          model = modelMatch[1]
+        }
+        if (/^[A-Z]{4,8}\s+.*?[│]\s*\[LLM\]\s*$/.test(trimmed) || trimmed === '[LLM]') continue
+        if (trimmed.startsWith('[LLM 分析报告') || trimmed.startsWith('[LLM] 分析结束')) continue
+        filtered.push(line)
+      }
+      const content = filtered.join('\n').trim()
+
       cards.push({
         type: 'llm_report',
         id: entry.id,
         time,
-        model: 'gpt-4o-mini',
-        content: raw,
+        model,
+        content,
         rawText: raw,
       })
       index++
@@ -1027,7 +1043,6 @@ export function TracebackViewer({ rawText }: { rawText: string }) {
           <div key={idx} className="traceback-frame-card">
             <div className="traceback-frame-header">
               <div className="frame-header-left">
-                <span className="frame-index-badge">#{idx + 1}</span>
                 <span className="frame-filename">{frame.fileName}</span>
                 <span className="frame-line-badge">:{frame.line}</span>
                 <span className="frame-func">in <span className="func-name">{frame.func}()</span></span>
@@ -1158,7 +1173,7 @@ export function TracebackCard({ card }: { card: Extract<CardItem, { type: 'trace
   )
 }
 
-// 7. LLM 智能分析报告卡片
+// 7. LLM 智能分析报告卡片 (MarkdownView 格式化渲染)
 export function LlmReportCard({ card }: { card: Extract<CardItem, { type: 'llm_report' }> }) {
   return (
     <div className="log-card llm-card">
@@ -1170,11 +1185,11 @@ export function LlmReportCard({ card }: { card: Extract<CardItem, { type: 'llm_r
           <span className="card-time">{card.time}</span>
         </div>
         <div className="card-actions">
-          <CopyButton text={card.rawText} />
+          <CopyButton text={card.content} label="复制报告" />
         </div>
       </div>
       <div className="card-body">
-        <pre className="llm-markdown-text">{card.content}</pre>
+        <MarkdownView content={card.content} className="llm-markdown-view" />
       </div>
     </div>
   )
