@@ -8,6 +8,8 @@ import {
   DataTableCard,
   ErrorContextCard,
   renderCellContent,
+  CostGridCard,
+  getCostHeatmapStyle,
 } from './LogCardView'
 
 describe('LogCardView 块级聚合器与卡片组件', () => {
@@ -220,5 +222,42 @@ describe('LogCardView 块级聚合器与卡片组件', () => {
 
     const boHtml = renderToStaticMarkup(<>{renderCellContent('BO')}</>)
     expect(boHtml).toContain('关卡旗舰 Boss')
+  })
+
+  it('正确渲染寻路移动代价热力图 (CostGridCard)：9999为纯黑色底，0为绿色起点，其余按代价渐变', () => {
+    // 单元样式断言
+    const wallStyle = getCostHeatmapStyle(9999, 8)
+    expect(wallStyle.backgroundColor).toBe('#000000')
+
+    const originStyle = getCostHeatmapStyle(0, 8)
+    expect(originStyle.backgroundColor).toBe('#10b981')
+    expect(originStyle.fontWeight).toBe(700)
+
+    const minStyle = getCostHeatmapStyle(1, 8)
+    expect(minStyle.backgroundColor).toBe('rgb(2, 132, 199)')
+
+    const maxStyle = getCostHeatmapStyle(8, 8)
+    expect(maxStyle.backgroundColor).toBe('rgb(225, 29, 72)')
+
+    // 聚合与卡片渲染断言
+    const entries = [
+      { id: 1, level: 'INFO', text: 'INFO 14:24:30.100 │       A    B    C' },
+      { id: 2, level: 'INFO', text: 'INFO 14:24:30.101 │  1 9999    2    3' },
+      { id: 3, level: 'INFO', text: 'INFO 14:24:30.102 │  2    1    0    1' },
+    ]
+    const cards = aggregateEntriesToCards(entries)
+    expect(cards).toHaveLength(1)
+    expect(cards[0].type).toBe('cost_grid')
+
+    if (cards[0].type === 'cost_grid') {
+      const html = renderToStaticMarkup(<CostGridCard card={cards[0]} />)
+      expect(html).toContain('寻路移动代价热力图')
+      expect(html).toContain('cost-wall')
+      expect(html).toContain('background-color:#000000')
+      expect(html).toContain('cost-origin')
+      expect(html).toContain('background-color:#10b981')
+      expect(html).toContain('不可达障碍 (9999)')
+      expect(html).toContain('寻路起点 (0 步)')
+    }
   })
 })

@@ -1416,9 +1416,75 @@ export function MatrixGridCard({ card }: { card: Extract<CardItem, { type: 'matr
   )
 }
 
+function interpolateColor(
+  c1: [number, number, number],
+  c2: [number, number, number],
+  factor: number
+): string {
+  const r = Math.round(c1[0] + factor * (c2[0] - c1[0]))
+  const g = Math.round(c1[1] + factor * (c2[1] - c1[1]))
+  const b = Math.round(c1[2] + factor * (c2[2] - c1[2]))
+  return `rgb(${r}, ${g}, ${b})`
+}
+
+const HEATMAP_STOPS: [number, [number, number, number]][] = [
+  [0.0, [2, 132, 199]],   // #0284c7 Sky Blue (近距代价 1)
+  [0.25, [37, 99, 235]],  // #2563eb Blue
+  [0.5, [124, 58, 237]],  // #7c3aed Purple
+  [0.75, [192, 38, 211]], // #c026d3 Fuchsia
+  [1.0, [225, 29, 72]],   // #e11d48 Rose (远距最高代价)
+]
+
+export function getCostHeatmapStyle(num: number, maxCost: number): React.CSSProperties {
+  if (num >= 9000) {
+    return {
+      backgroundColor: '#000000',
+      color: '#52525b',
+      fontSize: '10px',
+    }
+  }
+  if (num === 0) {
+    return {
+      backgroundColor: '#10b981',
+      color: '#ffffff',
+      fontWeight: 700,
+    }
+  }
+  const t = Math.max(0, Math.min(1, maxCost > 1 ? (num - 1) / (maxCost - 1) : 0))
+  for (let i = 0; i < HEATMAP_STOPS.length - 1; i++) {
+    const [t1, c1] = HEATMAP_STOPS[i]
+    const [t2, c2] = HEATMAP_STOPS[i + 1]
+    if (t >= t1 && t <= t2) {
+      const factor = (t - t1) / (t2 - t1)
+      return {
+        backgroundColor: interpolateColor(c1, c2, factor),
+        color: '#ffffff',
+      }
+    }
+  }
+  return {
+    backgroundColor: '#0284c7',
+    color: '#ffffff',
+  }
+}
+
 // 9. 寻路代价网格卡片 (Cost Grid)
 export function CostGridCard({ card }: { card: Extract<CardItem, { type: 'cost_grid' }> }) {
   const [open, setOpen] = useState(true)
+  const shapeStr = `${card.cols.length}×${card.rows.length}`
+
+  const maxCost = useMemo(() => {
+    let max = 1
+    for (const row of card.rows) {
+      for (const val of row.values) {
+        const n = parseInt(val, 10)
+        if (!isNaN(n) && n < 9000 && n > max) {
+          max = n
+        }
+      }
+    }
+    return max
+  }, [card.rows])
 
   return (
     <div className="log-card cost-card">
@@ -1426,10 +1492,11 @@ export function CostGridCard({ card }: { card: Extract<CardItem, { type: 'cost_g
         <div className="card-title">
           <Compass size={15} className="text-accent" />
           <span className="title-bold">寻路移动代价热力图 (Cost Map)</span>
+          <span className="badge-shape">{shapeStr}</span>
           <span className="card-time">{card.time}</span>
         </div>
         <div className="card-actions">
-          <CopyButton text={card.rawText} />
+          <CopyButton text={card.rawText} label="复制矩阵" />
           <button className="card-btn-icon" aria-label="展开或折叠">
             {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </button>
@@ -1453,12 +1520,22 @@ export function CostGridCard({ card }: { card: Extract<CardItem, { type: 'cost_g
                     <td className="map-td-row">{row.rowNum}</td>
                     {row.values.map((val, cIdx) => {
                       const num = parseInt(val, 10)
-                      const isObstacle = num >= 9999
+                      const isObstacle = num >= 9000
                       const isOrigin = num === 0
-                      const cls = isOrigin ? 'cost-origin' : isObstacle ? 'cost-wall' : 'cost-path'
+                      const cellStyle = getCostHeatmapStyle(num, maxCost)
+                      const title = isObstacle
+                        ? '不可达障碍 (9999)'
+                        : isOrigin
+                        ? '寻路起点 (0 步)'
+                        : `移动代价: ${num} 步`
+
                       return (
                         <td key={cIdx} className="map-td-cell">
-                          <span className={`cost-cell ${cls}`} title={isObstacle ? '不可达障碍' : `步数代价: ${num}`}>
+                          <span
+                            className={`cost-cell ${isObstacle ? 'cost-wall' : isOrigin ? 'cost-origin' : 'cost-path'}`}
+                            style={cellStyle}
+                            title={title}
+                          >
                             {val}
                           </span>
                         </td>
@@ -1468,6 +1545,14 @@ export function CostGridCard({ card }: { card: Extract<CardItem, { type: 'cost_g
                 ))}
               </tbody>
             </table>
+          </div>
+
+          <div className="map-legend-bar">
+            <span className="legend-item"><span className="legend-dot dot-origin" /> 起点 (0)</span>
+            <span className="legend-item"><span className="legend-dot dot-cost-low" /> 近距/低代价</span>
+            <span className="legend-item"><span className="legend-dot dot-cost-mid" /> 中距代价</span>
+            <span className="legend-item"><span className="legend-dot dot-cost-high" /> 远距代价 (最高: {maxCost})</span>
+            <span className="legend-item"><span className="legend-dot dot-cost-wall" /> 不可达障碍 (9999)</span>
           </div>
         </div>
       )}
