@@ -233,12 +233,43 @@
 .tag-exc {background: #ef444420; color: #ef4444}
 .section-action {background: #22c55e10; padding: 6px 10px; border-radius: 6px; border: 1px dashed #22c55e40}
 .text-action {font-weight: 600; color: #15803d}
-.error-stack-wrapper {margin-top: 6px}
-.stack-toggle-btn {display: flex; align-items: center; gap: 4px; font-size: 10px; background: transparent; border: 0; color: var(--muted); cursor: pointer; padding: 0}
-.error-stack-content {font-size: 10px; padding: 8px; margin: 6px 0 0; background: var(--surface-muted); border-radius: 6px; border: 1px solid var(--border); line-height: 1.4}
-
-/* 异常堆栈卡片 */
-.traceback-pre {font-size: 10px; padding: 8px; margin: 0; line-height: 1.4; color: var(--text); background: var(--surface-muted); border-radius: 6px}
+/* 异常堆栈追踪 (Traceback Viewer: 结构化多帧展示与源码高亮) */
+.error-stack-wrapper {margin-top: 8px}
+.traceback-viewer {border-radius: 6px; border: 1px solid var(--border); background: var(--surface-muted); overflow: hidden}
+.traceback-toolbar {display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--surface); font-size: 11px; flex-wrap: wrap; gap: 6px}
+.traceback-tool-info {display: flex; align-items: center; gap: 6px}
+.traceback-tool-title {font-weight: 600; font-size: 11px; color: var(--text)}
+.traceback-tool-actions {display: flex; align-items: center; gap: 6px}
+.traceback-frames-list {display: flex; flex-direction: column; gap: 8px; padding: 8px}
+.traceback-frame-card {border: 1px solid var(--border); border-radius: 5px; background: var(--surface); overflow: hidden}
+.traceback-frame-header {display: flex; justify-content: space-between; align-items: center; padding: 5px 8px; background: var(--surface-muted); border-bottom: 1px solid var(--border); font-size: 11px; flex-wrap: wrap; gap: 4px}
+.frame-header-left {display: flex; align-items: center; gap: 6px}
+.frame-index-badge {font-size: 10px; font-weight: 700; color: var(--muted); padding: 0 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 3px; font-family: var(--theme-font-mono)}
+.frame-filename {font-weight: 700; color: var(--text); font-family: var(--theme-font-mono)}
+.frame-line-badge {font-weight: 600; color: #ef4444; font-family: var(--theme-font-mono)}
+.frame-func {color: var(--muted); font-size: 11px}
+.func-name {color: var(--accent); font-family: var(--theme-font-mono); font-weight: 600}
+.frame-filepath {color: var(--muted); font-size: 10px; font-family: var(--theme-font-mono); max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap}
+.traceback-code-block {padding: 4px 0; font-family: var(--theme-font-mono); font-size: 11px; line-height: 1.5; overflow-x: auto}
+.traceback-code-row {display: flex; align-items: center; padding: 1px 8px}
+.traceback-code-row.fault-row {background: #ef444415; border-left: 3px solid #ef4444; padding-left: 5px}
+.gutter-col {display: flex; align-items: center; justify-content: flex-end; gap: 4px; min-width: 48px; padding-right: 10px; color: var(--muted); font-size: 10px; user-select: none; flex-shrink: 0}
+.fault-marker {color: #ef4444; font-weight: 700; font-size: 9px}
+.gutter-spacer {width: 9px; display: inline-block}
+.line-num {font-family: var(--theme-font-mono)}
+.fault-row .line-num {color: #ef4444; font-weight: 700}
+.code-col {flex: 1; white-space: pre; color: var(--text)}
+.fault-row .code-col {font-weight: 600; color: #f87171}
+.traceback-locals-block {border-top: 1px solid var(--border); padding: 5px 8px; background: var(--surface-muted); font-size: 10px; font-family: var(--theme-font-mono)}
+.locals-title {font-size: 10px; font-weight: 600; color: var(--muted); margin-bottom: 3px}
+.locals-list {display: flex; flex-direction: column; gap: 2px}
+.local-var-row {display: flex; align-items: baseline; gap: 6px; font-size: 10px}
+.local-key {color: #0ea5e9; font-weight: 600}
+.local-eq {color: var(--muted)}
+.local-val {color: var(--text); word-break: break-all}
+.traceback-exc-banner {display: flex; align-items: center; gap: 8px; padding: 6px 10px; margin: 0 8px 8px; background: #ef444415; border: 1px solid #ef444435; border-radius: 5px; font-size: 11px; font-family: var(--theme-font-mono); font-weight: 600; color: #ef4444}
+.exc-banner-text {word-break: break-word}
+.traceback-raw-pre {margin: 0; padding: 8px 10px; font-size: 10px; font-family: var(--theme-font-mono); line-height: 1.4; color: var(--text); overflow-x: auto; white-space: pre}
 
 /* LLM 智能诊断卡片 */
 .llm-header {background: #8b5cf610}

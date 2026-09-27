@@ -154,28 +154,42 @@ describe('LogCardView 块级聚合器与卡片组件', () => {
     }
   })
 
-  it('正确将四段式 error_context 渲染为警示操作卡片', () => {
+  it('正确将四段式 error_context 渲染为警示操作卡片并完整直接渲染堆栈', () => {
     const rawError = [
-      '[错误] 游戏状态无法推进',
-      '原因：无操作超时。',
-      '影响：任务中断。',
-      '建议：检查模拟器。',
-      '异常：GameStuckError',
+      '[错误] 任务执行发生未处理异常（opsi_ash_beacon）',
+      '原因：程序抛出了 ScriptEnd。',
+      '影响：当前任务中断。',
+      '建议：查看完整堆栈。',
+      '异常：ScriptEnd: 计算模式红脸弹窗',
+      '╭ Traceback (most recent call last) ╮',
+      '│ E:\\AzurPilot\\alas.py:1019 in run │',
+      '│ ❱ 1019 │ self.__getattribute__(command)() │',
+      '│ ╭ locals ╮ │',
+      '│ │ command = \'opsi_ash_beacon\' │ │',
+      '│ ╰────────╯ │',
+      '╰───────────────────────────────────╯',
+      'ScriptEnd: 计算模式红脸弹窗',
     ].join('\n')
     const entries = [{ id: 1, level: 'ERROR', text: rawError }]
     const cards = aggregateEntriesToCards(entries)
     expect(cards).toHaveLength(1)
     expect(cards[0].type).toBe('error_context')
     if (cards[0].type === 'error_context') {
-      expect(cards[0].title).toBe('游戏状态无法推进')
-      expect(cards[0].reason).toBe('无操作超时。')
-      expect(cards[0].action).toBe('检查模拟器。')
+      expect(cards[0].title).toBe('任务执行发生未处理异常（opsi_ash_beacon）')
+      expect(cards[0].reason).toBe('程序抛出了 ScriptEnd。')
+      expect(cards[0].action).toBe('查看完整堆栈。')
+      expect(cards[0].stackTrace).toContain('Traceback')
 
       const html = renderToStaticMarkup(<ErrorContextCard card={cards[0]} />)
       expect(html).toContain('error-card')
       expect(html).toContain('建议操作')
-      expect(html).toContain('检查模拟器。')
-      expect(html).toContain('复制错误现场')
+      expect(html).toContain('查看完整堆栈。')
+      expect(html).toContain('traceback-viewer')
+      expect(html).toContain('alas.py')
+      expect(html).toContain('1019')
+      expect(html).toContain('fault-row')
+      expect(html).toContain('opsi_ash_beacon')
+      expect(html).toContain('ScriptEnd: 计算模式红脸弹窗')
     }
   })
 })
