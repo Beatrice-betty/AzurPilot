@@ -1,16 +1,25 @@
 import { useState, useMemo, type ReactNode } from 'react'
 import {
   AlertCircle,
+  Anchor,
+  Ban,
   Check,
   ChevronDown,
   ChevronRight,
   Compass,
   Copy,
+  Crown,
+  HelpCircle,
   Layers,
   Map as MapIcon,
+  Package,
+  Ship,
+  Skull,
   Sparkles,
+  Swords,
   Table as TableIcon,
   Terminal,
+  Waves,
 } from 'lucide-react'
 import type { LogEntry } from '../api/types'
 import { MarkdownView } from './MarkdownView'
@@ -623,6 +632,106 @@ function getCellMeta(code: string): { label: string; cls: string } {
   return { label: `未知标记 (${code})`, cls: 'cell-default' }
 }
 
+export function renderCellContent(code: string): ReactNode {
+  // 1. 敌舰: 1M, 2C, 3E, 1L 等
+  if (/^[0-3][LMCET]/.test(code)) {
+    const star = code[0]
+    return (
+      <span className="cell-icon-wrap" title={`${star}★ 敌舰 (${code})`}>
+        <Swords size={13} className="cell-icon" />
+        {star !== '0' && <span className="cell-sub-star">{star}</span>}
+      </span>
+    )
+  }
+  if (code === 'SU') {
+    return (
+      <span className="cell-icon-wrap" title="塞壬精英敌人 (SU)">
+        <Skull size={13} className="cell-icon" />
+      </span>
+    )
+  }
+
+  // 2. Boss (BO)
+  if (code === 'BO') {
+    return (
+      <span className="cell-icon-wrap" title="关卡旗舰 Boss (BO)">
+        <Crown size={14} className="cell-icon" />
+      </span>
+    )
+  }
+
+  // 3. 旗舰与友军 (FL, Fl, ss, AL)
+  if (code === 'FL' || code === 'Fl') {
+    return (
+      <span className="cell-icon-wrap" title="主力舰队旗舰 (FL)">
+        <Ship size={13} className="cell-icon" />
+      </span>
+    )
+  }
+  if (code === 'ss') {
+    return (
+      <span className="cell-icon-wrap" title="潜艇部队 (ss)">
+        <Anchor size={13} className="cell-icon" />
+      </span>
+    )
+  }
+
+  // 4. 不可走/陆地 (++)
+  if (code === '++') {
+    return (
+      <span className="cell-icon-wrap" title="不可通航陆地/障碍 (++)">
+        <Ban size={12} className="cell-icon" />
+      </span>
+    )
+  }
+  if (code === 'Fc') {
+    return (
+      <span className="cell-icon-wrap" title="被塞壬捕获/移动受限 (Fc)">
+        <Ban size={12} className="cell-icon" />
+      </span>
+    )
+  }
+  if (code === 'FR') {
+    return (
+      <span className="cell-icon-wrap" title="机械要塞不可走 (FR)">
+        <Ban size={12} className="cell-icon" />
+      </span>
+    )
+  }
+
+  // 5. 海域航道 (--, ==)
+  if (code === '--' || code === '==') {
+    return (
+      <span className="cell-icon-wrap" title="海域/安全航道 (--)">
+        <Waves size={12} className="cell-icon" />
+      </span>
+    )
+  }
+
+  // 6. 物资与调查点 (MY, RE, AK, AM, EX, QU)
+  if (code === 'MY' || code === 'QU') {
+    return (
+      <span className="cell-icon-wrap" title="神秘调查点 (MY)">
+        <HelpCircle size={13} className="cell-icon" />
+      </span>
+    )
+  }
+  if (code === 'RE' || code === 'AM' || code === 'AK') {
+    return (
+      <span className="cell-icon-wrap" title="物资补给点 (RE)">
+        <Package size={13} className="cell-icon" />
+      </span>
+    )
+  }
+
+  // 7. 视野盲区 (..)
+  if (code === '..') {
+    return <span className="cell-blind-dots">··</span>
+  }
+
+  return <span>{code}</span>
+}
+
 // ==========================================
 // 专用卡片组件集 (Specialized Card Components)
 // ==========================================
@@ -673,7 +782,7 @@ export function MapGridCard({ card }: { card: Extract<CardItem, { type: 'map_gri
                             className={`map-badge ${meta.cls}`}
                             title={`[${card.cols[cIdx]}${row.rowNum}] ${meta.label}`}
                           >
-                            {cell}
+                            {renderCellContent(cell)}
                           </span>
                         </td>
                       )
@@ -685,12 +794,12 @@ export function MapGridCard({ card }: { card: Extract<CardItem, { type: 'map_gri
           </div>
 
           <div className="map-legend-bar">
-            <span className="legend-item"><span className="legend-dot dot-fleet" /> 旗舰 (FL)</span>
-            <span className="legend-item"><span className="legend-dot dot-boss" /> Boss (BO)</span>
-            <span className="legend-item"><span className="legend-dot dot-enemy" /> 敌舰 (1M/2C)</span>
-            <span className="legend-item"><span className="legend-dot dot-mystery" /> 物资 (MY)</span>
-            <span className="legend-item"><span className="legend-dot dot-land" /> 陆地 (++)</span>
-            <span className="legend-item"><span className="legend-dot dot-sea" /> 海洋 (--)</span>
+            <span className="legend-item"><Ship size={12} className="legend-icon text-fleet" /> 旗舰 (FL)</span>
+            <span className="legend-item"><Crown size={12} className="legend-icon text-boss" /> Boss (BO)</span>
+            <span className="legend-item"><Swords size={12} className="legend-icon text-enemy" /> 敌舰 (1M/2C)</span>
+            <span className="legend-item"><Package size={12} className="legend-icon text-mystery" /> 物资 (MY)</span>
+            <span className="legend-item"><Ban size={12} className="legend-icon text-impassable" /> 不可走 (++)</span>
+            <span className="legend-item"><Waves size={12} className="legend-icon text-sea" /> 海域 (--)</span>
           </div>
         </div>
       )}
@@ -1224,13 +1333,22 @@ export function MatrixGridCard({ card }: { card: Extract<CardItem, { type: 'matr
                     const meta = getCellMeta(cell)
                     return (
                       <span key={cIdx} className={`map-badge ${meta.cls}`} title={meta.label}>
-                        {cell}
+                        {renderCellContent(cell)}
                       </span>
                     )
                   })}
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className="map-legend-bar">
+            <span className="legend-item"><Ship size={12} className="legend-icon text-fleet" /> 旗舰 (FL)</span>
+            <span className="legend-item"><Crown size={12} className="legend-icon text-boss" /> Boss (BO)</span>
+            <span className="legend-item"><Swords size={12} className="legend-icon text-enemy" /> 敌舰 (1M/2C)</span>
+            <span className="legend-item"><Package size={12} className="legend-icon text-mystery" /> 物资 (MY)</span>
+            <span className="legend-item"><Ban size={12} className="legend-icon text-impassable" /> 不可走 (++)</span>
+            <span className="legend-item"><Waves size={12} className="legend-icon text-sea" /> 海域 (--)</span>
           </div>
         </div>
       )}

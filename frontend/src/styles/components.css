@@ -132,7 +132,10 @@
 .map-th-corner {width: 24px; color: var(--muted); text-align: right; padding-right: 6px}
 .map-td-row {color: var(--muted); text-align: right; padding-right: 6px; font-size: 10px; font-weight: 500}
 .map-td-cell {text-align: center; padding: 2px 3px}
-.map-badge {display: inline-block; min-width: 24px; padding: 1px 3px; border-radius: 3px; font-size: 11px; font-weight: 600; text-align: center; cursor: default}
+.map-badge {display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 26px; border-radius: 4px; font-size: 11px; font-weight: 600; text-align: center; cursor: default; user-select: none; box-sizing: border-box}
+.cell-icon-wrap {display: inline-flex; align-items: center; justify-content: center; position: relative}
+.cell-sub-star {font-size: 8px; font-weight: 800; margin-left: 1px; font-family: var(--theme-font-mono); line-height: 1}
+.cell-blind-dots {font-weight: 700; letter-spacing: 1px; font-size: 11px; opacity: 0.4}
 
 .cell-fleet-1 {background: #0284c7; color: #fff}
 .cell-fleet-2 {background: #0891b2; color: #fff}
@@ -141,43 +144,36 @@
 .cell-enemy {background: #dc2626; color: #fff}
 .cell-mystery {background: #059669; color: #fff}
 .cell-ammo {background: #ca8a04; color: #fff}
-.cell-land {background: #374151; color: #9ca3af}
-.cell-sea {background: transparent; color: #38bdf8; opacity: 0.8}
-.cell-cleared {background: transparent; color: #6b7280; opacity: 0.6}
-.cell-caught {background: #991b1b; color: #fecaca; border: 1px dashed #ef4444}
+.cell-land {background: #ef4444; color: #fff}
+.cell-sea {background: #0284c730; border: 1px solid #0284c760; color: #38bdf8}
+.cell-cleared {background: #0284c718; border: 1px solid #0284c740; color: #38bdf8; opacity: 0.7}
+.cell-caught {background: #b91c1c; color: #fff; border: 1px dashed #ef4444}
 .cell-akashi {background: #15803d; color: #dcfce7}
 .cell-resource {background: #16a34a; color: #fff}
 .cell-event {background: #eab308; color: #000}
 .cell-meowfficer {background: #06b6d4; color: #fff}
 .cell-question {background: #6366f1; color: #fff}
 .cell-device {background: #8b5cf6; color: #fff}
-.cell-fortress {background: #64748b; color: #fff}
+.cell-fortress {background: #ef4444; color: #fff}
 .cell-missile {background: #f97316; color: #fff}
-.cell-blind {background: transparent; color: var(--muted); opacity: 0.4}
-.cell-default {background: var(--surface-muted); color: var(--text)}
-.cell-land {background: #374151; color: #9ca3af}
-.cell-sea {background: transparent; color: #38bdf8; opacity: 0.8}
-.cell-cleared {background: transparent; color: #6b7280; opacity: 0.6}
-.cell-caught {background: #991b1b; color: #fecaca; border: 1px dashed #ef4444}
-.cell-akashi {background: #15803d; color: #dcfce7}
-.cell-resource {background: #16a34a; color: #fff}
-.cell-event {background: #eab308; color: #000}
-.cell-meowfficer {background: #06b6d4; color: #fff}
-.cell-question {background: #6366f1; color: #fff}
-.cell-device {background: #8b5cf6; color: #fff}
-.cell-fortress {background: #64748b; color: #fff}
-.cell-missile {background: #f97316; color: #fff}
-.cell-blind {background: transparent; color: var(--muted); opacity: 0.4}
+.cell-blind {background: var(--surface-muted); color: var(--muted); opacity: 0.4}
 .cell-default {background: var(--surface-muted); color: var(--text)}
 
 .map-legend-bar {display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--border); font-size: 10px; color: var(--muted)}
-.legend-item {display: inline-flex; align-items: center}
+.legend-item {display: inline-flex; align-items: center; gap: 4px}
+.legend-icon {display: inline-block; vertical-align: middle}
+.text-fleet {color: #0284c7}
+.text-boss {color: #d97706}
+.text-enemy {color: #dc2626}
+.text-mystery {color: #059669}
+.text-impassable {color: #ef4444}
+.text-sea {color: #38bdf8}
 .legend-dot {width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 4px}
 .dot-fleet {background: #0284c7}
 .dot-boss {background: #d97706}
 .dot-enemy {background: #dc2626}
 .dot-mystery {background: #059669}
-.dot-land {background: #374151}
+.dot-land {background: #ef4444}
 .dot-sea {background: #38bdf8}
 
 /* 透视与边界卡片 (向前倾斜，近大远小) */
