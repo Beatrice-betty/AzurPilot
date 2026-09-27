@@ -71,6 +71,7 @@
 | [webui/runtime.md](webui/runtime.md) | 运行时服务与进程管理 |
 | [webui/frontend.md](webui/frontend.md) | 前端（React + TypeScript + Vite） |
 | [webui/frontend-state.md](webui/frontend-state.md) | 前端状态机制：保存队列、草稿恢复与连接状态 |
+| [webui/accounts.md](webui/accounts.md) | 实例账号管理：保险库加密、TPM/DPAPI 密钥与应用私有目录一致性 |
 
 ## 维护约定
 

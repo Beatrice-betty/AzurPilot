@@ -85,7 +85,7 @@ AzurPilot/
 
 | 入口 | 用途 |
 | --- | --- |
-| `python gui.py`（`__main__`） | 整个体系的进程起点：按 `EnableReload` 分流监督模式或直连模式 |
+| `uv run python gui.py`（`__main__`） | 整个体系的进程起点：按 `EnableReload` 分流监督模式或直连模式 |
 | `gui.run_webui_supervisor()` / `gui.func()` | 父监督循环 / WebUI 服务子进程体 |
 | `module.api.app.create_app` | ASGI 应用工厂，uvicorn 以工厂字符串加载 |
 | `/api/v1/ws`（`Gateway.endpoint`） | 浏览器业务连接入口：Origin 校验、认证、会话 |
@@ -320,7 +320,7 @@ WebUI 的并发模型按「进程分层、进程内分工」组织：
 
 ## 14. 生命周期
 
-1. **启动**：用户运行 `python gui.py` → 强制 spawn 启动方式 → 按 `EnableReload` 分流。热重载模式下父监督循环：孤儿 worker 回收 →（按需）依赖同步 → 前端构建校验 → spawn 服务子进程 → 等待就绪事件。
+1. **启动**：用户运行 `uv run python gui.py` → 强制 spawn 启动方式 → 按 `EnableReload` 分流。热重载模式下父监督循环：孤儿 worker 回收 →（按需）依赖同步 → 前端构建校验 → spawn 服务子进程 → 等待就绪事件。
 2. **服务子进程初始化**：uvicorn 加载 `create_app` → 解析密码（必要时生成）→ 组装路由与 MCP 挂载 → lifespan `startup`：`State.init`（SyncManager、认领 worker 登记所有权）→ 注册更新循环 → 可选 OCR server / 远程访问 → 按 `--run`/`Webui.Run`/`reloadalas` 拉起实例 worker。
 3. **运行**：浏览器连接、认证、订阅；worker 由 API 启停；配置修改经事务落盘并在 worker 任务边界生效。
 4. **更新热重载**：见第 8 节更新事务流；父进程重建子进程，应用以新代码重新 import。
