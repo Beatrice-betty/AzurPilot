@@ -57,7 +57,7 @@ describe('LogCardView 块级聚合器与卡片组件', () => {
       expect(html).toContain('perspective-card')
       expect(html).toContain('trapezoid-visual')
       expect(html).toContain('0.045s')
-      expect(html).toContain('左边缘 ✓ 可见')
+      expect(html).toContain('edge-active')
     }
   })
 
@@ -78,8 +78,7 @@ describe('LogCardView 块级聚合器与卡片组件', () => {
 
       const html = renderToStaticMarkup(<PerspectiveCard card={cards[0]} />)
       expect(html).toContain('edge-missing')
-      expect(html).toContain('右边缘 ✗ 缺失')
-      expect(html).toContain('下边缘 ✗ 缺失')
+      expect(html).toContain('0.041s')
     }
   })
 

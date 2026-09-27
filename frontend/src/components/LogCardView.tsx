@@ -750,20 +750,6 @@ export function PerspectiveCard({ card }: { card: Extract<CardItem, { type: 'per
             <span className="metric-label">垂直/定位:</span>
             <span className="metric-val">{card.info2}</span>
           </div>
-          <div className="metric-tags">
-            <span className={`status-chip ${card.leftEdge ? 'active' : 'missing'}`}>
-              左边缘 {card.leftEdge ? '✓ 可见' : '✗ 缺失'}
-            </span>
-            <span className={`status-chip ${card.upperEdge ? 'active' : 'missing'}`}>
-              上边缘 {card.upperEdge ? '✓ 可见' : '✗ 缺失'}
-            </span>
-            <span className={`status-chip ${card.rightEdge ? 'active' : 'missing'}`}>
-              右边缘 {card.rightEdge ? '✓ 可见' : '✗ 缺失'}
-            </span>
-            <span className={`status-chip ${card.lowerEdge ? 'active' : 'missing'}`}>
-              下边缘 {card.lowerEdge ? '✓ 可见' : '✗ 缺失'}
-            </span>
-          </div>
         </div>
       </div>
     </div>
