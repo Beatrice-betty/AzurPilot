@@ -3,6 +3,7 @@ import os
 from dataclasses import dataclass
 from typing import Callable
 
+from module.api import background_service as background
 from module.api import protocol as p
 from module.runtime.process_manager import ProcessManager
 
@@ -54,6 +55,13 @@ class Router:
             'updater.apply': Method(p.Params, lambda _: self.updates.start('apply'), True),
             'updater.cancel': Method(p.Params, lambda _: self.updates.cancel(), True),
             'announcement.get': Method(p.AnnouncementParams, lambda x: self.announcements.get(force=x.force)),
+            'background.resolve': Method(p.BackgroundUrlParams, lambda x: background.resolve(x.url)),
+            'background.gallery.list': Method(p.Params, lambda _: background.gallery_list()),
+            'background.gallery.add': Method(p.BackgroundGalleryAddParams,
+                                                 lambda x: background.gallery_add(x.url, x.name), True),
+            'background.gallery.remove': Method(p.BackgroundGalleryRemoveParams,
+                                                    lambda x: {'removed': background.gallery_remove(x.id)}, True),
+            'background.gallery.open': Method(p.Params, lambda _: background.gallery_open(), True),
         }
 
     @property

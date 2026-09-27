@@ -1,3 +1,11 @@
+/* 壁纸层的定位与铺法：外壳级规则，所有皮肤共用（材质皮肤另有淡入动画）。 */
+/* 让壁纸层（z-index: -1）留在 #root 的层叠上下文里：否则它会被画布底色盖住，只有材质皮肤看得见。 */
+#root {isolation: isolate}
+.wallpaper {position: fixed; inset: 0; z-index: -1; pointer-events: none; background: none; overflow: hidden}
+.wallpaper img, .wallpaper video {position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover}
+.wallpaper-media {opacity: 1; backface-visibility: hidden; transform: translateZ(0)}
+.wallpaper-media.wallpaper-hidden {opacity: 0}
+
 .button {height: 37px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 7px; font-size: 11px; font-weight: 550; padding: 0 15px; white-space: nowrap; border: 1px solid transparent; transition: background-color var(--dur-2) var(--ease-standard), color var(--dur-2) var(--ease-standard), border-color var(--dur-2) var(--ease-standard), box-shadow var(--dur-2) var(--ease-standard), transform var(--dur-1) var(--ease-standard)}
 .button.primary {background: var(--accent); color: white; box-shadow: 0 3px 7px #118b7820}
 .button.primary:hover:not(:disabled) {background: var(--accent-hover); transform: translateY(-1px)}
@@ -79,7 +87,7 @@
 .live-label i {width: 4px; height: 4px; border-radius: 50%; background: #6aba9e}
 .log-panel {display: flex; flex-direction: column}
 .log-panel .panel-heading {padding-top: 14px; padding-bottom: 14px; flex-shrink: 0}
-.log-content {background: var(--surface-muted); padding: 13px 17px; height: 62vh; min-height: 220px; overflow: auto; font-family: var(--theme-font-mono, "JetBrains Mono", "JetBrains Mono NL", "Cascadia Code", "Consolas", "Courier New", monospace); font-size: 11px; line-height: 1.6; color: var(--text)}
+.log-content {background: var(--theme-plate-bg); -webkit-backdrop-filter: var(--theme-plate-filter); backdrop-filter: var(--theme-plate-filter); padding: 13px 17px; height: 62vh; min-height: 220px; overflow: auto; font-family: var(--theme-font-mono, "JetBrains Mono", "JetBrains Mono NL", "Cascadia Code", "Consolas", "Courier New", monospace); font-size: 11px; line-height: 1.6; color: var(--text)}
 .compact .log-content {height: 178px; min-height: 0}
 .log-entry-line {display: flex; gap: 8px; padding: 2px 0; white-space: pre-wrap; word-break: break-all}
 .log-entry-line.log-raw {display: block}
@@ -332,7 +340,7 @@
 .error-box button {margin-left: auto; text-decoration: underline; white-space: nowrap}
 .toast {position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); z-index: 100; max-width: 90vw; padding: 14px 23px; border-radius: 9px; color: white; background: #1c7466; box-shadow: 0 5px 25px #102b4e30; font-size: 12px}
 .toast.error {background: #a45159}
-.modal {background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 14px; padding: 24px; width: 440px; max-width: calc(100vw / var(--ui-scale) - 30px); box-shadow: 0 20px 80px #132b4830}
+.modal {background: var(--theme-modal-bg); -webkit-backdrop-filter: var(--theme-modal-filter); backdrop-filter: var(--theme-modal-filter); color: var(--text); border: 1px solid var(--border); border-radius: 14px; padding: 24px; width: 440px; max-width: calc(100vw / var(--ui-scale) - 30px); box-shadow: 0 20px 80px #132b4830}
 .modal::backdrop {background: #1323301a}
 .mismatch-note {display: flex; gap: 8px; align-items: center; margin: 0 0 16px; padding: 10px 14px; border-radius: 8px; background: var(--theme-warning-soft); color: var(--theme-warning); font-size: 12px; line-height: 1.7}
 .mismatch-note svg {flex-shrink: 0}
@@ -1042,3 +1050,67 @@
   box-shadow: 0 0 6px var(--red, #e05252);
 }
 
+/* 配色选择器：原来只写在简约皮肤里，材质与旧版因此完全没有布局（色板球宽度塌成 0）。
+   这套是四个大类共用的选择器样式，放在共享层。 */
+.palette-field {align-items: flex-start}
+.palette-options {display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; min-width: 0; border: 0; margin: 0; padding: 0; width: 100%}
+.palette-options legend {position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%)}
+.palette-option {position: relative; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 6px; min-height: 44px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 12px}
+.palette-option {transition: border-color .16s ease, background .16s ease}
+.palette-option:hover {border-color: var(--accent)}
+.palette-option:has(:checked) {border-color: var(--accent); background: var(--accent-soft)}
+.palette-option:focus-within {outline: 2px solid var(--accent); outline-offset: 2px}
+.palette-option input {margin: 0; flex-shrink: 0}
+.palette-add {position: relative; display: flex; align-items: center; justify-content: center; min-height: 44px; border: 1px dashed var(--border); border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; padding: 0}
+.palette-add:hover:not(:disabled) {border-color: var(--accent); color: var(--accent); background: var(--accent-soft)}
+.palette-add:focus-visible {outline: 2px solid var(--accent); outline-offset: 2px}
+.palette-add:disabled {opacity: 0.4; cursor: not-allowed}
+.field-control.palette-control {display: flex; flex-direction: column; gap: 12px; align-items: stretch; text-align: left}
+.custom-palette-actions {display: flex; flex-wrap: wrap; align-items: center; gap: 8px}
+.custom-palette-colors {min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--border); border-radius: 10px}
+.custom-palette-colors legend {padding: 0 6px; color: var(--muted)}
+.custom-color-row {display: grid; grid-template-columns: minmax(44px, 1fr) 44px minmax(100px, 1.5fr); gap: 8px; align-items: center; margin: 6px 0}
+.custom-color-row input[type='color'] {width: 44px; height: 44px; padding: 3px; cursor: pointer}
+.custom-color-row input:not([type='color']) {width: 100%; font-family: var(--theme-font-mono)}
+.custom-palette-modal .custom-palette-actions {justify-content: flex-end}
+.palette-swatch {display: inline-flex; flex-shrink: 0; gap: 2px}
+.palette-swatch i {display: block; width: 12px; height: 22px; border: 1px solid var(--border); border-radius: 3px; background: var(--accent)}
+.palette-swatch i + i {background: var(--secondary)}
+
+/* 收起侧栏（看图模式）：那一列宽由 --sidebar-width 决定，所以过渡 grid-template-columns
+   才会真的滑过去。只在桌面生效，窄屏侧栏是抽屉形态，不吃这套。 */
+.nav-collapse {display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; padding: 7px 10px; border: 0; border-radius: var(--theme-radius-control); background: transparent; color: var(--theme-muted); font-size: 13px; cursor: pointer; transition: color .15s ease, background .15s ease}
+.nav-collapse:hover {color: var(--theme-accent); background: var(--theme-accent-soft)}
+.nav-collapse:focus-visible {outline: 2px solid var(--theme-focus); outline-offset: 2px}
+/* 收起后左缘留下的那一道窄边，展开按钮就长在上面。 */
+.nav-restore {position: fixed; left: 0; top: 50%; transform: translateY(-50%); z-index: 60; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 58px; padding: 0; border: 0; border-radius: 0 11px 11px 0; background: color-mix(in srgb, var(--surface) 86%, transparent); color: var(--theme-muted); cursor: pointer; box-shadow: var(--glass-shadow); transition: color .15s ease, background .15s ease}
+.nav-restore:hover {color: var(--theme-accent); background: var(--surface)}
+.nav-restore:focus-visible {outline: 2px solid var(--theme-focus); outline-offset: 2px}
+@media (min-width: 951px) {
+  /* 侧栏宽度动画：grid 轨道用 auto，宽度由 .sidebar 自己的 width 过渡。 */
+  .sidebar {width: var(--sidebar-width); min-width: 0}
+  .sidebar {transition: width .28s ease, opacity .2s ease, padding .28s ease, border-width .28s ease}
+  /* 收起时把侧栏那一列收到 0，展开时回到主题的侧栏宽度。 */
+  :root body .app-shell {grid-template-columns: auto minmax(0, 1fr)}
+  :root body .app-shell.with-rail {grid-template-columns: auto minmax(0, 1fr) auto}
+  .right-rail {width: var(--right-rail-width); transition: width .28s ease, opacity .2s ease}
+  /* 收起时宽度收到 0：与展开态同属性，过渡才会生效。 */
+  /* 收起规则统一带 :root body 前缀：皮肤里 .app-shell.with-rail .sidebar 这类规则与它们特异性打平，
+     靠源码顺序决胜时 components.css 在前会输，导致类名加上了却不生效。 */
+  :root body .app-shell.nav-collapsed .sidebar {width: 0; opacity: 0; pointer-events: none; padding-left: 0; padding-right: 0; border-width: 0; overflow: hidden}
+  /* 右栏（调度器 / 任务计划）是 .main-shell 的兄弟，需一并淡出。 */
+  /* 全隐藏：shell 的直接子元素（含右栏与顶栏）一起淡出，只留把手。 */
+  :root body .app-shell.nav-collapsed > *:not(.nav-handle) {opacity: 0; pointer-events: none}
+  :root body .app-shell.nav-collapsed .right-rail {width: 0; overflow: hidden}
+  .main-shell, .topbar, .right-rail {transition: opacity .22s ease}
+  /* 收起/展开把手：侧栏边缘一条很细的竖带，带上一枚扁的指示标记。 */
+  /* 隐形按键：常态没有底色也没有投影，只剩那枚图标（人类要求：展开态别和背后侧栏有区分度）。 */
+  .nav-handle {position: fixed; left: 0; top: 50%; transform: translateY(-50%); z-index: 70; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 64px; padding: 0; border: 0; border-radius: 0 8px 8px 0; background: transparent; box-shadow: none; color: var(--theme-muted); cursor: pointer; transition: color .15s ease, background .15s ease}
+  /* 悬停/聚焦才浮出淡淡的底：既保持"隐形"，又不至于让人找不到它。 */
+  .nav-handle:hover {color: var(--theme-accent); background: color-mix(in srgb, var(--surface) 55%, transparent)}
+  .nav-handle:focus-visible {background: color-mix(in srgb, var(--surface) 55%, transparent)}
+  .nav-handle:focus-visible {outline: 2px solid var(--theme-focus); outline-offset: 2px}
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell, .sidebar, .nav-collapse, .nav-restore {transition: none}
+}

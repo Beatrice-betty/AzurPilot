@@ -33,6 +33,11 @@ export interface Parameters {
   "updater.apply": Record<string, never>
   "updater.cancel": Record<string, never>
   "announcement.get": { force?: boolean }
+  "background.resolve": { url: string }
+  "background.gallery.list": Record<string, never>
+  "background.gallery.add": { url: string; name?: string }
+  "background.gallery.remove": { id: string }
+  "background.gallery.open": Record<string, never>
   "auth.login": { password?: string }
   "events.subscribe": { instance?: string | null; topics: Array<"instances" | "overview" | "logs" | "preview"> }
 }

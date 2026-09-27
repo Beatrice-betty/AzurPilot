@@ -849,6 +849,87 @@
         "type": "object"
       }
     },
+    "background.resolve": {
+      "mutates": false,
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "maxLength": 2048,
+            "minLength": 8,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "BackgroundUrlParams",
+        "type": "object"
+      }
+    },
+    "background.gallery.list": {
+      "mutates": false,
+      "params": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "Params",
+        "type": "object"
+      }
+    },
+    "background.gallery.add": {
+      "mutates": true,
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "maxLength": 2048,
+            "minLength": 8,
+            "title": "Url",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "maxLength": 120,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "BackgroundGalleryAddParams",
+        "type": "object"
+      }
+    },
+    "background.gallery.remove": {
+      "mutates": true,
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "BackgroundGalleryRemoveParams",
+        "type": "object"
+      }
+    },
+    "background.gallery.open": {
+      "mutates": true,
+      "params": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "Params",
+        "type": "object"
+      }
+    },
     "auth.login": {
       "mutates": false,
       "params": {
