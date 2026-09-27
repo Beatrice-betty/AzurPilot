@@ -347,7 +347,7 @@ export function createMockState({ empty = false } = {}) {
     seed('-- AR -- -- ME -- -- -- -- SD')
     seed('-- QU -- -- -- -- EN -- -- --')
 
-    // 7. Rich Table: Benchmark 表格
+    // 7.1 Rich Table: 设备基准测试 (Device Benchmark)
     bare([
       '                                                                        Benchmark Result                                                                        ',
       '                                                          ┌──────────────┬──────────┬──────┬─────────┐                                                          ',
@@ -359,16 +359,67 @@ export function createMockState({ empty = false } = {}) {
       '                                                          └──────────────┴──────────┴──────┴─────────┘                                                          '
     ].join('\n'))
 
-    // 8. Rich Table: 指挥喵评分表格
+    // 7.2 Rich Table: 截图方式性能测试 (Screenshot Benchmark)
     bare([
-      '                                                                   Meowfficer Score Summary                                                                     ',
-      '                                                            ┌──────────────┬──────┬──────┬────────┐                                                             ',
-      '                                                            │ Name         │ Type │ Tier │  Score │                                                             ',
-      '                                                            ├──────────────┼──────┼──────┼────────┤                                                             ',
-      '                                                            │ Justice (林) │  BB  │  T0  │ 96/100 │                                                             ',
-      '                                                            │ Steel (风)   │  CV  │  T1  │ 88/100 │                                                             ',
-      '                                                            │ Rose (山)    │  CA  │  T2  │ 75/100 │                                                             ',
-      '                                                            └──────────────┴──────┴──────┴────────┘                                                             '
+      '                                                                      Screenshot Benchmark                                                                      ',
+      '                                                          ┌──────────────┬────────┬─────────┐                                                           ',
+      '                                                          │ Screenshot   │  Time  │  Speed  │                                                           ',
+      '                                                          ├──────────────┼────────┼─────────┤                                                           ',
+      '                                                          │ nemu_ipc     │ 0.005s │ Fastest │                                                           ',
+      '                                                          │ DroidCast    │ 0.018s │  Fast   │                                                           ',
+      '                                                          │ uiautomator2 │ 0.052s │ Medium  │                                                           ',
+      '                                                          │ ADB          │ 0.319s │  Slow   │                                                           ',
+      '                                                          │ aScreenCap   │ Failed │ Failed  │                                                           ',
+      '                                                          └──────────────┴────────┴─────────┘                                                           '
+    ].join('\n'))
+
+    // 7.3 Rich Table: 控制点击方式测试 (Click Benchmark)
+    bare([
+      '                                                                         Click Benchmark                                                                        ',
+      '                                                          ┌──────────────┬────────┬─────────┐                                                           ',
+      '                                                          │ Control      │  Time  │  Speed  │                                                           ',
+      '                                                          ├──────────────┼────────┼─────────┤                                                           ',
+      '                                                          │ minitouch    │ 0.012s │ Fastest │                                                           ',
+      '                                                          │ ADB_NC       │ 0.038s │  Fast   │                                                           ',
+      '                                                          │ uiautomator2 │ 0.052s │  Fast   │                                                           ',
+      '                                                          │ ADB          │ 0.120s │ Medium  │                                                           ',
+      '                                                          └──────────────┴────────┴─────────┘                                                           '
+    ].join('\n'))
+
+    // 7.4 Rich Table: OCR 识别基准摘要 (OCR Benchmark Summary)
+    bare([
+      '                                                                        OCR基准测试摘要                                                                         ',
+      '                                        ┌──────────┬──────────┬──────────────────┬──────────┬────────┬────────┐                                         ',
+      '                                        │ Model    │ Dataset  │ Accuracy         │ Avg Time │ Rating │ Status │                                         ',
+      '                                        ├──────────┼──────────┼──────────────────┼──────────┼────────┼────────┤                                         ',
+      '                                        │ CRNN     │ general  │ 100.00% (50/50)  │ 12.345 ms│ Fast   │  PASS  │                                         ',
+      '                                        │ Paddle   │ button   │  96.00% (48/50)  │ 28.120 ms│ Good   │  PASS  │                                         ',
+      '                                        │ CNS      │ number   │  85.00% (42/50)  │  8.500 ms│ Fast   │ Warning│                                         ',
+      '                                        └──────────┴──────────┴──────────────────┴──────────┴────────┴────────┘                                         '
+    ].join('\n'))
+
+    // 7.5 Rich Table: 指挥喵评分汇总 (Meowfficer Score Summary)
+    bare([
+      '                                                                           评分汇总                                                                             ',
+      '                                                            ┌────────┬────────┬──────────┬──────┬────────┐                                                      ',
+      '                                                            │ 来源   │ 指挥喵 │ 口径     │ 档位 │ 参考分 │                                                      ',
+      '                                                            ├────────┼────────┼──────────┼──────┼────────┤                                                      ',
+      '                                                            │ 喵窝-1 │ 莫桑   │ 战列旗舰 │  T0  │ 96/100 │                                                      ',
+      '                                                            │ 喵窝-2 │ 小吉丸 │ 驱逐雷击 │  T1  │ 85/100 │                                                      ',
+      '                                                            │ 喵窝-3 │ 伯克   │ 巡洋雷击 │  T2  │ 72/100 │                                                      ',
+      '                                                            └────────┴────────┴──────────┴──────┴────────┘                                                      '
+    ].join('\n'))
+
+    // 7.6 ASCII Table: 经典 ASCII 字符画表格 (Legacy ASCII Table)
+    bare([
+      '                                                                    Legacy ASCII Benchmark                                                                      ',
+      '                                                          +--------------+--------+--------+                                                            ',
+      '                                                          |  Screenshot  |  Time  | Speed  |                                                            ',
+      '                                                          +--------------+--------+--------+                                                            ',
+      '                                                          |     ADB      | 0.319s |  Fast  |                                                            ',
+      '                                                          | uiautomator2 | 0.476s | Medium |                                                            ',
+      '                                                          |  aScreenCap  | Failed | Failed |                                                            ',
+      '                                                          +--------------+--------+--------+                                                            '
     ].join('\n'))
 
     seed('带有路径 E:\\AzurPilot\\module\\os_ash\\meta.py 和 True/False/None', 'WARNING')

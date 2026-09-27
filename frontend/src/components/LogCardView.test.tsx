@@ -157,6 +157,34 @@ describe('LogCardView 块级聚合器与卡片组件', () => {
     }
   })
 
+  it('正确解析并渲染带 +--+ 边界的经典 ASCII 表格与状态颜色', () => {
+    const rawAsciiTable = [
+      '                                Legacy ASCII Benchmark                          ',
+      '                      +--------------+--------+--------+                        ',
+      '                      |  Screenshot  |  Time  | Speed  |                        ',
+      '                      +--------------+--------+--------+                        ',
+      '                      |     ADB      | 0.319s |  Fast  |                        ',
+      '                      | uiautomator2 | 0.476s | Medium |                        ',
+      '                      |  aScreenCap  | Failed | Failed |                        ',
+      '                      +--------------+--------+--------+                        ',
+    ].join('\n')
+    const entries = [{ id: 1, level: 'INFO', text: rawAsciiTable }]
+    const cards = aggregateEntriesToCards(entries)
+    expect(cards).toHaveLength(1)
+    expect(cards[0].type).toBe('data_table')
+    if (cards[0].type === 'data_table') {
+      expect(cards[0].title).toBe('Legacy ASCII Benchmark')
+      expect(cards[0].headers).toEqual(['Screenshot', 'Time', 'Speed'])
+      expect(cards[0].rows).toHaveLength(3)
+
+      const html = renderToStaticMarkup(<DataTableCard card={cards[0]} />)
+      expect(html).toContain('Legacy ASCII Benchmark')
+      expect(html).toContain('0.319s')
+      expect(html).toContain('Medium')
+      expect(html).toContain('Failed')
+    }
+  })
+
   it('正确将四段式 error_context 渲染为警示操作卡片并完整直接渲染堆栈', () => {
     const rawError = [
       '[错误] 任务执行发生未处理异常（opsi_ash_beacon）',

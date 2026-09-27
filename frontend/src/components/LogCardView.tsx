@@ -457,23 +457,44 @@ export function aggregateEntriesToCards(entries: LogEntry[]): CardItem[] {
       }
     }
 
-    // 8. Rich Table 表格: 包含 ┌─ 和 └─
-    if (raw.includes('┌') && raw.includes('┐') && raw.includes('└') && raw.includes('┘')) {
+    // 8. 数据表格 (Rich Table / ASCII Table)
+    const hasUnicodeBox =
+      (raw.includes('┌') && raw.includes('┘') && raw.includes('│')) ||
+      (raw.includes('╭') && raw.includes('╯') && raw.includes('│') && !raw.includes('Traceback')) ||
+      (raw.includes('┏') && raw.includes('┛') && raw.includes('┃')) ||
+      (raw.includes('╔') && raw.includes('╝') && raw.includes('║'))
+    const hasAsciiBox = /\+[-=]{3,}\+/.test(raw) && (raw.match(/\|/g) || []).length >= 4
+
+    if (hasUnicodeBox || hasAsciiBox) {
+      const vSep = raw.includes('│') ? '│' : raw.includes('┃') ? '┃' : raw.includes('║') ? '║' : '|'
       const lines = raw.split('\n')
-      let title = '数据表格 (Rich Table)'
+      let title = '数据表格'
       let headers: string[] = []
       const rows: string[][] = []
 
       for (let i = 0; i < lines.length; i++) {
         const l = lines[i].trim()
-        if (l && !l.includes('┌') && !l.includes('│') && !l.includes('├') && !l.includes('└') && i < 2) {
+        if (
+          l &&
+          !l.includes('┌') && !l.includes('┐') && !l.includes('└') && !l.includes('┘') &&
+          !l.includes('╭') && !l.includes('╮') && !l.includes('╰') && !l.includes('╯') &&
+          !l.includes('┏') && !l.includes('┛') && !l.includes('╔') && !l.includes('╝') &&
+          !l.startsWith('+--') && !l.startsWith('+==') &&
+          !l.includes(vSep) &&
+          i < 3
+        ) {
           title = l
-        } else if (l.includes('│') && headers.length === 0) {
-          headers = l.split('│').slice(1, -1).map(s => s.trim())
-        } else if (l.includes('│')) {
-          const cells = l.split('│').slice(1, -1).map(s => s.trim())
+        } else if (l.includes(vSep) && headers.length === 0) {
+          const cells = l.split(vSep).slice(1, -1).map(s => s.trim())
           if (cells.length > 0 && !cells.every(c => !c)) {
-            rows.push(cells)
+            headers = cells
+          }
+        } else if (l.includes(vSep)) {
+          const cells = l.split(vSep).slice(1, -1).map(s => s.trim())
+          if (cells.length > 0 && !cells.every(c => !c)) {
+            if (!cells.every(c => /^[-=]+$/.test(c))) {
+              rows.push(cells)
+            }
           }
         }
       }
@@ -967,6 +988,26 @@ export function PropertySheetCard({ card, search }: { card: Extract<CardItem, { 
   )
 }
 
+function renderTableCell(cell: string): ReactNode {
+  const trimmed = cell.trim()
+  if (trimmed === 'PASS' || trimmed === 'Fastest') {
+    return <span style={{ color: '#22c55e', fontWeight: 600 }}>{cell}</span>
+  }
+  if (trimmed === 'Warning' || trimmed === 'Medium') {
+    return <span style={{ color: '#eab308', fontWeight: 600 }}>{cell}</span>
+  }
+  if (trimmed === 'Failed' || trimmed === 'Error' || trimmed === 'Slow') {
+    return <span style={{ color: '#ef4444', fontWeight: 600 }}>{cell}</span>
+  }
+  if (trimmed === 'T0') {
+    return <span style={{ color: '#f59e0b', fontWeight: 700 }}>{cell}</span>
+  }
+  if (trimmed === 'T1') {
+    return <span style={{ color: '#8b5cf6', fontWeight: 600 }}>{cell}</span>
+  }
+  return cell
+}
+
 // 4. 原生数据表格卡片 (Benchmark / Score)
 export function DataTableCard({ card }: { card: Extract<CardItem, { type: 'data_table' }> }) {
   // 智能推断列对齐方式：若该列非空值多为数字或测量单位，则右对齐，否则左对齐
@@ -1016,7 +1057,7 @@ export function DataTableCard({ card }: { card: Extract<CardItem, { type: 'data_
                 <tr key={rIdx}>
                   {row.map((cell, cIdx) => (
                     <td key={cIdx} style={{ textAlign: colAlignments[cIdx] }}>
-                      {cell}
+                      {renderTableCell(cell)}
                     </td>
                   ))}
                 </tr>
