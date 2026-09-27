@@ -367,7 +367,7 @@ export function aggregateEntriesToCards(entries: LogEntry[]): CardItem[] {
 
       while (rIdx < entries.length) {
         const rMsg = extractLogMessage(entries[rIdx].text).message
-        const rowMatch = /^\s*(\d{1,2})\s+(\d{1,4}(\s+\d{1,4})+)/.exec(rMsg)
+        const rowMatch = /^\s*(\d{1,2})\s+((?:(?:\d{1,4}|--?)\s*)+)$/.exec(rMsg)
         if (rowMatch) {
           const rowNum = parseInt(rowMatch[1], 10)
           const values = rowMatch[2].trim().split(/\s+/)
@@ -1183,10 +1183,10 @@ export function parseTraceback(raw: string): ParsedTraceback {
       continue
     }
 
-    // 匹配 Rich 代码行 (含行号、故障标记 ❱ 与代码)
-    const richCodeMatch = rawLine.match(/[│]?\s*(❱)?\s*(\d+)\s*│\s*(.*?)\s*[│]?$/)
+    // 匹配 Rich 代码行 (含行号、故障标记 ❱/▶/> 与代码)
+    const richCodeMatch = rawLine.match(/[│]?\s*(❱|▶|>)?\s*(\d+)\s*│\s*(.*?)\s*[│]?$/)
     if (richCodeMatch) {
-      const isFault = richCodeMatch[1] === '❱'
+      const isFault = Boolean(richCodeMatch[1])
       const lineNum = parseInt(richCodeMatch[2], 10)
       const code = richCodeMatch[3].replace(/[│\s]+$/, '')
       currentFrame.codeLines.push({ lineNum, isFault, code })

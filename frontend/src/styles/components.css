@@ -198,6 +198,12 @@
 .metric-val {color: var(--text); font-family: var(--theme-font-mono)}
 
 /* 属性清单卡片 (Property Sheet: 紧凑双列对齐，无悬停动效) */
+.property-card {width: fit-content; max-width: 100%; align-self: flex-start}
+.property-grid {display: flex; flex-direction: column; gap: 3px; padding: 2px 0}
+.property-row {display: flex; align-items: baseline; gap: 4px; padding: 1px 4px; font-size: 11px}
+.prop-key {color: var(--muted); font-weight: 500; font-family: var(--theme-font-mono); flex-shrink: 0}
+.prop-divider {color: var(--muted); margin-right: 4px; flex-shrink: 0; user-select: none}
+.prop-val {color: var(--text); font-family: var(--theme-font-mono); word-break: break-word}
 .property-grid-table {display: flex; flex-direction: column; gap: 4px; padding: 2px 0}
 .property-row-card {display: flex; align-items: center; gap: 10px; padding: 2px 6px; font-size: 11px}
 .prop-key-col {color: var(--muted); font-weight: 500; min-width: 95px; text-align: right; flex-shrink: 0}

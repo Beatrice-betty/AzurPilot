@@ -314,10 +314,10 @@ export function LogPanel({active = true}: {active?: boolean}) {
         <button
           className={`icon-button ${viewMode === 'cards' ? 'filter-active' : ''}`}
           onClick={toggleViewMode}
-          aria-label={viewMode === 'cards' ? '切换为经典终端' : '切换为卡片视图'}
-          title={viewMode === 'cards' ? '当前：全部卡片式视图（点击切换经典终端）' : '当前：经典终端视图（点击切换卡片视图）'}
+          aria-label={viewMode === 'cards' ? ui('log.viewModeClassic') : ui('log.viewModeCards')}
+          title={viewMode === 'cards' ? ui('log.viewModeCardsTitle') : ui('log.viewModeClassicTitle')}
         >
-          <LayoutGrid size={15} />
+          {viewMode === 'cards' ? <LayoutGrid size={15} /> : <Terminal size={15} />}
         </button>
         <button className="icon-button" onClick={() => setFloor(entries.at(-1)?.id ?? 0)} aria-label={ui('log.clearView')}>
           <Trash2 size={15} />
