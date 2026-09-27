@@ -322,13 +322,14 @@
 .stat-multi-metrics.is-compact .stat-metric-icon {flex:none; display:flex; align-items:center; justify-content:center; width:20px; height:20px}
 .stat-multi-metrics.is-compact .stat-metric-value {font-size:13px; font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap}
 .stat-multi-metrics.is-compact .stat-metric-labels span {font-size:12px; font-weight:400; color:var(--muted); text-align:right}
-/* 收获的表格式呈现：表头一列一个指标，表体只有一行数值；指标多时横向滚动而不是换行。 */
-.summary-metrics-table-wrap {overflow-x:auto; padding:18px 22px}
-.summary-metrics-table {border-collapse:collapse; width:max-content; margin:0 auto}
-.summary-metrics-table th {padding:0 18px 10px; font-size:13px; font-weight:400; color:var(--muted); text-align:center; white-space:nowrap}
-.summary-metrics-table td {padding:0 18px; font-size:22px; font-variant-numeric:tabular-nums; text-align:center; white-space:nowrap}
-.summary-metrics-table td small {font-size:12px; margin-left:6px; color:var(--muted)}
 /* 点掉曲线的资源在表头里淡色保留：卡片本身不隐藏，再点一下回到图上。 */
+/* 收获表格复用明细表时标题留空：只藏重复的标题块，同一行右侧的折叠、切换钮与表格设置照常保留。 */
+.summary-metrics-panel .statistics-table > .panel-heading > div:first-child:has(> h3:empty) {display:none}
+/* 搜索与记录数在标题行里居中：左右两侧是标题与动作，中间留一块可伸缩的搜索区。 */
+.statistics-table > .panel-heading > .table-search {flex:1 1 200px;display:flex;align-items:center;gap:10px;justify-content:center;min-width:0;color:var(--muted);font-size:12px}
+.statistics-table > .panel-heading > .table-search input {max-width:240px;width:100%;min-width:120px;min-height:var(--table-heading-control);padding:6px 12px}
+.stat-card.is-folded > .panel > .statistics-table > .panel-heading,
+.stat-card.is-folded > .statistics-table > .panel-heading {display:flex}
 .stat-metric-card.is-filterable, .stat-metric-row.is-filterable > * {cursor:pointer}
 .stat-metric-card.is-filtered {opacity:.45}
 .stat-metric-row.is-filtered > * {opacity:.45}

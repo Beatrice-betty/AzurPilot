@@ -1,6 +1,8 @@
 /* 全站表单共用现有主题契约，外部 theme.css 仍可覆盖颜色与圆角。 */
 :root {
   --form-height: 40px;
+  /* 表格标题行内控件（搜索框）的高度，与同排 .text-button 一致。 */
+  --table-heading-control: 36px;
   --form-edge: color-mix(in srgb, var(--theme-input-border) 75%, var(--theme-muted));
   --form-shadow: 0 1px 2px rgb(0 0 0 / .04);
 }

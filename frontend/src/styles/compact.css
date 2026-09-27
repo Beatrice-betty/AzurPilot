@@ -311,6 +311,7 @@
   :root[data-theme='extreme'] .button {padding: 5px 12px}
   :root[data-theme='extreme'] .icon-button {width: 28px; height: 28px}
   :root[data-theme='extreme'] .text-button {min-height: 26px; padding: 2px}
+  :root[data-theme='extreme'] {--table-heading-control: 26px}
   :root[data-theme='extreme'] .select-trigger {padding: 5px 10px}
   :root[data-theme='extreme'] .multi-options {gap: 5px}
   :root[data-theme='extreme'] .multi-options .checkbox-control {min-height: 28px; padding: 4px 8px}

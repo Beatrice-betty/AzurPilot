@@ -209,9 +209,7 @@ def report(configs, instance, category, month, days, period, research_series=0, 
                          data.get('siren_research_devices'), round(data.get('siren_research_rate', 0) * 100, 2),
                          {'exact': '实测', 'estimated': '估算', 'none': '暂无记录'}.get(data.get('by_hazard', {}).get(str(hazard), {}).get('source', 'none'))])
         result['tables'].append(table('短猫运行统计', ['侵蚀等级', '战斗次数', '有效轮数', '平均战斗秒数', '平均每轮秒数', '研究装置', '获取率（%）', '统计来源'], rows))
-        # 收获卡片在列表视图下排成一整行：列名是指标名，唯一一行是数值。
-        result['tables'].append(table('收获', [item['label'] for item in result['metrics']],
-                                      [[item['value'] for item in result['metrics']]]))
+        # 收获只作卡片渲染：卡片 / 表格两种呈现由前端布局按页切换，后端不另出表。
     elif category == 'action':
         from module.statistics.opsi_month import get_ap_timeline, get_coins_timeline
         ap = get_ap_timeline(year, month_number, instance)
