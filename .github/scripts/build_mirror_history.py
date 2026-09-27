@@ -7,12 +7,15 @@
 """
 
 import argparse
+import json
 import subprocess
 import tempfile
 from pathlib import Path
 
 
-MIRROR_BASELINE = '4aaafecfa2353022ead731a38376856c14b23b6d'
+MIRROR_BASELINE = json.loads(
+    Path(__file__).with_name('mirror_history.json').read_text(encoding='utf-8')
+)['baseline']
 
 
 def git(*args, cwd=None, data=None):
