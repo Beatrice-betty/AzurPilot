@@ -57,7 +57,33 @@ describe('LogCardView 块级聚合器与卡片组件', () => {
       expect(html).toContain('perspective-card')
       expect(html).toContain('trapezoid-visual')
       expect(html).toContain('0.045s')
-      expect(html).toContain('左边缘 ✓')
+      expect(html).toContain('左边缘 ✓ 可见')
+      expect(html).toContain('4 边完整闭合')
+    }
+  })
+
+  it('正确表现缺失边界时的红色虚线与状态标记', () => {
+    // 右边缘与下边缘缺失
+    const entries = [
+      { id: 1, level: 'INFO', text: 'INFO 14:24:30.500 │ [地图-透视] 0.041s      水平: 5 (5 内部, 0 边缘)' },
+      { id: 2, level: 'INFO', text: 'INFO 14:24:30.501 │ [地图-透视] 边缘: /_     垂直: 6 (6 内部, 0 边缘)' },
+    ]
+    const cards = aggregateEntriesToCards(entries)
+    expect(cards).toHaveLength(1)
+    expect(cards[0].type).toBe('perspective')
+    if (cards[0].type === 'perspective') {
+      expect(cards[0].lowerEdge).toBe(false)
+      expect(cards[0].rightEdge).toBe(false)
+      expect(cards[0].leftEdge).toBe(true)
+      expect(cards[0].upperEdge).toBe(true)
+
+      const html = renderToStaticMarkup(<PerspectiveCard card={cards[0]} />)
+      expect(html).toContain('edge-missing')
+      expect(html).toContain('缺失 2 边')
+      expect(html).toContain('右(缺失)')
+      expect(html).toContain('下(缺失)')
+      expect(html).toContain('右边缘 ✗ 缺失')
+      expect(html).toContain('下边缘 ✗ 缺失')
     }
   })
 

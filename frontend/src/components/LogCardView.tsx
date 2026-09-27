@@ -282,10 +282,10 @@ export function aggregateEntriesToCards(entries: LogEntry[]): CardItem[] {
     }
 
     // 3. 海域透视与边缘线识别: [地图-透视] 或 [地图-单应性]
-    const perspMatch = /^\[地图-(透视|单应性)\]\s+([\d.]+s)\s*([_\s])\s*(水平:.*|边缘线:.*)$/.exec(trimmedMsg)
+    const perspMatch = /^\[地图-(透视|单应性)\]\s+([\d.]+s)\s+(_)?\s*(水平:.*|边缘线:.*)$/.exec(trimmedMsg)
     if (perspMatch && index + 1 < entries.length) {
-      const nextMsg = extractLogMessage(entries[index + 1].text).message.trim()
-      const nextPersp = /^\[地图-(透视|单应性)\]\s+边缘:\s*([\/ _\\]{1,4})\s*(垂直:.*|单应位置:.*)$/.exec(nextMsg)
+      const nextMsg = extractLogMessage(entries[index + 1].text).message
+      const nextPersp = /^\[地图-(透视|单应性)\]\s+边缘:\s*([\/ _\\]*?)\s+(垂直:.*|单应位置:.*)$/.exec(nextMsg.trim())
       if (nextPersp) {
         const edgesStr = nextPersp[2]
         cards.push({
@@ -684,15 +684,19 @@ export function MapGridCard({ card }: { card: Extract<CardItem, { type: 'map_gri
 
 // 2. 海域透视与边缘线识别卡片
 export function PerspectiveCard({ card }: { card: Extract<CardItem, { type: 'perspective' }> }) {
-  const allActive = card.leftEdge && card.upperEdge && card.rightEdge && card.lowerEdge
+  const missingCount = [card.leftEdge, card.upperEdge, card.rightEdge, card.lowerEdge].filter(e => !e).length
+  const allActive = missingCount === 0
 
   return (
-    <div className="log-card perspective-card motion-enter">
+    <div className={`log-card perspective-card ${allActive ? 'perspective-complete' : 'perspective-has-missing'} motion-enter`}>
       <div className="card-header">
         <div className="card-title">
-          <Compass size={16} className="text-secondary" />
+          <Compass size={16} className={allActive ? 'text-secondary' : 'text-warning'} />
           <span className="title-bold">海域{card.model}与边界线拓扑</span>
           <span className="badge-pill duration">{card.duration}</span>
+          <span className={`badge-pill ${allActive ? 'edge-status-full' : 'edge-status-missing'}`}>
+            {allActive ? '4 边完整闭合' : `缺失 ${missingCount} 边`}
+          </span>
           <span className="card-time">{card.time}</span>
         </div>
         <div className="card-actions">
@@ -702,52 +706,52 @@ export function PerspectiveCard({ card }: { card: Extract<CardItem, { type: 'per
       <div className="card-body perspective-body">
         {/* 梯形视口微型几何模型 (向前倾斜，近大远小) */}
         <div className="trapezoid-visual" title="海域 2.5D 透视边界视口 (向前倾斜)">
-          <svg width="156" height="88" viewBox="0 0 156 88" className="trapezoid-svg">
-            {/* 梯形底面浅色半透明背景 */}
+          <svg width="168" height="96" viewBox="0 0 168 96" className="trapezoid-svg">
+            {/* 梯形底面浅色半透明背景 (仅完全闭合时填充) */}
             <polygon
-              points="44,18 112,18 142,74 14,74"
-              className={`trapezoid-fill ${allActive ? 'fill-all' : ''}`}
+              points="48,20 120,20 152,78 16,78"
+              className={`trapezoid-fill ${allActive ? 'fill-all' : 'fill-broken'}`}
             />
             {/* 纵深透视虚线网格（向前方地平线收拢） */}
-            <line x1="60" y1="18" x2="48" y2="74" className="grid-depth-line" />
-            <line x1="78" y1="18" x2="78" y2="74" className="grid-depth-line" />
-            <line x1="96" y1="18" x2="108" y2="74" className="grid-depth-line" />
-            <line x1="31" y1="46" x2="125" y2="46" className="grid-depth-line" />
+            <line x1="66" y1="20" x2="52" y2="78" className="grid-depth-line" />
+            <line x1="84" y1="20" x2="84" y2="78" className="grid-depth-line" />
+            <line x1="102" y1="20" x2="116" y2="78" className="grid-depth-line" />
+            <line x1="33" y1="49" x2="135" y2="49" className="grid-depth-line" />
 
             {/* 上边界 (远处，较短) */}
             <line
-              x1="44" y1="18" x2="112" y2="18"
-              className={`edge-stroke ${card.upperEdge ? 'edge-active' : 'edge-dim'}`}
+              x1="48" y1="20" x2="120" y2="20"
+              className={`edge-stroke ${card.upperEdge ? 'edge-active' : 'edge-missing'}`}
             />
-            <text x="78" y="12" textAnchor="middle" className={`edge-svg-text ${card.upperEdge ? 'text-active' : 'text-dim'}`}>
-              上边界
+            <text x="84" y="13" textAnchor="middle" className={`edge-svg-text ${card.upperEdge ? 'text-active' : 'text-missing'}`}>
+              {card.upperEdge ? '上边界' : '上(缺失)'}
             </text>
 
             {/* 下边界 (近处，较宽) */}
             <line
-              x1="14" y1="74" x2="142" y2="74"
-              className={`edge-stroke ${card.lowerEdge ? 'edge-active' : 'edge-dim'}`}
+              x1="16" y1="78" x2="152" y2="78"
+              className={`edge-stroke ${card.lowerEdge ? 'edge-active' : 'edge-missing'}`}
             />
-            <text x="78" y="85" textAnchor="middle" className={`edge-svg-text ${card.lowerEdge ? 'text-active' : 'text-dim'}`}>
-              下边界
+            <text x="84" y="90" textAnchor="middle" className={`edge-svg-text ${card.lowerEdge ? 'text-active' : 'text-missing'}`}>
+              {card.lowerEdge ? '下边界' : '下(缺失)'}
             </text>
 
             {/* 左边界 (向前倾斜收拢) */}
             <line
-              x1="14" y1="74" x2="44" y2="18"
-              className={`edge-stroke ${card.leftEdge ? 'edge-active' : 'edge-dim'}`}
+              x1="16" y1="78" x2="48" y2="20"
+              className={`edge-stroke ${card.leftEdge ? 'edge-active' : 'edge-missing'}`}
             />
-            <text x="18" y="44" textAnchor="middle" className={`edge-svg-text ${card.leftEdge ? 'text-active' : 'text-dim'}`}>
-              左
+            <text x="20" y="47" textAnchor="middle" className={`edge-svg-text ${card.leftEdge ? 'text-active' : 'text-missing'}`}>
+              {card.leftEdge ? '左' : '左(缺失)'}
             </text>
 
             {/* 右边界 (向前倾斜收拢) */}
             <line
-              x1="112" y1="18" x2="142" y2="74"
-              className={`edge-stroke ${card.rightEdge ? 'edge-active' : 'edge-dim'}`}
+              x1="120" y1="20" x2="152" y2="78"
+              className={`edge-stroke ${card.rightEdge ? 'edge-active' : 'edge-missing'}`}
             />
-            <text x="138" y="44" textAnchor="middle" className={`edge-svg-text ${card.rightEdge ? 'text-active' : 'text-dim'}`}>
-              右
+            <text x="148" y="47" textAnchor="middle" className={`edge-svg-text ${card.rightEdge ? 'text-active' : 'text-missing'}`}>
+              {card.rightEdge ? '右' : '右(缺失)'}
             </text>
           </svg>
         </div>
@@ -763,10 +767,18 @@ export function PerspectiveCard({ card }: { card: Extract<CardItem, { type: 'per
             <span className="metric-val">{card.info2}</span>
           </div>
           <div className="metric-tags">
-            <span className={`status-chip ${card.leftEdge ? 'active' : ''}`}>左边缘 {card.leftEdge ? '✓' : '✗'}</span>
-            <span className={`status-chip ${card.upperEdge ? 'active' : ''}`}>上边缘 {card.upperEdge ? '✓' : '✗'}</span>
-            <span className={`status-chip ${card.rightEdge ? 'active' : ''}`}>右边缘 {card.rightEdge ? '✓' : '✗'}</span>
-            <span className={`status-chip ${card.lowerEdge ? 'active' : ''}`}>下边缘 {card.lowerEdge ? '✓' : '✗'}</span>
+            <span className={`status-chip ${card.leftEdge ? 'active' : 'missing'}`}>
+              左边缘 {card.leftEdge ? '✓ 可见' : '✗ 缺失'}
+            </span>
+            <span className={`status-chip ${card.upperEdge ? 'active' : 'missing'}`}>
+              上边缘 {card.upperEdge ? '✓ 可见' : '✗ 缺失'}
+            </span>
+            <span className={`status-chip ${card.rightEdge ? 'active' : 'missing'}`}>
+              右边缘 {card.rightEdge ? '✓ 可见' : '✗ 缺失'}
+            </span>
+            <span className={`status-chip ${card.lowerEdge ? 'active' : 'missing'}`}>
+              下边缘 {card.lowerEdge ? '✓ 可见' : '✗ 缺失'}
+            </span>
           </div>
         </div>
       </div>
