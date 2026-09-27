@@ -127,12 +127,12 @@
 
 /* 海图网格卡片 */
 .map-grid-viewport {overflow-x: auto; max-width: 100%; padding-bottom: 4px}
-.map-ascii-table {border-collapse: collapse; font-family: var(--theme-font-mono); font-size: 11px; line-height: 1.4}
-.map-th-col {text-align: center; min-width: 28px; color: var(--muted); padding: 2px 4px; font-weight: 600}
+.map-ascii-table {border-collapse: collapse; font-family: var(--theme-font-mono); font-size: 11px; line-height: 1}
+.map-th-col {text-align: center; width: 28px; min-width: 28px; max-width: 28px; color: var(--muted); padding: 4px 0; font-weight: 600}
 .map-th-corner {width: 24px; color: var(--muted); text-align: right; padding-right: 6px}
 .map-td-row {color: var(--muted); text-align: right; padding-right: 6px; font-size: 10px; font-weight: 500}
-.map-td-cell {text-align: center; padding: 2px 3px}
-.map-badge {display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 26px; border-radius: 4px; font-size: 11px; font-weight: 600; text-align: center; cursor: default; user-select: none; box-sizing: border-box}
+.map-td-cell {text-align: center; padding: 0; line-height: 0; border: none}
+.map-badge {display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 0; font-size: 11px; font-weight: 600; text-align: center; cursor: default; user-select: none; box-sizing: border-box; border: none}
 .cell-icon-wrap {display: inline-flex; align-items: center; justify-content: center; position: relative}
 .cell-sub-star {font-size: 8px; font-weight: 800; margin-left: 1px; font-family: var(--theme-font-mono); line-height: 1}
 .cell-blind-dots {font-weight: 700; letter-spacing: 1px; font-size: 11px; opacity: 0.4}
@@ -145,9 +145,9 @@
 .cell-mystery {background: #059669; color: #fff}
 .cell-ammo {background: #ca8a04; color: #fff}
 .cell-land {background: #ef4444; color: #fff}
-.cell-sea {background: #0284c730; border: 1px solid #0284c760; color: #38bdf8}
-.cell-cleared {background: #0284c718; border: 1px solid #0284c740; color: #38bdf8; opacity: 0.7}
-.cell-caught {background: #b91c1c; color: #fff; border: 1px dashed #ef4444}
+.cell-sea {background: #0284c730; color: #38bdf8}
+.cell-cleared {background: #0284c718; color: #38bdf8; opacity: 0.7}
+.cell-caught {background: #b91c1c; color: #fff}
 .cell-akashi {background: #15803d; color: #dcfce7}
 .cell-resource {background: #16a34a; color: #fff}
 .cell-event {background: #eab308; color: #000}
@@ -280,8 +280,8 @@
 .cost-origin {color: #10b981; font-weight: 700}
 .cost-path {color: #0ea5e9}
 .cost-wall {color: var(--muted); opacity: 0.35}
-.matrix-grid-rows {display: flex; flex-direction: column; gap: 2px}
-.matrix-row {display: flex; gap: 4px}
+.matrix-grid-rows {display: inline-flex; flex-direction: column; gap: 0}
+.matrix-row {display: flex; gap: 0}
 
 /* 系统横幅与阶段卡片 */
 .system-banner-card {text-align: center; padding: 10px 0; margin: 6px 0; border: 0; background: transparent; box-shadow: none}
