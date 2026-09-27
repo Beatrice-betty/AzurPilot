@@ -341,11 +341,11 @@ export function createMockState({ empty = false } = {}) {
 
     // 6. 大世界雷达扫描 (radar.show)
     seed('-- -- -- -- -- -- -- -- -- --')
-    seed('-- AK -- -- RE -- -- 1E -- --')
+    seed('-- AK -- PO -- RE -- -- 1E --')
     seed('-- -- -- -- -- == == -- -- --')
     seed('-- -- FL -- -- == == -- EX --')
-    seed('-- -- -- -- ME -- -- -- -- SD')
-    seed('-- QU -- -- -- -- -- -- -- --')
+    seed('-- AR -- -- ME -- -- -- -- SD')
+    seed('-- QU -- -- -- -- EN -- -- --')
 
     // 7. Rich Table: Benchmark 表格
     bare([

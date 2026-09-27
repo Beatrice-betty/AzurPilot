@@ -7,6 +7,7 @@ import {
   PropertySheetCard,
   DataTableCard,
   ErrorContextCard,
+  renderCellContent,
 } from './LogCardView'
 
 describe('LogCardView 块级聚合器与卡片组件', () => {
@@ -191,5 +192,33 @@ describe('LogCardView 块级聚合器与卡片组件', () => {
       expect(html).toContain('opsi_ash_beacon')
       expect(html).toContain('ScriptEnd: 计算模式红脸弹窗')
     }
+  })
+
+  it('海域方格保持纯净无冗余波浪图标，大世界战术地标全量覆盖图标', () => {
+    // 海域航道不渲染图标，返回 null
+    expect(renderCellContent('--')).toBeNull()
+    expect(renderCellContent('==')).toBeNull()
+
+    // 大世界战术图标全面覆盖
+    const meHtml = renderToStaticMarkup(<>{renderCellContent('ME')}</>)
+    expect(meHtml).toContain('大世界指挥喵搜索点')
+
+    const exHtml = renderToStaticMarkup(<>{renderCellContent('EX')}</>)
+    expect(exHtml).toContain('大世界感叹号特殊事件')
+
+    const sdHtml = renderToStaticMarkup(<>{renderCellContent('SD')}</>)
+    expect(sdHtml).toContain('大世界环境扫描探测装置')
+
+    const arHtml = renderToStaticMarkup(<>{renderCellContent('AR')}</>)
+    expect(arHtml).toContain('大世界机密档案记录')
+
+    const poHtml = renderToStaticMarkup(<>{renderCellContent('PO')}</>)
+    expect(poHtml).toContain('大世界补给港口')
+
+    const enHtml = renderToStaticMarkup(<>{renderCellContent('EN')}</>)
+    expect(enHtml).toContain('敌舰 (EN)')
+
+    const boHtml = renderToStaticMarkup(<>{renderCellContent('BO')}</>)
+    expect(boHtml).toContain('关卡旗舰 Boss')
   })
 })

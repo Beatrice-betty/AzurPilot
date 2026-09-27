@@ -154,6 +154,8 @@
 .cell-meowfficer {background: #06b6d4; color: #fff}
 .cell-question {background: #6366f1; color: #fff}
 .cell-device {background: #8b5cf6; color: #fff}
+.cell-archive {background: #6366f1; color: #fff}
+.cell-port {background: #0284c7; color: #fff}
 .cell-fortress {background: #ef4444; color: #fff}
 .cell-missile {background: #f97316; color: #fff}
 .cell-blind {background: var(--surface-muted); color: var(--muted); opacity: 0.4}
@@ -166,6 +168,9 @@
 .text-boss {color: #d97706}
 .text-enemy {color: #dc2626}
 .text-mystery {color: #059669}
+.text-meowfficer {color: #06b6d4}
+.text-event {color: #eab308}
+.text-device {color: #8b5cf6}
 .text-impassable {color: #ef4444}
 .text-sea {color: #38bdf8}
 .legend-dot {width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 4px}
@@ -174,7 +179,7 @@
 .dot-enemy {background: #dc2626}
 .dot-mystery {background: #059669}
 .dot-land {background: #ef4444}
-.dot-sea {background: #38bdf8}
+.dot-sea {background: #0284c730; border: 1px solid #38bdf8; box-sizing: border-box}
 
 /* 透视与边界卡片 (向前倾斜，近大远小) */
 .perspective-body {display: flex; gap: 20px; align-items: center; flex-wrap: wrap}

@@ -3,6 +3,7 @@ import {
   AlertCircle,
   Anchor,
   Ban,
+  BookOpen,
   Check,
   ChevronDown,
   ChevronRight,
@@ -13,13 +14,16 @@ import {
   Layers,
   Map as MapIcon,
   Package,
+  PawPrint,
+  Radar,
   Ship,
   Skull,
   Sparkles,
   Swords,
   Table as TableIcon,
   Terminal,
-  Waves,
+  Crosshair,
+  Zap,
 } from 'lucide-react'
 import type { LogEntry } from '../api/types'
 import { MarkdownView } from './MarkdownView'
@@ -615,10 +619,13 @@ const CELL_DICT: Record<string, { label: string; cls: string }> = {
   'AK': { label: '明石隐藏商店', cls: 'cell-akashi' },
   'AL': { label: '护送盟友货船', cls: 'cell-ally' },
   'RE': { label: '大世界资源箱', cls: 'cell-resource' },
-  'EX': { label: '感叹号事件点', cls: 'cell-event' },
-  'ME': { label: '指挥喵搜索点', cls: 'cell-meowfficer' },
+  'EX': { label: '大世界感叹号特殊事件', cls: 'cell-event' },
+  'ME': { label: '大世界指挥喵搜索点', cls: 'cell-meowfficer' },
   'QU': { label: '神秘问号事件', cls: 'cell-question' },
-  'SD': { label: '扫描装置', cls: 'cell-device' },
+  'SD': { label: '大世界环境扫描装置', cls: 'cell-device' },
+  'AR': { label: '大世界机密档案记录', cls: 'cell-archive' },
+  'PO': { label: '大世界补给港口', cls: 'cell-port' },
+  'EN': { label: '敌方舰队', cls: 'cell-enemy' },
 }
 
 function getCellMeta(code: string): { label: string; cls: string } {
@@ -633,13 +640,13 @@ function getCellMeta(code: string): { label: string; cls: string } {
 }
 
 export function renderCellContent(code: string): ReactNode {
-  // 1. 敌舰: 1M, 2C, 3E, 1L 等
-  if (/^[0-3][LMCET]/.test(code)) {
+  // 1. 敌舰: 1M, 2C, 3E, 1L, EN 等
+  if (/^[0-3][LMCET]/.test(code) || code === 'EN') {
     const star = code[0]
     return (
-      <span className="cell-icon-wrap" title={`${star}★ 敌舰 (${code})`}>
+      <span className="cell-icon-wrap" title={`${star === 'E' ? '' : star + '★ '}敌舰 (${code})`}>
         <Swords size={13} className="cell-icon" />
-        {star !== '0' && <span className="cell-sub-star">{star}</span>}
+        {star !== '0' && star !== 'E' && <span className="cell-sub-star">{star}</span>}
       </span>
     )
   }
@@ -699,32 +706,79 @@ export function renderCellContent(code: string): ReactNode {
     )
   }
 
-  // 5. 海域航道 (--, ==)
+  // 5. 海域航道 (--, ==): 纯净蓝色方格，不展示冗余波浪图标
   if (code === '--' || code === '==') {
+    return null
+  }
+
+  // 6. 大世界专属图标全面覆盖 (ME, EX, SD, AR, PO)
+  if (code === 'ME') {
     return (
-      <span className="cell-icon-wrap" title="海域/安全航道 (--)">
-        <Waves size={12} className="cell-icon" />
+      <span className="cell-icon-wrap" title="大世界指挥喵搜索点 (ME)">
+        <PawPrint size={13} className="cell-icon" />
+      </span>
+    )
+  }
+  if (code === 'EX') {
+    return (
+      <span className="cell-icon-wrap" title="大世界感叹号特殊事件 (EX)">
+        <AlertCircle size={13} className="cell-icon" />
+      </span>
+    )
+  }
+  if (code === 'SD') {
+    return (
+      <span className="cell-icon-wrap" title="大世界环境扫描探测装置 (SD)">
+        <Radar size={13} className="cell-icon" />
+      </span>
+    )
+  }
+  if (code === 'AR') {
+    return (
+      <span className="cell-icon-wrap" title="大世界机密档案记录 (AR)">
+        <BookOpen size={13} className="cell-icon" />
+      </span>
+    )
+  }
+  if (code === 'PO') {
+    return (
+      <span className="cell-icon-wrap" title="大世界补给港口 (PO)">
+        <Anchor size={13} className="cell-icon" />
       </span>
     )
   }
 
-  // 6. 物资与调查点 (MY, RE, AK, AM, EX, QU)
+  // 7. 物资与调查点 (MY, RE, AK, AM, QU)
   if (code === 'MY' || code === 'QU') {
     return (
-      <span className="cell-icon-wrap" title="神秘调查点 (MY)">
+      <span className="cell-icon-wrap" title="神秘问号调查点 (MY/QU)">
         <HelpCircle size={13} className="cell-icon" />
       </span>
     )
   }
-  if (code === 'RE' || code === 'AM' || code === 'AK') {
+  if (code === 'RE' || code === 'AK') {
     return (
-      <span className="cell-icon-wrap" title="物资补给点 (RE)">
+      <span className="cell-icon-wrap" title="物资资源箱/明石商店 (RE/AK)">
         <Package size={13} className="cell-icon" />
       </span>
     )
   }
+  if (code === 'AM' || code === 'MA') {
+    return (
+      <span className="cell-icon-wrap" title="弹药补给点 (AM)">
+        <Zap size={13} className="cell-icon" />
+      </span>
+    )
+  }
+  if (code === 'MI') {
+    return (
+      <span className="cell-icon-wrap" title="导弹支援点 (MI)">
+        <Crosshair size={13} className="cell-icon" />
+      </span>
+    )
+  }
 
-  // 7. 视野盲区 (..)
+  // 8. 视野盲区 (..)
   if (code === '..') {
     return <span className="cell-blind-dots">··</span>
   }
@@ -796,10 +850,13 @@ export function MapGridCard({ card }: { card: Extract<CardItem, { type: 'map_gri
           <div className="map-legend-bar">
             <span className="legend-item"><Ship size={12} className="legend-icon text-fleet" /> 旗舰 (FL)</span>
             <span className="legend-item"><Crown size={12} className="legend-icon text-boss" /> Boss (BO)</span>
-            <span className="legend-item"><Swords size={12} className="legend-icon text-enemy" /> 敌舰 (1M/2C)</span>
-            <span className="legend-item"><Package size={12} className="legend-icon text-mystery" /> 物资 (MY)</span>
+            <span className="legend-item"><Swords size={12} className="legend-icon text-enemy" /> 敌舰 (1M/EN)</span>
+            <span className="legend-item"><Package size={12} className="legend-icon text-mystery" /> 物资/箱 (MY/RE)</span>
+            <span className="legend-item"><PawPrint size={12} className="legend-icon text-meowfficer" /> 指挥喵 (ME)</span>
+            <span className="legend-item"><AlertCircle size={12} className="legend-icon text-event" /> 事件 (EX)</span>
+            <span className="legend-item"><Radar size={12} className="legend-icon text-device" /> 装置 (SD)</span>
             <span className="legend-item"><Ban size={12} className="legend-icon text-impassable" /> 不可走 (++)</span>
-            <span className="legend-item"><Waves size={12} className="legend-icon text-sea" /> 海域 (--)</span>
+            <span className="legend-item"><span className="legend-dot dot-sea" /> 海域 (--)</span>
           </div>
         </div>
       )}
@@ -1345,10 +1402,13 @@ export function MatrixGridCard({ card }: { card: Extract<CardItem, { type: 'matr
           <div className="map-legend-bar">
             <span className="legend-item"><Ship size={12} className="legend-icon text-fleet" /> 旗舰 (FL)</span>
             <span className="legend-item"><Crown size={12} className="legend-icon text-boss" /> Boss (BO)</span>
-            <span className="legend-item"><Swords size={12} className="legend-icon text-enemy" /> 敌舰 (1M/2C)</span>
-            <span className="legend-item"><Package size={12} className="legend-icon text-mystery" /> 物资 (MY)</span>
+            <span className="legend-item"><Swords size={12} className="legend-icon text-enemy" /> 敌舰 (1M/EN)</span>
+            <span className="legend-item"><Package size={12} className="legend-icon text-mystery" /> 物资/箱 (MY/RE)</span>
+            <span className="legend-item"><PawPrint size={12} className="legend-icon text-meowfficer" /> 指挥喵 (ME)</span>
+            <span className="legend-item"><AlertCircle size={12} className="legend-icon text-event" /> 事件 (EX)</span>
+            <span className="legend-item"><Radar size={12} className="legend-icon text-device" /> 装置 (SD)</span>
             <span className="legend-item"><Ban size={12} className="legend-icon text-impassable" /> 不可走 (++)</span>
-            <span className="legend-item"><Waves size={12} className="legend-icon text-sea" /> 海域 (--)</span>
+            <span className="legend-item"><span className="legend-dot dot-sea" /> 海域 (--)</span>
           </div>
         </div>
       )}
