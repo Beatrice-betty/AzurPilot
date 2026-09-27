@@ -111,16 +111,14 @@
 .log-filters .input-icon {flex: 1}
 
 /* 卡片式日志体系 (Log Card View) */
-.log-cards-container {display: flex; flex-direction: column; gap: 10px; padding: 4px 0}
-.log-card {border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden; transition: all 0.2s}
-.log-card:hover {border-color: var(--accent-soft)}
-.card-header {display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface-muted); cursor: pointer; user-select: none}
+.log-cards-container {display: flex; flex-direction: column; gap: 8px; padding: 4px 0}
+.log-card {border: 1px solid var(--border); border-radius: 6px; background: var(--surface); box-shadow: none; overflow: hidden}
+.card-header {display: flex; justify-content: space-between; align-items: center; padding: 7px 12px; border-bottom: 1px solid var(--border); background: var(--surface-muted); cursor: pointer; user-select: none}
 .card-title {display: flex; align-items: center; gap: 8px; font-size: 11px}
 .title-bold {font-weight: 600; color: var(--text)}
 .card-time {font-size: 10px; color: #06b6d4; font-family: var(--theme-font-mono)}
 .card-actions {display: flex; align-items: center; gap: 6px}
 .card-btn-action {display: inline-flex; align-items: center; gap: 4px; font-size: 10px; padding: 2px 7px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer}
-.card-btn-action:hover {color: var(--text); border-color: var(--accent)}
 .card-btn-icon {padding: 3px; border-radius: 4px; border: 0; background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center}
 .card-body {padding: 10px 14px}
 .badge-shape {font-size: 9px; padding: 1px 5px; border-radius: 4px; background: var(--surface-muted); border: 1px solid var(--border); color: var(--muted); font-family: var(--theme-font-mono)}
@@ -134,16 +132,29 @@
 .map-th-corner {width: 24px; color: var(--muted); text-align: right; padding-right: 6px}
 .map-td-row {color: var(--muted); text-align: right; padding-right: 6px; font-size: 10px; font-weight: 500}
 .map-td-cell {text-align: center; padding: 2px 3px}
-.map-badge {display: inline-block; min-width: 24px; padding: 1px 3px; border-radius: 3px; font-size: 11px; font-weight: 600; text-align: center; cursor: default; transition: transform 0.1s}
-.map-badge:hover {transform: scale(1.15); z-index: 2}
+.map-badge {display: inline-block; min-width: 24px; padding: 1px 3px; border-radius: 3px; font-size: 11px; font-weight: 600; text-align: center; cursor: default}
 
-.cell-fleet-1 {background: #0284c7; color: #fff; box-shadow: 0 0 6px #0284c780}
+.cell-fleet-1 {background: #0284c7; color: #fff}
 .cell-fleet-2 {background: #0891b2; color: #fff}
 .cell-submarine {background: #4f46e5; color: #fff}
-.cell-boss {background: #d97706; color: #fff; font-weight: 700; box-shadow: 0 0 8px #f59e0b80}
+.cell-boss {background: #d97706; color: #fff; font-weight: 700}
 .cell-enemy {background: #dc2626; color: #fff}
 .cell-mystery {background: #059669; color: #fff}
 .cell-ammo {background: #ca8a04; color: #fff}
+.cell-land {background: #374151; color: #9ca3af}
+.cell-sea {background: transparent; color: #38bdf8; opacity: 0.8}
+.cell-cleared {background: transparent; color: #6b7280; opacity: 0.6}
+.cell-caught {background: #991b1b; color: #fecaca; border: 1px dashed #ef4444}
+.cell-akashi {background: #15803d; color: #dcfce7}
+.cell-resource {background: #16a34a; color: #fff}
+.cell-event {background: #eab308; color: #000}
+.cell-meowfficer {background: #06b6d4; color: #fff}
+.cell-question {background: #6366f1; color: #fff}
+.cell-device {background: #8b5cf6; color: #fff}
+.cell-fortress {background: #64748b; color: #fff}
+.cell-missile {background: #f97316; color: #fff}
+.cell-blind {background: transparent; color: var(--muted); opacity: 0.4}
+.cell-default {background: var(--surface-muted); color: var(--text)}
 .cell-land {background: #374151; color: #9ca3af}
 .cell-sea {background: transparent; color: #38bdf8; opacity: 0.8}
 .cell-cleared {background: transparent; color: #6b7280; opacity: 0.6}
@@ -171,13 +182,13 @@
 
 /* 透视与边界卡片 (向前倾斜，近大远小) */
 .perspective-body {display: flex; gap: 20px; align-items: center; flex-wrap: wrap}
-.trapezoid-visual {width: 156px; height: 84px; padding: 4px; border-radius: 8px; background: var(--surface-muted); border: 1px solid var(--border); display: flex; justify-content: center; align-items: center}
+.trapezoid-visual {width: 168px; height: 118px; padding: 4px; border-radius: 6px; background: var(--surface-muted); border: 1px solid var(--border); display: flex; justify-content: center; align-items: center; flex-shrink: 0}
 .trapezoid-svg {overflow: visible; display: block}
-.trapezoid-fill {fill: transparent; transition: fill 0.2s}
+.trapezoid-fill {fill: transparent}
 .trapezoid-fill.fill-all {fill: #10b98110}
 .trapezoid-fill.fill-broken {fill: #ef444406}
 .grid-depth-line {stroke: var(--border); stroke-dasharray: 2 3; stroke-width: 1; opacity: 0.45}
-.edge-stroke {stroke-linecap: round; transition: stroke 0.2s}
+.edge-stroke {stroke-linecap: round}
 .edge-stroke.edge-active {stroke: #10b981; stroke-width: 3.5}
 .edge-stroke.edge-missing {stroke: #ef4444; stroke-width: 2.5; stroke-dasharray: 5 4}
 .perspective-metrics {flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 6px; font-size: 11px}
@@ -185,19 +196,31 @@
 .metric-label {color: var(--muted); min-width: 65px}
 .metric-val {color: var(--text); font-family: var(--theme-font-mono)}
 
-/* 属性清单卡片 */
-.property-grid {display: flex; flex-direction: column; gap: 4px}
-.property-row {display: flex; gap: 8px; font-size: 11px; align-items: baseline}
-.prop-key {color: var(--muted); min-width: 100px; text-align: right; font-weight: 500}
-.prop-divider {color: var(--border); user-select: none}
-.prop-val {color: var(--text); flex: 1}
+/* 属性清单卡片 (Property Sheet: 紧凑双列对齐，无悬停动效) */
+.property-card {border-left: 3px solid var(--accent)}
+.property-grid-table {display: flex; flex-direction: column; gap: 4px; padding: 2px 0}
+.property-row-card {display: flex; align-items: center; gap: 10px; padding: 2px 6px; font-size: 11px}
+.prop-key-col {color: var(--muted); font-weight: 500; min-width: 95px; text-align: right; flex-shrink: 0}
+.prop-key-col::after {content: ":"; margin-left: 2px}
+.prop-val-col {display: flex; align-items: center; gap: 6px; font-family: var(--theme-font-mono)}
+.prop-val-transition {display: flex; align-items: center; gap: 6px}
+.prop-arrow {color: var(--muted); font-size: 11px}
+.prop-val-chips {display: flex; flex-wrap: wrap; gap: 4px}
+.prop-pill {padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 500; background: var(--surface-muted); border: 1px solid var(--border); color: var(--text)}
+.prop-pill-from {color: var(--muted)}
+.prop-pill-to {color: var(--accent); background: var(--accent-soft); border-color: var(--accent); font-weight: 600}
+.prop-pill-coord {color: #06b6d4; background: #06b6d412; border-color: #06b6d435; font-weight: 600}
+.prop-pill-item {color: #14b8a6; background: #14b8a612; border-color: #14b8a635; font-weight: 500}
+.prop-badge {padding: 1px 7px; border-radius: 4px; font-size: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px}
+.prop-badge-true {background: #22c55e15; color: #22c55e; border: 1px solid #22c55e40}
+.prop-badge-false {background: #ef444415; color: #ef4444; border: 1px solid #ef444440}
+.prop-val-plain {color: var(--text)}
 
 /* 数据表格卡片 */
 .data-table-viewport {overflow-x: auto; max-width: 100%}
 .native-log-table {width: 100%; border-collapse: collapse; font-size: 11px; font-family: var(--theme-font-mono)}
 .native-log-table th {background: var(--surface-muted); padding: 6px 12px; border-bottom: 2px solid var(--border); text-align: left; font-weight: 600; color: var(--text)}
 .native-log-table td {padding: 6px 12px; border-bottom: 1px solid var(--border); color: var(--text)}
-.native-log-table tr:hover td {background: #ffffff05}
 
 /* 错误与自愈指南卡片 */
 .error-card {border-left: 3px solid #ef4444}
@@ -214,7 +237,6 @@
 .text-action {font-weight: 600; color: #15803d}
 .error-stack-wrapper {margin-top: 6px}
 .stack-toggle-btn {display: flex; align-items: center; gap: 4px; font-size: 10px; background: transparent; border: 0; color: var(--muted); cursor: pointer; padding: 0}
-.stack-toggle-btn:hover {color: var(--text)}
 .error-stack-content {font-size: 10px; padding: 8px; margin: 6px 0 0; background: var(--surface-muted); border-radius: 6px; border: 1px solid var(--border); line-height: 1.4}
 
 /* 异常堆栈卡片 */
@@ -247,7 +269,6 @@
 
 /* 常规单行卡片 */
 .log-card-line {padding: 3px 6px; border-radius: 4px; background: transparent}
-.log-card-line:hover {background: #ffffff05}
 
 .empty {flex: 0 1 auto; min-height: 160px; padding: 35px 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); gap: 12px; text-align: center; line-height: 1.8; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; font-size: 11px}
 .empty > svg {color: #a7b9c1; margin-bottom: 3px}

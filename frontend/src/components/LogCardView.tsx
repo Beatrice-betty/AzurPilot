@@ -617,7 +617,7 @@ export function MapGridCard({ card }: { card: Extract<CardItem, { type: 'map_gri
   const shapeStr = `${card.cols.length}×${card.rows.length}`
 
   return (
-    <div className="log-card map-card motion-enter">
+    <div className="log-card map-card">
       <div className="card-header" onClick={() => setExpanded(!expanded)}>
         <div className="card-title">
           <MapIcon size={16} className="text-accent" />
@@ -687,7 +687,7 @@ export function PerspectiveCard({ card }: { card: Extract<CardItem, { type: 'per
   const allActive = card.leftEdge && card.upperEdge && card.rightEdge && card.lowerEdge
 
   return (
-    <div className={`log-card perspective-card ${allActive ? 'perspective-complete' : 'perspective-has-missing'} motion-enter`}>
+    <div className={`log-card perspective-card ${allActive ? 'perspective-complete' : 'perspective-has-missing'}`}>
       <div className="card-header">
         <div className="card-title">
           <Compass size={16} className={allActive ? 'text-secondary' : 'text-warning'} />
@@ -759,7 +759,7 @@ export function PerspectiveCard({ card }: { card: Extract<CardItem, { type: 'per
 // 3. 连续属性对齐卡片 (Property Sheet)
 export function PropertySheetCard({ card, search }: { card: Extract<CardItem, { type: 'property_sheet' }>; search: string }) {
   return (
-    <div className="log-card property-card motion-enter">
+    <div className="log-card property-card">
       <div className="card-header">
         <div className="card-title">
           <Layers size={15} className="text-muted" />
@@ -788,7 +788,7 @@ export function PropertySheetCard({ card, search }: { card: Extract<CardItem, { 
 // 4. 原生数据表格卡片 (Benchmark / Score)
 export function DataTableCard({ card }: { card: Extract<CardItem, { type: 'data_table' }> }) {
   return (
-    <div className="log-card table-card motion-enter">
+    <div className="log-card table-card">
       <div className="card-header">
         <div className="card-title">
           <TableIcon size={16} className="text-accent" />
@@ -830,7 +830,7 @@ export function ErrorContextCard({ card }: { card: Extract<CardItem, { type: 'er
   const [stackOpen, setStackOpen] = useState(false)
 
   return (
-    <div className="log-card error-card motion-enter">
+    <div className="log-card error-card">
       <div className="card-header error-header">
         <div className="card-title">
           <AlertCircle size={18} className="text-danger" />
@@ -889,7 +889,7 @@ export function TracebackCard({ card }: { card: Extract<CardItem, { type: 'trace
   const [open, setOpen] = useState(false)
 
   return (
-    <div className="log-card traceback-card motion-enter">
+    <div className="log-card traceback-card">
       <div className="card-header" onClick={() => setOpen(!open)}>
         <div className="card-title">
           <Terminal size={15} className="text-warning" />
@@ -915,7 +915,7 @@ export function TracebackCard({ card }: { card: Extract<CardItem, { type: 'trace
 // 7. LLM 智能分析报告卡片
 export function LlmReportCard({ card }: { card: Extract<CardItem, { type: 'llm_report' }> }) {
   return (
-    <div className="log-card llm-card motion-enter">
+    <div className="log-card llm-card">
       <div className="card-header llm-header">
         <div className="card-title">
           <Sparkles size={16} className="text-llm" />
@@ -939,7 +939,7 @@ export function MatrixGridCard({ card }: { card: Extract<CardItem, { type: 'matr
   const [open, setOpen] = useState(true)
 
   return (
-    <div className="log-card matrix-card motion-enter">
+    <div className="log-card matrix-card">
       <div className="card-header" onClick={() => setOpen(!open)}>
         <div className="card-title">
           <MapIcon size={15} className="text-secondary" />
@@ -982,7 +982,7 @@ export function CostGridCard({ card }: { card: Extract<CardItem, { type: 'cost_g
   const [open, setOpen] = useState(true)
 
   return (
-    <div className="log-card cost-card motion-enter">
+    <div className="log-card cost-card">
       <div className="card-header" onClick={() => setOpen(!open)}>
         <div className="card-title">
           <Compass size={15} className="text-accent" />
@@ -1039,7 +1039,7 @@ export function CostGridCard({ card }: { card: Extract<CardItem, { type: 'cost_g
 // 10. 系统横幅卡片
 export function SystemBannerCard({ card }: { card: Extract<CardItem, { type: 'system_banner' }> }) {
   return (
-    <div className="log-card system-banner-card motion-enter">
+    <div className="log-card system-banner-card">
       <div className="banner-double-rule" />
       <div className="banner-title-text">{card.title}</div>
       <div className="banner-double-rule" />
@@ -1050,7 +1050,7 @@ export function SystemBannerCard({ card }: { card: Extract<CardItem, { type: 'sy
 // 11. 任务阶段卡片
 export function StageHeaderCard({ card }: { card: Extract<CardItem, { type: 'stage_header' }> }) {
   return (
-    <div className={`log-card stage-header-card level-${card.level} motion-enter`}>
+    <div className={`log-card stage-header-card level-${card.level}`}>
       <div className="stage-rule-bar" />
       <div className="stage-title-wrap">
         <span className="stage-title">{card.title}</span>
@@ -1065,7 +1065,7 @@ export function StageHeaderCard({ card }: { card: Extract<CardItem, { type: 'sta
 export function SingleLogLineCard({ card, search }: { card: Extract<CardItem, { type: 'single' }>; search: string }) {
   const lvlKey = card.level.toLowerCase()
   return (
-    <div className={`log-line log-entry-line level-${lvlKey} log-card-line motion-enter`}>
+    <div className={`log-line log-entry-line level-${lvlKey} log-card-line`}>
       <span className={`log-lvl lvl-${lvlKey}`}>{card.level}</span>
       <span className="log-ts">{card.time}</span>
       <span className="log-divider">│</span>
