@@ -1,8 +1,8 @@
 /** 卡片式调度编辑器：图、属性、隔离模拟和运行轨迹。 */
-import {memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties} from 'react'
+import {memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties} from 'react'
 import {useParams} from 'react-router-dom'
 import {ReactFlowProvider, Handle, MarkerType, Position, useConnection as useFlowConnection, useReactFlow, type NodeProps, type Connection as FlowConnection} from '@xyflow/react'
-import {ArrowDown, ArrowUp, ChevronDown, ChevronUp, Copy, Download, FolderOpen, GripVertical, Layers, Play, Plus, Redo2, Save, Search, StepForward, Trash2, Undo2, Upload, X} from 'lucide-react'
+import {ArrowDown, ArrowUp, Bug, Copy, Download, FolderOpen, GripVertical, Layers, Play, Plus, Redo2, Save, Search, StepForward, Trash2, Undo2, Upload, X} from 'lucide-react'
 import '@xyflow/react/dist/style.css'
 import '../scheduler/editor.css'
 import {api} from '../api/client'
@@ -47,10 +47,47 @@ function JsonField({label, value, onChange}: {label: string; value: unknown; onC
   const serialized = JSON.stringify(value ?? null, null, 2)
   const [draft, setDraft] = useState(serialized)
   const [error, setError] = useState('')
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
   useEffect(() => {setDraft(serialized); setError('')}, [serialized])
-  return <label>{label}<textarea className="program-json" value={draft} onChange={e => setDraft(e.target.value)} onBlur={() => {
-    try {onChange(JSON.parse(draft)); setError('')} catch {setError('请填写有效的 JSON 值')}
-  }}/>{error && <small role="alert">{error}</small>}</label>
+
+  const autoResize = useCallback(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.max(el.scrollHeight + 4, 72)}px`
+  }, [])
+
+  useLayoutEffect(() => {
+    const input = textareaRef.current
+    if (!input) return
+    autoResize()
+    let width = input.clientWidth
+    let frame = 0
+    const observer = new ResizeObserver(() => {
+      if (input.clientWidth !== width) {
+        width = input.clientWidth
+        cancelAnimationFrame(frame)
+        frame = requestAnimationFrame(autoResize)
+      }
+    })
+    observer.observe(input)
+    return () => {observer.disconnect(); cancelAnimationFrame(frame)}
+  }, [draft, autoResize])
+
+  const calculatedRows = Math.min(Math.max((draft.match(/\n/g)?.length ?? 0) + 1, 3), 40)
+
+  return <label onMouseEnter={autoResize}>{label}<textarea
+    ref={textareaRef}
+    className="program-json"
+    rows={calculatedRows}
+    value={draft}
+    onFocus={autoResize}
+    onChange={e => {setDraft(e.target.value); autoResize()}}
+    onBlur={() => {
+      try {onChange(JSON.parse(draft)); setError('')} catch {setError('请填写有效的 JSON 值')}
+    }}
+  />{error && <small role="alert">{error}</small>}</label>
 }
 
 function Editor() {
@@ -80,7 +117,7 @@ function Editor() {
   const [outcomes, setOutcomes] = useState('completed')
   const [simSteps, setSimSteps] = useState(0)
   const [variablesOpen, setVariablesOpen] = useState(false)
-  const [consoleOpen, setConsoleOpen] = useState(true)
+  const [debugOpen, setDebugOpen] = useState(false)
   const [guideDismissed, setGuideDismissed] = useState(false)
   const [connector, setConnector] = useState({source:'', sourcePort:'', target:'', targetPort:''})
   const history = useRef<{past: ProgramDocument[]; future: ProgramDocument[]}>({past:[], future:[]})
@@ -88,6 +125,10 @@ function Editor() {
   const requestVersion = useRef(0)
   const wrapper = useRef<HTMLDivElement>(null)
   const dirty = !!doc && !!saved && JSON.stringify(doc) !== JSON.stringify(saved.draft)
+  const docRef = useRef(doc)
+  docRef.current = doc
+  const graphIdRef = useRef(graphId)
+  graphIdRef.current = graphId
   const graph = doc && (graphId === 'main' ? doc : doc.subgraphs.find(s => s.id === graphId))
   const picked = graph?.nodes.find(n => n.id === selection[0])
 
@@ -190,9 +231,13 @@ function Editor() {
     updateGraph({...graph, edges:[...edges, {id:id(), source:link.source, sourcePort:sourcePort!, target:link.target, targetPort, kind:kind as 'data' | 'control'}]})
   }
   const onParamsChange = useCallback((node: string, patch: Record<string, unknown>) => {
-    if (!doc || !graph) return
-    change(replaceGraph(doc, graphId, {...graph,nodes:graph.nodes.map(n => n.id === node ? {...n,params:{...n.params,...patch}} : n)}))
-  }, [doc,graph,graphId,change])
+    const currentDoc = docRef.current
+    if (!currentDoc) return
+    const gid = graphIdRef.current
+    const currentGraph = gid === 'main' ? currentDoc : currentDoc.subgraphs.find(s => s.id === gid)
+    if (!currentGraph) return
+    change(replaceGraph(currentDoc, gid, {...currentGraph, nodes:currentGraph.nodes.map(n => n.id === node ? {...n, params:{...n.params, ...patch}} : n)}))
+  }, [change])
   const currentNode = (tab === 'simulate' ? simulation?.state.node : runtime?.node)
   const nodes = useMemo<CanvasNode[]>(() => graph && catalog && doc ? graph.nodes.map(node => {
     const spec = definition(node,doc,catalog,graph)
@@ -213,7 +258,7 @@ function Editor() {
     setBusy(true); setError('')
     try {
       if (kind === 'validate') {
-        setConsoleOpen(true)
+        setDebugOpen(true)
         const result = await api.request('scheduler.program.validate', {instance, document:doc, mode}); if (version === requestVersion.current) setValidation(result)
       } else {
         let latest = saved
@@ -227,7 +272,7 @@ function Editor() {
   }
   async function simulate(steps: number) {
     if (!doc) return
-    setBusy(true); setError(''); setTab('simulate'); setConsoleOpen(true)
+    setBusy(true); setError(''); setTab('simulate'); setDebugOpen(true)
     const version = requestVersion.current
     try {
       const now = simTime.replace('T', ' ') + ':00'
@@ -265,7 +310,9 @@ function Editor() {
     <header className="program-toolbar"><div><Layers size={21}/><div><h1>{ui('nav.schedulerProgram')}</h1><small>{saved.mode === 'native' ? '当前使用原调度' : saved.mode === 'enhance' ? '当前使用增强调度' : '当前由卡片程序完全接管'} · {dirty ? '有未保存修改' : '草稿已保存'}</small></div></div>
       <div className="program-actions"><button className="button secondary" onClick={() => undo()} disabled={!history.current.past.length} title="撤销"><Undo2 size={15}/></button><button className="button secondary" onClick={() => undo(true)} disabled={!history.current.future.length} title="重做"><Redo2 size={15}/></button>
         <select aria-label="调度模式" value={mode} onChange={e => {setMode(e.target.value as ProgramMode); setValidation(undefined)}}><option value="takeover">完全接管</option><option value="enhance">增强调度</option></select>
-        <button className="button secondary" disabled={busy} onClick={() => void action('validate')}>校验</button><button className="button secondary" disabled={busy} onClick={() => void action('save')}><Save size={15}/>保存草稿</button><button className="button primary" disabled={busy} onClick={() => void action('apply')}><Play size={15}/>应用方案</button>
+        <button className="button secondary" disabled={busy} onClick={() => void action('validate')}>校验</button>
+        <button type="button" className={`button secondary program-debug-btn ${debugOpen ? 'active' : ''}`} onClick={() => setDebugOpen(open => !open)} title={debugOpen ? '收起调试面板' : '展开调试面板'} aria-expanded={debugOpen}><Bug size={14}/><span>调试</span></button>
+        <button className="button secondary" disabled={busy} onClick={() => void action('save')}><Save size={15}/>保存草稿</button><button className="button primary" disabled={busy} onClick={() => void action('apply')}><Play size={15}/>应用方案</button>
       </div>
     </header>
     {error && <ErrorBox message={error}/>}
@@ -297,15 +344,15 @@ function Editor() {
           onEdgeDoubleClick={(_,edge) => updateGraph({...graph, edges:graph.edges.filter(e => e.id !== edge.id)})}/>
         <div className="program-canvas-hint">左键框选 · 中键或空格拖动 · Ctrl/Cmd+C/V 复制粘贴 · 退格删除<br/>同色端口可连接 · 彩环为通用端口 · 方形为执行端口</div>
       </main>
-      <aside className="program-library"><label className="program-search"><Search size={15}/><input placeholder="搜索卡片…" value={search} onChange={e => setSearch(e.target.value)}/></label>
+      <aside className="program-library nowheel nopan nodrag"><label className="program-search"><Search size={15}/><input placeholder="搜索卡片…" value={search} onChange={e => setSearch(e.target.value)}/></label>
         {[...new Set(catalog.cards.map(c => c.category))].map(category => <div key={category} style={{'--card-color':categoryColor(category)} as CSSProperties}><h3><i className="program-category-dot"/>{category}</h3>{catalog.cards.filter(c => c.category === category && `${c.label} ${c.type}`.toLowerCase().includes(search.toLowerCase())).map(card => <button key={card.type} draggable onDragStart={event => event.dataTransfer.setData('application/azurpilot-card', JSON.stringify({type:card.type}))} onClick={() => add(card.type)}><Plus size={12}/>{card.label}</button>)}</div>)}
         <h3>组合卡片</h3>{doc.subgraphs.filter(s => s.name.includes(search)).map(sub => <div className="program-library-composite" key={sub.id}><button draggable onDragStart={event => event.dataTransfer.setData('application/azurpilot-card', JSON.stringify({type:'call', graph:sub.id}))} onClick={() => add('call', sub.id)}><Layers size={12}/>{sub.name}</button><button title="打开内部逻辑" onClick={() => {setGraphId(sub.id); setSelection([])}}>↗</button></div>)}
       </aside>
-      <aside className="program-properties"><h2>{picked ? spec?.label : '卡片属性'}</h2>
+      <aside className="program-properties nowheel nopan nodrag"><h2>{picked ? spec?.label : '卡片属性'}</h2>
         {picked?.label && <div className="program-card-alias" style={{marginBottom:10}}>别名：{picked.label}</div>}
         {!picked && <p className="muted">点击卡片设置参数。拖拽端口连线，也可以使用下方的连接表单。</p>}
         {picked && <><label htmlFor="program-card-label">卡片名称<input id="program-card-label" aria-label="卡片名称" placeholder="自定义别名（优先显示原名）" value={picked.label} onChange={e => updateNode({...picked, label:e.target.value})}/></label>
-          <label htmlFor="program-card-comment">卡片注释<textarea id="program-card-comment" aria-label="卡片注释" value={picked.comment ?? ''} maxLength={2000} placeholder="单独设置卡片注释，说明具体用途…" onChange={e => updateNode({...picked, comment:e.target.value})}/></label>
+          <label htmlFor="program-card-comment">卡片注释<textarea id="program-card-comment" aria-label="卡片注释" value={picked.comment ?? ''} rows={Math.max((picked.comment?.match(/\n/g)?.length ?? 0) + 1, 3)} maxLength={2000} placeholder="单独设置卡片注释，说明具体用途…" onChange={e => updateNode({...picked, comment:e.target.value})}/></label>
           {picked.type === 'call' && <button className="button secondary" onClick={() => {setGraphId(String(picked.params.graph)); setSelection([])}}>打开内部逻辑</button>}
           {graphId !== 'main' && currentGraph.pure && <button className="button secondary" onClick={() => updateGraph({...graph, entry:picked.id})}>作为数据输出入口</button>}
           {renderParams.map(([key,value]) => {
@@ -351,25 +398,45 @@ function Editor() {
           <button type="button" className="program-guide-close" title="关闭说明" onClick={() => setGuideDismissed(true)}><X size={13}/></button>
         </div>
       )}
-      <section className={`program-console ${consoleOpen ? 'open' : 'collapsed'}`}>
-        <div className="program-console-tabs" onDoubleClick={() => setConsoleOpen(open => !open)}>
-          <button className={tab === 'simulate' ? 'active' : ''} onClick={() => {setTab('simulate'); setConsoleOpen(true)}}>隔离模拟</button>
-          <button className={tab === 'runtime' ? 'active' : ''} onClick={() => {setTab('runtime'); setConsoleOpen(true)}}>运行轨迹</button>
-          <span>{status?.status ?? '尚未执行'}{status?.task ? ` · ${status.task}` : ''}{status?.reason ? ` · ${status.reason}` : ''}</span>
-          <button type="button" className="program-console-toggle" aria-label={consoleOpen ? '收起控制台' : '展开控制台'} title={consoleOpen ? '收起控制台' : '展开控制台'} onClick={() => setConsoleOpen(open => !open)}>
-            {consoleOpen ? <ChevronDown size={14}/> : <ChevronUp size={14}/>}
-            <span>{consoleOpen ? '收起' : '展开'}</span>
+      <aside className={`program-console program-debug-drawer nowheel nopan nodrag ${debugOpen ? 'open' : 'closed'}`} aria-label="调试面板" onWheel={e => e.stopPropagation()}>
+        <div className="program-console-tabs">
+          <div className="program-console-tab-buttons">
+            <button type="button" className={tab === 'simulate' ? 'active' : ''} onClick={() => setTab('simulate')}>隔离模拟</button>
+            <button type="button" className={tab === 'runtime' ? 'active' : ''} onClick={() => setTab('runtime')}>运行轨迹</button>
+          </div>
+          <div className="program-console-status">
+            <span>{status?.status ?? '尚未执行'}{status?.task ? ` · ${status.task}` : ''}{status?.reason ? ` · ${status.reason}` : ''}</span>
+          </div>
+          <button type="button" className="program-debug-close" aria-label="关闭调试面板" title="关闭调试面板" onClick={() => setDebugOpen(false)}>
+            <X size={15}/>
           </button>
         </div>
-        <div className="program-console-body">
+        <div className="program-console-body nowheel nopan nodrag" onWheel={e => e.stopPropagation()}>
           {validation && <div className={`program-diagnostics ${validation.valid ? 'valid' : ''}`}>{validation.valid ? '程序校验通过' : validation.diagnostics.map((d,index) => {
             const g = d.graph === 'main' ? doc : doc.subgraphs.find(s => s.id === d.graph)
             const target = g?.nodes.find(n => n.id === d.node)
             const targetTitle = target ? `${definition(target, doc, catalog, g ?? graph).label}${target.label ? `（${target.label}）` : ''}` : d.node
             return <button key={index} onClick={() => {setGraphId(d.graph); setSelection(d.node ? [d.node] : [])}}>{d.message}{targetTitle ? ` · ${targetTitle}` : ''}</button>
           })}</div>}
-          {tab === 'simulate' && <div className="program-simulator"><label>模拟时间<input type="datetime-local" value={simTime} onChange={e => {setSimTime(e.target.value); setSimSteps(0)}}/></label>{catalog.resources.map(r => <label key={r.name}>{r.name.startsWith('Emotion') ? `舰队 ${r.name.slice(-1)} 心情` : ui(`resource.${r.name}` as UiKey)}<input type="number" placeholder="数据不可用" value={resources[r.name] ?? ''} onChange={e => {setResources({...resources,[r.name]:e.target.value}); setSimSteps(0)}}/></label>)}<label>含体力箱的总行动力<input type="number" value={apTotal} onChange={e => {setApTotal(e.target.value); setSimSteps(0)}}/></label><label>任务结果序列<input value={outcomes} onChange={e => {setOutcomes(e.target.value); setSimSteps(0)}} placeholder="completed,yielded,failed"/></label><button className="button secondary" disabled={busy} onClick={() => void simulate(Math.min(simSteps+1,1000))}><StepForward size={14}/>单步</button><button className="button primary" disabled={busy} onClick={() => void simulate(100)}><Play size={14}/>模拟运行</button></div>}
-          <details><summary>模拟任务状态</summary><JsonField label="任务列表（名称、启用状态、下次运行时间）" value={simTasks} onChange={value => {if (Array.isArray(value)) {setSimTasks(value); setSimSteps(0)}}}/></details><div className="program-trace">{status?.trace?.length ? status.trace.map((line,index) => {
+          {tab === 'simulate' && <>
+            <div className="program-sim-actions">
+              <button type="button" className="button secondary" disabled={busy} onClick={() => void simulate(Math.min(simSteps+1,1000))}><StepForward size={14}/>单步</button>
+              <button type="button" className="button primary" disabled={busy} onClick={() => void simulate(100)}><Play size={14}/>模拟运行</button>
+            </div>
+            <details className="program-sim-params">
+              <summary>
+                <span>环境与资源数据</span>
+                <small>（时间、资源等参数，点击展开修改）</small>
+              </summary>
+              <div className="program-sim-params-content">
+                <label>模拟时间<input type="datetime-local" value={simTime} onChange={e => {setSimTime(e.target.value); setSimSteps(0)}}/></label>
+                {catalog.resources.map(r => <label key={r.name}>{r.name.startsWith('Emotion') ? `舰队 ${r.name.slice(-1)} 心情` : ui(`resource.${r.name}` as UiKey)}<input type="number" placeholder="数据不可用" value={resources[r.name] ?? ''} onWheel={e => (e.target as HTMLInputElement).blur()} onChange={e => {setResources({...resources,[r.name]:e.target.value}); setSimSteps(0)}}/></label>)}
+                <label>含体力箱的总行动力<input type="number" value={apTotal} onWheel={e => (e.target as HTMLInputElement).blur()} onChange={e => {setApTotal(e.target.value); setSimSteps(0)}}/></label>
+                <label>任务结果序列<input value={outcomes} onChange={e => {setOutcomes(e.target.value); setSimSteps(0)}} placeholder="completed,yielded,failed"/></label>
+              </div>
+            </details>
+          </>}
+          <details className="program-sim-tasks-details"><summary>模拟任务状态</summary><JsonField label="任务列表（名称、启用状态、下次运行时间）" value={simTasks} onChange={value => {if (Array.isArray(value)) {setSimTasks(value); setSimSteps(0)}}}/></details><div className="program-trace">{status?.trace?.length ? status.trace.map((line,index) => {
             const cardDef = catalog.cards.find(c => c.type === line.type)
             const sub = line.graph && line.graph !== 'main' ? doc.subgraphs.find(s => s.id === line.graph) : undefined
             const orig = cardDef?.label ?? sub?.name ?? line.type ?? line.node
@@ -377,7 +444,7 @@ function Editor() {
             return <div key={index}><span>{index + 1}</span><button onClick={() => {setGraphId(String(line.graph ?? 'main')); setSelection([String(line.node)])}}>{displayLabel}</button><code>{JSON.stringify(line.input ?? line.value ?? line.output ?? line.exit ?? '')}</code></div>
           }) : <p className="muted">模拟不会连接设备，也不会修改资源或持久变量。执行后可查看每张卡片的输入、出口和结果。</p>}</div>
         </div>
-      </section>
+      </aside>
     </div>
   </div>
 }

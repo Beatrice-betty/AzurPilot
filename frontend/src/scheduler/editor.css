@@ -73,7 +73,22 @@
   outline: none;
   background: var(--background, #f6f8fb);
 }
-.program-canvas-hint {position:absolute; bottom:14px; left:20px; pointer-events:none; font-size:10px; color:var(--muted); background:color-mix(in srgb, var(--program-panel) 85%, transparent); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); padding:6px 10px; border-radius:6px; border:1px solid var(--border,#d7dce3); z-index:2}
+.program-canvas-hint {
+  position: absolute;
+  bottom: 14px;
+  left: 310px;
+  pointer-events: none;
+  font-size: 10px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--program-panel) 85%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border,#d7dce3);
+  z-index: 4;
+  transition: left 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
 
 /* 控件：悬浮在编辑区画布上方（Overlay Controls） */
 .program-library, .program-properties {
@@ -92,7 +107,19 @@
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
   overflow-y: auto;
   box-sizing: border-box;
+  touch-action: pan-y;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--border, #d7dce3) 70%, var(--muted, #8191a5)) transparent;
   transition: transform .2s ease, opacity .2s ease, left .2s ease, right .2s ease;
+}
+.program-library::-webkit-scrollbar,
+.program-properties::-webkit-scrollbar {
+  width: 6px;
+}
+.program-library::-webkit-scrollbar-thumb,
+.program-properties::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--border, #d7dce3) 70%, var(--muted, #8191a5));
+  border-radius: 4px;
 }
 .program-library {
   left: 14px;
@@ -116,7 +143,12 @@
 /* 节点位置由画布直接更新，不对拖拽坐标或连线附加主题转场 */
 .program-canvas .react-flow__node, .program-canvas .react-flow__viewport, .program-card {transition:none; animation:none}
 .program-canvas .react-flow__edge-text {fill:var(--text)}.program-canvas .react-flow__edge-textbg {fill:var(--program-panel)}
-.program-properties h2 {font-size:15px; margin:0 0 12px}.program-properties>label,.program-properties details label {display:flex; flex-direction:column; gap:5px; font-size:11px; margin-bottom:10px}.program-properties fieldset {border:1px solid var(--border); border-radius:8px; margin:8px 0; padding:8px; max-height:200px; overflow:auto}.program-properties fieldset label,.program-checkbox {display:flex; align-items:center; gap:7px; margin:5px 0; font-size:11px}.program-properties p {font-size:12px; line-height:1.65}.program-json {width:100%; font:11px/1.5 monospace; min-height:60px; resize:vertical}
+.program-properties h2 {font-size:15px; margin:0 0 12px}
+.program-properties>label,.program-properties details label {display:flex; flex-direction:column; gap:5px; font-size:11px; margin-bottom:10px}
+.program-properties fieldset {border:1px solid var(--border); border-radius:8px; margin:8px 0; padding:8px 10px; max-height:none; overflow:visible}
+.program-properties fieldset label,.program-checkbox {display:flex; align-items:center; gap:7px; margin:5px 0; font-size:11px}
+.program-properties p {font-size:12px; line-height:1.65}
+.program-json {width:100%; font:11px/1.55 var(--theme-font-mono, "JetBrains Mono", Consolas, monospace); min-height:72px; max-height:none; resize:vertical; overflow:visible; box-sizing:border-box}
 .program-priority-row {display:flex; align-items:center; gap:4px; padding:4px 0; font-size:11px}.program-priority-row span {flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis}.program-priority-row button {padding:3px; background:none; border:0; color:var(--text); cursor:pointer}.program-priority-row button:disabled {opacity:.3}
 .program-connect {margin-top:14px; font-size:11px}.program-connect summary {cursor:pointer; margin-bottom:10px}.program-file input {display:none}
 
@@ -156,108 +188,309 @@
   background: var(--hover, rgba(90, 120, 160, 0.1));
 }
 
-/* 底部控制台：悬浮在画布下方底部中央 */
+.program-debug-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.program-debug-btn.active {
+  background: var(--accent, #3b82f6) !important;
+  color: #fff !important;
+  border-color: var(--accent, #3b82f6) !important;
+}
+
+/* 调试控制台：从右上角展开的右侧滑入浮岛抽屉 */
 .program-console {
   position: absolute;
-  left: 258px;
-  right: 328px;
+  top: 14px;
+  right: 14px;
   bottom: 14px;
-  z-index: 10;
+  width: 440px;
+  max-width: calc(100% - 28px);
+  z-index: 25;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border, #d7dce3);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--program-panel) 94%, transparent);
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.09);
+  background: color-mix(in srgb, var(--program-panel) 96%, transparent);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.12), 0 8px 30px rgba(0, 0, 0, 0.08);
   padding: 0;
   overflow: hidden;
-  max-height: 38vh;
-  transition: max-height .18s cubic-bezier(0.16, 1, 0.3, 1), left .2s ease, right .2s ease;
+  touch-action: pan-y;
+  transition: transform .22s cubic-bezier(0.16, 1, 0.3, 1), opacity .2s ease, visibility .22s ease;
 }
-.program-console.collapsed {
-  max-height: 38px;
+.program-console.open {
+  transform: translateX(0);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.program-console.closed {
+  transform: translateX(calc(100% + 24px));
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 .program-console-tabs {
-  height: 38px;
-  min-height: 38px;
-  padding: 0 14px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 12px 0 14px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   font-size: 12px;
   user-select: none;
-  border-bottom: 1px solid transparent;
+  border-bottom: 1px solid var(--border, #d7dce3);
+  background: color-mix(in srgb, var(--program-panel) 70%, transparent);
   flex-shrink: 0;
 }
-.program-console.open .program-console-tabs {
-  border-bottom-color: var(--border, #d7dce3);
+.program-console-tab-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .program-console-tabs button {
   border: 0;
   background: none;
   color: var(--muted);
   cursor: pointer;
-  padding: 8px 0;
+  padding: 5px 10px;
+  border-radius: 6px;
   font-size: 12px;
+  font-weight: 500;
+  transition: all .15s ease;
+}
+.program-console-tabs button:hover {
+  color: var(--text);
+  background: var(--hover, rgba(90, 120, 160, 0.08));
 }
 .program-console-tabs button.active {
   color: var(--accent);
+  background: var(--hover, rgba(90, 120, 160, 0.14));
   font-weight: 600;
 }
-.program-console-tabs span {
+.program-console-status {
   margin-left: auto;
   color: var(--muted);
-  max-width: 50%;
+  max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 11px;
 }
-.program-console-toggle {
+.program-debug-close {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
   border: 0;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 4px;
-  font-size: 11px;
-  margin-left: 8px;
+  border-radius: 6px;
+  padding: 0;
   flex-shrink: 0;
+  transition: all .15s ease;
 }
-.program-console-toggle:hover {
-  background: var(--hover, rgba(90, 120, 160, 0.1));
+.program-debug-close:hover {
+  background: var(--hover, rgba(90, 120, 160, 0.12));
   color: var(--text);
 }
 .program-console-body {
   flex: 1 1 0;
   min-height: 0;
-  overflow-y: auto;
-  padding: 10px 14px 14px;
+  height: 100%;
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding: 12px 14px 16px;
   display: flex;
   flex-direction: column;
+  gap: 10px;
+  touch-action: pan-y;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--border, #d7dce3) 70%, var(--muted, #8191a5)) transparent;
+}
+.program-console-body::-webkit-scrollbar {
+  width: 6px;
+}
+.program-console-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.program-console-body::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--border, #d7dce3) 70%, var(--muted, #8191a5));
+  border-radius: 4px;
+}
+.program-console-body::-webkit-scrollbar-thumb:hover {
+  background: var(--muted, #8191a5);
+}
+
+.program-sim-actions {
+  display: flex;
   gap: 8px;
+  align-items: center;
+  padding: 2px 0;
+  flex-shrink: 0;
 }
-.program-console.collapsed .program-console-body {
-  display: none;
+.program-sim-actions .button {
+  flex: 1;
+  min-height: 32px;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+}
+.program-sim-actions .button.primary {
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
 }
 
-.program-simulator {display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:8px 0}.program-simulator label {display:flex;flex-direction:column;gap:4px;font-size:10px}.program-simulator input {width:90px}.program-simulator label:first-child input {width:170px}.program-simulator label:nth-last-of-type(1) input {width:170px}
-.program-trace {max-height:200px;overflow:auto;font-size:11px}.program-trace>div {display:flex;gap:10px;padding:6px 4px;border-top:1px solid var(--border)}.program-trace span {color:var(--muted);width:24px}.program-trace button {border:0;background:transparent;color:var(--accent);cursor:pointer;flex-shrink:0}.program-trace code {white-space:pre-wrap;overflow-wrap:anywhere}.program-diagnostics {display:flex;flex-direction:column;gap:4px;color:#c25461;font-size:12px;margin:8px 0}.program-diagnostics.valid {color:#329071}.program-diagnostics button {text-align:left;border:0;background:transparent;color:inherit;cursor:pointer}
-.program-schema-panel {border-bottom:1px solid var(--border); background:var(--program-panel); padding:10px 16px; display:flex; flex-direction:column; gap:8px; font-size:12px; flex-shrink:0}.program-schema-panel>div:first-child {display:flex;align-items:center;gap:10px}.program-schema-row {display:flex;gap:10px;align-items:center;flex-wrap:wrap}.program-schema-row>label {display:flex;align-items:center;gap:5px}.program-schema-row textarea {min-height:32px;max-height:60px;width:180px}
-.program-editor .react-flow__controls button {background:var(--program-panel);color:var(--text);border-color:var(--border)}.program-editor .react-flow__controls button svg {fill:currentColor}.program-editor .react-flow__minimap {background:var(--program-panel)}
+.program-sim-params {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--program-panel) 60%, transparent);
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+.program-sim-params summary {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+  background: color-mix(in srgb, var(--program-panel) 85%, transparent);
+}
+.program-sim-params summary:hover {
+  background: var(--hover, rgba(90, 120, 160, 0.08));
+}
+.program-sim-params summary small {
+  font-size: 11px;
+  font-weight: normal;
+  color: var(--muted);
+}
+.program-sim-params-content {
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  border-top: 1px solid var(--border);
+}
+.program-sim-params-content label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.program-sim-params-content label input {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--input-bg, transparent);
+  color: var(--text);
+  font-size: 12px;
+  box-sizing: border-box;
+}
+.program-sim-params-content label:first-child,
+.program-sim-params-content label:nth-last-of-type(1) {
+  grid-column: span 2;
+}
 
-/* 展开画布模式：收起左右浮岛，中间悬浮条向两侧拓展，画布完整裸露 */
+.program-sim-tasks-details {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--program-panel) 60%, transparent);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.program-sim-tasks-details summary {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+  background: color-mix(in srgb, var(--program-panel) 85%, transparent);
+}
+.program-sim-tasks-details summary:hover {
+  background: var(--hover, rgba(90, 120, 160, 0.08));
+}
+
+.program-trace {
+  flex: 1 1 auto;
+  min-height: 160px;
+  max-height: none;
+  overflow: visible;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--program-panel);
+}
+.program-trace>div {display:flex;gap:10px;padding:6px 8px;border-top:1px solid var(--border)}.program-trace span {color:var(--muted);width:24px}.program-trace button {border:0;background:transparent;color:var(--accent);cursor:pointer;flex-shrink:0}.program-trace code {white-space:pre-wrap;overflow-wrap:anywhere}.program-diagnostics {display:flex;flex-direction:column;gap:4px;color:#c25461;font-size:12px;margin:8px 0}.program-diagnostics.valid {color:#329071}.program-diagnostics button {text-align:left;border:0;background:transparent;color:inherit;cursor:pointer}
+.program-schema-panel {border-bottom:1px solid var(--border); background:var(--program-panel); padding:10px 16px; display:flex; flex-direction:column; gap:8px; font-size:12px; flex-shrink:0}.program-schema-panel>div:first-child {display:flex;align-items:center;gap:10px}.program-schema-row {display:flex;gap:10px;align-items:center;flex-wrap:wrap}.program-schema-row>label {display:flex;align-items:center;gap:5px}.program-schema-row textarea {min-height:32px;max-height:none;width:180px}
+
+/* React Flow 控制器与小地图：自动退避左右悬浮面板与抽屉，杜绝遮挡 */
+.program-editor .react-flow__controls {
+  left: 258px !important;
+  bottom: 14px !important;
+  z-index: 5 !important;
+  margin: 0 !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08) !important;
+  overflow: hidden !important;
+  transition: left 0.22s cubic-bezier(0.16, 1, 0.3, 1), bottom 0.2s ease !important;
+}
+.program-editor .react-flow__controls button {
+  background: var(--program-panel);
+  color: var(--text);
+  border-color: var(--border);
+}
+.program-editor .react-flow__controls button svg {
+  fill: currentColor;
+}
+.program-editor .react-flow__minimap {
+  right: 328px !important;
+  bottom: 14px !important;
+  z-index: 5 !important;
+  margin: 0 !important;
+  background: var(--program-panel) !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08) !important;
+  transition: right 0.22s cubic-bezier(0.16, 1, 0.3, 1), bottom 0.2s ease !important;
+}
+
+/* 当右侧调试面板展开时，小地图自动向左退避 */
+.program-workspace:has(.program-console.open) .react-flow__minimap {
+  right: 468px !important;
+}
+
+/* 展开画布模式下（左右面板收起），控制器与小地图退回到画布两边缘 */
+.program-workspace.canvas-expanded .react-flow__controls {
+  left: 14px !important;
+}
+.program-workspace.canvas-expanded:not(:has(.program-console.open)) .react-flow__minimap {
+  right: 14px !important;
+}
+.program-workspace.canvas-expanded .program-canvas-hint {
+  left: 66px;
+}
+
+/* 展开画布模式：收起左右浮岛，顶部提示条向两侧拓展，画布完整裸露 */
 .program-workspace.canvas-expanded > .program-library,
 .program-workspace.canvas-expanded > .program-properties {
   display: none;
 }
-.program-workspace.canvas-expanded > .program-default-guide,
-.program-workspace.canvas-expanded > .program-console {
+.program-workspace.canvas-expanded > .program-default-guide {
   left: 14px;
   right: 14px;
 }
@@ -277,7 +510,12 @@
 @media(max-width:1200px) {
   .program-library {width:200px}
   .program-properties {width:250px}
-  .program-default-guide, .program-console {left:228px; right:278px}
+  .program-default-guide {left:218px; right:268px}
+  .program-console {width:380px}
+  .program-editor .react-flow__controls {left:228px !important}
+  .program-canvas-hint {left:280px}
+  .program-editor .react-flow__minimap {right:278px !important}
+  .program-workspace:has(.program-console.open) .react-flow__minimap {right:408px !important}
 }
 
 @media(max-width:850px) {
@@ -296,7 +534,8 @@
   .program-workspace.mobile-library .program-library,
   .program-workspace.mobile-properties .program-properties {display:flex}
   .program-default-guide {display:none}
-  .program-console {left:10px; right:10px; bottom:10px}
-  .program-editor .react-flow__minimap {width:100px; height:70px}
-  .program-canvas-hint {max-width:calc(100% - 65px)}
+  .program-console {left:10px; right:10px; width:auto; max-width:none; top:10px; bottom:10px}
+  .program-editor .react-flow__controls {left:14px !important; bottom:14px !important}
+  .program-editor .react-flow__minimap {right:14px !important; bottom:14px !important; width:100px; height:70px}
+  .program-canvas-hint {display:none}
 }

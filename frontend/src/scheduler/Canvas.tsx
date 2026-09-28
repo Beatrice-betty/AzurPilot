@@ -27,8 +27,10 @@ export function ProgramCanvas({nodes: documentNodes = [], edges: documentEdges =
     observer.observe(root.current)
     return () => {observer.disconnect(); cancelAnimationFrame(frame)}
   }, [flow])
-  // 保留 React Flow 测得的尺寸，文档或节点装饰变化不会重新挂载节点。
-  useEffect(() => {
+  // 同步外部文档变更：在渲染周期即时对齐节点与连线数据，避免 useEffect 异步帧延迟导致受控状态回弹。
+  const [prevDocumentNodes, setPrevDocumentNodes] = useState(documentNodes)
+  if (prevDocumentNodes !== documentNodes) {
+    setPrevDocumentNodes(documentNodes)
     setNodes(previous => {
       const indexed = new Map(previous.map(node => [node.id, node]))
       return documentNodes.map(node => {
@@ -36,13 +38,15 @@ export function ProgramCanvas({nodes: documentNodes = [], edges: documentEdges =
         return {...current, ...node, position: current?.dragging ? current.position : node.position}
       })
     })
-  }, [documentNodes])
-  useEffect(() => {
+  }
+  const [prevDocumentEdges, setPrevDocumentEdges] = useState(documentEdges)
+  if (prevDocumentEdges !== documentEdges) {
+    setPrevDocumentEdges(documentEdges)
     setEdges(previous => {
-      const indexed = new Map(previous.map(edge => [edge.id,edge]))
-      return documentEdges.map(edge => ({...indexed.get(edge.id),...edge}))
+      const indexed = new Map(previous.map(edge => [edge.id, edge]))
+      return documentEdges.map(edge => ({...indexed.get(edge.id), ...edge}))
     })
-  }, [documentEdges])
+  }
   const onNodesChange = useCallback((changes: NodeChange<CanvasNode>[]) => {
     setNodes(previous => applyNodeChanges(changes, previous))
   }, [])
