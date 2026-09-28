@@ -913,6 +913,7 @@ export function createMockState({ empty = false } = {}) {
         if (params.enabled !== undefined) { if (params.enabled) startup.add(name); else startup.delete(name) }
         if (params.remember !== undefined) { if (params.remember) remember.add(name); else remember.delete(name) }
         return { enabled: startup.has(name), remember: remember.has(name) }
+      case 'background.access': return {token: 'mock-background-token'}
       case 'announcement.get':
         return {
           announcementId: 'mock-announcement-v2',

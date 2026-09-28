@@ -81,7 +81,7 @@ const listeners = new Set<() => void>()
 export const galleryUrl = (identifier: string) => `/background-library/${encodeURIComponent(identifier)}`
 
 /** 网图的同源代理地址：服务端先抓下来再回传，浏览器加载它与直链是同一张图。 */
-export const proxyUrl = (url: string) => `/api/v1/background/media?url=${encodeURIComponent(url)}`
+export const proxyUrl = (url: string, token: string) => `/api/v1/background/media?url=${encodeURIComponent(url)}&token=${encodeURIComponent(token)}`
 
 const MIGRATED_KEY = 'azurpilot.background.migrated'
 /** initBackgroundGallery 只跑一次的守卫（它是幂等的引导流程，重复调用会引发重解析循环）。 */
@@ -283,10 +283,11 @@ export async function resolveActiveBackground() {
   if (!url) return
   publish({resolving: true, resolveError: ''})
   try {
+    const {token} = await api.request('background.access', {})
     const result = await api.request('background.resolve', {url})
     if (activeBackgroundUrl(snapshot) !== url) return
     /* 解析成功：壁纸改用直链 —— 同一个地址同时用于预览与"存入图库"，不会出现两次随机。 */
-    lastGoodAssetUrl = proxyUrl(result.final_url)
+    lastGoodAssetUrl = proxyUrl(result.final_url, token)
     publish({assetUrl: lastGoodAssetUrl, directUrl: result.final_url, resolving: false, resolveError: ''})
   } catch (error) {
     /* 解析失败就退回原地址直接当图片用（很多 API 本身就是图片），并把原因留给界面显示。 */
@@ -385,7 +386,8 @@ export function applyGalleryEntry(identifier?: string) {
 export async function uploadBackgroundFile(file: File) {
   const form = new FormData()
   form.append('file', file)
-  const response = await fetch('/api/v1/background/gallery', {method: 'POST', body: form})
+  const {token} = await api.request('background.access', {})
+  const response = await fetch('/api/v1/background/gallery', {method: 'POST', body: form, headers: {'x-azurpilot-background-token': token}})
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(payload?.error || '上传失败。')
   await refreshGallery()

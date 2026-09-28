@@ -108,6 +108,7 @@ export interface Results {
   'accounts.status': AccountStatus
   'accounts.manage': AccountStatus
   'announcement.get': Announcement | null
+  'background.access': {token: string}
   'background.resolve': {final_url: string; content_type: string}
   'background.gallery.list': BackgroundGalleryEntry[]
   'background.gallery.add': {entry: BackgroundGalleryEntry}
