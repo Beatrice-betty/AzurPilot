@@ -188,15 +188,22 @@ const DOMPURIFY_CONFIG: Config = {
   ],
 }
 
+function escapeHtmlText(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
 function sanitizeHtml(html: string): string {
   if (typeof window !== 'undefined' && typeof DOMPurify.sanitize === 'function') {
     return DOMPurify.sanitize(html, DOMPURIFY_CONFIG)
   }
-  // 在 SSR / 纯 Node 测试环境中兜底拦截危险标签与事件属性
-  return html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/\son\w+=("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replace(/javascript:[^\s"'>]+/gi, '')
+  // SSR / 纯 Node 没有可用 DOM 时不尝试手写“删除危险片段”的过滤器。
+  // 直接将整段内容编码为文本，宁可降级显示 Markdown/HTML 源码，也不产生可执行 HTML。
+  return escapeHtmlText(html)
 }
 
 /**
