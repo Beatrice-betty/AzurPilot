@@ -2570,6 +2570,12 @@ class AzurLaneAutoScript:
                 time.sleep(wait_seconds)
 
 if __name__ == '__main__':
+    if '--tui' in sys.argv:
+        from tui import main as tui_main
+        sys.argv.remove('--tui')
+        tui_main()
+        sys.exit(0)
+
     try:
         config_name = parse_config_name(sys.argv[1:])
     except ValueError as error:
