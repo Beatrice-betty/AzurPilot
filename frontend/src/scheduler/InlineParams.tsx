@@ -44,12 +44,14 @@ export function InlineParams({card,spec,catalog,document,connectedInputs,onChang
       else if (key === 'operator') options = (card.type === 'logic' ? ['and','or','not'] : card.type === 'math' ? ['+','-','*','/','%','min','max'] : ['==','!=','>','>=','<','<=']).map(op => [op,({and:'且',or:'或',not:'非'} as Record<string,string>)[op] ?? op])
       else if (key === 'rule') options = [['enabled','已启用'],['due','已到期'],['field','按字段判断']]
       if (!options && typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') return null
-      return <label key={key} className={typeof value === 'boolean' && !options ? 'program-card-checkbox' : ''}>{label}
-        {options ? <select aria-label={label} disabled={connected} value={connected ? '__connected' : String(value ?? '')} onChange={e => update(key,e.target.value)}>{connected ? <option value="__connected">由连线提供</option> : <option value="">请选择…</option>}{options.map(([option,text]) => <option key={option} value={option}>{text}</option>)}</select>
-          : typeof value === 'boolean' ? <input type="checkbox" aria-label={label} disabled={connected} checked={value} onChange={e => update(key,e.target.checked)}/>
-          : <input aria-label={label} type={typeof value === 'number' ? 'number' : key === 'start' || key === 'end' || (key === 'time' && String(value).length <= 5) ? 'time' : 'text'} disabled={connected} value={String(value)} onChange={e => update(key,typeof value === 'number' ? Number(e.target.value) : e.target.value)}/>}
+      const inputId = `inline-${card.id}-${key}`
+      return <div key={key} className={typeof value === 'boolean' && !options ? 'program-card-checkbox' : 'program-card-field'}>
+        <label htmlFor={inputId}>{label}</label>
+        {options ? <select id={inputId} aria-label={label} disabled={connected} value={connected ? '__connected' : String(value ?? '')} onChange={e => update(key,e.target.value)}>{connected ? <option value="__connected">由连线提供</option> : <option value="">请选择…</option>}{options.map(([option,text]) => <option key={option} value={option}>{text}</option>)}</select>
+          : typeof value === 'boolean' ? <input id={inputId} type="checkbox" aria-label={label} disabled={connected} checked={Boolean(value)} onChange={e => update(key,e.target.checked)}/>
+          : <input id={inputId} aria-label={label} type={typeof value === 'number' ? 'number' : key === 'start' || key === 'end' || (key === 'time' && String(value).length <= 5) ? 'time' : 'text'} disabled={connected} value={String(value)} onChange={e => update(key,typeof value === 'number' ? Number(e.target.value) : e.target.value)}/>}
         {connected && <small>由连线提供</small>}
-      </label>
+      </div>
     })}
     {card.type === 'resource' && <small className="program-card-resource-note">{catalog.resources.find(r => r.name === values.name)?.refreshable ? '可在任务边界刷新' : '读取任务观察记录'}</small>}
   </div>

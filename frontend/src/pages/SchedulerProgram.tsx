@@ -2,7 +2,7 @@
 import {memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties} from 'react'
 import {useParams} from 'react-router-dom'
 import {ReactFlowProvider, Handle, MarkerType, Position, useConnection as useFlowConnection, useReactFlow, type NodeProps, type Connection as FlowConnection} from '@xyflow/react'
-import {ArrowDown, ArrowUp, Copy, Download, FolderOpen, GripVertical, Layers, Play, Plus, Redo2, Save, Search, StepForward, Trash2, Undo2, Upload} from 'lucide-react'
+import {ArrowDown, ArrowUp, ChevronDown, ChevronUp, Copy, Download, FolderOpen, GripVertical, Layers, Play, Plus, Redo2, Save, Search, StepForward, Trash2, Undo2, Upload, X} from 'lucide-react'
 import '@xyflow/react/dist/style.css'
 import '../scheduler/editor.css'
 import {api} from '../api/client'
@@ -80,6 +80,8 @@ function Editor() {
   const [outcomes, setOutcomes] = useState('completed')
   const [simSteps, setSimSteps] = useState(0)
   const [variablesOpen, setVariablesOpen] = useState(false)
+  const [consoleOpen, setConsoleOpen] = useState(true)
+  const [guideDismissed, setGuideDismissed] = useState(false)
   const [connector, setConnector] = useState({source:'', sourcePort:'', target:'', targetPort:''})
   const history = useRef<{past: ProgramDocument[]; future: ProgramDocument[]}>({past:[], future:[]})
   const clipboard = useRef<Pick<Graph,'nodes' | 'edges'> | undefined>(undefined)
@@ -211,6 +213,7 @@ function Editor() {
     setBusy(true); setError('')
     try {
       if (kind === 'validate') {
+        setConsoleOpen(true)
         const result = await api.request('scheduler.program.validate', {instance, document:doc, mode}); if (version === requestVersion.current) setValidation(result)
       } else {
         let latest = saved
@@ -224,7 +227,7 @@ function Editor() {
   }
   async function simulate(steps: number) {
     if (!doc) return
-    setBusy(true); setError(''); setTab('simulate')
+    setBusy(true); setError(''); setTab('simulate'); setConsoleOpen(true)
     const version = requestVersion.current
     try {
       const now = simTime.replace('T', ' ') + ':00'
@@ -286,12 +289,7 @@ function Editor() {
         {(['inputs','outputs'] as const).map(kind => <div key={kind}><strong>{kind === 'inputs' ? '输入端口' : '输出端口'}</strong><button onClick={() => change({...doc, subgraphs:doc.subgraphs.map(s => s.id === graphId ? {...s, [kind]:[...s[kind], {name:`${kind}${s[kind].length + 1}`, type:'any', required:true}]} : s)})}>添加端口</button>{currentGraph[kind].map((p,index) => <div className="program-schema-row" key={index}><input aria-label="端口名称" value={p.name} onChange={e => change({...doc, subgraphs:doc.subgraphs.map(s => s.id === graphId ? {...s, [kind]:s[kind].map((x,i) => i === index ? {...x, name:e.target.value} : x)} : s)})}/><select value={p.type} aria-label="端口类型" onChange={e => change({...doc, subgraphs:doc.subgraphs.map(s => s.id === graphId ? {...s, [kind]:s[kind].map((x,i) => i === index ? {...x, type:e.target.value} : x)} : s)})}>{Object.entries(typeLabels).map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select><button onClick={() => change({...doc, subgraphs:doc.subgraphs.map(s => s.id === graphId ? {...s, [kind]:s[kind].filter((_,i) => i !== index)} : s)})}>删除</button></div>)}</div>)}</>}
     </section>}
     <div className="program-mobile-panels"><button className="button secondary" onClick={() => setMobilePanel('library')}>卡片库</button><button className="button secondary" onClick={() => setMobilePanel('properties')}>属性与连接</button></div>
-    {graph.nodes.some(n => n.type === 'original_settings') && <div className="program-default-guide">原调度业务流程：读取任务 → 过滤启用与到期状态 → 按当前实例优先级排序 → 执行；没有到期任务时等待最近计划。任务结束后立即重新判断。维护检测、登录恢复和看门狗由原执行器处理。</div>}
     <div className={`program-workspace mobile-${mobilePanel} ${canvasExpanded ? 'canvas-expanded' : ''}`}>
-      <aside className="program-library"><label className="program-search"><Search size={15}/><input placeholder="搜索卡片…" value={search} onChange={e => setSearch(e.target.value)}/></label>
-        {[...new Set(catalog.cards.map(c => c.category))].map(category => <div key={category} style={{'--card-color':categoryColor(category)} as CSSProperties}><h3><i className="program-category-dot"/>{category}</h3>{catalog.cards.filter(c => c.category === category && `${c.label} ${c.type}`.toLowerCase().includes(search.toLowerCase())).map(card => <button key={card.type} draggable onDragStart={event => event.dataTransfer.setData('application/azurpilot-card', JSON.stringify({type:card.type}))} onClick={() => add(card.type)}><Plus size={12}/>{card.label}</button>)}</div>)}
-        <h3>组合卡片</h3>{doc.subgraphs.filter(s => s.name.includes(search)).map(sub => <div className="program-library-composite" key={sub.id}><button draggable onDragStart={event => event.dataTransfer.setData('application/azurpilot-card', JSON.stringify({type:'call', graph:sub.id}))} onClick={() => add('call', sub.id)}><Layers size={12}/>{sub.name}</button><button title="打开内部逻辑" onClick={() => {setGraphId(sub.id); setSelection([])}}>↗</button></div>)}
-      </aside>
       <main className="program-canvas" tabIndex={0} aria-label="调度画布" onPointerDown={event => {if (!editingText(event.target)) event.currentTarget.focus({preventScroll:true})}} onDragOver={e => {e.preventDefault(); e.dataTransfer.dropEffect = 'copy'}} onDrop={e => {e.preventDefault(); try {const data = JSON.parse(e.dataTransfer.getData('application/azurpilot-card')); add(data.type, data.graph, flow.screenToFlowPosition({x:e.clientX,y:e.clientY}))} catch { /* 忽略非卡片拖放。 */ }}}>
         <ProgramCanvas key={graphId} nodes={nodes} edges={edges} nodeTypes={nodeTypes} deleteKeyCode={null} onNodeClick={() => setMobilePanel('properties')} onSelectionChange={onSelectionChange} onConnect={connect} isValidConnection={connectValid}
           onPositionsCommit={moved => {const positions = new Map(moved.map(n => [n.id, n.position])); if (moved.some(n => {const old=graph.nodes.find(x => x.id === n.id); return old && (old.position.x !== n.position.x || old.position.y !== n.position.y)})) updateGraph({...graph, nodes:graph.nodes.map(n => positions.has(n.id) ? {...n, position:positions.get(n.id)!} : n)})}}
@@ -299,6 +297,10 @@ function Editor() {
           onEdgeDoubleClick={(_,edge) => updateGraph({...graph, edges:graph.edges.filter(e => e.id !== edge.id)})}/>
         <div className="program-canvas-hint">左键框选 · 中键或空格拖动 · Ctrl/Cmd+C/V 复制粘贴 · 退格删除<br/>同色端口可连接 · 彩环为通用端口 · 方形为执行端口</div>
       </main>
+      <aside className="program-library"><label className="program-search"><Search size={15}/><input placeholder="搜索卡片…" value={search} onChange={e => setSearch(e.target.value)}/></label>
+        {[...new Set(catalog.cards.map(c => c.category))].map(category => <div key={category} style={{'--card-color':categoryColor(category)} as CSSProperties}><h3><i className="program-category-dot"/>{category}</h3>{catalog.cards.filter(c => c.category === category && `${c.label} ${c.type}`.toLowerCase().includes(search.toLowerCase())).map(card => <button key={card.type} draggable onDragStart={event => event.dataTransfer.setData('application/azurpilot-card', JSON.stringify({type:card.type}))} onClick={() => add(card.type)}><Plus size={12}/>{card.label}</button>)}</div>)}
+        <h3>组合卡片</h3>{doc.subgraphs.filter(s => s.name.includes(search)).map(sub => <div className="program-library-composite" key={sub.id}><button draggable onDragStart={event => event.dataTransfer.setData('application/azurpilot-card', JSON.stringify({type:'call', graph:sub.id}))} onClick={() => add('call', sub.id)}><Layers size={12}/>{sub.name}</button><button title="打开内部逻辑" onClick={() => {setGraphId(sub.id); setSelection([])}}>↗</button></div>)}
+      </aside>
       <aside className="program-properties"><h2>{picked ? spec?.label : '卡片属性'}</h2>
         {picked?.label && <div className="program-card-alias" style={{marginBottom:10}}>别名：{picked.label}</div>}
         {!picked && <p className="muted">点击卡片设置参数。拖拽端口连线，也可以使用下方的连接表单。</p>}
@@ -343,23 +345,40 @@ function Editor() {
         </>}
         <details className="program-connect"><summary>按钮式连接</summary><label>来源卡片<select aria-label="来源卡片" value={connector.source} onChange={e => setConnector({...connector,source:e.target.value,sourcePort:''})}><option value="">选择来源…</option>{graph.nodes.map(n => <option key={n.id} value={n.id}>{definition(n,doc,catalog,graph).label}{n.label ? `（${n.label}）` : ''} · {n.id.slice(0,7)}</option>)}</select></label><label>输出端口<select aria-label="输出端口" value={connector.sourcePort} onChange={e => setConnector({...connector,sourcePort:e.target.value})}><option value="">选择输出…</option>{sourceSpec?.outputs.map(p => <option key={p.name} value={`data:${p.name}`}>{p.name} · {typeLabels[p.type]}</option>)}{sourceSpec?.exits.map(e => <option key={e} value={`control:${e}`}>{exits[e] ?? e} · 执行</option>)}</select></label><label>目标卡片<select aria-label="目标卡片" value={connector.target} onChange={e => setConnector({...connector,target:e.target.value,targetPort:''})}><option value="">选择目标…</option>{graph.nodes.map(n => <option key={n.id} value={n.id}>{definition(n,doc,catalog,graph).label}{n.label ? `（${n.label}）` : ''} · {n.id.slice(0,7)}</option>)}</select></label><label>输入端口<select aria-label="输入端口" value={connector.targetPort} onChange={e => setConnector({...connector,targetPort:e.target.value})}><option value="">选择输入…</option>{targetSpec?.inputs.map(p => <option key={p.name} value={`data:${p.name}`}>{p.name} · {typeLabels[p.type]}</option>)}{targetSpec && !targetSpec.pure && <option value="control:in">执行入口</option>}</select></label><button className="button secondary" onClick={() => connect({source:connector.source,target:connector.target,sourceHandle:connector.sourcePort,targetHandle:connector.targetPort})}>连接</button></details>
       </aside>
+      {!guideDismissed && graph.nodes.some(n => n.type === 'original_settings') && (
+        <div className="program-default-guide">
+          <span>原调度业务流程：读取任务 → 过滤启用与到期状态 → 按当前实例优先级排序 → 执行；没有到期任务时等待最近计划。任务结束后立即重新判断。维护检测、登录恢复和看门狗由原执行器处理。</span>
+          <button type="button" className="program-guide-close" title="关闭说明" onClick={() => setGuideDismissed(true)}><X size={13}/></button>
+        </div>
+      )}
+      <section className={`program-console ${consoleOpen ? 'open' : 'collapsed'}`}>
+        <div className="program-console-tabs" onDoubleClick={() => setConsoleOpen(open => !open)}>
+          <button className={tab === 'simulate' ? 'active' : ''} onClick={() => {setTab('simulate'); setConsoleOpen(true)}}>隔离模拟</button>
+          <button className={tab === 'runtime' ? 'active' : ''} onClick={() => {setTab('runtime'); setConsoleOpen(true)}}>运行轨迹</button>
+          <span>{status?.status ?? '尚未执行'}{status?.task ? ` · ${status.task}` : ''}{status?.reason ? ` · ${status.reason}` : ''}</span>
+          <button type="button" className="program-console-toggle" aria-label={consoleOpen ? '收起控制台' : '展开控制台'} title={consoleOpen ? '收起控制台' : '展开控制台'} onClick={() => setConsoleOpen(open => !open)}>
+            {consoleOpen ? <ChevronDown size={14}/> : <ChevronUp size={14}/>}
+            <span>{consoleOpen ? '收起' : '展开'}</span>
+          </button>
+        </div>
+        <div className="program-console-body">
+          {validation && <div className={`program-diagnostics ${validation.valid ? 'valid' : ''}`}>{validation.valid ? '程序校验通过' : validation.diagnostics.map((d,index) => {
+            const g = d.graph === 'main' ? doc : doc.subgraphs.find(s => s.id === d.graph)
+            const target = g?.nodes.find(n => n.id === d.node)
+            const targetTitle = target ? `${definition(target, doc, catalog, g ?? graph).label}${target.label ? `（${target.label}）` : ''}` : d.node
+            return <button key={index} onClick={() => {setGraphId(d.graph); setSelection(d.node ? [d.node] : [])}}>{d.message}{targetTitle ? ` · ${targetTitle}` : ''}</button>
+          })}</div>}
+          {tab === 'simulate' && <div className="program-simulator"><label>模拟时间<input type="datetime-local" value={simTime} onChange={e => {setSimTime(e.target.value); setSimSteps(0)}}/></label>{catalog.resources.map(r => <label key={r.name}>{r.name.startsWith('Emotion') ? `舰队 ${r.name.slice(-1)} 心情` : ui(`resource.${r.name}` as UiKey)}<input type="number" placeholder="数据不可用" value={resources[r.name] ?? ''} onChange={e => {setResources({...resources,[r.name]:e.target.value}); setSimSteps(0)}}/></label>)}<label>含体力箱的总行动力<input type="number" value={apTotal} onChange={e => {setApTotal(e.target.value); setSimSteps(0)}}/></label><label>任务结果序列<input value={outcomes} onChange={e => {setOutcomes(e.target.value); setSimSteps(0)}} placeholder="completed,yielded,failed"/></label><button className="button secondary" disabled={busy} onClick={() => void simulate(Math.min(simSteps+1,1000))}><StepForward size={14}/>单步</button><button className="button primary" disabled={busy} onClick={() => void simulate(100)}><Play size={14}/>模拟运行</button></div>}
+          <details><summary>模拟任务状态</summary><JsonField label="任务列表（名称、启用状态、下次运行时间）" value={simTasks} onChange={value => {if (Array.isArray(value)) {setSimTasks(value); setSimSteps(0)}}}/></details><div className="program-trace">{status?.trace?.length ? status.trace.map((line,index) => {
+            const cardDef = catalog.cards.find(c => c.type === line.type)
+            const sub = line.graph && line.graph !== 'main' ? doc.subgraphs.find(s => s.id === line.graph) : undefined
+            const orig = cardDef?.label ?? sub?.name ?? line.type ?? line.node
+            const displayLabel = line.label ? `${orig}（${line.label}） · ${line.type}` : `${orig} · ${line.type}`
+            return <div key={index}><span>{index + 1}</span><button onClick={() => {setGraphId(String(line.graph ?? 'main')); setSelection([String(line.node)])}}>{displayLabel}</button><code>{JSON.stringify(line.input ?? line.value ?? line.output ?? line.exit ?? '')}</code></div>
+          }) : <p className="muted">模拟不会连接设备，也不会修改资源或持久变量。执行后可查看每张卡片的输入、出口和结果。</p>}</div>
+        </div>
+      </section>
     </div>
-    <section className="program-console"><div className="program-console-tabs"><button className={tab === 'simulate' ? 'active' : ''} onClick={() => setTab('simulate')}>隔离模拟</button><button className={tab === 'runtime' ? 'active' : ''} onClick={() => setTab('runtime')}>运行轨迹</button><span>{status?.status ?? '尚未执行'}{status?.task ? ` · ${status.task}` : ''}{status?.reason ? ` · ${status.reason}` : ''}</span></div>
-      {validation && <div className={`program-diagnostics ${validation.valid ? 'valid' : ''}`}>{validation.valid ? '程序校验通过' : validation.diagnostics.map((d,index) => {
-        const g = d.graph === 'main' ? doc : doc.subgraphs.find(s => s.id === d.graph)
-        const target = g?.nodes.find(n => n.id === d.node)
-        const targetTitle = target ? `${definition(target, doc, catalog, g ?? graph).label}${target.label ? `（${target.label}）` : ''}` : d.node
-        return <button key={index} onClick={() => {setGraphId(d.graph); setSelection(d.node ? [d.node] : [])}}>{d.message}{targetTitle ? ` · ${targetTitle}` : ''}</button>
-      })}</div>}
-      {tab === 'simulate' && <div className="program-simulator"><label>模拟时间<input type="datetime-local" value={simTime} onChange={e => {setSimTime(e.target.value); setSimSteps(0)}}/></label>{catalog.resources.map(r => <label key={r.name}>{r.name.startsWith('Emotion') ? `舰队 ${r.name.slice(-1)} 心情` : ui(`resource.${r.name}` as UiKey)}<input type="number" placeholder="数据不可用" value={resources[r.name] ?? ''} onChange={e => {setResources({...resources,[r.name]:e.target.value}); setSimSteps(0)}}/></label>)}<label>含体力箱的总行动力<input type="number" value={apTotal} onChange={e => {setApTotal(e.target.value); setSimSteps(0)}}/></label><label>任务结果序列<input value={outcomes} onChange={e => {setOutcomes(e.target.value); setSimSteps(0)}} placeholder="completed,yielded,failed"/></label><button className="button secondary" disabled={busy} onClick={() => void simulate(Math.min(simSteps+1,1000))}><StepForward size={14}/>单步</button><button className="button primary" disabled={busy} onClick={() => void simulate(100)}><Play size={14}/>模拟运行</button></div>}
-      <details><summary>模拟任务状态</summary><JsonField label="任务列表（名称、启用状态、下次运行时间）" value={simTasks} onChange={value => {if (Array.isArray(value)) {setSimTasks(value); setSimSteps(0)}}}/></details><div className="program-trace">{status?.trace?.length ? status.trace.map((line,index) => {
-        const cardDef = catalog.cards.find(c => c.type === line.type)
-        const sub = line.graph && line.graph !== 'main' ? doc.subgraphs.find(s => s.id === line.graph) : undefined
-        const orig = cardDef?.label ?? sub?.name ?? line.type ?? line.node
-        const displayLabel = line.label ? `${orig}（${line.label}） · ${line.type}` : `${orig} · ${line.type}`
-        return <div key={index}><span>{index + 1}</span><button onClick={() => {setGraphId(String(line.graph ?? 'main')); setSelection([String(line.node)])}}>{displayLabel}</button><code>{JSON.stringify(line.input ?? line.value ?? line.output ?? line.exit ?? '')}</code></div>
-      }) : <p className="muted">模拟不会连接设备，也不会修改资源或持久变量。执行后可查看每张卡片的输入、出口和结果。</p>}</div>
-    </section>
   </div>
 }
 

@@ -1,43 +1,302 @@
-.program-editor {--program-panel:var(--panel, var(--surface, #fff)); display:flex; flex-direction:column; gap:12px; min-width:0; padding:4px 0 24px}
-.program-toolbar, .program-toolbar>div, .program-actions, .program-subtoolbar {display:flex; align-items:center; gap:10px; flex-wrap:wrap}
-.program-toolbar {justify-content:space-between}.program-toolbar h1 {font-size:21px; margin:0 0 3px}.program-toolbar small {color:var(--muted)}
-.program-editor input, .program-editor select, .program-editor textarea {max-width:100%; min-width:0; padding:7px 9px; border:1px solid var(--border,#d7dce3); background:var(--program-panel); color:var(--text,#273244); border-radius:8px}
-.program-subtoolbar>input {max-width:190px}.program-subtoolbar select {max-width:220px}.program-editor .button {font-size:12px; min-height:32px; padding:6px 10px}
-.program-workspace {display:grid; grid-template-columns:190px minmax(300px,1fr) 250px; min-height:610px; border:1px solid var(--border,#d7dce3); border-radius:14px; overflow:hidden; background:var(--program-panel)}
-.program-library,.program-properties {padding:14px; overflow:auto; max-height:690px}.program-library {border-right:1px solid var(--border,#d7dce3)}.program-properties {border-left:1px solid var(--border,#d7dce3)}
-.program-library h3,.program-properties h3 {font-size:11px; text-transform:uppercase; letter-spacing:.04em; margin:17px 0 8px; color:var(--muted)}.program-library button {display:flex; align-items:center; gap:6px; text-align:left; width:100%; padding:8px 5px; border:0; border-radius:7px; background:transparent; color:var(--text); font-size:12px; cursor:pointer}.program-library button:hover {background:var(--hover,rgba(90,120,160,.1))}
-.program-search {display:flex; align-items:center; gap:5px}.program-search input {width:100%; font-size:12px}.program-library-composite {display:flex}.program-library-composite>button:last-child {width:25px; flex-shrink:0}
-.program-canvas {position:relative; height:690px; background:var(--background,#f6f8fb); min-width:0}.program-canvas-hint {position:absolute; bottom:10px; left:55px; pointer-events:none; font-size:10px; color:var(--muted); background:var(--program-panel); padding:5px; border-radius:5px}
+/* 调度程序编辑页占满整个内容区：清空外层内边距，外壳不滚动，内容区自身撑满 100% 视口高度 */
+.app-shell.scheduler-editor-shell,
+.app-shell:has(.program-editor) {
+  height: var(--viewport-height);
+  overflow: hidden;
+}
+.app-shell.scheduler-editor-shell > .main-shell,
+.app-shell:has(.program-editor) > .main-shell {
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.app-shell.scheduler-editor-shell > .main-shell > main,
+.app-shell:has(.program-editor) > .main-shell > main {
+  padding: 0 !important;
+  margin: 0 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  flex: 1 1 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  max-width: none !important;
+  width: 100% !important;
+}
+
+.program-editor {
+  --program-panel: var(--panel, var(--surface, #fff));
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  gap: 0;
+  overflow: hidden;
+  position: relative;
+  background: var(--program-panel);
+}
+
+.program-toolbar, .program-toolbar>div, .program-actions, .program-subtoolbar {display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.program-toolbar {justify-content:space-between; padding:8px 16px; background:var(--program-panel); border-bottom:1px solid var(--border,#d7dce3); flex-shrink:0}
+.program-toolbar h1 {font-size:18px; margin:0 0 2px}.program-toolbar small {color:var(--muted); font-size:11px}
+.program-editor input, .program-editor select, .program-editor textarea {max-width:100%; min-width:0; padding:6px 8px; border:1px solid var(--border,#d7dce3); background:var(--program-panel); color:var(--text,#273244); border-radius:7px; font-size:12px}
+.program-subtoolbar {padding:6px 16px; background:var(--program-panel); border-bottom:1px solid var(--border,#d7dce3); flex-shrink:0}
+.program-subtoolbar>input {max-width:180px}.program-subtoolbar select {max-width:200px}
+.program-editor .button {font-size:12px; min-height:30px; padding:5px 9px; display:inline-flex; align-items:center; gap:5px}
+
+/* 编辑区工作台：作为全屏舞台容器，画布全屏铺底，控件悬浮在画布上方 */
+.program-workspace {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--background, #f6f8fb);
+}
+
+/* 画布：绝对定位 100% 铺满编辑区全屏 */
+.program-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  z-index: 1;
+  outline: none;
+  background: var(--background, #f6f8fb);
+}
+.program-canvas-hint {position:absolute; bottom:14px; left:20px; pointer-events:none; font-size:10px; color:var(--muted); background:color-mix(in srgb, var(--program-panel) 85%, transparent); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); padding:6px 10px; border-radius:6px; border:1px solid var(--border,#d7dce3); z-index:2}
+
+/* 控件：悬浮在编辑区画布上方（Overlay Controls） */
+.program-library, .program-properties {
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  background: color-mix(in srgb, var(--program-panel) 92%, transparent);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border, #d7dce3);
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+  overflow-y: auto;
+  box-sizing: border-box;
+  transition: transform .2s ease, opacity .2s ease, left .2s ease, right .2s ease;
+}
+.program-library {
+  left: 14px;
+  width: 230px;
+}
+.program-properties {
+  right: 14px;
+  width: 300px;
+}
+
+.program-library h3, .program-properties h3 {font-size:11px; text-transform:uppercase; letter-spacing:.04em; margin:14px 0 6px; color:var(--muted)}.program-library button {display:flex; align-items:center; gap:6px; text-align:left; width:100%; padding:7px 5px; border:0; border-radius:6px; background:transparent; color:var(--text); font-size:12px; cursor:pointer}.program-library button:hover {background:var(--hover,rgba(90,120,160,.1))}
+.program-search {display:flex; align-items:center; gap:5px; margin-bottom:6px}.program-search input {width:100%; font-size:12px}.program-library-composite {display:flex}.program-library-composite>button:last-child {width:25px; flex-shrink:0}
+
+/* 卡片节点样式 */
 .program-card {width:220px; border:1px solid color-mix(in srgb,var(--card-color) 50%,var(--border,#d7dce3)); border-radius:12px; color:var(--text,#273244); background:var(--program-panel); box-shadow:0 3px 12px #192e4510; padding:0; overflow:visible}.program-card.selected {outline:2px solid var(--card-color); outline-offset:2px}.program-card.current {box-shadow:0 0 0 4px #39b99060}.program-card.invalid {border-color:#d85b65; box-shadow:0 0 0 2px #d85b6540}
 .program-card-heading {position:relative; display:flex; flex-direction:column; gap:5px; border-bottom:1px solid color-mix(in srgb,var(--card-color) 30%,var(--border)); background:color-mix(in srgb,var(--card-color) 14%,var(--program-panel)); border-radius:11px 11px 0 0; padding:12px 14px}.program-card-heading span {font-size:11px; color:var(--card-color); font-weight:600}.program-card-heading strong {font-size:16px}.program-card-summary {font-size:12px; color:var(--muted); padding:8px 14px; overflow-wrap:anywhere}
 .program-card-ports {display:flex; justify-content:space-between; gap:5px; border-top:1px solid var(--border)}.program-card-ports>div {flex:1; min-width:0}.program-port {position:relative; display:flex; flex-direction:column; justify-content:center; min-height:38px; padding:4px 10px; font-size:12px; overflow-wrap:anywhere}.program-port.output {text-align:right}.program-port small {font-size:10px; color:var(--muted)}
 .program-card .react-flow__handle {width:12px; height:12px; background:#8191a5; border:2px solid var(--program-panel); top:50%}.program-card .control-handle {background:var(--card-color); border-radius:3px}.program-card-exits {padding:4px 0}.program-card-exits .program-port {min-height:24px;font-size:12px}
 .program-category-dot {display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; background:var(--card-color)}.program-library button>svg {color:var(--card-color,var(--text))}
-/* 节点位置由画布直接更新，不对拖拽坐标或连线附加主题转场。 */
+
+/* 节点位置由画布直接更新，不对拖拽坐标或连线附加主题转场 */
 .program-canvas .react-flow__node, .program-canvas .react-flow__viewport, .program-card {transition:none; animation:none}
 .program-canvas .react-flow__edge-text {fill:var(--text)}.program-canvas .react-flow__edge-textbg {fill:var(--program-panel)}
-.program-properties h2 {font-size:15px; margin:0 0 15px}.program-properties>label,.program-properties details label {display:flex; flex-direction:column; gap:6px; font-size:11px; margin-bottom:12px}.program-properties fieldset {border:1px solid var(--border); border-radius:8px; margin:8px 0; padding:8px; max-height:220px; overflow:auto}.program-properties fieldset label,.program-checkbox {display:flex; align-items:center; gap:7px; margin:5px 0; font-size:11px}.program-properties p {font-size:12px; line-height:1.65}.program-json {width:100%; font:11px/1.5 monospace; min-height:66px; resize:vertical}
-.program-priority-row {display:flex; align-items:center; gap:4px; padding:5px 0; font-size:11px}.program-priority-row span {flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis}.program-priority-row button {padding:3px; background:none; border:0; color:var(--text); cursor:pointer}.program-priority-row button:disabled {opacity:.3}
-.program-connect {margin-top:18px; font-size:11px}.program-connect summary {cursor:pointer; margin-bottom:12px}.program-file input {display:none}
-.program-console,.program-schema-panel {border:1px solid var(--border); border-radius:12px; background:var(--program-panel); padding:12px}.program-console-tabs {display:flex;align-items:center;gap:15px;flex-wrap:wrap;font-size:12px}.program-console-tabs button {border:0;background:none;color:var(--muted);cursor:pointer;padding:6px 0}.program-console-tabs button.active {color:var(--accent);font-weight:600}.program-console-tabs span {margin-left:auto;color:var(--muted);max-width:65%;overflow-wrap:anywhere}
-.program-simulator {display:flex;gap:9px;flex-wrap:wrap;align-items:end;margin:14px 0}.program-simulator label {display:flex;flex-direction:column;gap:5px;font-size:10px}.program-simulator input {width:95px}.program-simulator label:first-child input {width:185px}.program-simulator label:nth-last-of-type(1) input {width:180px}
-.program-trace {max-height:240px;overflow:auto;font-size:11px}.program-trace>div {display:flex;gap:10px;padding:7px 4px;border-top:1px solid var(--border)}.program-trace span {color:var(--muted);width:24px}.program-trace button {border:0;background:transparent;color:var(--accent);cursor:pointer;flex-shrink:0}.program-trace code {white-space:pre-wrap;overflow-wrap:anywhere}.program-diagnostics {display:flex;flex-direction:column;gap:5px;color:#c25461;font-size:12px;margin:10px 0}.program-diagnostics.valid {color:#329071}.program-diagnostics button {text-align:left;border:0;background:transparent;color:inherit;cursor:pointer}
-.program-schema-panel {display:flex;flex-direction:column;gap:10px;font-size:12px}.program-schema-panel>div:first-child {display:flex;align-items:center;gap:10px}.program-schema-row {display:flex;gap:10px;align-items:center;flex-wrap:wrap}.program-schema-row>label {display:flex;align-items:center;gap:5px}.program-schema-row textarea {min-height:32px;max-height:60px;width:180px}
+.program-properties h2 {font-size:15px; margin:0 0 12px}.program-properties>label,.program-properties details label {display:flex; flex-direction:column; gap:5px; font-size:11px; margin-bottom:10px}.program-properties fieldset {border:1px solid var(--border); border-radius:8px; margin:8px 0; padding:8px; max-height:200px; overflow:auto}.program-properties fieldset label,.program-checkbox {display:flex; align-items:center; gap:7px; margin:5px 0; font-size:11px}.program-properties p {font-size:12px; line-height:1.65}.program-json {width:100%; font:11px/1.5 monospace; min-height:60px; resize:vertical}
+.program-priority-row {display:flex; align-items:center; gap:4px; padding:4px 0; font-size:11px}.program-priority-row span {flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis}.program-priority-row button {padding:3px; background:none; border:0; color:var(--text); cursor:pointer}.program-priority-row button:disabled {opacity:.3}
+.program-connect {margin-top:14px; font-size:11px}.program-connect summary {cursor:pointer; margin-bottom:10px}.program-file input {display:none}
+
+/* 原调度业务流程引导条：悬浮在画布上方顶部 */
+.program-default-guide {
+  position: absolute;
+  top: 14px;
+  left: 258px;
+  right: 328px;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  border: 1px solid var(--border, #d7dce3);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--program-panel) 92%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+}
+.program-guide-close {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.program-guide-close:hover {
+  color: var(--text);
+  background: var(--hover, rgba(90, 120, 160, 0.1));
+}
+
+/* 底部控制台：悬浮在画布下方底部中央 */
+.program-console {
+  position: absolute;
+  left: 258px;
+  right: 328px;
+  bottom: 14px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border, #d7dce3);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--program-panel) 94%, transparent);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.09);
+  padding: 0;
+  overflow: hidden;
+  max-height: 38vh;
+  transition: max-height .18s cubic-bezier(0.16, 1, 0.3, 1), left .2s ease, right .2s ease;
+}
+.program-console.collapsed {
+  max-height: 38px;
+}
+.program-console-tabs {
+  height: 38px;
+  min-height: 38px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12px;
+  user-select: none;
+  border-bottom: 1px solid transparent;
+  flex-shrink: 0;
+}
+.program-console.open .program-console-tabs {
+  border-bottom-color: var(--border, #d7dce3);
+}
+.program-console-tabs button {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 8px 0;
+  font-size: 12px;
+}
+.program-console-tabs button.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+.program-console-tabs span {
+  margin-left: auto;
+  color: var(--muted);
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.program-console-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+.program-console-toggle:hover {
+  background: var(--hover, rgba(90, 120, 160, 0.1));
+  color: var(--text);
+}
+.program-console-body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.program-console.collapsed .program-console-body {
+  display: none;
+}
+
+.program-simulator {display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:8px 0}.program-simulator label {display:flex;flex-direction:column;gap:4px;font-size:10px}.program-simulator input {width:90px}.program-simulator label:first-child input {width:170px}.program-simulator label:nth-last-of-type(1) input {width:170px}
+.program-trace {max-height:200px;overflow:auto;font-size:11px}.program-trace>div {display:flex;gap:10px;padding:6px 4px;border-top:1px solid var(--border)}.program-trace span {color:var(--muted);width:24px}.program-trace button {border:0;background:transparent;color:var(--accent);cursor:pointer;flex-shrink:0}.program-trace code {white-space:pre-wrap;overflow-wrap:anywhere}.program-diagnostics {display:flex;flex-direction:column;gap:4px;color:#c25461;font-size:12px;margin:8px 0}.program-diagnostics.valid {color:#329071}.program-diagnostics button {text-align:left;border:0;background:transparent;color:inherit;cursor:pointer}
+.program-schema-panel {border-bottom:1px solid var(--border); background:var(--program-panel); padding:10px 16px; display:flex; flex-direction:column; gap:8px; font-size:12px; flex-shrink:0}.program-schema-panel>div:first-child {display:flex;align-items:center;gap:10px}.program-schema-row {display:flex;gap:10px;align-items:center;flex-wrap:wrap}.program-schema-row>label {display:flex;align-items:center;gap:5px}.program-schema-row textarea {min-height:32px;max-height:60px;width:180px}
 .program-editor .react-flow__controls button {background:var(--program-panel);color:var(--text);border-color:var(--border)}.program-editor .react-flow__controls button svg {fill:currentColor}.program-editor .react-flow__minimap {background:var(--program-panel)}
-@media(max-width:1200px) {.program-workspace {grid-template-columns:155px minmax(250px,1fr) 220px}.program-library,.program-properties {padding:10px}}
-@media(max-width:850px) {.program-workspace {grid-template-columns:1fr}.program-canvas {height:480px;grid-row:1}.program-library {max-height:180px;display:flex;gap:15px;overflow:auto;border-right:0;border-top:1px solid var(--border)}.program-library>div {flex-shrink:0;min-width:145px}.program-library .program-search {min-width:150px}.program-properties {max-height:400px;border-left:0;border-top:1px solid var(--border)}.program-toolbar h1 {font-size:18px}.program-console-tabs span {max-width:100%}}
+
+/* 展开画布模式：收起左右浮岛，中间悬浮条向两侧拓展，画布完整裸露 */
+.program-workspace.canvas-expanded > .program-library,
+.program-workspace.canvas-expanded > .program-properties {
+  display: none;
+}
+.program-workspace.canvas-expanded > .program-default-guide,
+.program-workspace.canvas-expanded > .program-console {
+  left: 14px;
+  right: 14px;
+}
 
 .program-mobile-panels {display:none}
 .program-flow {width:100%; height:100%; min-width:0}
 .program-card-settings {display:flex; flex-direction:column; gap:8px; padding:8px 12px 12px; border-top:1px solid var(--border)}
-.program-card-settings label {display:flex; flex-direction:column; gap:4px; font-size:11px; color:var(--muted)}
+.program-card-settings label, .program-card-settings .program-card-field label {display:flex; flex-direction:column; gap:4px; font-size:11px; color:var(--muted)}
 .program-card-settings input,.program-card-settings select {width:100%; padding:6px 7px; min-height:30px; border-radius:5px; font-size:12px; color:var(--text)}
-.program-card-settings label.program-card-checkbox {flex-direction:row; align-items:center; justify-content:space-between; flex-wrap:wrap}
-.program-card-settings .program-card-checkbox input {width:15px; height:15px; min-height:0; accent-color:var(--card-color)}
+.program-card-settings .program-card-checkbox {display:flex; flex-direction:row; align-items:center; justify-content:space-between; flex-wrap:wrap}
+.program-card-settings .program-card-checkbox label {font-size:11px; color:var(--muted); cursor:pointer}
+.program-card-settings .program-card-checkbox input {width:15px; height:15px; min-height:0; accent-color:var(--card-color); cursor:pointer}
 .program-card-settings small {font-size:10px; color:var(--muted)}.program-card-settings :disabled {opacity:.65}.program-card-resource-note {line-height:1.5}
-@media(max-width:850px) {.program-editor .react-flow__minimap {width:100px; height:70px}.program-canvas-hint {max-width:calc(100% - 65px)}}
-.program-workspace.canvas-expanded {grid-template-columns:1fr}.program-workspace.canvas-expanded>.program-library,.program-workspace.canvas-expanded>.program-properties {display:none}
 .program-observation {font-size:10px;white-space:pre-wrap;overflow-wrap:anywhere}
-.program-default-guide {padding:10px 14px;border:1px solid var(--border);border-radius:10px;background:var(--program-panel);font-size:12px;line-height:1.7;color:var(--muted)}
 .program-card-alias {font-size:11px;font-weight:400;color:var(--muted);overflow-wrap:anywhere}.program-card-comment {padding:9px 14px;border-bottom:1px solid var(--border);font-size:12px;line-height:1.5;color:var(--muted);white-space:pre-wrap;overflow-wrap:anywhere}
-@media(max-width:850px) {.program-mobile-panels {display:flex;gap:8px}.program-workspace.mobile-library .program-properties,.program-workspace.mobile-properties .program-library {display:none}}
+
+@media(max-width:1200px) {
+  .program-library {width:200px}
+  .program-properties {width:250px}
+  .program-default-guide, .program-console {left:228px; right:278px}
+}
+
+@media(max-width:850px) {
+  .program-mobile-panels {display:flex; gap:8px; padding:6px 16px; background:var(--program-panel); border-bottom:1px solid var(--border); flex-shrink:0}
+  .program-library, .program-properties {
+    position: static;
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    box-shadow: none;
+    border: none;
+  }
+  .program-workspace {display:flex; flex-direction:column}
+  .program-workspace.mobile-library .program-properties,
+  .program-workspace.mobile-properties .program-library {display:none}
+  .program-workspace.mobile-library .program-library,
+  .program-workspace.mobile-properties .program-properties {display:flex}
+  .program-default-guide {display:none}
+  .program-console {left:10px; right:10px; bottom:10px}
+  .program-editor .react-flow__minimap {width:100px; height:70px}
+  .program-canvas-hint {max-width:calc(100% - 65px)}
+}
