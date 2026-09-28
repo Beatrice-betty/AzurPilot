@@ -28,27 +28,12 @@ class TestGitOverCdnClient(unittest.TestCase):
         ):
             self.assertFalse(client.update())
 
-    def test_latest_commit_selects_history_from_local_sha(self):
-        github, gitcode, old_mirror = 'a' * 40, 'b' * 40, 'c' * 40
-        for current, expected in ((github, github), (gitcode, gitcode), (old_mirror, gitcode), ('d' * 40, github)):
-            with self.subTest(current=current):
-                client = self._client()
-                client.current_commit = current
-                client.preferred_urls = client.urls
-                client.session = MagicMock()
-                client.session.get.return_value = self._response(text=(
-                    '{"commit": "' + github + '", "gitcode_commit": "' + gitcode
-                    + '", "gitcode_commits": ["' + gitcode + '", "' + old_mirror + '"]}'
-                ))
-                self.assertEqual(expected, client.latest_commit)
-
-    def test_latest_commit_accepts_legacy_manifest_and_ignores_invalid_mirror(self):
-        for fields in ('', ', "gitcode_commit": "invalid", "gitcode_commits": []'):
-            client = self._client()
-            client.preferred_urls = client.urls
-            client.session = MagicMock()
-            client.session.get.return_value = self._response(text='{"commit": "' + 'a' * 40 + '"' + fields + '}')
-            self.assertEqual('a' * 40, client.latest_commit)
+    def test_latest_commit_accepts_single_sha_manifest(self):
+        client = self._client()
+        client.preferred_urls = client.urls
+        client.session = MagicMock()
+        client.session.get.return_value = self._response(text='{"commit": "' + 'a' * 40 + '"}')
+        self.assertEqual('a' * 40, client.latest_commit)
 
     @staticmethod
     def _client(urls=None, fallback_urls=None):

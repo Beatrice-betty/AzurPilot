@@ -311,16 +311,6 @@ class GitOverCdnClient:
                     if not isinstance(commit, str) or not re.fullmatch(r'[0-9a-f]{40}', commit):
                         self.logger.error('CDN manifest contains an invalid commit')
                         continue
-                    # 固定基线镜像与 GitHub 使用不同 SHA，按本地版本选择同一套历史。
-                    mirror_commit = info.get('gitcode_commit')
-                    mirror_commits = info.get('gitcode_commits', [])
-                    if (
-                        isinstance(mirror_commit, str)
-                        and re.fullmatch(r'[0-9a-f]{40}', mirror_commit)
-                        and isinstance(mirror_commits, list)
-                        and self.current_commit in mirror_commits
-                    ):
-                        commit = mirror_commit
                     self.logger.attr('LatestCommit', commit)
                     return commit
                 except json.JSONDecodeError:

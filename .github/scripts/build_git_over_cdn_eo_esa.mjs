@@ -5,7 +5,6 @@ import { spawn, spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 import yazl from "yazl";
-import { buildMirrorMapping, MIRROR_BASELINE, MirrorHistoryIncompleteError } from "./mirror_history.mjs";
 
 const env = process.env;
 // Cloudflare Worker 单文件上限 25MB，24MB 留出余量
@@ -42,12 +41,11 @@ function printHelp() {
   --site-url <url>     canonical/sitemap 默认站点 URL，默认 ${DEFAULT_SITE_URL}
   --remote <name>      拉取历史时使用的 remote，默认 origin
   --no-fetch           跳过 git fetch
-  --fetch-full         浅克隆时执行 git fetch --unshallow
   --help               显示帮助
 
 环境变量：
   GOC_BRANCH, GOC_REF, GOC_HISTORY, GOC_OUTPUT, GOC_REMOTE,
-  GOC_SITE_URL, GOC_MIRROR_URLS, GOC_FETCH=0, GOC_FETCH_FULL=1
+  GOC_SITE_URL, GOC_MIRROR_URLS, GOC_FETCH=0
 `);
 }
 
@@ -106,7 +104,6 @@ function parseArgs(argv) {
     siteUrl: normalizeSiteUrl(env.GOC_SITE_URL || DEFAULT_SITE_URL),
     remote: env.GOC_REMOTE || "origin",
     fetch: env.GOC_FETCH !== "0",
-    fetchFull: env.GOC_FETCH_FULL === "1",
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -132,9 +129,6 @@ function parseArgs(argv) {
         break;
       case "--no-fetch":
         options.fetch = false;
-        break;
-      case "--fetch-full":
-        options.fetchFull = true;
         break;
       case "--help":
       case "-h":
@@ -219,27 +213,7 @@ function maybeFetchHistory(options, repoRoot) {
     return;
   }
 
-  const fetchDepth = String(options.history + 5);
-  const isShallow = runGit(
-    ["rev-parse", "--is-shallow-repository"],
-    repoRoot,
-    { allowFailure: true },
-  ) === "true";
-
-  if (!isShallow) {
-    runGit(["fetch", "--no-tags", options.remote, options.branch], repoRoot, { allowFailure: true });
-    return;
-  }
-
-  if (options.fetchFull) {
-    if (gitOk(["fetch", "--no-tags", "--unshallow", options.remote, options.branch], repoRoot)) {
-      return;
-    }
-  } else if (gitOk(["fetch", "--no-tags", "--deepen", fetchDepth, options.remote, options.branch], repoRoot)) {
-    return;
-  }
-
-  runGit(["fetch", "--no-tags", "--depth", fetchDepth, options.remote, options.branch], repoRoot);
+  runGit(["fetch", "--no-tags", options.remote, options.branch], repoRoot);
 }
 
 function resolveBuildRef(options, repoRoot) {
@@ -471,7 +445,7 @@ function writeRobotsTxt(outputDir, mirrorUrls) {
   fs.writeFileSync(path.join(outputDir, "robots.txt"), text, "utf8");
 }
 
-function writeIndexHtml(outputDir, options, latest, packTargets, commitInfos, generatedAtTimestamp, mirrorLatest) {
+function writeIndexHtml(outputDir, options, latest, oldCommits, commitInfos, generatedAtTimestamp) {
   const latestCommitInfo = commitInfos[0];
   if (!latestCommitInfo) {
     throw new Error("无法读取最新提交信息");
@@ -495,17 +469,17 @@ function writeIndexHtml(outputDir, options, latest, packTargets, commitInfos, ge
     sameAs: options.mirrorUrls,
     dateModified: generatedAt,
   }, null, 2));
-  const builtPacks = packTargets.filter(({ latest: target, old }) => fs.existsSync(path.join(outputDir, target, `${old}.zip`)));
-  const packRows = builtPacks.map(({ latest: target, old: commit, source }) => {
-    const filename = `${target}/${commit}.zip`;
+  const builtPacks = oldCommits.filter((commit) => fs.existsSync(path.join(outputDir, latest, `${commit}.zip`)));
+  const packRows = builtPacks.map((commit) => {
+    const filename = `${latest}/${commit}.zip`;
     return `
           <tr>
-            <td>${escapeHtml(source)} <code>${escapeHtml(shortCommit(commit))}</code></td>
+            <td><code>${escapeHtml(shortCommit(commit))}</code></td>
             <td><a href="${escapeHtml(filename)}">${escapeHtml(filename)}</a></td>
           </tr>`;
   }).join("");
   const generatedPackCount = builtPacks.length;
-  const skippedPackCount = packTargets.length - generatedPackCount;
+  const skippedPackCount = oldCommits.length - generatedPackCount;
   const commitRows = commitInfos.map((info, index) => `
           <tr>
             <td>${index === 0 ? "最新" : `前 ${index} 次`}</td>
@@ -669,7 +643,6 @@ function writeIndexHtml(outputDir, options, latest, packTargets, commitInfos, ge
       <dl>
         <dt>最新版本</dt>
         <dd><code>${escapeHtml(latest)}</code></dd>
-        ${mirrorLatest ? `<dt>GitCode 最新版本</dt><dd><code>${escapeHtml(mirrorLatest)}</code></dd>` : ""}
         <dt>构建分支</dt>
         <dd><code>${escapeHtml(options.branch)}</code></dd>
         <dt>项目主站</dt>
@@ -724,7 +697,7 @@ function writeIndexHtml(outputDir, options, latest, packTargets, commitInfos, ge
 
     <section>
       <h2>更新包</h2>
-      ${packTargets.length ? `<table>
+      ${oldCommits.length ? `<table>
         <thead>
           <tr>
             <th>本地版本</th>
@@ -844,38 +817,16 @@ function writeIndexHtml(outputDir, options, latest, packTargets, commitInfos, ge
   fs.writeFileSync(path.join(outputDir, "index.html"), html, "utf8");
 }
 
-export async function buildStaticFiles(options, repoRoot, baseline = MIRROR_BASELINE) {
+export async function buildStaticFiles(options, repoRoot) {
   maybeFetchHistory(options, repoRoot);
 
   const buildRef = resolveBuildRef(options, repoRoot);
   const latest = runGit(["rev-parse", buildRef], repoRoot);
-  let mirrorMapping;
-  while (true) {
-    try {
-      mirrorMapping = buildMirrorMapping(repoRoot, latest, baseline);
-      break;
-    } catch (error) {
-      if (!(error instanceof MirrorHistoryIncompleteError) || !options.fetch) throw error;
-      const shallowPath = path.resolve(repoRoot, runGit(["rev-parse", "--git-path", "shallow"], repoRoot));
-      const boundaries = fs.readFileSync(shallowPath, "utf8");
-      runGit(["fetch", "--no-tags", "--deepen", "300", options.remote, options.branch], repoRoot);
-      if (fs.existsSync(shallowPath) && fs.readFileSync(shallowPath, "utf8") === boundaries) {
-        throw new Error("浅克隆未能继续加深，停止生成镜像 SHA");
-      }
-    }
-  }
   const commits = runGit(
     ["rev-list", "--first-parent", `--max-count=${options.history + 1}`, latest],
     repoRoot,
   ).split(/\r?\n/).filter(Boolean);
   const oldCommits = commits.filter((commit) => commit !== latest);
-  const mirrorLatest = mirrorMapping?.get(latest) ?? null;
-  const mirrorCommits = commits.map((commit) => mirrorMapping?.get(commit)).filter(Boolean);
-  const packTargets = [
-    ...oldCommits.map((old) => ({ latest, old, source: "GitHub" })),
-    ...mirrorCommits.filter((old) => old !== mirrorLatest)
-      .map((old) => ({ latest: mirrorLatest, old, source: "GitCode" })),
-  ];
   const commitInfos = commits.map((commit) => getCommitInfo(commit, repoRoot));
   const outputDir = path.resolve(repoRoot, options.output);
 
@@ -883,40 +834,32 @@ export async function buildStaticFiles(options, repoRoot, baseline = MIRROR_BASE
   fs.mkdirSync(outputDir, { recursive: true });
   fs.writeFileSync(
     path.join(outputDir, "latest.json"),
-    `${JSON.stringify({
-      commit: latest,
-      branch: options.branch,
-      gitcode_commit: mirrorLatest,
-      gitcode_commits: mirrorCommits,
-      mirror_baseline: baseline,
-    }, null, 2)}\n`,
+    `${JSON.stringify({ commit: latest }, null, 2)}\n`,
     "utf8",
   );
 
+  const latestDir = path.join(outputDir, latest);
   let skipped = 0;
-  for (const target of packTargets) {
-    if (await buildPack(target.latest, target.old, path.join(outputDir, target.latest), repoRoot) === null) {
+  for (const old of oldCommits) {
+    if (await buildPack(latest, old, latestDir, repoRoot) === null) {
       skipped += 1;
     }
   }
-  for (const target of new Set(packTargets.map((pack) => pack.latest))) {
-    cleanupPackArtifacts(path.join(outputDir, target));
-  }
+  cleanupPackArtifacts(latestDir);
   const generatedAtTimestamp = Date.now();
   const generatedAt = new Date(generatedAtTimestamp).toISOString();
-  writeIndexHtml(outputDir, options, latest, packTargets, commitInfos, generatedAtTimestamp, mirrorLatest);
+  writeIndexHtml(outputDir, options, latest, oldCommits, commitInfos, generatedAtTimestamp);
   writeSitemapXml(outputDir, options.mirrorUrls, generatedAt);
   writeRobotsTxt(outputDir, options.mirrorUrls);
 
   console.log("Build git-over-cdn files");
   console.log(`  branch : ${options.branch}`);
   console.log(`  ref    : ${latest}`);
-  console.log(`  gitcode: ${mirrorLatest ?? "当前分支尚未包含固定基线，仅生成 GitHub 更新包"}`);
   console.log(`  history: ${options.history}`);
   console.log(`  output : ${path.relative(repoRoot, outputDir).replaceAll(path.sep, "/")}`);
   console.log(`  site   : ${options.siteUrl}`);
   console.log(`  mirrors: ${options.mirrorUrls.length}`);
-  console.log(`Generated index.html, robots.txt, sitemap.xml, latest.json and ${packTargets.length - skipped} update pack(s)`);
+  console.log(`Generated index.html, robots.txt, sitemap.xml, latest.json and ${oldCommits.length - skipped} update pack(s)`);
   if (skipped > 0) {
     console.log(`Skipped ${skipped} update pack(s) larger than ${fmtBytes(MAX_PACK_BYTES)} (Cloudflare Worker file limit)`);
   }
