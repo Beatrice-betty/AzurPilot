@@ -4,6 +4,18 @@ from datetime import datetime
 from module.scheduler.catalog import REFRESHABLE, RESOURCES
 
 
+def original_order(data, tasks):
+    """模拟读取原优先级合并规则，但不创建可写配置对象或设备。"""
+    from types import SimpleNamespace
+    from module.base.filter import Filter
+    from module.config.config_manual import ManualConfig
+    config = ManualConfig()
+    config.YukikazeTaskManager_TaskPriorityAdjustment = data.get('General', {}).get('YukikazeTaskManager', {}).get('TaskPriorityAdjustment')
+    priority = Filter(regex=r'(.*)', attr=['command'])
+    priority.load(config.SCHEDULER_PRIORITY)
+    return [item.task for item in priority.apply([SimpleNamespace(command=t['name'], task=t) for t in tasks])]
+
+
 def snapshot(data, observations, now):
     tasks = []
     for name, groups in data.items():

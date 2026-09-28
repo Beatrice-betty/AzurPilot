@@ -895,6 +895,10 @@ class AzurLaneAutoScript:
     def config(self):
         try:
             config = AzurLaneConfig(config_name=self.config_name)
+            runtime = self.__dict__.get('_program_runtime')
+            if runtime is not None:
+                # 维护恢复发生在选任务之前，重载后的配置也必须接入系统通道。
+                runtime.attach(config)
             return config
         except RequestHumanTakeover:
             logger.error_context(
@@ -2379,7 +2383,8 @@ class AzurLaneAutoScript:
                 _ = self.device
                 self.device.config = self.config
                 # 跳过第一次重启
-                if self.is_first_task and task == 'Restart':
+                runtime = self.__dict__.get('_program_runtime')
+                if self.is_first_task and task == 'Restart' and (runtime is None or runtime.mode == 'native'):
                     logger.info('[Alas] 调度器启动时跳过任务 `Restart`')
                     self.delay_next_restart()
                     del_cached_property(self, 'config')

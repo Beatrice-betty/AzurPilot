@@ -4,7 +4,7 @@ from datetime import datetime
 
 from module.api.protocol import ApiError
 from module.scheduler.catalog import CARDS, OVERRIDES, REFRESHABLE, RESOURCES
-from module.scheduler.context import snapshot
+from module.scheduler.context import original_order, snapshot
 from module.scheduler.engine import simulate
 from module.scheduler.models import ProgramDocument, ResourceObservation
 from module.scheduler.store import ConflictError, ProgramStore
@@ -76,7 +76,7 @@ class SchedulerService:
         try:
             state['resources'] = {name: ResourceObservation.model_validate(row).model_dump() for name, row in state['resources'].items()}
             instant = parse_time(state['now'])
-            due = [t for t in state['tasks'] if t.get('enabled') and t.get('nextRun') and parse_time(t['nextRun']) <= instant]
+            due = original_order(data, [t for t in state['tasks'] if t.get('enabled') and t.get('nextRun') and parse_time(t['nextRun']) <= instant])
         except (ValueError, TypeError, KeyError) as exc:
             raise ApiError('INVALID_PARAMS', '模拟时间或资源记录格式无效') from exc
         state.setdefault('nativeTask', due[0] if due else None)

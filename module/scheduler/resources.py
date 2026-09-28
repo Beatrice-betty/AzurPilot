@@ -13,6 +13,8 @@ def stable_read(ui, visible, read):
             if value is not None and value == previous:
                 return value
             previous = value
+        else:
+            previous = None
         if timeout.reached():
             return None
     return None

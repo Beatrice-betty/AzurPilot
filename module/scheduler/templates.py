@@ -17,11 +17,9 @@ def builtins():
         inputs=[port('items', 'tasks', True)], outputs=[port('value', 'task')], nodes=[
             node('input', 'input', name='items'), node('order', 'priority', 250), node('first', 'first', 500)], edges=[
             edge('input', 'order', 'value', 'items', True), edge('order', 'first', 'value', 'items', True)])
-    original = SubgraphDefinition(id='builtin.original', name='按原计划筛选选择', pure=True, entry='first',
-        outputs=[port('value', 'task')], nodes=[node('tasks', 'tasks'), node('enabled', 'filter', 240),
-            node('due', 'filter', 480, rule='due'), node('order', 'priority', 720), node('first', 'first', 960)], edges=[
-            edge('tasks', 'enabled', 'value', 'items', True), edge('enabled', 'due', 'value', 'items', True),
-            edge('due', 'order', 'value', 'items', True), edge('order', 'first', 'value', 'items', True)])
+    # 原队列包含用户优先级和囤积等待，不能用固定任务顺序重新模拟。
+    original = SubgraphDefinition(id='builtin.original', name='按原计划筛选选择', pure=True, entry='plan',
+        outputs=[port('value', 'task')], nodes=[node('plan', 'original_plan')])
     def execution_sub(identifier, label, nodes, edges, inputs=()):
         return SubgraphDefinition(id=identifier, name=label, entry='entry', inputs=list(inputs),
                                  nodes=[node('entry', 'entry'), *nodes], edges=edges)

@@ -138,6 +138,15 @@ class SchedulerApiTests(unittest.TestCase):
         self.assertEqual(before, self.store.persistent('testpilot'))
         self.assertFalse(self.store.exists('testpilot'))
 
+    def test_default_simulation_uses_configured_original_priority(self):
+        data = json.loads(self.configs.path('testpilot').read_text(encoding='utf-8'))
+        data['General']['YukikazeTaskManager']['TaskPriorityAdjustment'] = 'Main > Commission'
+        self.configs.path('testpilot').write_text(json.dumps(data), encoding='utf-8')
+        supplied = context(tasks=[{'name': 'Commission', 'enabled': True, 'nextRun': '2026-09-28 09:00:00'},
+                                  {'name': 'Main', 'enabled': True, 'nextRun': '2026-09-28 09:00:00'}])
+        result = self.dispatch('simulate', document=default_program().model_dump(), context=supplied, steps=10)
+        self.assertEqual('Main', next(effect['task'] for effect in result['effects'] if effect['kind'] == 'execute'))
+
     def test_invalid_simulation_and_program_are_located(self):
         document = default_program().model_dump()
         document['nodes'][4]['params']['overrides'] = {'Emulator_Serial':'private'}

@@ -68,9 +68,12 @@ class SchedulerRuntime:
         context['requests'] = copy.deepcopy(self.requests)
         # 复用原队列实现，保留固定优先级与囤积等待的语义。
         config.get_next_task()
-        candidate = config.pending_task[0] if config.pending_task else None
+        business = {t['name'] for t in context['tasks']}
+        # 系统恢复不能占住业务候选的首位；它由独立恢复通道派发。
+        candidate = next((t for t in config.pending_task if t.command in business), None)
         context['nativeTask'] = next((t for t in context['tasks'] if candidate and t['name'] == candidate.command), None)
-        future = config.waiting_task[0].next_run + config.hoarding if config.waiting_task else now() + timedelta(minutes=5)
+        waiting = next((t for t in config.waiting_task if t.command in business), None)
+        future = waiting.next_run + config.hoarding if waiting else now() + timedelta(minutes=5)
         context['nativeDeadline'] = future.isoformat(sep=' ')
         if self.mode == 'enhance':
             pending = {t.command for t in config.pending_task}

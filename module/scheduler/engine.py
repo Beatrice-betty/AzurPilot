@@ -179,7 +179,17 @@ class Engine:
             names = {r['task'] for r in self.context.get('requests', [])}
             value = [t for t in self.context.get('tasks', []) if t['name'] in names]
         elif kind == 'original_plan':
-            value = self.context.get('nativeTask') if output == 'value' else self.context.get('nativeDeadline')
+            if 'nativeTask' in self.context:
+                value = self.context.get('nativeTask') if output == 'value' else self.context.get('nativeDeadline')
+            else:
+                # 隔离模拟没有真实配置队列，按注入的任务状态和默认优先级计算。
+                from module.scheduler.catalog import REGISTRY
+                enabled = [t for t in self.context.get('tasks', []) if t.get('enabled') and t.get('nextRun')]
+                due = [t for t in enabled if parse_time(t['nextRun']) <= self.now]
+                order = {name: index for index, name in enumerate(REGISTRY['priority'].params['order'])}
+                due.sort(key=lambda t: order.get(t['name'], len(order)))
+                future = [parse_time(t['nextRun']) for t in enabled if parse_time(t['nextRun']) > self.now]
+                value = (due[0] if due else None) if output == 'value' else (min(future) if future else self.now + timedelta(minutes=5)).isoformat(sep=' ')
         elif kind == 'filter':
             items = get('items') or []
             if p['rule'] == 'enabled':
