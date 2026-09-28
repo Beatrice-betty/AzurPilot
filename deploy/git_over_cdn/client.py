@@ -103,24 +103,18 @@ class GitOverCdnClient:
 
     @cached_property
     def current_commit(self) -> str:
-        for file in [
-            f'./refs/remotes/{self.source}/{self.branch}',
-            f'./refs/heads/{self.branch}',
-            'ORIG_HEAD',
-        ]:
-            file = self.filepath(file)
-            try:
-                with open(file, 'r', encoding='utf-8') as f:
-                    commit = f.read()
-                res = re.search(r'([0-9a-f]{40})', commit)
-                if res:
-                    commit = res.group(1)
-                    self.logger.attr('CurrentCommit', commit)
-                    return commit
-            except FileNotFoundError as e:
-                self.logger.error(f'Failed to get local commit: {e}')
-            except Exception as e:
-                self.logger.error(f'Failed to get local commit: {e}')
+        # 以实际 HEAD 为准，兼容 packed-refs，避免旧的远端引用选错历史或更新包。
+        try:
+            result = subprocess.run(
+                [self.git, 'rev-parse', '--verify', 'HEAD'], cwd=self.folder,
+                capture_output=True, text=True, timeout=10,
+            )
+            commit = result.stdout.strip()
+            if result.returncode == 0 and re.fullmatch(r'[0-9a-f]{40}', commit):
+                self.logger.attr('CurrentCommit', commit)
+                return commit
+        except (OSError, subprocess.TimeoutExpired) as e:
+            self.logger.error(f'Failed to get local commit: {e}')
         return ''
 
     @staticmethod
@@ -223,7 +217,23 @@ class GitOverCdnClient:
             if resp.status_code == 200:
                 try:
                     info = json.loads(resp.text)
+                    if not isinstance(info, dict) or info.get('branch', 'master') != self.branch:
+                        self.logger.warning('CDN manifest does not match the configured branch')
+                        continue
                     commit = info['commit']
+                    if not isinstance(commit, str) or not re.fullmatch(r'[0-9a-f]{40}', commit):
+                        self.logger.error('CDN manifest contains an invalid commit')
+                        continue
+                    # 固定基线镜像与 GitHub 使用不同 SHA，按本地版本选择同一套历史。
+                    mirror_commit = info.get('gitcode_commit')
+                    mirror_commits = info.get('gitcode_commits', [])
+                    if (
+                        isinstance(mirror_commit, str)
+                        and re.fullmatch(r'[0-9a-f]{40}', mirror_commit)
+                        and isinstance(mirror_commits, list)
+                        and self.current_commit in mirror_commits
+                    ):
+                        commit = mirror_commit
                     self.logger.attr('LatestCommit', commit)
                     return commit
                 except json.JSONDecodeError:
@@ -302,32 +312,40 @@ class GitOverCdnClient:
         Returns:
             str: 命令的标准输出。
         """
-        os.chdir(self.folder)
         cmd = list(map(str, args))
         cmd = [self.git] + cmd
         self.logger.info(f'Execute: {cmd}')
 
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=False)
+        process = subprocess.Popen(cmd, cwd=self.folder, stdout=subprocess.PIPE, shell=False)
         try:
             stdout, stderr = process.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
             process.kill()
             stdout, stderr = process.communicate()
             self.logger.warning(f'TimeoutExpired when calling {cmd}, stdout={stdout}, stderr={stderr}')
+        if process.returncode != 0:
+            raise subprocess.CalledProcessError(process.returncode, cmd, output=stdout)
         return stdout.decode()
 
     def git_reset(self):
-        """执行 git reset --hard 到远程分支。"""
+        """执行 git reset --hard 到远程分支，返回是否成功。"""
         # 移除 git 锁文件
         for lock_file in [
             './.git/index.lock',
             './.git/HEAD.lock',
-            './.git/refs/heads/master.lock',
+            f'./.git/refs/heads/{self.branch}.lock',
         ]:
+            lock_file = os.path.join(self.folder, lock_file)
             if os.path.exists(lock_file):
                 self.logger.info(f'Lock file {lock_file} exists, removing')
                 os.remove(lock_file)
-        self.git_command('reset', '--hard', f'{self.source}/{self.branch}')
+        try:
+            self.git_command('reset', '--hard', f'{self.source}/{self.branch}')
+        except (OSError, subprocess.CalledProcessError) as e:
+            self.logger.error(f'Failed to reset local repository: {e}')
+            return False
+        self.__dict__.pop('current_commit', None)
+        return True
 
     def get_status(self):
         """获取仓库状态。
@@ -365,13 +383,16 @@ class GitOverCdnClient:
             return False
         if self.current_commit == self.latest_commit:
             self.logger.info('Already up to date')
-            self.git_reset()
-            return True
+            # HEAD 可能已更新而远端引用仍旧，先对齐引用再 reset，避免回退版本。
+            if not self.update_refs():
+                return False
+            return self.git_reset()
 
         if not self.download_pack():
             return False
         if not self.update_refs():
             return False
-        self.git_reset()
+        if not self.git_reset():
+            return False
         self.logger.info('Update success')
         return True

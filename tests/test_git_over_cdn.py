@@ -1,4 +1,5 @@
 import threading
+import subprocess
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -9,6 +10,46 @@ from deploy.git_over_cdn.endpoints import CLOUDFLARE_UPDATE_URLS, FALLBACK_UPDAT
 
 
 class TestGitOverCdnClient(unittest.TestCase):
+    def test_manifest_for_another_branch_falls_back_to_git(self):
+        client = self._client()
+        client.branch = 'dev'
+        client.current_commit = 'b' * 40
+        client.preferred_urls = client.urls
+        client.session = MagicMock()
+        client.session.get.return_value = self._response(text='{"commit": "' + 'a' * 40 + '", "branch": "master"}')
+        self.assertEqual('failed', client.get_status())
+
+    def test_reset_failure_is_not_reported_as_success(self):
+        client = self._client()
+        client.current_commit = client.latest_commit = 'a' * 40
+        with (
+            patch.object(client, 'update_refs', return_value=True),
+            patch.object(client, 'git_command', side_effect=subprocess.CalledProcessError(1, ['git', 'reset'])),
+        ):
+            self.assertFalse(client.update())
+
+    def test_latest_commit_selects_history_from_local_sha(self):
+        github, gitcode, old_mirror = 'a' * 40, 'b' * 40, 'c' * 40
+        for current, expected in ((github, github), (gitcode, gitcode), (old_mirror, gitcode), ('d' * 40, github)):
+            with self.subTest(current=current):
+                client = self._client()
+                client.current_commit = current
+                client.preferred_urls = client.urls
+                client.session = MagicMock()
+                client.session.get.return_value = self._response(text=(
+                    '{"commit": "' + github + '", "gitcode_commit": "' + gitcode
+                    + '", "gitcode_commits": ["' + gitcode + '", "' + old_mirror + '"]}'
+                ))
+                self.assertEqual(expected, client.latest_commit)
+
+    def test_latest_commit_accepts_legacy_manifest_and_ignores_invalid_mirror(self):
+        for fields in ('', ', "gitcode_commit": "invalid", "gitcode_commits": []'):
+            client = self._client()
+            client.preferred_urls = client.urls
+            client.session = MagicMock()
+            client.session.get.return_value = self._response(text='{"commit": "' + 'a' * 40 + '"' + fields + '}')
+            self.assertEqual('a' * 40, client.latest_commit)
+
     @staticmethod
     def _client(urls=None, fallback_urls=None):
         return GitOverCdnClient(
@@ -120,11 +161,13 @@ class TestGitOverCdnClient(unittest.TestCase):
             manager = object.__new__(manager_class)
             manager.root_filepath = '.'
             manager.git = 'git'
+            manager.Branch = 'dev'
 
             client = manager.goc_client
 
             self.assertEqual(list(CLOUDFLARE_UPDATE_URLS), client.urls)
             self.assertEqual(list(FALLBACK_UPDATE_URLS), client.fallback_urls)
+            self.assertEqual('dev', client.branch)
 
 
 if __name__ == '__main__':

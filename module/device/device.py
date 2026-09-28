@@ -547,6 +547,9 @@ class Device(Screenshot, Control, AppControl, Input):
             logger.critical('[Device] 错误 没有启动/停止应用，因为 HandleError 已禁用')
             logger.critical('[Device] 请启用 Alas.Error.HandleError 或手动登录碧蓝航线')
             raise RequestHumanTakeover
+        # 与推荐配置共用启动前流程：设备已连接，先恢复账号，再写配置，最后启动游戏。
+        from module.api.account_service import restore_worker
+        restore_worker(self.config.config_name, device=self)
         if getattr(self.config, 'Emulator_GameSettings', False):
             from module.game_setting.player_prefs import apply_recommended_game_settings
 

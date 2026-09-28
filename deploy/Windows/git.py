@@ -179,7 +179,7 @@ class GitManager(DeployConfig):
             fallback_urls=FALLBACK_UPDATE_URLS,
             folder=self.root_filepath,
             source='origin',
-            branch='master',
+            branch=self.Branch,
             git=self.git,
         )
         client.logger = logger
