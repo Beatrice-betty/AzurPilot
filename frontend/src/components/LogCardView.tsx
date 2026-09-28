@@ -168,6 +168,35 @@ function renderSearchHighlights(text: string, searchLower: string, keyPrefix: st
   return <span key={keyPrefix}>{nodes}</span>
 }
 
+function splitLogFields(value: string): string[] {
+  const fields: string[] = []
+  let current = ''
+  for (const char of value.trim()) {
+    if (char === ' ' || char === '\t') {
+      if (current) {
+        fields.push(current)
+        current = ''
+      }
+    } else {
+      current += char
+    }
+  }
+  if (current) fields.push(current)
+  return fields
+}
+
+function isAsciiDigits(value: string, minLength: number, maxLength: number): boolean {
+  if (value.length < minLength || value.length > maxLength) return false
+  for (const char of value) {
+    if (char < '0' || char > '9') return false
+  }
+  return true
+}
+
+function isCostValue(value: string): boolean {
+  return value === '-' || value === '--' || isAsciiDigits(value, 1, 4)
+}
+
 // 复制按钮小组件
 function CopyButton({ text, label = '复制' }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false)
@@ -447,10 +476,11 @@ function aggregateSlice(
 
       while (rIdx < entries.length) {
         const rMsg = extractLogMessage(entries[rIdx].text).message
-        const rowMatch = /^\s*(\d{1,2})\s+((?:(?:\d{1,4}|--?)\s*)+)$/.exec(rMsg)
-        if (rowMatch) {
-          const rowNum = parseInt(rowMatch[1], 10)
-          const values = rowMatch[2].trim().split(/\s+/)
+        const fields = splitLogFields(rMsg)
+        const rowToken = fields[0] ?? ''
+        const values = fields.slice(1)
+        if (isAsciiDigits(rowToken, 1, 2) && values.length > 0 && values.every(isCostValue)) {
+          const rowNum = Number(rowToken)
           rows.push({ rowNum, values })
           rawLines.push(entries[rIdx].text)
           rIdx++

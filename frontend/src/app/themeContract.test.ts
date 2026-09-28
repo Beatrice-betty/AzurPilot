@@ -60,8 +60,15 @@ const REGIONS = ['surface', 'plate', 'sidebar', 'topbar', 'modal', 'menu', 'cont
 const REGION_PROPS = ['alpha', 'blur', 'saturation', 'radius', 'bg', 'filter', 'edge', 'shadow'] as const
 const INHERITING = ['sidebar', 'topbar', 'modal', 'menu'] as const
 
-const declaration = (css: string, key: string) =>
-  css.match(new RegExp(`${key}\s*:\s*([^;]+);`))?.[1].trim() ?? ''
+const declaration = (css: string, key: string) => {
+  const needle = `${key}:`
+  const start = css.indexOf(needle)
+  if (start < 0) return ''
+  const valueStart = start + needle.length
+  const semicolon = css.indexOf(';', valueStart)
+  if (semicolon < 0) return ''
+  return css.slice(valueStart, semicolon).trim()
+}
 
 describe('区域化材质契约', () => {
   it('七个区域各八键齐备', () => {

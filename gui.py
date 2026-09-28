@@ -133,6 +133,9 @@ def _create_dual_stack_sockets(
                     listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 if family == socket.AF_INET6:
                     listener.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+                # WebUI 明确支持局域网/远程访问，因此双栈监听所有接口是产品行为；
+                # 访问控制由 WebSocket 鉴权、Origin/远程访问网关等应用层边界负责。
+                # codeql[py/bind-socket-all-network-interfaces]
                 listener.bind((address, listen_port))
                 listener.listen(backlog)
                 listener.setblocking(False)

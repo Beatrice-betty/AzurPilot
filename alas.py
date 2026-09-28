@@ -407,21 +407,6 @@ class AzurLaneAutoScript:
             )
         except Exception as error:
             logger.warning(f'[日报] 记录任务结果失败，已忽略: {type(error).__name__}')
-            return
-        try:
-            if success is True:
-                status = 'success'
-            elif success == 'recoverable':
-                status = 'recoverable'
-            else:
-                status = 'failed'
-            finished_at = current_time()
-            duration = max(0.0, (finished_at - started_at).total_seconds())
-            self._get_daily_summary_service().store.record_task_finish(
-                self.config_name, run_id, finished_at, status, duration
-            )
-        except Exception as error:
-            logger.warning(f'[日报] 记录任务结果失败，已忽略: {type(error).__name__}')
 
     def _deep_restart_enabled(self):
         """判断本次模拟器重启是否改用「深度重启」。

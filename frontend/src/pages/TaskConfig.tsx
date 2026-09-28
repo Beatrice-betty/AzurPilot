@@ -9,6 +9,7 @@ import { api } from '../api/client'
 import type { Config } from '../api/types'
 import { useApp, useConnection } from '../app/context'
 import { usesLegacyLayout } from '../app/theme'
+import { htmlToPlainText } from '../app/htmlText'
 import { readRailView, setRailView, subscribeRailView } from '../app/railPrefs'
 import { smoothScrollToElement } from '../app/scroll'
 import { Empty, ErrorBox, Loading, Modal, PageTitle } from '../components/ui'
@@ -166,7 +167,7 @@ export function TaskConfig() {
                 {label}
                 {readonly && <span className="small-label">{ui('task.readonly')}</span>}
               </label>
-              {help && help !== 'help' && help !== arg && <p>{help.replace(/<[^>]*>/g, '')}</p>}
+              {help && help !== 'help' && help !== arg && <p>{htmlToPlainText(help)}</p>}
               {/* 多行控件的提示跟标题同一行，浮在它右端。 */}
               {isMultiline && <EditStatus id={path} edit={edit} retry={queue.retry} queue={queue} />}
             </div>

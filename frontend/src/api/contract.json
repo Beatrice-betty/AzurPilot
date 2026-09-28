@@ -5,6 +5,7 @@
       "mutates": false,
       "params": {
         "additionalProperties": false,
+        "description": "API 入参基础模型，禁止额外字段并启用严格类型校验。",
         "properties": {},
         "title": "Params",
         "type": "object"
@@ -14,6 +15,7 @@
       "mutates": false,
       "params": {
         "additionalProperties": false,
+        "description": "配置界面架构查询参数模型。",
         "properties": {
           "language": {
             "default": "zh-CN",
@@ -36,6 +38,7 @@
       "mutates": false,
       "params": {
         "additionalProperties": false,
+        "description": "API 入参基础模型，禁止额外字段并启用严格类型校验。",
         "properties": {},
         "title": "Params",
         "type": "object"
@@ -45,6 +48,7 @@
       "mutates": true,
       "params": {
         "additionalProperties": false,
+        "description": "新建实例请求参数模型。",
         "properties": {
           "name": {
             "maxLength": 64,
@@ -88,6 +92,7 @@
       "mutates": false,
       "params": {
         "additionalProperties": false,
+        "description": "API 入参基础模型，禁止额外字段并启用严格类型校验。",
         "properties": {},
         "title": "Params",
         "type": "object"
@@ -124,6 +129,7 @@
       "mutates": true,
       "params": {
         "additionalProperties": false,
+        "description": "带版本校验的请求参数模型。",
         "properties": {
           "instance": {
             "maxLength": 64,
@@ -148,6 +154,7 @@
       "mutates": false,
       "params": {
         "additionalProperties": false,
+        "description": "单实例操作通用入参模型。",
         "properties": {
           "instance": {
             "maxLength": 64,
@@ -169,6 +176,7 @@
         "$defs": {
           "ConfigChange": {
             "additionalProperties": false,
+            "description": "单个配置项修改条目模型。",
             "properties": {
               "path": {
                 "maxLength": 180,
@@ -189,6 +197,7 @@
           }
         },
         "additionalProperties": false,
+        "description": "批量配置修改请求参数模型。",
         "properties": {
           "instance": {
             "maxLength": 64,
@@ -271,6 +280,7 @@
       "mutates": false,
       "params": {
         "additionalProperties": false,
+        "description": "单实例操作通用入参模型。",
         "properties": {
           "instance": {
             "maxLength": 64,
@@ -290,6 +300,7 @@
       "mutates": true,
       "params": {
         "additionalProperties": false,
+        "description": "单实例操作通用入参模型。",
         "properties": {
           "instance": {
             "maxLength": 64,
@@ -309,6 +320,7 @@
       "mutates": true,
       "params": {
         "additionalProperties": false,
+        "description": "单实例操作通用入参模型。",
         "properties": {
           "instance": {
             "maxLength": 64,
@@ -328,6 +340,7 @@
       "mutates": true,
       "params": {
         "additionalProperties": false,
+        "description": "单任务控制请求参数模型。",
         "properties": {
           "instance": {
             "maxLength": 64,
@@ -354,6 +367,7 @@
       "mutates": false,
       "params": {
         "additionalProperties": false,
+        "description": "日志获取请求参数模型。",
         "properties": {
           "instance": {
             "maxLength": 64,
@@ -379,6 +393,7 @@
       "mutates": false,
       "params": {
         "additionalProperties": false,
+        "description": "单实例操作通用入参模型。",
         "properties": {
           "instance": {
             "maxLength": 64,
@@ -398,6 +413,7 @@
       "mutates": true,
       "params": {
         "additionalProperties": false,
+        "description": "单实例操作通用入参模型。",
         "properties": {
           "instance": {
             "maxLength": 64,
@@ -417,6 +433,7 @@
       "mutates": false,
       "params": {
         "additionalProperties": false,
+        "description": "综合统计报表请求参数模型。",
         "properties": {
           "instance": {
             "maxLength": 64,
@@ -556,6 +573,7 @@
       "mutates": false,
       "params": {
         "additionalProperties": false,
+        "description": "单资源图表统计请求参数模型。",
         "properties": {
           "instance": {
             "maxLength": 64,
@@ -601,6 +619,7 @@
       "mutates": false,
       "params": {
         "additionalProperties": false,
+        "description": "API 入参基础模型，禁止额外字段并启用严格类型校验。",
         "properties": {},
         "title": "Params",
         "type": "object"
@@ -610,6 +629,7 @@
       "mutates": true,
       "params": {
         "additionalProperties": false,
+        "description": "部署配置修改请求参数模型。",
         "properties": {
           "values": {
             "additionalProperties": true,
@@ -628,6 +648,7 @@
       "mutates": false,
       "params": {
         "additionalProperties": false,
+        "description": "单实例操作通用入参模型。",
         "properties": {
           "instance": {
             "maxLength": 64,
@@ -647,6 +668,7 @@
       "mutates": true,
       "params": {
         "additionalProperties": false,
+        "description": "开机启动设置请求参数模型。",
         "properties": {
           "instance": {
             "maxLength": 64,
@@ -690,6 +712,7 @@
       "mutates": false,
       "params": {
         "additionalProperties": false,
+        "description": "单实例操作通用入参模型。",
         "properties": {
           "instance": {
             "maxLength": 64,
@@ -778,6 +801,7 @@
       "mutates": false,
       "params": {
         "additionalProperties": false,
+        "description": "API 入参基础模型，禁止额外字段并启用严格类型校验。",
         "properties": {},
         "title": "Params",
         "type": "object"
@@ -787,6 +811,7 @@
       "mutates": false,
       "params": {
         "additionalProperties": false,
+        "description": "Git 提交记录查询参数模型。",
         "properties": {
           "offset": {
             "default": 0,
@@ -810,6 +835,7 @@
       "mutates": true,
       "params": {
         "additionalProperties": false,
+        "description": "API 入参基础模型，禁止额外字段并启用严格类型校验。",
         "properties": {},
         "title": "Params",
         "type": "object"
@@ -819,6 +845,7 @@
       "mutates": true,
       "params": {
         "additionalProperties": false,
+        "description": "API 入参基础模型，禁止额外字段并启用严格类型校验。",
         "properties": {},
         "title": "Params",
         "type": "object"
@@ -828,6 +855,7 @@
       "mutates": true,
       "params": {
         "additionalProperties": false,
+        "description": "API 入参基础模型，禁止额外字段并启用严格类型校验。",
         "properties": {},
         "title": "Params",
         "type": "object"
@@ -837,7 +865,7 @@
       "mutates": false,
       "params": {
         "additionalProperties": false,
-        "description": "公告查询参数。",
+        "description": "公告查询参数模型。",
         "properties": {
           "force": {
             "default": false,
@@ -872,6 +900,7 @@
       "mutates": false,
       "params": {
         "additionalProperties": false,
+        "description": "API 入参基础模型，禁止额外字段并启用严格类型校验。",
         "properties": {},
         "title": "Params",
         "type": "object"
@@ -925,6 +954,7 @@
       "mutates": true,
       "params": {
         "additionalProperties": false,
+        "description": "API 入参基础模型，禁止额外字段并启用严格类型校验。",
         "properties": {},
         "title": "Params",
         "type": "object"
@@ -934,6 +964,7 @@
       "mutates": false,
       "params": {
         "additionalProperties": false,
+        "description": "鉴权请求参数模型。",
         "properties": {
           "password": {
             "default": "",
@@ -950,6 +981,7 @@
       "mutates": false,
       "params": {
         "additionalProperties": false,
+        "description": "WebSocket 主题订阅请求参数模型。",
         "properties": {
           "instance": {
             "anyOf": [
