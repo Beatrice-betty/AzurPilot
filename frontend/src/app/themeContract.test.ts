@@ -61,7 +61,7 @@ const REGION_PROPS = ['alpha', 'blur', 'saturation', 'radius', 'bg', 'filter', '
 const INHERITING = ['sidebar', 'topbar', 'modal', 'menu'] as const
 
 const declaration = (css: string, key: string) =>
-  css.match(new RegExp(`${key}\s*:\s*([^;]+);`))?.[1].trim() ?? ''
+  css.match(new RegExp(`${key}\\s*:\\s*([^;]+);`))?.[1].trim() ?? ''
 
 describe('区域化材质契约', () => {
   it('七个区域各八键齐备', () => {
