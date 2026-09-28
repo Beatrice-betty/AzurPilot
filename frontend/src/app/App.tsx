@@ -6,7 +6,7 @@ import { PasswordInput, Select } from '../components/FormControls'
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type MouseEvent, type ChangeEvent } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getLayout, setSidebarCollapsed, subscribeLayout } from './layout'
-import { getThemePreference, usesMaterial } from './theme'
+import { getThemePreference, supportsBackground } from './theme'
 import { ArrowRight, CalendarClock, ChartNoAxesCombined, CirclePause, CirclePlay, Code2, Compass, Download, ExternalLink, FileJson, GalleryHorizontal, Globe, House, LayoutDashboard, LoaderCircle, Maximize2, Megaphone, Menu, Minimize2, Palette, PanelTop, Settings2, WifiOff, X, ChevronRight } from 'lucide-react'
 import { api } from '../api/client'
 import { editor } from '../config/editors'
@@ -331,7 +331,7 @@ function NavHandle() {
     }
   }, [collapsed])
   /* 只有会铺壁纸的族才需要这个把手：简约/紧凑族根本没有背景，收起也没意义（人类要求）。 */
-  if (!usesMaterial(getThemePreference().theme)) return null
+  if (!supportsBackground(getThemePreference().theme)) return null
   return <button
     type="button"
     className="nav-handle"
