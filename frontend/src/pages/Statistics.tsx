@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 数据统计与图表分析页面。
+ */
+
 import {NumberDraftInput, Select} from '../components/FormControls'
 import { Fragment, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { getSelectedKeysForCategory, getStatisticsPrefs, getStatisticsPrefsVersion, subscribeStatisticsPrefs } from '../app/statisticsPrefs'

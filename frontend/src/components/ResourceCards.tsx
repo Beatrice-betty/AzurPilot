@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 仪表盘资源（石油、物资、魔方等）统计卡片组件。
+ */
+
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Box, GripVertical, Plus, X } from 'lucide-react'
 import type { Resource } from '../api/types'

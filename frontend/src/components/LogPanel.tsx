@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 实例实时控制台日志面板组件。
+ */
+
 import { Select } from './FormControls'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'

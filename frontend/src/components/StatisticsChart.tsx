@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 统计图表（折线图、柱状图、堆叠图）渲染组件。
+ */
+
 import type {ReactNode, KeyboardEvent as ReactKeyboardEvent} from 'react'
 import { Select } from './FormControls'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'

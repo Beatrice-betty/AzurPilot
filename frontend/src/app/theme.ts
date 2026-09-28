@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 应用主题模式、明暗切换、紧凑布局与旧版外壳判定。
+ */
+
 import { palettes, paletteColors, paletteTokens, readCustomPalettes, colorModes, fixedColorModes, type Palette, type ColorMode, type ResolvedMode, type CustomPalette } from './palettes'
 export type Theme = 'light' | 'dark' | 'minimal' | 'extreme'
   | 'legacy-light' | 'legacy-dark'

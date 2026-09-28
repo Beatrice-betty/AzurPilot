@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 账号状态文案与多语言键格式化工具。
+ */
+
 import type { Language } from '../i18n'
 
 const zh = {

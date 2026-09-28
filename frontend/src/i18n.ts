@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 前端国际化 (i18n) 语言包、文案翻译器与语言检测。
+ */
+
 import { developerEnUS, developerJaJP, developerZhCN, developerZhTW } from './i18n.dev'
 
 export type Language = 'zh-CN' | 'zh-TW' | 'en-US' | 'ja-JP' | 'zh-MIAO'

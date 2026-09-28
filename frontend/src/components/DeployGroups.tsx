@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 部署设置分组表单渲染组件。
+ */
+
 import type { Settings as SettingsData } from '../api/types'
 import type { EditQueue, EditSnapshot } from '../config/EditQueue'
 import { useApp } from '../app/context'

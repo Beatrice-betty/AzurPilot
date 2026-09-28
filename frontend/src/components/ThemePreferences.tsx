@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 主题模式与配色方案配置面板组件。
+ */
+
 import { useState, type CSSProperties } from 'react'
 import { Plus } from 'lucide-react'
 import { useApp } from '../app/context'

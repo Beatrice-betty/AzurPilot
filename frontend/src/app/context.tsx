@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 全局 React 上下文提供者，统合实例、配置架构、语言和主题状态。
+ */
+
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { api } from '../api/client'
 import type { Instance, Schema } from '../api/types'

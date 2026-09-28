@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 预设与自定义配色方案计算、对比度判定与 CSS 变量生成。
+ */
+
 export const palettes = ['ocean', 'forest', 'violet', 'sand', 'slate'] as const
 export type PresetPalette = typeof palettes[number]
 export type Palette = PresetPalette | `custom:${string}`

@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 全局毛玻璃材质背景层挂载组件。
+ */
+
 import { lazy, Suspense } from 'react'
 import { useApp } from '../app/context'
 import { usesMaterial } from '../app/theme'

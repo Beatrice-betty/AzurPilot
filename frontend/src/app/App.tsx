@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 应用顶层外壳组件与全局路由布局。
+ */
+
 import { PasswordInput, Select } from '../components/FormControls'
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type MouseEvent, type ChangeEvent } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'

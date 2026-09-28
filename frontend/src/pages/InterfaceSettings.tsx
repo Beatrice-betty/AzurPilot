@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 界面外观偏好设置页面（主题、配色、背景与多语言）。
+ */
+
 import { Select } from '../components/FormControls'
 import { languages, useApp, useConnection } from '../app/context'
 import { usesMaterial, usesPaletteOptions } from '../app/theme'

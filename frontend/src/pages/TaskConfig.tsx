@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 任务参数设置与自定义策略脚本编辑页面。
+ */
+
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { useParams } from 'react-router-dom'
 import { CalendarClock, Clock3, ListTree, Play, Search, Settings2, Ship, Terminal } from 'lucide-react'

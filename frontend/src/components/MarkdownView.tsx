@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 支持数学公式与代码高亮的 Markdown 渲染组件。
+ */
+
 import { useMemo, type MouseEvent } from 'react'
 import { Marked, type Token } from 'marked'
 import katex from 'katex'

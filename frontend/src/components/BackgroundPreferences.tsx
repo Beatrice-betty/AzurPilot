@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 背景偏好设置组件（支持 URL 与本地文件上传）。
+ */
+
 import { useEffect, useState, useSyncExternalStore, type FormEvent } from 'react'
 import { Upload } from 'lucide-react'
 import { getBackground, loadUploadedBackground, resetBackground, setBackgroundUpload, setBackgroundUrl, subscribeBackground, type BackgroundKind, type BackgroundSource } from '../app/background'

@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 账号管理与密码设置面板组件。
+ */
+
 import { useEffect, useRef, useState } from 'react'
 import { ApiError, api } from '../api/client'
 import type { Parameters } from '../api/generated'

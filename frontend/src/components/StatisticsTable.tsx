@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 统计数据明细与掉落记录表格组件。
+ */
+
 import type {ReactNode} from 'react'
 import { ArrowDown, ArrowUp, Search } from 'lucide-react'
 import { useState } from 'react'

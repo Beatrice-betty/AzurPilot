@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 结构化运行日志卡片流渲染与虚拟滚动视图组件。
+ */
+
 import {
   useState,
   useMemo,
@@ -856,7 +860,7 @@ export function renderCellContent(code: string): ReactNode {
     )
   }
 
-  // 2. Boss (BO)
+  // 2. 首领关卡旗舰 (BO)
   if (code === 'BO') {
     return (
       <span className="cell-icon-wrap" title="关卡旗舰 Boss (BO)">
@@ -1696,9 +1700,9 @@ function interpolateColor(
 
 const HEATMAP_STOPS: [number, [number, number, number]][] = [
   [0.0, [2, 132, 199]],   // #0284c7 Sky Blue (近距代价 1)
-  [0.25, [37, 99, 235]],  // #2563eb Blue
-  [0.5, [124, 58, 237]],  // #7c3aed Purple
-  [0.75, [192, 38, 211]], // #c026d3 Fuchsia
+  [0.25, [37, 99, 235]],  // #2563eb 蓝色调
+  [0.5, [124, 58, 237]],  // #7c3aed 紫色调
+  [0.75, [192, 38, 211]], // #c026d3 品红色调
   [1.0, [225, 29, 72]],   // #e11d48 Rose (远距最高代价)
 ]
 

@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 系统版本更新与 Git 提交历史检查页面。
+ */
+
 import { useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { ArrowDown, ArrowUp, Check, CircleAlert, Download, GitBranch, GitCommitHorizontal, RefreshCw, TriangleAlert, X } from 'lucide-react'

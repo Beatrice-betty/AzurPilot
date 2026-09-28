@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 应用背景图与视频偏好管理、IndexedDB 持久化存储及数据流。
+ */
+
 export type BackgroundSource = 'default' | 'url' | 'upload'
 export type BackgroundKind = 'image' | 'video'
 

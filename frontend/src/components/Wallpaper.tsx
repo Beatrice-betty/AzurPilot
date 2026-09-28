@@ -1,3 +1,7 @@
+/**
+ * @fileoverview 全局壁纸背景与视频渲染组件。
+ */
+
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { getBackground, loadUploadedBackground, subscribeBackground } from '../app/background'
 
