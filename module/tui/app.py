@@ -9,7 +9,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Footer
 
 from module.tui.backend import TUIBackend
-from module.tui.widgets import HeaderBar, LogView, ResourceBar, Sidebar, TaskModal, TaskTable
+from module.tui.widgets import ConfigModal, HeaderBar, LogView, ResourceBar, Sidebar, TaskModal, TaskTable
 
 
 class AzurPilotTUI(App[None]):
@@ -21,6 +21,8 @@ class AzurPilotTUI(App[None]):
 
     BINDINGS = [
         Binding("space", "toggle_scheduler", "启动/停止", priority=True),
+        Binding("c", "open_config", "配置功能"),
+        Binding("e", "edit_selected_task", "编辑选中任务"),
         Binding("t", "run_task", "单任务执行"),
         Binding("r", "refresh_data", "刷新"),
         Binding("l", "clear_log", "清屏"),
@@ -219,6 +221,34 @@ class AzurPilotTUI(App[None]):
         log_view = self.query_one(LogView)
         log_view.toggle_scroll()
 
+    def action_open_config(self, task: Optional[str] = None) -> None:
+        """C 快捷键：打开功能配置中心。"""
+        current = self.backend.current_instance
+
+        def on_config_closed(saved: bool) -> None:
+            if saved:
+                self.refresh_all_data()
+
+        self.push_screen(ConfigModal(self.backend, initial_task=task, instance=current), on_config_closed)
+
+    def action_edit_selected_task(self) -> None:
+        """E 快捷键：编辑当前表格选中的任务。"""
+        task_table = self.query_one(TaskTable)
+        selected_task = task_table.get_selected_task()
+        self.action_open_config(task=selected_task)
+
+    def on_task_table_task_toggle_requested(self, event: TaskTable.TaskToggleRequested) -> None:
+        """表格回车：一键切换任务启用/禁用状态。"""
+        task = event.task_name
+        success, msg, _ = self.backend.toggle_task_enable(task)
+        self.notify(msg, severity="information" if success else "error")
+        if success:
+            self.refresh_all_data()
+
+    def on_task_table_task_edit_requested(self, event: TaskTable.TaskEditRequested) -> None:
+        """表格请求编辑：打开该任务的配置窗。"""
+        self.action_open_config(task=event.task_name)
+
     def on_sidebar_action_triggered(self, event: Sidebar.ActionTriggered) -> None:
         """处理来自侧边栏按钮的点击事件。"""
         action = event.action
@@ -226,6 +256,8 @@ class AzurPilotTUI(App[None]):
             self.start_current_scheduler()
         elif action == "stop":
             self.stop_current_instance()
+        elif action == "config":
+            self.action_open_config()
         elif action == "task":
             self.action_run_task()
         elif action == "refresh":

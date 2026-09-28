@@ -79,9 +79,10 @@ class Sidebar(Widget):
             yield Label("⚡ 快捷操作", id="actions-title")
             yield Button("▶ 启动调度器", id="btn-start", variant="success", classes="action-btn")
             yield Button("⏹ 停止运行", id="btn-stop", variant="error", classes="action-btn")
-            yield Button("🎯 单任务执行", id="btn-task", variant="primary", classes="action-btn")
+            yield Button("⚙ 功能配置 [C]", id="btn-config", variant="primary", classes="action-btn")
+            yield Button("🎯 单任务执行", id="btn-task", variant="default", classes="action-btn")
             yield Button("🔄 刷新状态", id="btn-refresh", variant="default", classes="action-btn")
-            yield Label("[Space] 启动/停止\n[Tab] 切换焦点", id="hint-label")
+            yield Label("[Space] 启动/停止\n[C] 配置  [E] 编辑任务\n[Enter] 开关任务", id="hint-label")
 
     def update_instances(self, instances: List[Dict[str, Any]], current: str) -> None:
         """更新实例列表。"""
@@ -134,6 +135,8 @@ class Sidebar(Widget):
             self.post_message(self.ActionTriggered("start"))
         elif btn_id == "btn-stop":
             self.post_message(self.ActionTriggered("stop"))
+        elif btn_id == "btn-config":
+            self.post_message(self.ActionTriggered("config"))
         elif btn_id == "btn-task":
             self.post_message(self.ActionTriggered("task"))
         elif btn_id == "btn-refresh":

@@ -32,6 +32,14 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # 标记当前运行于 TUI 终端全屏环境，移除全局控制台日志处理器避免污染终端
+    os.environ["AZURPILOT_TUI"] = "1"
+    try:
+        from module.logger import console_hdlr, logger
+        logger.removeHandler(console_hdlr)
+    except Exception:
+        pass
+
     # 延迟导入以加快帮助输出响应
     from module.tui.app import AzurPilotTUI
 

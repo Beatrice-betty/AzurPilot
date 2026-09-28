@@ -2,9 +2,10 @@
 
 import unittest
 
+from module.runtime.setting import State
 from module.tui.app import AzurPilotTUI
 from module.tui.backend import TUIBackend
-from module.tui.widgets import HeaderBar, LogView, ResourceBar, Sidebar, TaskTable
+from module.tui.widgets import ConfigModal, HeaderBar, LogView, ResourceBar, Sidebar, TaskTable
 
 
 class TestTUIBackend(unittest.TestCase):
@@ -12,6 +13,10 @@ class TestTUIBackend(unittest.TestCase):
 
     def setUp(self) -> None:
         self.backend = TUIBackend()
+
+    def test_state_manager_initialized(self) -> None:
+        """测试全局多进程管理器正常就绪，避免子进程启动出现 NoneType Queue。"""
+        self.assertIsNotNone(State.manager)
 
     def test_list_instances(self) -> None:
         """测试实例列表获取。"""
@@ -57,6 +62,29 @@ class TestTUIBackend(unittest.TestCase):
             self.assertIsInstance(code, str)
             self.assertIsInstance(title, str)
 
+    def test_get_all_configurable_tasks(self) -> None:
+        """测试所有可配置任务列表获取。"""
+        tasks = self.backend.get_all_configurable_tasks()
+        self.assertIsInstance(tasks, list)
+        self.assertGreater(len(tasks), 10)
+        task_codes = [t[0] for t in tasks]
+        self.assertIn("Commission", task_codes)
+        self.assertIn("Research", task_codes)
+
+    def test_get_task_config_schema(self) -> None:
+        """测试任务参数元数据解析与字段组装。"""
+        groups = self.backend.get_task_config_schema("Commission")
+        self.assertIsInstance(groups, list)
+        self.assertGreater(len(groups), 0)
+        first_group = groups[0]
+        self.assertIn("group_name", first_group)
+        self.assertIn("group_title", first_group)
+        self.assertIn("items", first_group)
+        first_item = first_group["items"][0]
+        self.assertIn("path", first_item)
+        self.assertIn("title", first_item)
+        self.assertIn("type", first_item)
+
     def test_get_logs(self) -> None:
         """测试日志拉取契约。"""
         cursor, entries = self.backend.get_logs(after=0)
@@ -93,6 +121,17 @@ class TestTUIApp(unittest.IsolatedAsyncioTestCase):
 
             # 模拟手动刷新动作
             app.action_refresh_data()
+
+    async def test_config_modal_mount(self) -> None:
+        """测试配置弹窗挂载与表单控件初始化。"""
+        backend = TUIBackend()
+        modal = ConfigModal(backend=backend, initial_task="Commission")
+        app = AzurPilotTUI()
+        async with app.run_test():
+            await app.push_screen(modal)
+            self.assertEqual(modal.current_task, "Commission")
+            # 验证表单中已加载字段
+            self.assertGreater(len(modal.active_fields), 0)
 
 
 if __name__ == "__main__":

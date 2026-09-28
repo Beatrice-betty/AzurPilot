@@ -66,28 +66,24 @@ class LogView(Widget):
         rich_log = self.query_one("#rich-log-container", RichLog)
         for entry in entries:
             level = str(entry.get("level", "INFO")).upper()
-            msg = str(entry.get("message", "")).rstrip()
-            seq = entry.get("sequence", 0)
+            raw_text = str(entry.get("text") or entry.get("message", "")).rstrip()
+            seq = entry.get("id") or entry.get("sequence", 0)
 
             # 根据级别着色
-            if "ERROR" in level or "CRITICAL" in level:
-                style = "bold red"
-                prefix_style = "bold white on red"
-            elif "WARN" in level:
-                style = "bold yellow"
-                prefix_style = "black on yellow"
-            elif "DEBUG" in level:
-                style = "dim cyan"
-                prefix_style = "dim cyan"
-            else:
-                style = "bright_white"
-                prefix_style = "green"
-
-            # 构造富文本行
             line = Text()
-            line.append(f"[{seq:05d}] ", style="dim")
-            line.append(f"{level:<5} ", style=prefix_style)
-            line.append(f" │ {msg}", style=style)
+            line.append(f"[{seq:04d}] ", style="dim")
+            if "ERROR" in level or "CRITICAL" in level:
+                line.append(f"{level:<5} ", style="bold white on red")
+                line.append(f"│ {raw_text}", style="bold red")
+            elif "WARN" in level:
+                line.append(f"{level:<5} ", style="black on yellow")
+                line.append(f"│ {raw_text}", style="yellow")
+            elif "DEBUG" in level:
+                line.append(f"{level:<5} ", style="dim cyan")
+                line.append(f"│ {raw_text}", style="dim cyan")
+            else:
+                line.append(f"{level:<5} ", style="green")
+                line.append(f"│ {raw_text}", style="bright_white")
 
             rich_log.write(line)
 

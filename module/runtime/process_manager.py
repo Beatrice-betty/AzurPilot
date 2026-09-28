@@ -803,9 +803,8 @@ class ProcessManager:
 
         # 初始化日志器
         set_file_logger(name=config_name)
-        if State.electron:
-            # 参考 https://github.com/LmeSzinc/AzurLaneAutoScript/issues/2051
-            logger.info("[WebUI] 检测到 Electron 环境，移除标准输出日志处理器")
+        if State.electron or os.environ.get("AZURPILOT_TUI") == "1":
+            # 运行于 Electron 或 TUI 终端界面时，移除标准输出处理器避免污染终端渲染
             from module.logger import console_hdlr
 
             logger.removeHandler(console_hdlr)
