@@ -1,3 +1,9 @@
+"""Web 调试服务模块。
+
+通过启动轻量 Flask HTTP 服务暴露调试接口，便于通过 HTTP 请求触发
+模拟收益记录写入与通知推送。
+"""
+
 import threading
 
 from module.logger import logger
@@ -11,12 +17,22 @@ DEFAULT_PORT = 8765
 
 
 def _trigger(method):
-    """调用调试处理器上的指定方法，未注入处理器时静默跳过。"""
+    """调用调试处理器上的指定方法，未注入处理器时静默跳过。
+
+    Args:
+        method (str): 目标方法名称。
+    """
     if DEBUG_HANDLER is not None:
         getattr(DEBUG_HANDLER, method)()
 
 
 def _register_routes(app, jsonify):
+    """在 Flask 应用实例上注册调试路由。
+
+    Args:
+        app: Flask 应用实例。
+        jsonify: JSON 响应封装函数。
+    """
     @app.route('/debug/gem')
     def debug_gem():
         _trigger('trigger_gem_test')
@@ -39,6 +55,12 @@ def _register_routes(app, jsonify):
 
 
 def run_server(host=DEFAULT_HOST, port=DEFAULT_PORT):
+    """启动 Flask 调试 HTTP 服务。
+
+    Args:
+        host (str): 监听主机地址。
+        port (int): 监听端口号。
+    """
     from flask import Flask, jsonify
 
     app = Flask(__name__)

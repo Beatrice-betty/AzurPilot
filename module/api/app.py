@@ -1,4 +1,8 @@
-"""Starlette 应用工厂：静态 React 页面与同源 WebSocket。"""
+"""Starlette 应用工厂模块。
+
+构建包含静态 React 前端页面托管、同源 WebSocket 接口、MCP 挂载与 Android 控制路由的 Starlette 应用。
+"""
+
 import argparse
 import asyncio
 from contextlib import asynccontextmanager
@@ -9,7 +13,7 @@ from starlette.responses import FileResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route, WebSocketRoute
 from starlette.staticfiles import StaticFiles
 
-from module.api.config_service import ConfigService, ROOT
+from module.api.config_service import ROOT, ConfigService
 from module.api.router import Router
 from module.api.runtime_service import RuntimeService
 from module.api.socket import Gateway
@@ -20,7 +24,19 @@ from module.runtime.setting import State
 
 
 def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_mcp=True):
-    """创建应用；测试可以关闭真实进程生命周期并使用临时配置目录。"""
+    """创建并配置完整的 WebUI Starlette 应用。
+
+    测试环境下可以关闭真实进程生命周期并使用临时配置目录。
+
+    Args:
+        root (Path, optional): 项目根路径。默认为 ROOT。
+        password (str, optional): 访问密码。为 None 时从命令行或部署设置读取。默认为 None。
+        manage_runtime (bool, optional): 是否管理调度器和 RPC 生命周期。默认为 True。
+        mount_mcp (bool, optional): 是否挂载 /mcp 端点。默认为 True。
+
+    Returns:
+        Starlette: 已配置好的 ASGI 应用对象。
+    """
     configs = ConfigService(root)
     runtime = RuntimeService(configs)
     mcp_app = None
@@ -38,6 +54,7 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
 
     @asynccontextmanager
     async def lifespan(application):
+        """管理应用的启动与关闭生命周期。"""
         try:
             if manage_runtime:
                 from module.api.lifecycle import startup
@@ -75,11 +92,13 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
     dist = root / 'frontend/dist'
 
     async def index(request):
+        """返回前端入口 index.html，未构建时提示 503。"""
         if (dist / 'index.html').is_file():
             return FileResponse(dist / 'index.html', headers={'Cache-Control': 'no-cache'})
         return PlainTextResponse('前端尚未构建，请在 frontend 目录运行 npm ci 和 npm run build。', status_code=503)
 
     async def health(request):
+        """健康检查接口，返回协议版本及正常状态。"""
         return JSONResponse({'status': 'ok', 'protocolVersion': 1})
 
     async def meowfficer_score_report(request):
@@ -107,7 +126,8 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
     if opsi_items.is_dir():
         routes.append(Mount('/opsi-items', StaticFiles(directory=opsi_items)))
     if mount_mcp:
-        from mcp_server_sse import create_app as create_mcp_app, configure_auth
+        from mcp_server_sse import configure_auth
+        from mcp_server_sse import create_app as create_mcp_app
         configure_auth(password, public_bind=bool(password))
         mcp_app = create_mcp_app(configs, runtime, manage_runtime=False)
         routes.append(Mount('/mcp', mcp_app))

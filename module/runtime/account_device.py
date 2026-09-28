@@ -18,12 +18,39 @@ PLAYER_PREFS = 'shared_prefs/com.bilibili.azurlane.v2.playerprefs.xml'
 FILES = (DATABASE, SDK_PREFS, PLAYER_PREFS)
 
 
-def account_key(name):
+def account_key(name: str) -> bool:
+    """判定 XML 偏好项键名是否为登录账号相关的键。
+
+    Args:
+        name: 偏好项键名。
+
+    Returns:
+        bool: 是登录账号相关键返回 True，否则返回 False。
+    """
     return name.startswith(('user.', 'server.id', 'loginedServer_'))
 
 
 class AccountDevice:
-    def __init__(self, serial, adb):
+    """基于 ADB 的安卓设备账号数据交互桥梁。
+
+    管理 B 站客户端登录凭据（users.db 与 shared_prefs XML）的读取、校验、原子备份与回滚写入。
+
+    Attributes:
+        serial: 模拟器 ADB 连接序列号。
+        adb: ADB 可执行文件路径。
+        use_su: su 提权模式（False, 'command', 'uid', 'root'）。
+    """
+
+    def __init__(self, serial: str, adb: str):
+        """初始化设备账号交互桥梁。
+
+        Args:
+            serial: 模拟器 ADB 序列号。
+            adb: ADB 可执行文件路径。
+
+        Raises:
+            ApiError: 序列号未提供 (DEVICE_REQUIRED) 或无法获取 root 权限 (ROOT_REQUIRED)。
+        """
         if not serial or serial == 'auto' or not re.fullmatch(r'[A-Za-z0-9_.:\-]+', serial):
             raise ApiError('DEVICE_REQUIRED', '账号管理需要明确的模拟器 ADB 地址')
         self.serial, self.adb = serial, str(adb)
@@ -40,8 +67,17 @@ class AccountDevice:
             else:
                 raise ApiError('ROOT_REQUIRED', 'ADB 已连接，但无法取得 root；已检查 su -c、su 0 和 su root，请启用模拟器 root 权限')
 
-    def resolve_base(self):
-        """同时检查两种私有目录及可读文件，失败只报告路径，不输出账号内容。"""
+    def resolve_base(self) -> str:
+        """解析并确认应用私有数据目录路径。
+
+        同时检查两种私有目录及可读文件，失败只报告路径，不输出账号内容。
+
+        Returns:
+            str: 可访问的应用私有数据根目录绝对路径。
+
+        Raises:
+            ApiError: 目录检测异常或未找到包含必要文件的私有目录 (ACCOUNT_DEVICE_FAILED / ACCOUNT_DATA_NOT_FOUND)。
+        """
         checks = []
         for base in BASES:
             checks.append(f'test -d {base}')
@@ -63,7 +99,21 @@ class AccountDevice:
                 details.append(f'{base}：缺少或无法读取 ' + '、'.join(missing))
         raise ApiError('ACCOUNT_DATA_NOT_FOUND', f'ADB {self.serial} 账号文件检测失败；' + '；'.join(details))
 
-    def command(self, script, data=None):
+    def command(self, script: str, data: bytes = None) -> bytes:
+        """在设备 shell 中安全执行命令或管道传输数据。
+
+        所有传输均经由 Base64 编码，避免 Windows 标准输入输出二进制截断与换行转义。
+
+        Args:
+            script: 待执行的 shell 脚本语句。
+            data: 可选的写入标准输入的数据字节串。
+
+        Returns:
+            bytes: 解码后的命令输出字节串。
+
+        Raises:
+            ApiError: 执行失败、超时、ADB 路径不存在或传输校验失败。
+        """
         writing = data is not None
         if data is not None:
             # Windows adb 的 stdin 会把二进制 Ctrl-Z 当作 EOF；仅通过管道传输 Base64。
@@ -102,15 +152,39 @@ class AccountDevice:
             raise ApiError('ACCOUNT_DEVICE_FAILED', f'ADB {stage}或 Base64 传输校验失败，请检查 ADB、root 和 shell 工具') from None
 
     def stop(self):
+        """强制停止游戏客户端进程并确认完全退出。
+
+        Raises:
+            ApiError: 进程未能终止时抛出 GAME_RUNNING。
+        """
         self.command(f'am force-stop {PACKAGE}')
         if self.command(f'pidof {PACKAGE} || true').strip():
             raise ApiError('GAME_RUNNING', '未确认游戏停止，已拒绝访问账号文件')
 
-    def read(self, name):
+    def read(self, name: str) -> bytes:
+        """读取应用私有目录下指定文件的二进制内容。
+
+        Args:
+            name: 相对路径文件名。
+
+        Returns:
+            bytes: 文件二进制内容。
+        """
         return self.command(f'cat {self.base}/{name}')
 
     @staticmethod
-    def users(blob):
+    def users(blob: bytes) -> list[dict]:
+        """从 SQLite 数据库内存镜像解析账号 UID 及用户名列表。
+
+        Args:
+            blob: users.db 的原始二进制内容。
+
+        Returns:
+            list[dict]: 包含 uid 和 name 的字典列表。
+
+        Raises:
+            ApiError: 数据库结构不兼容或数据损坏时抛出 ACCOUNT_SCHEMA_CHANGED。
+        """
         try:
             with closing(sqlite3.connect(':memory:')) as db:
                 db.deserialize(blob)
@@ -125,7 +199,16 @@ class AccountDevice:
         except (sqlite3.Error, ValueError):
             raise ApiError('ACCOUNT_SCHEMA_CHANGED', '账号数据库结构不兼容，已拒绝操作') from None
 
-    def capture(self):
+    def capture(self) -> tuple[dict[str, str], list[dict]]:
+        """停止游戏并捕获设备中当前登录账号的完整凭据快照。
+
+        Returns:
+            tuple[dict[str, str], list[dict]]: (包含 Base64 编码文件的字典, 账号用户信息列表)。
+
+        Raises:
+            ApiError: 事务未合并 (ACCOUNT_DATABASE_BUSY)、账号为空 (ACCOUNT_EMPTY)
+                或格式不兼容 (ACCOUNT_SCHEMA_CHANGED)。
+        """
         self.stop()
         self.base = self.resolve_base()
         # 非空 WAL/回滚日志可能含未合并事务，不能当作完整快照。
@@ -154,7 +237,17 @@ class AccountDevice:
             raise ApiError('ACCOUNT_SCHEMA_CHANGED', '登录偏好文件格式不兼容') from None
         return {name: base64.b64encode(blob).decode('ascii') for name, blob in blobs.items()}, users
 
-    def restore(self, files):
+    def restore(self, files: dict[str, str]):
+        """停止游戏并将账号凭据快照原子还原到设备中。
+
+        备份原有凭据，写入新凭据并应用 SELinux 上下文及所有者权限，写入失败或校验不符时自动回滚。
+
+        Args:
+            files: 包含 Base64 编码的快照文件字典。
+
+        Raises:
+            ApiError: 快照损坏、文件所有者不确定或写入校验失败并触发回滚。
+        """
         if DATABASE not in files or not set(files) <= set(FILES):
             raise ApiError('ACCOUNT_SCHEMA_CHANGED', '账号快照文件不兼容')
         try:
@@ -218,4 +311,5 @@ class AccountDevice:
                 self.command(f'rm -rf {stage}')
 
     def launch(self):
+        """通过 Monkey 启动碧蓝航线客户端。"""
         self.command(f'monkey -p {PACKAGE} -c android.intent.category.LAUNCHER 1 >/dev/null')

@@ -1,15 +1,33 @@
-"""账号管理 API；每次敏感操作重新验证实例密码。"""
+"""账号管理 API 模块。
+
+提供账号保险库管理服务，每次敏感操作重新验证实例密码。
+支持国服客户端账号快照备份、切换、本地密钥自动解锁与 TPM 绑定。
+"""
+
 import secrets
 import uuid
 
 from module.api.protocol import ApiError
-from module.runtime.account_device import AccountDevice, PACKAGE
+from module.runtime.account_device import PACKAGE, AccountDevice
 from module.runtime.account_local import LocalProtector, is_local
-from module.runtime.account_vault import AccountVault, OPERATIONS, sensitive_operation, vault
+from module.runtime.account_vault import OPERATIONS, AccountVault, sensitive_operation, vault
 from module.runtime.process_manager import ProcessManager
 
 
 def device_for(configs, instance, device=None):
+    """根据实例配置获取对应的账号设备操作对象。
+
+    Args:
+        configs: 配置管理服务实例。
+        instance (str): 实例名称。
+        device (optional): 已有的设备连接实例。默认为 None。
+
+    Returns:
+        AccountDevice: 账号设备操作对象。
+
+    Raises:
+        ApiError: 客户端包名不受支持时抛出 ACCOUNT_UNSUPPORTED。
+    """
     data, _ = configs.read(instance)
     emulator = data.get('Alas', {}).get('Emulator', {})
     if emulator.get('PackageName') != PACKAGE:
@@ -17,13 +35,22 @@ def device_for(configs, instance, device=None):
     # worker 使用设备层实际连接成功的地址和 ADB，避免绕过连接与模拟器冷启动。
     if device is not None:
         return AccountDevice(device.serial, device.adb_binary)
-    from module.runtime.setting import State
     from deploy.config import DeployConfig
+    from module.runtime.setting import State
     adb = DeployConfig().filepath('AdbExecutable') if State.deploy_config is None else State.deploy_config.filepath('AdbExecutable')
     return AccountDevice(emulator.get('Serial'), adb)
 
 
 def ensure_idle(configs, instance):
+    """确保指定实例及其复用同一模拟器的其他实例处于停止状态。
+
+    Args:
+        configs: 配置管理服务实例。
+        instance (str): 实例名称。
+
+    Raises:
+        ApiError: 存在正在运行的相关实例时抛出 INSTANCE_RUNNING。
+    """
     data, _ = configs.read(instance)
     serial = data.get('Alas', {}).get('Emulator', {}).get('Serial')
     for name in configs.names():
@@ -33,16 +60,42 @@ def ensure_idle(configs, instance):
 
 
 class AccountService:
+    """账号保险库与快照管理服务。
+
+    负责处理账号保险库的锁定/解锁、快照捕获与恢复、密码变更及硬件保护绑定。
+    """
+
     def __init__(self, configs):
+        """初始化账号管理服务。
+
+        Args:
+            configs: 配置管理服务实例。
+        """
         self.configs = configs
         self.vault = vault if configs.root.resolve() == vault.root.resolve() else AccountVault(configs.root)
 
     def status(self, params):
+        """获取指定实例的账号保险库状态。
+
+        Args:
+            params: 状态请求参数对象，包含 instance 字段。
+
+        Returns:
+            dict: 账号保险库当前状态字典。
+        """
         instance = self.configs.path(params.instance).stem
         with OPERATIONS:
             return self.status_result(instance)
 
     def status_result(self, instance):
+        """组装指定实例的保险库状态字典（包含 TPM 可用性）。
+
+        Args:
+            instance (str): 实例名称。
+
+        Returns:
+            dict: 状态字典，包含 tpm_available 等字段。
+        """
         from module.runtime.account_tpm import TpmProtector
         result = self.vault.status(instance)
         result['tpm_available'] = bool(TpmProtector.available())
@@ -50,6 +103,18 @@ class AccountService:
 
     @sensitive_operation
     def manage(self, params, web_password=''):
+        """执行账号管理敏感操作。
+
+        Args:
+            params: 管理请求参数，包含 action, instance, password 等。
+            web_password (str, optional): WebUI 当前密码，用于防重用校验。默认为 ''。
+
+        Returns:
+            dict: 操作完成后的状态字典或包含快照列表的数据字典。
+
+        Raises:
+            ApiError: 参数不合法、密码错误、快照满额或设备未选择时抛出。
+        """
         instance, action = self.configs.path(params.instance).stem, params.action
         with ProcessManager._get_lifecycle_lock(instance), OPERATIONS:
             if action == 'lock':
@@ -169,7 +234,17 @@ class AccountService:
 
 @sensitive_operation
 def prepare_worker(instance):
-    """父进程启动前检查解锁与同设备冲突；与账号操作共享锁。"""
+    """父进程启动前检查解锁与同设备冲突；与账号操作共享锁。
+
+    Args:
+        instance (str): 待启动的实例名称。
+
+    Returns:
+        Any: 启动所需密钥，未启用保险库时返回 None。
+
+    Raises:
+        ApiError: 同一设备已有运行实例时抛出 DEVICE_BUSY。
+    """
     from module.api.config_service import ConfigService
     if not any((vault.root / 'config').glob('*/config.db')) and not any((vault.root / 'config').glob('*/account.destroyed')):
         return None
@@ -191,6 +266,12 @@ def prepare_worker(instance):
 
 @sensitive_operation
 def restore_worker(instance, device=None):
+    """在 worker 启动时将当前选中的账号恢复到设备。
+
+    Args:
+        instance (str): 实例名称。
+        device (optional): 已建立连接的设备对象。默认为 None。
+    """
     from module.api.config_service import ConfigService
     with OPERATIONS:
         if vault.startup_key(instance) is not None:

@@ -9,13 +9,31 @@ from module.runtime.process_manager import ProcessManager
 
 @dataclass(frozen=True)
 class Method:
+    """路由方法注册项。
+
+    Attributes:
+        params: 参数校验模型类型。
+        handler: 请求处理函数或方法。
+        mutates: 是否会修改系统状态或运行任务。
+    """
     params: type[p.Params]
     handler: Callable
     mutates: bool = False
 
 
 class Router:
+    """API 路由分发器。
+
+    管理所有 WebSocket RPC 方法的注册、参数校验与调用分发。
+    """
+
     def __init__(self, configs, runtime):
+        """初始化路由分发器。
+
+        Args:
+            configs: 配置服务实例。
+            runtime: 运行时管理服务实例。
+        """
         self.configs, self.runtime = configs, runtime
         self._accounts = None
         self.access_password = ''
@@ -58,6 +76,11 @@ class Router:
 
     @property
     def accounts(self):
+        """获取账号管理服务单例。
+
+        Returns:
+            AccountService: 账号管理服务实例。
+        """
         if self._accounts is None:
             from module.api.account_service import AccountService
             self._accounts = AccountService(self.configs)
@@ -65,20 +88,48 @@ class Router:
 
     @property
     def announcements(self):
+        """获取公告服务单例。
+
+        Returns:
+            AnnouncementService: 公告服务实例。
+        """
         from module.api.announcement_service import announcement_service
         return announcement_service
 
     @property
     def updates(self):
+        """获取更新管理服务单例。
+
+        Returns:
+            UpdateService: 更新服务实例。
+        """
         from module.api.update_service import update_service
         return update_service
 
-    def refresh_loot(self, params):
+    def refresh_loot(self, params: p.InstanceParams):
+        """刷新指定实例的掉落统计数据。
+
+        Args:
+            params: 包含实例名称的参数对象。
+
+        Returns:
+            Any: 刷新操作的执行结果。
+        """
         from module.api.statistics_service import refresh_loot
         return refresh_loot(self.configs, params.instance)
 
-    def validate_shop_strategy(self, params):
-        """校验高级商店策略，禁止客户端指定任意执行上下文。"""
+    def validate_shop_strategy(self, params: p.ShopStrategyValidateParams):
+        """校验高级商店策略，禁止客户端指定任意执行上下文。
+
+        Args:
+            params: 商店策略校验参数。
+
+        Returns:
+            list[dict]: 策略语法或语义诊断结果列表。
+
+        Raises:
+            p.ApiError: 指定任务不支持高级商店策略时抛出 INVALID_PARAMS。
+        """
         self.configs.path(params.instance)
         if 'ShopAdvanced' not in self.configs.args.get(params.task, {}):
             raise p.ApiError('INVALID_PARAMS', '不支持的商店任务')
@@ -87,21 +138,58 @@ class Router:
         # 显式检查返回诊断而不是抛出参数错误，编辑器才能标出行列位置。
         return validate_strategy(params.script)
 
-    def statistics_report(self, params):
+    def statistics_report(self, params: p.StatisticsReportParams):
+        """生成并获取指定维度的统计报表。
+
+        Args:
+            params: 统计报表请求参数。
+
+        Returns:
+            dict: 统计报表数据。
+        """
         from module.api.statistics_service import report
         return report(self.configs, params.instance, params.category, params.month,
                       params.days, params.period, research_series=params.series,
                       research_scope=params.scope, loot_task=params.task)
 
-    def meowfficer_score_report(self, params):
+    def meowfficer_score_report(self, params: p.MeowfficerScoreReportParams):
+        """获取指挥喵评分报告。
+
+        Args:
+            params: 指挥喵报告请求参数。
+
+        Returns:
+            dict: 指挥喵评分报告数据。
+        """
         from module.api.meowfficer_service import report
         return report(self.configs, params.instance, params.limit)
 
-    def meowfficer_clear_report(self, params):
+    def meowfficer_clear_report(self, params: p.MeowfficerClearReportParams):
+        """清空指挥喵评分报告。
+
+        Args:
+            params: 指挥喵清空报告请求参数。
+
+        Returns:
+            dict: 清空操作结果。
+        """
         from module.api.meowfficer_service import clear
         return clear(self.configs, params.instance)
 
-    def dispatch(self, method, params):
+    def dispatch(self, method: str, params: dict):
+        """分发并执行指定的 API 方法。
+
+        Args:
+            method: 方法名称。
+            params: 原始请求参数字典。
+
+        Returns:
+            Any: 处理函数执行结果。
+
+        Raises:
+            p.ApiError: 方法未注册 (METHOD_NOT_FOUND)、参数不合法 (INVALID_PARAMS)
+                或演示模式下尝试修改 (READ_ONLY)。
+        """
         entry = self.methods.get(method)
         if entry is None:
             raise p.ApiError('METHOD_NOT_FOUND', '未知 API 方法')
@@ -110,7 +198,18 @@ class Router:
             raise p.ApiError('READ_ONLY', '演示模式下禁止修改配置或运行任务')
         return entry.handler(validated)
 
-    def delete(self, params):
+    def delete(self, params: p.RevisionParams):
+        """删除指定实例及其关联的数据和进程。
+
+        Args:
+            params: 包含实例名称和版本号的参数对象。
+
+        Returns:
+            dict: 删除操作结果。
+
+        Raises:
+            p.ApiError: 实例仍在运行无法删除时抛出 INSTANCE_RUNNING。
+        """
         with ProcessManager._get_lifecycle_lock(params.instance):
             manager = self.runtime.manager(params.instance)
             if manager.alive:
@@ -134,7 +233,15 @@ class Router:
             hub.discard(params.instance)
             return result
 
-    def settings(self, _):
+    def settings(self, _: p.Params):
+        """获取部署设置表单结构及远程访问状态。
+
+        Args:
+            _: 空通用参数。
+
+        Returns:
+            dict: 部署设置表单元数据与字段值。
+        """
         from module.runtime.deploy_settings import deploy_settings_schema
         from module.runtime.remote_access import remote_access_status
         result = deploy_settings_schema(self.configs.translate)
@@ -148,7 +255,15 @@ class Router:
         result['remote'] = remote_access_status()
         return result
 
-    def save_settings(self, params):
+    def save_settings(self, params: p.DeployParams):
+        """保存部署设置。
+
+        Args:
+            params: 部署配置参数。
+
+        Returns:
+            dict: 保存结果及最新配置。
+        """
         from module.runtime.deploy_settings import save_deploy_settings
         values = dict(params.values)
         if values.get('Password') == '':
@@ -156,14 +271,30 @@ class Router:
         with self.configs.lock:
             return save_deploy_settings({'values': values})
 
-    def get_startup(self, params):
+    def get_startup(self, params: p.InstanceParams):
+        """获取实例的开机自启与状态保持配置。
+
+        Args:
+            params: 包含实例名称的参数对象。
+
+        Returns:
+            dict: 包含开机自启和记忆状态的配置信息。
+        """
         from module.runtime.deploy_settings import get_startup_run
         from module.runtime.startup_memory import get_startup_remember
         self.configs.path(params.instance)
         return {**get_startup_run(params.instance),
                 'remember': get_startup_remember(params.instance)}
 
-    def set_startup(self, params):
+    def set_startup(self, params: p.StartupParams):
+        """设置实例的开机自启与状态保持配置。
+
+        Args:
+            params: 启动设置参数对象。
+
+        Returns:
+            dict: 更新后的开机自启和记忆状态。
+        """
         from module.runtime.deploy_settings import get_startup_run, set_startup_run
         from module.runtime.startup_memory import get_startup_remember, set_startup_remember
         self.configs.path(params.instance)

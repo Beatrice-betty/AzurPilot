@@ -16,15 +16,36 @@ from Crypto.Cipher import AES
 from module.api.protocol import ApiError
 
 
-def is_local(blob):
+def is_local(blob: bytes) -> bool:
+    """判定密钥封装载荷是否为本机受保护提供者。
+
+    Args:
+        blob: 封装的载荷二进制数据。
+
+    Returns:
+        bool: 是本机绑定提供者返回 True，否则返回 False。
+    """
     try:
         return isinstance(blob, bytes) and json.loads(blob).get('provider') == 'local'
     except (ValueError, AttributeError, UnicodeError):
         return False
 
 
-def dpapi(data, decrypt=False):
-    """DPAPI 仅绑定当前 Windows 用户；输入和输出不进入命令行或日志。"""
+def dpapi(data: bytes, decrypt: bool = False) -> bytes:
+    """调用 Windows DPAPI 进行数据加密或解密。
+
+    DPAPI 仅绑定当前 Windows 用户；输入和输出不进入命令行或日志。
+
+    Args:
+        data: 待加密或解密的明文/密文字节串。
+        decrypt: 若为 True 则执行解密，否则执行加密。
+
+    Returns:
+        bytes: 加密或解密后的数据字节串。
+
+    Raises:
+        ValueError: DPAPI 加密或解密调用失败。
+    """
     from ctypes import wintypes
 
     class Blob(ctypes.Structure):
@@ -52,12 +73,36 @@ def dpapi(data, decrypt=False):
 
 
 class LocalProtector:
-    def __init__(self, root, instance):
+    """基于本机用户环境与凭据保护的主机端密钥管理器。
+
+    在 Windows 环境使用 DPAPI 保护，在 Linux 环境结合 machine-id 及特定权限目录保护。
+
+    Attributes:
+        root: 项目根目录的绝对路径。
+        instance: 实例名称。
+        context: 项目路径与实例绑定的上下文哈希值。
+    """
+
+    def __init__(self, root: str, instance: str):
+        """初始化本机保护器。
+
+        Args:
+            root: 项目根目录路径。
+            instance: 实例名称。
+        """
         self.root, self.instance = Path(root).resolve(), instance
         self.context = hashlib.sha256((str(self.root) + '\0' + instance).encode()).hexdigest()
 
     @staticmethod
-    def key_directory():
+    def key_directory() -> Path:
+        """获取存储本机解锁密钥的安全目录。
+
+        Returns:
+            Path: 本机密钥存储目录路径。
+
+        Raises:
+            ApiError: 当前操作系统不受支持时抛出 LOCAL_KEY_UNAVAILABLE。
+        """
         if os.name == 'nt':
             return Path.home() / 'AppData' / 'Local' / 'AzurPilot' / 'account-keys'
         if sys.platform == 'linux':
@@ -65,7 +110,15 @@ class LocalProtector:
         raise ApiError('LOCAL_KEY_UNAVAILABLE', '本机自动解锁目前支持 Windows 和 Linux')
 
     @staticmethod
-    def host_identity():
+    def host_identity() -> str:
+        """获取并计算当前主机的唯一身份哈希。
+
+        Returns:
+            str: 主机身份的 SHA-256 十六进制哈希串。
+
+        Raises:
+            ApiError: 无法获取 Windows 用户 SID 或 Linux machine-id。
+        """
         if os.name == 'nt':
             from module.runtime.account_tpm import TpmProtector
             # MachineGuid 检测迁移；实际用户保护由 DPAPI 完成。
@@ -92,7 +145,19 @@ class LocalProtector:
             raise ApiError('LOCAL_KEY_UNAVAILABLE', '本机自动解锁目前支持 Windows 和 Linux')
         return hashlib.sha256(identity.encode()).hexdigest()
 
-    def path(self, key_id):
+    def path(self, key_id: str) -> Path:
+        """根据密钥 ID 解析对应的本地密钥文件路径并验证其安全性。
+
+        Args:
+            key_id: 32 位十六进制密钥标识。
+
+        Returns:
+            Path: 本地密钥文件的完整路径。
+
+        Raises:
+            ValueError: 密钥 ID 格式不合法或路径中包含软链接/接合点。
+            ApiError: 密钥目录被配置在项目内。
+        """
         if not re.fullmatch(r'[0-9a-f]{32}', key_id):
             raise ValueError()
         directory = self.key_directory()
@@ -107,7 +172,15 @@ class LocalProtector:
             raise ValueError()
         return path
 
-    def prepare_directory(self, directory):
+    def prepare_directory(self, directory: Path):
+        """创建并严格限制密钥目录的访问权限（仅允许当前用户访问）。
+
+        Args:
+            directory: 目标目录路径。
+
+        Raises:
+            ValueError: Windows ACL 设置失败或 Linux 目录所有权/权限不符合安全要求。
+        """
         directory.mkdir(parents=True, mode=0o700, exist_ok=True)
         if os.name == 'nt':
             script = r'''
@@ -133,7 +206,18 @@ try {
                 raise ValueError()
             directory.chmod(0o700)
 
-    def load(self, key_id):
+    def load(self, key_id: str) -> bytes:
+        """从本地磁盘读取并解密指定的密钥内容。
+
+        Args:
+            key_id: 密钥标识字符串。
+
+        Returns:
+            bytes: 解密后的 32 字节密钥。
+
+        Raises:
+            ValueError: 文件类型异常、权限不安全或解密长度不符合要求。
+        """
         path = self.path(key_id)
         flags = os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_BINARY', 0)
         with os.fdopen(os.open(path, flags), 'rb') as file:
@@ -151,7 +235,19 @@ try {
             raise ValueError()
         return key
 
-    def binding(self, blob):
+    def binding(self, blob: bytes) -> dict:
+        """解析并校验封装绑定的元数据及主机一致性。
+
+        Args:
+            blob: JSON 格式的绑定数据。
+
+        Returns:
+            dict: 解析后的绑定配置字典。
+
+        Raises:
+            ValueError: 绑定格式不合法或版本不兼容。
+            ApiError: 主机或用户身份已变更时抛出 LOCAL_DEVICE_CHANGED。
+        """
         binding = json.loads(blob)
         if binding['provider'] != 'local' or binding['version'] != 1:
             raise ValueError()
@@ -159,7 +255,19 @@ try {
             raise ApiError('LOCAL_DEVICE_CHANGED', '本机自动解锁的主机或用户身份已改变')
         return binding
 
-    def wrap(self, key, previous=None):
+    def wrap(self, key: bytes, previous: bytes = None) -> bytes:
+        """将主密钥使用本地保护密钥通过 AES-GCM 进行封装。
+
+        Args:
+            key: 待封装的主密钥（32 字节）。
+            previous: 可选的先前封装载荷，用于就地重轮换。
+
+        Returns:
+            bytes: 包含密文、IV、Tag 和主机元数据的 JSON 载荷字节串。
+
+        Raises:
+            ApiError: 无法建立本机保护密钥或加密失败。
+        """
         from module.runtime.account_vault import SecretKey
         secret = None
         path = None
@@ -194,7 +302,18 @@ try {
             if secret is not None:
                 secret.clear()
 
-    def unwrap(self, blob):
+    def unwrap(self, blob: bytes) -> bytes:
+        """从本地保护封装中解密还原主密钥。
+
+        Args:
+            blob: JSON 格式的封装载荷字节串。
+
+        Returns:
+            bytes: 解密还原出的 32 字节主密钥。
+
+        Raises:
+            ApiError: 封装失效、本地密钥丢失或权限异常。
+        """
         from module.runtime.account_vault import SecretKey
         secret = None
         try:
@@ -215,7 +334,12 @@ try {
             if secret is not None:
                 secret.clear()
 
-    def remove(self, blob):
+    def remove(self, blob: bytes):
+        """擦除并销毁封装绑定的本地密钥文件。
+
+        Args:
+            blob: 包含密钥 ID 的封装载荷字节串。
+        """
         from module.runtime.account_vault import AccountVault
         binding = json.loads(blob)
         AccountVault.wipe_file(self.path(binding['id']))
