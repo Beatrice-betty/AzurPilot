@@ -447,10 +447,10 @@ function aggregateSlice(
 
       while (rIdx < entries.length) {
         const rMsg = extractLogMessage(entries[rIdx].text).message
-        const rowMatch = /^\s*(\d{1,2})\s+((?:(?:\d{1,4}|--?)\s*)+)$/.exec(rMsg)
-        if (rowMatch) {
+        const rowMatch = /^\s*(\d{1,2})\s+([\d\s-]+)$/.exec(rMsg)
+        const values = rowMatch?.[2].trim().split(/\s+/) ?? []
+        if (rowMatch && values.length > 0 && values.every(value => /^(?:\d{1,4}|--?)$/.test(value))) {
           const rowNum = parseInt(rowMatch[1], 10)
-          const values = rowMatch[2].trim().split(/\s+/)
           rows.push({ rowNum, values })
           rawLines.push(entries[rIdx].text)
           rIdx++
