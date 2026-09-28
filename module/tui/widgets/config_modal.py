@@ -141,6 +141,9 @@ class ConfigModal(ModalScreen[bool]):
 
     def on_select_changed(self, event: Select.Changed) -> None:
         """切换任务下拉项时，重绘该任务的配置表单。"""
+        # 严格限定：只有顶部的任务选择下拉框能够触发表单重绘，拦截表单内部所有参数字段的冒泡事件
+        if getattr(event.select, "id", None) != "select-task":
+            return
         if event.value and event.value != Select.BLANK and event.value != self.current_task:
             self.current_task = str(event.value)
             self.render_task_form(self.current_task)
@@ -184,10 +187,15 @@ class ConfigModal(ModalScreen[bool]):
                 elif options:
                     # 下拉选择控件
                     select_options = [(label, opt) for opt, label in options]
+                    valid_values = [opt for opt, label in options]
+                    val = current_val
+                    if val not in valid_values:
+                        val = valid_values[0] if valid_values else Select.BLANK
+
                     children.append(
                         Select(
                             options=select_options,
-                            value=current_val,
+                            value=val,
                             id=self._ctrl_id("select", path),
                             allow_blank=False,
                             classes="field-ctrl",

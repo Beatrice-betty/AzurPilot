@@ -123,15 +123,20 @@ class TestTUIApp(unittest.IsolatedAsyncioTestCase):
             app.action_refresh_data()
 
     async def test_config_modal_mount(self) -> None:
-        """测试配置弹窗挂载与表单控件初始化。"""
+        """测试配置弹窗挂载与表单控件初始化，确保内部 Select 不会导致表单清空消失。"""
         backend = TUIBackend()
         modal = ConfigModal(backend=backend, initial_task="Commission")
         app = AzurPilotTUI()
-        async with app.run_test():
+        async with app.run_test() as pilot:
             await app.push_screen(modal)
+            await pilot.pause()
+            # 验证当前任务未被冒泡事件覆盖
             self.assertEqual(modal.current_task, "Commission")
-            # 验证表单中已加载字段
+            # 验证表单中已加载字段且没有消失
             self.assertGreater(len(modal.active_fields), 0)
+            # 验证内部控件成功渲染挂载
+            scroll = modal.query_one("#form-scroll")
+            self.assertGreater(len(scroll.children), 0)
 
 
 if __name__ == "__main__":
