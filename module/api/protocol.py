@@ -61,6 +61,18 @@ class SchemaParams(Params):
     language: Literal['zh-CN', 'zh-MIAO', 'en-US', 'ja-JP', 'zh-TW'] = 'zh-CN'
 
 
+class BackgroundUrlParams(Params):
+    url: StrictStr = Field(min_length=8, max_length=2048)
+
+
+class BackgroundGalleryAddParams(BackgroundUrlParams):
+    name: StrictStr = Field(default='', max_length=120)
+
+
+class BackgroundGalleryRemoveParams(Params):
+    id: StrictStr = Field(min_length=1, max_length=128)
+
+
 class InstanceParams(Params):
     """单实例操作通用入参模型。"""
     instance: StrictStr = Field(min_length=1, max_length=64)

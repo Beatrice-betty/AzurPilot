@@ -9,11 +9,12 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from starlette.applications import Starlette
-from starlette.responses import FileResponse, JSONResponse, PlainTextResponse
+from starlette.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 from starlette.routing import Mount, Route, WebSocketRoute
 from starlette.staticfiles import StaticFiles
 
-from module.api.config_service import ROOT, ConfigService
+from module.api.background_service import LIBRARY_DIR, gallery_add_bytes, proxy_fetch
+from module.api.config_service import ConfigService, ROOT
 from module.api.router import Router
 from module.api.runtime_service import RuntimeService
 from module.api.socket import Gateway
@@ -109,10 +110,40 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
         return FileResponse(path, media_type='text/html', headers={'Cache-Control': 'no-cache'})
 
     from module.api.android import routes as android_routes
+    async def background_upload(request):
+        """接收浏览器上传的本地背景图，存进 cache/background/library（本地图片的唯一落点）。"""
+        form = await request.form()
+        upload = form.get('file')
+        if upload is None or not hasattr(upload, 'read'):
+            return JSONResponse({'error': '没有收到文件。'}, status_code=400)
+        data = await upload.read()
+        try:
+            entry = gallery_add_bytes(data, getattr(upload, 'filename', '') or '', getattr(upload, 'content_type', '') or '')
+        except Exception as error:
+            return JSONResponse({'error': str(error)}, status_code=400)
+        return JSONResponse({'entry': entry})
+
+    async def background_media(request):
+        """同源代理一张网图：解析出的直链由这里回给浏览器，避免防盗链或跨域让显示的图与直链分叉。"""
+        target = request.query_params.get('url', '')
+        if not target:
+            return JSONResponse({'error': '缺少 url 参数。'}, status_code=400)
+        try:
+            data, content_type = proxy_fetch(target)
+        except Exception as error:
+            return JSONResponse({'error': str(error)}, status_code=400)
+        return Response(data, media_type=content_type, headers={'Cache-Control': 'no-cache'})
+
     routes = [Route('/healthz', health),
+              Route('/api/v1/background/media', background_media),
               Route('/reports/meowfficer_score', meowfficer_score_report),
               WebSocketRoute('/api/v1/ws', gateway.endpoint)]
     routes.extend(android_routes(configs, runtime))
+    # 背景图库：图片直接由 StaticFiles 提供（与 research-items 等模板图同一套做法），
+    # 上传走下面那个 POST；目录不存在时先建出来，免得挂载失败。
+    LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
+    routes.append(Route('/api/v1/background/gallery', background_upload, methods=['POST']))
+    routes.append(Mount('/background-library', StaticFiles(directory=LIBRARY_DIR)))
     if (dist / 'assets').is_dir():
         routes.append(Mount('/assets', StaticFiles(directory=dist / 'assets')))
     # 科研掉落的物品图标直接用仓库里的模板图，不走前端构建，

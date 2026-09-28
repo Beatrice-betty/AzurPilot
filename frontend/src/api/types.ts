@@ -84,10 +84,25 @@ export interface Announcement {
   content: string
   url?: string
 }
+/** 背景图库条目：文件都放在服务器的 cache/background/library 下。 */
+export interface BackgroundGalleryEntry {
+  id: string
+  name: string
+  size: number
+  added: number
+  kind: 'image' | 'video'
+  source?: string
+}
+
 export interface Results {
   'accounts.status': AccountStatus
   'accounts.manage': AccountStatus
   'announcement.get': Announcement | null
+  'background.resolve': {final_url: string; content_type: string}
+  'background.gallery.list': BackgroundGalleryEntry[]
+  'background.gallery.add': {entry: BackgroundGalleryEntry}
+  'background.gallery.remove': {removed: boolean}
+  'background.gallery.open': {path: string}
   'updater.status': UpdateStatus
   'updater.commits': CommitHistory
   'updater.fetch': {accepted: boolean}
