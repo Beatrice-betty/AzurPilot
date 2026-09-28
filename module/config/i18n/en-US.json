@@ -2377,7 +2377,11 @@
     },
     "MinLevel": {
       "name": "Only add ships at level >= X",
-      "help": ""
+      "help": "0 means no limit"
+    },
+    "MaxLevel": {
+      "name": "Only add ships at level <= X",
+      "help": "0 means no limit\nWhen it conflicts with the minimum level, both are treated as 0 (disabled)"
     }
   },
   "Research": {
