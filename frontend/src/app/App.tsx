@@ -6,7 +6,7 @@ import { PasswordInput, Select } from '../components/FormControls'
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type MouseEvent, type ChangeEvent } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getLayout, setSidebarCollapsed, subscribeLayout } from './layout'
-import { getThemePreference, usesMaterial } from './theme'
+import { getThemePreference, supportsBackground } from './theme'
 import { ArrowRight, CalendarClock, ChartNoAxesCombined, CirclePause, CirclePlay, Code2, Compass, Download, ExternalLink, FileJson, GalleryHorizontal, Globe, House, LayoutDashboard, LoaderCircle, Maximize2, Megaphone, Menu, Minimize2, Palette, PanelTop, Settings2, WifiOff, X, ChevronRight } from 'lucide-react'
 import { api } from '../api/client'
 import { editor } from '../config/editors'
@@ -272,12 +272,11 @@ export function App() {
   </header>
   // 旧版顶栏只留招牌与居中的页面名，「主页 / 实例 / 任务」这一行落到内容区顶部。
   const pageNav = <div className="legacy-page-nav"><div className={`breadcrumb${tabsShown ? ' with-tabs' : ''}`}>{topbarActions}{tabsShown ? tabStrip : <><span>/</span><InstanceSwitcher onCreate={() => setCreating(true)}/></>}{currentTask && <><span>/</span><TaskSwitcher/></>}</div></div>
-  /* 登录页要在所有 Hook 调用之后返回。放在这类提前返回之后才调用的 Hook
-     （useIsDesktop、bulkBusy）会让同一次会话里的 Hook 数量随连接状态变化，
-     隧道远程访问首帧就走 auth，React 会直接抛 #300 崩掉整页。 */
-  if (connection === 'auth') return <Login/>
   /* shell 自己必须订阅：收起状态变了要重渲染才能加上 nav-collapsed 类（按钮订阅管不到这里）。 */
   const layout = useSyncExternalStore(subscribeLayout, getLayout)
+  /* 登录页必须在 App 的所有 Hook 之后返回：否则同一次会话里 Hook 数量会随连接状态变化，React 抛 #300 崩掉整页。 */
+  if (connection === 'auth') return <Login/>
+
   return <div className={`app-shell ${layout.sidebarCollapsed ? 'nav-collapsed' : ''} ${showRail ? 'with-rail' : ''} ${currentTask ? 'task-config-shell' : ''} ${legacyShell ? 'legacy-shell' : ''} ${legacyHomeShell ? 'legacy-shell legacy-home-shell' : ''} ${mobileOpen ? 'mobile-open' : ''} ${railOpen ? 'rail-open' : ''}`}>
     <a className="skip-link" href="#main-content" onClick={event => {event.preventDefault(); document.getElementById('main-content')?.focus()}}>{ui('nav.skipContent')}</a>
     {(legacyShell || legacyHomeShell) && topbar}
@@ -331,7 +330,7 @@ function NavHandle() {
     }
   }, [collapsed])
   /* 只有会铺壁纸的族才需要这个把手：简约/紧凑族根本没有背景，收起也没意义（人类要求）。 */
-  if (!usesMaterial(getThemePreference().theme)) return null
+  if (!supportsBackground(getThemePreference().theme)) return null
   return <button
     type="button"
     className="nav-handle"

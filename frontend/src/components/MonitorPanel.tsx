@@ -2,7 +2,7 @@
  * @fileoverview 模拟器画面监控与截图捕获面板组件。
  */
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Download, Image, Terminal } from 'lucide-react'
 import { api } from '../api/client'
 import type { LogEntry, Logs as LogsData, Preview } from '../api/types'
@@ -57,12 +57,33 @@ function RecentLogs({instance}: {instance: string}) {
     }).catch(error => notify(error.message, true))
     return () => { active = false }
   }, [connection, instance, notify])
-  useEffect(() => api.onEvent(event => {
-    if (event.topic !== 'logs') return
-    const data = event.data as LogsData
-    if (data.instance !== instance) return
-    setLines(previous => mergeLines(previous, data.entries, data.reset))
-  }), [instance])
+  /* 服务端每条日志发一个事件；这里按帧归并后再进 state。 */
+  const pending = useRef<{entries: LogEntry[]; reset: boolean}>({entries: [], reset: false})
+  const frame = useRef<number | null>(null)
+  useEffect(() => {
+    const flush = () => {
+      frame.current = null
+      const batch = pending.current
+      if (!batch.entries.length && !batch.reset) return
+      pending.current = {entries: [], reset: false}
+      setLines(previous => mergeLines(previous, batch.entries, batch.reset))
+    }
+    const unsubscribe = api.onEvent(event => {
+      if (event.topic !== 'logs') return
+      const data = event.data as LogsData
+      if (data.instance !== instance) return
+      const batch = pending.current
+      if (data.reset) {batch.entries = [...data.entries]; batch.reset = true}
+      else batch.entries.push(...data.entries)
+      if (frame.current === null) frame.current = requestAnimationFrame(flush)
+    })
+    return () => {
+      unsubscribe()
+      if (frame.current !== null) cancelAnimationFrame(frame.current)
+      frame.current = null
+      pending.current = {entries: [], reset: false}
+    }
+  }, [instance])
   if (!lines.length) return null
   return <div className="preview-log" aria-label={ui('monitor.recentLogs')}>
     {lines.map(line => <div className="preview-log-line" key={line.id} title={line.text}>

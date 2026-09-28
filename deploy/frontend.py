@@ -51,6 +51,35 @@ def source_fingerprint(directory):
     return digest.hexdigest()
 
 
+def _install_dependencies(command, directory, flags):
+    """优先使用镜像安装，失败或超时后仅用官方源重试一次。
+
+    Args:
+        command (list[str]): npm 命令的可执行文件与参数列表。
+        directory (Path): 前端工程目录。
+        flags (dict): 平台相关的子进程启动参数。
+
+    Raises:
+        subprocess.CalledProcessError: 两个源均安装失败时抛出最后一次异常。
+        subprocess.TimeoutExpired: 官方源安装超时时抛出。
+    """
+    from module.logger import logger
+
+    registries = ('https://registry.npmmirror.com', 'https://registry.npmjs.org')
+    for index, registry in enumerate(registries):
+        logger.info(f'使用 npm 源安装前端依赖: {registry}')
+        try:
+            subprocess.run(
+                [*command, 'ci', '--no-audit', '--no-fund', f'--registry={registry}'],
+                cwd=directory, check=True, timeout=600, **flags,
+            )
+            return
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            if index == len(registries) - 1:
+                raise
+            logger.warning(f'镜像源安装失败，切换至 npm 官方源重试: {exc}')
+
+
 def ensure_frontend(root=None):
     """缺少或过期时构建前端；已有对应版本的产物不要求安装 Node。
 
@@ -60,6 +89,7 @@ def ensure_frontend(root=None):
     Raises:
         RuntimeError: 在 Android 环境缺少预构建产物时抛出。
         subprocess.CalledProcessError: 前端构建命令执行失败时抛出。
+        subprocess.TimeoutExpired: 官方源安装或编译超时时抛出。
     """
     from module.logger import logger
     directory = (Path(root) if root else Path(__file__).resolve().parents[1]) / 'frontend'
@@ -72,7 +102,7 @@ def ensure_frontend(root=None):
     command = npm_command()
     logger.info('正在构建 React 前端资源')
     flags = {'creationflags': subprocess.CREATE_NO_WINDOW} if hasattr(subprocess, 'CREATE_NO_WINDOW') else {}
-    subprocess.run([*command, 'ci', '--no-audit', '--no-fund'], cwd=directory, check=True, timeout=600, **flags)
+    _install_dependencies(command, directory, flags)
     subprocess.run([*command, 'run', 'build'], cwd=directory, check=True, timeout=180, **flags)
     marker.write_text(fingerprint + '\n', encoding='utf-8')
 
