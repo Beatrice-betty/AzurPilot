@@ -2,7 +2,7 @@
 import {memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties} from 'react'
 import {useParams} from 'react-router-dom'
 import {ReactFlowProvider, Handle, MarkerType, Position, useConnection as useFlowConnection, useReactFlow, type NodeProps, type Connection as FlowConnection} from '@xyflow/react'
-import {ArrowDown, ArrowUp, Bug, Copy, Download, FolderOpen, GripVertical, Layers, Play, Plus, Redo2, Save, Search, StepForward, Trash2, Undo2, Upload, X} from 'lucide-react'
+import {ArrowDown, ArrowLeft, ArrowUp, Bug, Copy, Download, FolderOpen, GripVertical, Layers, Play, Plus, Redo2, Save, Search, StepForward, Trash2, Undo2, Upload, X} from 'lucide-react'
 import '@xyflow/react/dist/style.css'
 import '../scheduler/editor.css'
 import {api} from '../api/client'
@@ -112,7 +112,7 @@ function Editor() {
   const [resources, setResources] = useState<Record<string, string>>({Oil:'8000', Coin:'50000', ActionPoint:'200'})
   const [apTotal, setApTotal] = useState('5300')
   const [simTasks, setSimTasks] = useState<Catalog['tasks']>()
-  const [mobilePanel, setMobilePanel] = useState<'library' | 'properties'>('library')
+  const [mobilePanel, setMobilePanel] = useState<'canvas' | 'library' | 'properties'>('canvas')
   const [canvasExpanded, setCanvasExpanded] = useState(false)
   const [outcomes, setOutcomes] = useState('completed')
   const [simSteps, setSimSteps] = useState(0)
@@ -208,6 +208,7 @@ function Editor() {
     const spec = catalog.cards.find(c => c.type === kind)!
     const node: ProgramNode = {id:id(), type:kind, label:'', comment:'', params:{...clone(spec.params), ...(subId ? {graph:subId} : {})}, position:position ?? flow.screenToFlowPosition({x:(wrapper.current?.getBoundingClientRect().left ?? 0) + 360, y:(wrapper.current?.getBoundingClientRect().top ?? 0) + 180})}
     updateGraph({...graph, nodes:[...graph.nodes, node]}); setSelection([node.id])
+    if (window.innerWidth <= 850) setMobilePanel('canvas')
   }
   function updateNode(node: ProgramNode) {
     if (graph) updateGraph({...graph, nodes:graph.nodes.map(n => n.id === node.id ? node : n)})
@@ -335,7 +336,11 @@ function Editor() {
       {graphId !== 'main' && <><label>组合名称<input value={currentGraph.name} onChange={e => change({...doc, subgraphs:doc.subgraphs.map(s => s.id === graphId ? {...s, name:e.target.value} : s)})}/></label><label><input type="checkbox" checked={currentGraph.pure} onChange={e => change({...doc, subgraphs:doc.subgraphs.map(s => s.id === graphId ? {...s, pure:e.target.checked} : s)})}/>无副作用数据组合</label>
         {(['inputs','outputs'] as const).map(kind => <div key={kind}><strong>{kind === 'inputs' ? '输入端口' : '输出端口'}</strong><button onClick={() => change({...doc, subgraphs:doc.subgraphs.map(s => s.id === graphId ? {...s, [kind]:[...s[kind], {name:`${kind}${s[kind].length + 1}`, type:'any', required:true}]} : s)})}>添加端口</button>{currentGraph[kind].map((p,index) => <div className="program-schema-row" key={index}><input aria-label="端口名称" value={p.name} onChange={e => change({...doc, subgraphs:doc.subgraphs.map(s => s.id === graphId ? {...s, [kind]:s[kind].map((x,i) => i === index ? {...x, name:e.target.value} : x)} : s)})}/><select value={p.type} aria-label="端口类型" onChange={e => change({...doc, subgraphs:doc.subgraphs.map(s => s.id === graphId ? {...s, [kind]:s[kind].map((x,i) => i === index ? {...x, type:e.target.value} : x)} : s)})}>{Object.entries(typeLabels).map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select><button onClick={() => change({...doc, subgraphs:doc.subgraphs.map(s => s.id === graphId ? {...s, [kind]:s[kind].filter((_,i) => i !== index)} : s)})}>删除</button></div>)}</div>)}</>}
     </section>}
-    <div className="program-mobile-panels"><button className="button secondary" onClick={() => setMobilePanel('library')}>卡片库</button><button className="button secondary" onClick={() => setMobilePanel('properties')}>属性与连接</button></div>
+    <div className="program-mobile-panels">
+      <button type="button" className={`button ${mobilePanel === 'canvas' ? 'primary active' : 'secondary'}`} onClick={() => setMobilePanel('canvas')}>画布</button>
+      <button type="button" className={`button ${mobilePanel === 'library' ? 'primary active' : 'secondary'}`} onClick={() => setMobilePanel('library')}>卡片库</button>
+      <button type="button" className={`button ${mobilePanel === 'properties' ? 'primary active' : 'secondary'}`} onClick={() => setMobilePanel('properties')}>属性与连接</button>
+    </div>
     <div className={`program-workspace mobile-${mobilePanel} ${canvasExpanded ? 'canvas-expanded' : ''}`}>
       <main className="program-canvas" tabIndex={0} aria-label="调度画布" onPointerDown={event => {if (!editingText(event.target)) event.currentTarget.focus({preventScroll:true})}} onDragOver={e => {e.preventDefault(); e.dataTransfer.dropEffect = 'copy'}} onDrop={e => {e.preventDefault(); try {const data = JSON.parse(e.dataTransfer.getData('application/azurpilot-card')); add(data.type, data.graph, flow.screenToFlowPosition({x:e.clientX,y:e.clientY}))} catch { /* 忽略非卡片拖放。 */ }}}>
         <ProgramCanvas key={graphId} nodes={nodes} edges={edges} nodeTypes={nodeTypes} deleteKeyCode={null} onNodeClick={() => setMobilePanel('properties')} onSelectionChange={onSelectionChange} onConnect={connect} isValidConnection={connectValid}
@@ -344,11 +349,23 @@ function Editor() {
           onEdgeDoubleClick={(_,edge) => updateGraph({...graph, edges:graph.edges.filter(e => e.id !== edge.id)})}/>
         <div className="program-canvas-hint">左键框选 · 中键或空格拖动 · Ctrl/Cmd+C/V 复制粘贴 · 退格删除<br/>同色端口可连接 · 彩环为通用端口 · 方形为执行端口</div>
       </main>
-      <aside className="program-library nowheel nopan nodrag"><label className="program-search"><Search size={15}/><input placeholder="搜索卡片…" value={search} onChange={e => setSearch(e.target.value)}/></label>
+      <aside className="program-library nowheel nopan nodrag">
+        <div className="program-mobile-back-bar">
+          <button type="button" className="button secondary program-mobile-back" onClick={() => setMobilePanel('canvas')}>
+            <ArrowLeft size={14}/>返回画布
+          </button>
+        </div>
+        <label className="program-search"><Search size={15}/><input placeholder="搜索卡片…" value={search} onChange={e => setSearch(e.target.value)}/></label>
         {[...new Set(catalog.cards.map(c => c.category))].map(category => <div key={category} style={{'--card-color':categoryColor(category)} as CSSProperties}><h3><i className="program-category-dot"/>{category}</h3>{catalog.cards.filter(c => c.category === category && `${c.label} ${c.type}`.toLowerCase().includes(search.toLowerCase())).map(card => <button key={card.type} draggable onDragStart={event => event.dataTransfer.setData('application/azurpilot-card', JSON.stringify({type:card.type}))} onClick={() => add(card.type)}><Plus size={12}/>{card.label}</button>)}</div>)}
         <h3>组合卡片</h3>{doc.subgraphs.filter(s => s.name.includes(search)).map(sub => <div className="program-library-composite" key={sub.id}><button draggable onDragStart={event => event.dataTransfer.setData('application/azurpilot-card', JSON.stringify({type:'call', graph:sub.id}))} onClick={() => add('call', sub.id)}><Layers size={12}/>{sub.name}</button><button title="打开内部逻辑" onClick={() => {setGraphId(sub.id); setSelection([])}}>↗</button></div>)}
       </aside>
-      <aside className="program-properties nowheel nopan nodrag"><h2>{picked ? spec?.label : '卡片属性'}</h2>
+      <aside className="program-properties nowheel nopan nodrag">
+        <div className="program-properties-title-row">
+          <h2>{picked ? spec?.label : '卡片属性'}</h2>
+          <button type="button" className="button secondary program-mobile-back" onClick={() => setMobilePanel('canvas')}>
+            <ArrowLeft size={14}/>返回画布
+          </button>
+        </div>
         {picked?.label && <div className="program-card-alias" style={{marginBottom:10}}>别名：{picked.label}</div>}
         {!picked && <p className="muted">点击卡片设置参数。拖拽端口连线，也可以使用下方的连接表单。</p>}
         {picked && <><label htmlFor="program-card-label">卡片名称<input id="program-card-label" aria-label="卡片名称" placeholder="自定义别名（优先显示原名）" value={picked.label} onChange={e => updateNode({...picked, label:e.target.value})}/></label>

@@ -825,6 +825,133 @@ test('窄窗口调度器入口位于左侧标题栏且可展开右栏', async ({
   await expect(page.locator('.mobile-rail-toggle')).toBeHidden()
 })
 
+test('移动端窄屏下调度程序支持画布、卡片库与属性三态切换与调试抽屉适配', async ({page}) => {
+  await page.setViewportSize({width: 414, height: 896})
+  await page.goto('/#/i/demo-alt/task/SchedulerProgram')
+  await expect(page.locator('.program-editor')).toBeVisible()
+  const mobileNav = page.locator('.program-mobile-panels')
+  await expect(mobileNav).toBeVisible()
+  const canvasBtn = mobileNav.getByRole('button', {name: '画布', exact: true})
+  const libraryBtn = mobileNav.getByRole('button', {name: '卡片库', exact: true})
+  const propertiesBtn = mobileNav.getByRole('button', {name: '属性与连接', exact: true})
+
+  // 默认在移动端展示画布，左右浮层收起，全屏沉浸
+  await expect(canvasBtn).toHaveClass(/active/)
+  await expect(page.locator('.program-library')).toBeHidden()
+  await expect(page.locator('.program-properties')).toBeHidden()
+  await expect(page.locator('.program-canvas')).toBeVisible()
+
+  // 切换到卡片库，验证全屏实体面板与返回画布按钮
+  await libraryBtn.click()
+  await expect(libraryBtn).toHaveClass(/active/)
+  await expect(page.locator('.program-library')).toBeVisible()
+  await expect(page.locator('.program-properties')).toBeHidden()
+  const libBack = page.locator('.program-library .program-mobile-back')
+  await expect(libBack).toBeVisible()
+  await page.screenshot({path: 'test-results/scheduler-mobile-library.png'})
+  await libBack.click()
+  await expect(canvasBtn).toHaveClass(/active/)
+
+  // 再次切换到卡片库，点击添加卡片后自动切回画布
+  await libraryBtn.click()
+  await page.locator('.program-library').getByRole('button', {name: '读取资源', exact: true}).click()
+  await expect(canvasBtn).toHaveClass(/active/)
+  await expect(page.locator('.program-canvas')).toBeVisible()
+
+  // 切换到属性与连接面板，验证全屏面板与返回画布按钮
+  await propertiesBtn.click()
+  await expect(propertiesBtn).toHaveClass(/active/)
+  await expect(page.locator('.program-properties')).toBeVisible()
+  await expect(page.locator('.program-library')).toBeHidden()
+  const propBack = page.locator('.program-properties .program-mobile-back')
+  await expect(propBack).toBeVisible()
+  await page.screenshot({path: 'test-results/scheduler-mobile-properties.png'})
+  await propBack.click()
+  await expect(canvasBtn).toHaveClass(/active/)
+
+  // 移动端展开调试抽屉并截图
+  await page.getByRole('button', {name: '调试', exact: true}).click()
+  const drawer = page.locator('.program-console')
+  await expect(drawer).toBeVisible()
+  await page.waitForTimeout(300)
+  const drawerBox = (await drawer.boundingBox())!
+  expect(drawerBox.width).toBeGreaterThanOrEqual(380)
+  await page.screenshot({path: 'test-results/scheduler-mobile-console.png'})
+
+  // 移动端模拟运行并可关闭抽屉
+  await page.getByRole('button', {name: '模拟运行', exact: true}).click()
+  await expect(page.locator('.program-trace')).toBeVisible()
+  await page.getByRole('button', {name: '关闭调试面板', exact: true}).click()
+  await expect(drawer).toBeHidden()
+
+  // 验证子工具栏支持移动端横向平滑滑动且不破坏视口
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.screenshot({path: 'test-results/scheduler-mobile.png', fullPage: true})
+})
+
+test('调度程序在全量六套主题下背景与控件对比度正常无白底穿透', async ({page}) => {
+  await page.goto('/#/i/demo-alt/task/SchedulerProgram')
+  await expect(page.locator('.program-editor')).toBeVisible()
+
+  // 1. 测试深色模式 (dark)
+  await page.evaluate(() => {
+    localStorage.setItem('azurpilot.theme', 'dark')
+  })
+  await page.reload()
+  await expect(page.locator('.program-editor')).toBeVisible()
+  const darkBg = await page.locator('.program-workspace').evaluate(el => getComputedStyle(el).backgroundColor)
+  const darkRgb = darkBg.match(/\d+/g)?.map(Number) ?? [255, 255, 255]
+  expect(darkRgb[0]).toBeLessThan(80)
+  await page.screenshot({path: 'test-results/scheduler-theme-dark.png'})
+
+  // 2. 测试经典旧版深色 (legacy-dark)
+  await page.evaluate(() => {
+    localStorage.setItem('azurpilot.theme', 'legacy-dark')
+  })
+  await page.reload()
+  await expect(page.locator('.program-editor')).toBeVisible()
+  const legacyDarkBg = await page.locator('.program-workspace').evaluate(el => getComputedStyle(el).backgroundColor)
+  const legacyDarkRgb = legacyDarkBg.match(/\d+/g)?.map(Number) ?? [255, 255, 255]
+  expect(legacyDarkRgb[0]).toBeLessThan(80)
+  await page.screenshot({path: 'test-results/scheduler-theme-legacy-dark.png'})
+
+  // 3. 测试极简主题 (minimal)
+  await page.evaluate(() => {
+    localStorage.setItem('azurpilot.theme', 'minimal')
+  })
+  await page.reload()
+  await expect(page.locator('.program-editor')).toBeVisible()
+  const minimalBackdrop = await page.locator('.program-library').evaluate(el => getComputedStyle(el).backdropFilter)
+  expect(minimalBackdrop).toBe('none')
+  await page.screenshot({path: 'test-results/scheduler-theme-minimal.png'})
+
+  // 4. 测试极致紧凑主题 (extreme)
+  await page.evaluate(() => {
+    localStorage.setItem('azurpilot.theme', 'extreme')
+  })
+  await page.reload()
+  await expect(page.locator('.program-editor')).toBeVisible()
+  const extremeBackdrop = await page.locator('.program-library').evaluate(el => getComputedStyle(el).backdropFilter)
+  expect(extremeBackdrop).toBe('none')
+  await page.screenshot({path: 'test-results/scheduler-theme-extreme.png'})
+
+  // 5. 测试经典旧版浅色 (legacy-light)
+  await page.evaluate(() => {
+    localStorage.setItem('azurpilot.theme', 'legacy-light')
+  })
+  await page.reload()
+  await expect(page.locator('.program-editor')).toBeVisible()
+  await page.screenshot({path: 'test-results/scheduler-theme-legacy-light.png'})
+
+  // 6. 切回默认浅色 (light) 并截图
+  await page.evaluate(() => {
+    localStorage.setItem('azurpilot.theme', 'light')
+  })
+  await page.reload()
+  await expect(page.locator('.program-editor')).toBeVisible()
+  await page.screenshot({path: 'test-results/scheduler-theme-light.png', fullPage: true})
+})
+
 
 test('主页实例状态、任务搜索收起与导航固定', async ({page}) => {
   const errors: string[] = []
