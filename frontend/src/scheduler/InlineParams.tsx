@@ -9,8 +9,8 @@ type Props = {
 }
 const fields: Record<string, Array<[string, string]>> = {
   resource:[['name','读取资源'], ['field','读取数值'], ['maxAge','有效期（秒）'], ['autoRefresh','过期时自动刷新']],
-  task:[['name','指定任务']], execute:[['task','执行任务']], last_result:[['task','任务结果']],
-  wait:[['seconds','等待秒数']], wait_until:[['time','等待到']],
+  task:[['name','指定任务']], execute:[['task','执行任务'],['followOriginal','检查原计划任务切换']], last_result:[['task','任务结果']],
+  wait:[['seconds','等待秒数']], wait_until:[['time','等待到'],['recheckOnConfigChange','配置变更时重新判断']],
   time_window:[['start','开始时间'],['end','结束时间']],
   compare:[['operator','比较'],['a','输入 A'],['b','输入 B']], math:[['operator','运算'],['a','输入 A'],['b','输入 B']],
   logic:[['operator','逻辑'],['a','输入 A'],['b','输入 B']],

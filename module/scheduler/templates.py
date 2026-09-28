@@ -51,17 +51,36 @@ def builtins():
 
 
 def default_program():
-    """默认只搭好原计划示例，保存或打开页面都不会启用。"""
-    return ProgramDocument(entry='start', name='按优先级循环调度', subgraphs=builtins(), nodes=[
+    """把原调度的业务选择规则直接展开，便于理解和修改。"""
+    document = ProgramDocument(entry='start', name='原调度器 · 启用、到期、优先级与等待', subgraphs=builtins(), nodes=[
         node('start', 'entry', 0, 0), node('loop', 'loop', 320, 0),
         node('tasks', 'tasks', 0, 400),
-        node('choose', 'call', 320, 300, graph='builtin.original'),
-        node('run', 'execute', 640, 0), node('wait', 'wait', 960, 0, seconds=60),
-        node('repeat', 'loop_end', 1280, 0, loop='loop')], edges=[
-        edge('start', 'loop'), edge('loop', 'run', 'body'),
+        node('choose', 'first', 1280, 400),
+        node('run', 'execute', 1920, 0, followOriginal=True), node('wait', 'wait_until', 1920, 720, recheckOnConfigChange=True),
+        node('repeat', 'loop_end', 2240, 0, loop='loop'),
+        node('enabled', 'filter', 320, 400, rule='enabled'), node('due', 'filter', 640, 400, rule='due', strict=True),
+        node('order', 'priority', 960, 400), node('empty', 'empty', 1600, 400),
+        node('branch', 'branch', 1600, 0), node('rules', 'original_settings', 640, 950),
+        node('failed', 'end', 2240, 700)], edges=[
+        edge('start', 'loop'), edge('loop', 'branch', 'body'),
+        edge('tasks', 'enabled', 'value', 'items', True), edge('enabled', 'due', 'value', 'items', True),
+        edge('due', 'order', 'value', 'items', True), edge('rules', 'due', 'dueBefore', 'before', True),
+        edge('rules', 'order', 'order', 'order', True), edge('order', 'choose', 'value', 'items', True),
+        edge('order', 'empty', 'value', 'items', True), edge('empty', 'branch', 'value', 'condition', True),
+        edge('branch', 'wait', 'yes'), edge('branch', 'run', 'no'),
         edge('choose', 'run', 'value', 'task', True),
-        *[edge('run', 'wait', outcome) for outcome in ('completed', 'yielded', 'recoverable', 'empty')],
+        *[edge('run', 'repeat', outcome) for outcome in ('completed', 'yielded', 'recoverable')],
+        edge('run', 'wait', 'empty'), edge('run', 'failed', 'failed'),
+        edge('rules', 'wait', 'deadline', 'time', True),
         edge('wait', 'repeat')])
+    labels = {'start': '原调度业务入口', 'loop': '每轮重新读取任务状态', 'tasks': '读取实例全部业务任务',
+              'enabled': '只保留已启用任务', 'due': '只保留已到期任务（含囤积规则）', 'order': '按当前实例优先级排序',
+              'choose': '选择优先级最高的任务', 'empty': '没有到期任务？', 'branch': '没有任务则等待，有任务则执行',
+              'run': '执行选中的任务', 'wait': '等待最近原计划时间', 'repeat': '回到下一轮判断',
+              'rules': '读取当前优先级、囤积截止与最近计划', 'failed': '失败时结束并显示结果'}
+    for card in document.nodes:
+        card.comment = labels[card.id]
+    return document
 
 
 def enhance_program():

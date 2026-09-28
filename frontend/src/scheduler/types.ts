@@ -4,7 +4,7 @@ import type {Parameters, SchedulerModels} from '../api/generated'
 export type ProgramMode = 'native' | 'enhance' | 'takeover'
 export type PortType = 'any' | 'number' | 'boolean' | 'string' | 'time' | 'duration' | 'resource' | 'task' | 'tasks' | 'result' | 'list' | 'object'
 export interface Port {name: string; type: PortType; required: boolean}
-export interface ProgramNode {id: string; type: string; label: string; params: Record<string, unknown>; position: {x: number; y: number}}
+export interface ProgramNode {id: string; type: string; label: string; comment?: string; params: Record<string, unknown>; position: {x: number; y: number}}
 export interface ProgramEdge {id: string; source: string; sourcePort: string; target: string; targetPort: string; kind: 'control' | 'data'}
 export interface Graph {entry: string; nodes: ProgramNode[]; edges: ProgramEdge[]}
 export interface Subgraph extends Graph {id: string; name: string; pure: boolean; inputs: Port[]; outputs: Port[]}

@@ -33,6 +33,7 @@ class CardNode(Model):
     id: str = Field(min_length=1, max_length=80)
     type: str
     label: str = ''
+    comment: str = Field(default='', max_length=2000)
     params: dict[str, Any] = Field(default_factory=dict)
     position: dict[str, float | int] = Field(default_factory=lambda: {'x': 0, 'y': 0})
 

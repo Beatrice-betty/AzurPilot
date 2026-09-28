@@ -268,7 +268,8 @@ class ExtraEngineTests(unittest.TestCase):
         self.assertFalse(validate(doc)['valid'])
 
     def test_rotation_advances_when_task_is_dispatched(self):
-        doc=default_program(); doc.nodes[3].params['graph']='builtin.rotation'
+        doc=default_program(); doc.nodes[3].type='call'; doc.nodes[3].params={'graph':'builtin.rotation'}
+        doc.edges = [e for e in doc.edges if e.target != 'choose']
         doc.edges.append(edge('tasks','choose','value','items',True))
         result=simulate(doc,context(),steps=30)
         tasks=[e['task'] for e in result['effects'] if e['kind']=='execute']

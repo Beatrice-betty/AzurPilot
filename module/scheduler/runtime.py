@@ -75,6 +75,10 @@ class SchedulerRuntime:
         waiting = next((t for t in config.waiting_task if t.command in business), None)
         future = waiting.next_run + config.hoarding if waiting else now() + timedelta(minutes=5)
         context['nativeDeadline'] = future.isoformat(sep=' ')
+        from module.scheduler.context import original_order
+        from module.config.config import AzurLaneConfig
+        context['nativeOrder'] = [t['name'] for t in original_order(config.data, context['tasks'])]
+        context['nativeDueBefore'] = (now() - config.hoarding if AzurLaneConfig.is_hoarding_task else now()).isoformat(sep=' ')
         if self.mode == 'enhance':
             pending = {t.command for t in config.pending_task}
             context['tasks'] = [t for t in context['tasks'] if t['name'] in pending]
@@ -99,7 +103,7 @@ class SchedulerRuntime:
 
     def wait(self, deadline):
         # 只在调度等待层轮询，游戏识别循环不使用固定休眠。
-        self.script.wait_until(min(deadline, now() + timedelta(seconds=4)))
+        return self.script.wait_until(min(deadline, now() + timedelta(seconds=4)))
 
     def next_task(self):
         while True:
@@ -124,6 +128,8 @@ class SchedulerRuntime:
                 effect = self.engine.advance(context)
                 self.emit()
                 if effect.kind == 'execute':
+                    from module.config.config import AzurLaneConfig
+                    AzurLaneConfig.is_hoarding_task = False
                     self.invocation = copy.deepcopy(effect.payload)
                     self.yield_reason = ''
                     self.overlay = copy.deepcopy(effect.payload['overrides'])
@@ -145,7 +151,8 @@ class SchedulerRuntime:
                         self.engine.resume()
                         continue
                     self.save()
-                    self.wait(deadline)
+                    if self.wait(deadline) is False and effect.payload.get('recheckOnConfigChange'):
+                        self.engine.resume()
                 elif effect.kind == 'error':
                     raise ProgramError(effect.payload['reason'])
                 else:
@@ -201,6 +208,12 @@ class SchedulerRuntime:
             self.yield_reason = '调度方案已更新'
             return True
         guard = self.invocation.get('guard')
+        if self.invocation.get('followOriginal'):
+            config.load()
+            candidate = self.context(config)['nativeTask']
+            if candidate and candidate['name'] != self.invocation['task']:
+                self.yield_reason = '原计划已有其他优先任务'
+                return True
         if guard:
             try:
                 config.load()

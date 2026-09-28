@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from module.scheduler.engine import Engine, simulate
-from module.scheduler.models import ProgramDocument, SubgraphDefinition
+from module.scheduler.models import CardNode, ProgramDocument, SubgraphDefinition
 from module.scheduler.store import ConflictError, ProgramStore
 from module.scheduler.templates import default_program, enhance_program, node, edge
 from module.scheduler.validation import validate
@@ -27,18 +27,23 @@ class TestProgramEngine(unittest.TestCase):
         self.assertTrue(validate(doc)['valid'])
         result = simulate(doc, context(), steps=12)
         self.assertEqual('Commission', next(e['task'] for e in result['effects'] if e['kind'] == 'execute'))
-        self.assertTrue(any(e['kind'] == 'wait' for e in result['effects']))
+        self.assertFalse(any(e['kind'] == 'wait' for e in result['effects']))
+        idle = context(tasks=[{'name':'Main','enabled':True,'nextRun':'2026-09-28 11:00:00'}])
+        waiting = simulate(doc, idle, steps=4)['effects'][-1]
+        self.assertEqual('wait', waiting['kind'])
+        self.assertEqual('2026-09-28 11:00:00', waiting['deadline'])
 
     def test_priority_ties_unlisted_and_scores(self):
         doc = default_program()
-        doc.nodes[3].params['graph']='builtin.priority'
+        doc.nodes[3].type='call'; doc.nodes[3].params={'graph':'builtin.priority'}
+        doc.edges = [e for e in doc.edges if e.target != 'choose']
         doc.edges.append(edge('tasks','choose','value','items',True))
         priority = doc.subgraphs[0].nodes[1]
         priority.params['order'] = ['Research']
-        result = simulate(doc, context(), steps=3)
-        self.assertEqual('Research', result['effects'][-1]['task'])
+        result = simulate(doc, context(), steps=4)
+        self.assertEqual('Research', next(e['task'] for e in result['effects'] if e['kind']=='execute'))
         priority.params['order'] = []
-        self.assertEqual('Main', simulate(doc, context(), steps=3)['effects'][-1]['task'])
+        self.assertEqual('Main', next(e['task'] for e in simulate(doc, context(), steps=4)['effects'] if e['kind']=='execute'))
 
     def test_unknown_resource_uses_unavailable_branch(self):
         doc = ProgramDocument(entry='start', nodes=[node('start','entry'), node('oil','resource'),
@@ -101,6 +106,24 @@ class TestProgramEngine(unittest.TestCase):
         simulate(default_program(),ctx,steps=30)
         self.assertEqual(original,ctx)
 
+    def test_card_labels_comments_and_backward_compatibility(self):
+        doc = default_program()
+        # 原名优先：默认方案中的说明存放在 comment 中，卡片 label 保持为空
+        enabled_node = next(n for n in doc.nodes if n.id == 'enabled')
+        self.assertEqual('', enabled_node.label)
+        self.assertEqual('只保留已启用任务', enabled_node.comment)
+        # 反序列化兼容：旧版没有 comment 字段的节点自动填空字符串
+        legacy_node = CardNode.model_validate({'id': 'legacy', 'type': 'filter', 'params': {}})
+        self.assertEqual('', legacy_node.comment)
+        self.assertEqual('', legacy_node.label)
+        # 自定义别名与独立注释共存
+        custom_node = CardNode.model_validate({'id': 'custom', 'type': 'execute', 'label': '日常出击', 'comment': '执行日常主线出击'})
+        self.assertEqual('日常出击', custom_node.label)
+        self.assertEqual('执行日常主线出击', custom_node.comment)
+        # 注释长度上限校验
+        with self.assertRaises(Exception):
+            CardNode.model_validate({'id': 'long', 'type': 'execute', 'comment': 'x' * 2001})
+
 
 class TestProgramStore(unittest.TestCase):
     def setUp(self):
@@ -135,6 +158,18 @@ class TestProgramStore(unittest.TestCase):
     def test_path_traversal_rejected(self):
         with self.assertRaises(Exception):
             self.store.get('../outside')
+
+    def test_store_persists_card_label_and_comment(self):
+        doc = default_program()
+        loop_node = next(n for n in doc.nodes if n.id == 'loop')
+        loop_node.label = '主循环'
+        loop_node.comment = '每轮重新评估所有任务与资源'
+        revision = self.store.get('testpilot')['revision']
+        updated = self.store.update('testpilot', revision, draft=doc.model_dump())
+        reloaded = ProgramDocument.model_validate(updated['draft'])
+        reloaded_loop = next(n for n in reloaded.nodes if n.id == 'loop')
+        self.assertEqual('主循环', reloaded_loop.label)
+        self.assertEqual('每轮重新评估所有任务与资源', reloaded_loop.comment)
 
 
 class TestProgramIntegration(unittest.TestCase):

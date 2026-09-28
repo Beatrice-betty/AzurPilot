@@ -38,4 +38,6 @@
 @media(max-width:850px) {.program-editor .react-flow__minimap {width:100px; height:70px}.program-canvas-hint {max-width:calc(100% - 65px)}}
 .program-workspace.canvas-expanded {grid-template-columns:1fr}.program-workspace.canvas-expanded>.program-library,.program-workspace.canvas-expanded>.program-properties {display:none}
 .program-observation {font-size:10px;white-space:pre-wrap;overflow-wrap:anywhere}
+.program-default-guide {padding:10px 14px;border:1px solid var(--border);border-radius:10px;background:var(--program-panel);font-size:12px;line-height:1.7;color:var(--muted)}
+.program-card-alias {font-size:11px;font-weight:400;color:var(--muted);overflow-wrap:anywhere}.program-card-comment {padding:9px 14px;border-bottom:1px solid var(--border);font-size:12px;line-height:1.5;color:var(--muted);white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:850px) {.program-mobile-panels {display:flex;gap:8px}.program-workspace.mobile-library .program-properties,.program-workspace.mobile-properties .program-library {display:none}}

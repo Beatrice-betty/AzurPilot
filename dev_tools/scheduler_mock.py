@@ -1,10 +1,11 @@
 """前端 mock 使用同一解释器；输入输出仅走管道，不读取实例或设备。"""
 import json
 import sys
+from contextlib import redirect_stdout
 from datetime import datetime, timedelta
 
 from module.scheduler.catalog import CARDS, RESOURCES, REFRESHABLE, OVERRIDES
-from module.scheduler.context import snapshot
+from module.scheduler.context import snapshot, simulation_plan
 from module.scheduler.engine import simulate, parse_time
 from module.scheduler.models import ProgramDocument
 from module.scheduler.templates import builtins, default_program, enhance_program
@@ -27,9 +28,10 @@ def dispatch(request):
         return {**result, 'state': {'status': 'error', 'trace': []}, 'effects': []}
     context.update(request.get('context', {}))
     instant = parse_time(context['now'])
-    due = [t for t in context['tasks'] if t['enabled'] and parse_time(t['nextRun']) <= instant]
-    context.setdefault('nativeTask', due[0] if due else None)
-    context.setdefault('nativeDeadline', (instant + timedelta(minutes=5)).isoformat(sep=' '))
+    plan = simulation_plan(request.get('config', {}), context['tasks'], instant)
+    for key, value in plan.items():
+        context.setdefault(key, value)
+    due = [task for name in plan['nativeOrder'] for task in context['tasks'] if task['name'] == name and task.get('enabled') and task.get('nextRun') and parse_time(task['nextRun']) < parse_time(plan['nativeDueBefore'])]
     if request.get('mode') == 'enhance':
         context['tasks'] = due
     return {**result, **simulate(doc, context, request.get('outcomes'), request.get('steps', 100))}
@@ -37,7 +39,9 @@ def dispatch(request):
 
 if __name__ == '__main__':
     try:
-        result = dispatch(json.load(sys.stdin))
+        # 优先级模块的首次导入会初始化日志，管道的标准输出只允许 JSON。
+        with redirect_stdout(sys.stderr):
+            result = dispatch(json.load(sys.stdin))
     except (ValueError, KeyError, TypeError) as exc:
         result = {'error': str(exc)}
     sys.stdout.write(json.dumps(result, ensure_ascii=False))

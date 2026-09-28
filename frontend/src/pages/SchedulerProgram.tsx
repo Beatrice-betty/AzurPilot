@@ -8,7 +8,7 @@ import '../scheduler/editor.css'
 import {api} from '../api/client'
 import {useApp, useConnection} from '../app/context'
 import {ErrorBox, Loading} from '../components/ui'
-import {clone, compatible, connectedPortType, definition, duplicate, encapsulate, horizontalLayout, id, replaceGraph} from '../scheduler/graph'
+import {clone, compatible, connectedPortType, definition, duplicate, encapsulate, horizontalLayout, id, replaceGraph, withComments} from '../scheduler/graph'
 import {ProgramCanvas, type CanvasNode} from '../scheduler/Canvas'
 import {categoryColor, controlColor, portColors, wildcardBackground} from '../scheduler/appearance'
 import {InlineParams} from '../scheduler/InlineParams'
@@ -19,6 +19,7 @@ import type {UiKey} from '../i18n'
 const typeLabels: Record<string, string> = {any:'任意值', number:'数值', boolean:'布尔', string:'文本', time:'时间', duration:'时长（秒）', resource:'资源记录', task:'任务', tasks:'任务列表', result:'任务结果', list:'列表', object:'对象'}
 const exits: Record<string, string> = {next:'下一步', yes:'是', no:'否', unavailable:'数据不可用', completed:'完成', yielded:'主动让出', recoverable:'可恢复错误', failed:'失败', empty:'没有任务', success:'成功', body:'循环体', done:'结束'}
 const labels: Record<string, string> = {name:'名称', value:'值', operator:'运算符', a:'输入 A', b:'输入 B', condition:'条件', yes:'满足时的值', no:'不满足时的值', seconds:'时长（秒）', time:'目标时间', start:'开始时刻', end:'结束时刻', weekdays:'星期（1～7）', field:'字段', maxAge:'有效期（秒）', autoRefresh:'过期时自动刷新', task:'任务', rule:'筛选规则', descending:'降序', count:'循环次数（-1 为持续）', loop:'所属循环', graph:'组合卡片', guard:'继续条件', key:'记录标识', kind:'记录类型', reset:'刷新时刻', limit:'每日上限', valueType:'数据类型'}
+Object.assign(labels, {order:'当前优先级顺序', dueBefore:'到期截止时间', deadline:'最近计划时间', idleMode:'空闲策略', before:'到期截止时间', strict:'截止之前才视为到期'})
 const Card = memo(function Card({data, selected}: NodeProps<CanvasNode>) {
   const {card, spec} = data
   const connection = useFlowConnection<CanvasNode>()
@@ -29,7 +30,8 @@ const Card = memo(function Card({data, selected}: NodeProps<CanvasNode>) {
     return {background:type === 'any' ? wildcardBackground : portColors[type]}
   }
   return <div style={{'--card-color':categoryColor(spec.category)} as CSSProperties} className={`program-card ${spec.pure ? 'data' : 'action'} ${selected ? 'selected' : ''} ${data.current ? 'current' : ''} ${data.invalid ? 'invalid' : ''}`}>
-    <div className="program-card-heading">{!spec.pure && <Handle type="target" position={Position.Left} id="control:in" className="control-handle" style={{background:controlColor}} title="执行入口"/>}<span>{spec.category} · {spec.pure ? '数据' : '执行'}</span><strong>{card.label || spec.label}</strong></div>
+    <div className="program-card-heading">{!spec.pure && <Handle type="target" position={Position.Left} id="control:in" className="control-handle" style={{background:controlColor}} title="执行入口"/>}<span>{spec.category} · {spec.pure ? '数据' : '执行'}</span><strong>{spec.label}</strong>{card.label && <small className="program-card-alias">名称：{card.label}</small>}</div>
+    {card.comment && <div className="program-card-comment">{card.comment}</div>}
     {spec.exits.length > 0 && <div className="program-card-exits">{spec.exits.map(exit => <div key={exit} className="program-port output"><span>{exits[exit] ?? exit}</span><Handle type="source" position={Position.Right} id={`control:${exit}`} className="control-handle" style={{background:controlColor}} title={`${exits[exit] ?? exit} · 执行`}/></div>)}</div>}
     <div className="program-card-summary">{String(card.params.name ?? card.params.task ?? card.params.operator ?? (spec.pure ? '数据处理' : '流程控制'))}</div>
     <InlineParams card={card} spec={spec} catalog={data.catalog} document={data.document} connectedInputs={data.connectedInputs} onChange={data.onParamsChange}/>
@@ -118,7 +120,7 @@ function Editor() {
 
   const change = useCallback((next: ProgramDocument, track = true) => {
     if (doc && track) {history.current.past.push(clone(doc)); history.current.past = history.current.past.slice(-100); history.current.future = []}
-    setDoc(next); setValidation(undefined); setSimulation(undefined); setSimSteps(0)
+    setDoc(withComments(next)); setValidation(undefined); setSimulation(undefined); setSimSteps(0)
   }, [doc])
   const updateGraph = (next: Graph, track = true) => {if (doc) change(replaceGraph(doc, graphId, next), track)}
   function undo(redo = false) {
@@ -161,7 +163,7 @@ function Editor() {
   function add(kind: string, subId?: string, position?: {x:number; y:number}) {
     if (!catalog || !graph) return
     const spec = catalog.cards.find(c => c.type === kind)!
-    const node: ProgramNode = {id:id(), type:kind, label:'', params:{...clone(spec.params), ...(subId ? {graph:subId} : {})}, position:position ?? flow.screenToFlowPosition({x:(wrapper.current?.getBoundingClientRect().left ?? 0) + 360, y:(wrapper.current?.getBoundingClientRect().top ?? 0) + 180})}
+    const node: ProgramNode = {id:id(), type:kind, label:'', comment:'', params:{...clone(spec.params), ...(subId ? {graph:subId} : {})}, position:position ?? flow.screenToFlowPosition({x:(wrapper.current?.getBoundingClientRect().left ?? 0) + 360, y:(wrapper.current?.getBoundingClientRect().top ?? 0) + 180})}
     updateGraph({...graph, nodes:[...graph.nodes, node]}); setSelection([node.id])
   }
   function updateNode(node: ProgramNode) {
@@ -265,7 +267,7 @@ function Editor() {
     </header>
     {error && <ErrorBox message={error}/>}
     <div className="program-subtoolbar"><input aria-label="方案名称" value={doc.name} onChange={e => change({...doc, name:e.target.value})}/><select aria-label="编辑流程" value={graphId} onChange={e => {setGraphId(e.target.value); setSelection([]); setTimeout(() => void flow.fitView(), 0)}}><option value="main">主程序</option>{doc.subgraphs.map(s => <option key={s.id} value={s.id}>{s.name}{s.pure ? ' · 数据' : ' · 执行'}</option>)}</select>
-      <button className="button secondary" onClick={() => {change(clone(catalog.templates[mode === 'enhance' ? 'enhance' : 'takeover'])); setGraphId('main'); setSelection([])}}><FolderOpen size={14}/>载入示例</button>
+      <button className="button secondary" onClick={() => {change(clone(catalog.templates[mode === 'enhance' ? 'enhance' : 'takeover'])); setGraphId('main'); setSelection([])}}><FolderOpen size={14}/>载入原调度方案</button>
       <button className="button secondary" onClick={() => setVariablesOpen(!variablesOpen)}>变量与端口</button>
       <button className="button secondary" onClick={() => {updateGraph(horizontalLayout(graph)); requestAnimationFrame(() => void flow.fitView({padding:0.12}))}}>从左到右排列</button>
       <button className="button secondary" onClick={() => {setCanvasExpanded(value => !value); requestAnimationFrame(() => void flow.fitView({padding:0.12}))}}>{canvasExpanded ? '显示面板' : '展开画布'}</button>
@@ -284,6 +286,7 @@ function Editor() {
         {(['inputs','outputs'] as const).map(kind => <div key={kind}><strong>{kind === 'inputs' ? '输入端口' : '输出端口'}</strong><button onClick={() => change({...doc, subgraphs:doc.subgraphs.map(s => s.id === graphId ? {...s, [kind]:[...s[kind], {name:`${kind}${s[kind].length + 1}`, type:'any', required:true}]} : s)})}>添加端口</button>{currentGraph[kind].map((p,index) => <div className="program-schema-row" key={index}><input aria-label="端口名称" value={p.name} onChange={e => change({...doc, subgraphs:doc.subgraphs.map(s => s.id === graphId ? {...s, [kind]:s[kind].map((x,i) => i === index ? {...x, name:e.target.value} : x)} : s)})}/><select value={p.type} aria-label="端口类型" onChange={e => change({...doc, subgraphs:doc.subgraphs.map(s => s.id === graphId ? {...s, [kind]:s[kind].map((x,i) => i === index ? {...x, type:e.target.value} : x)} : s)})}>{Object.entries(typeLabels).map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select><button onClick={() => change({...doc, subgraphs:doc.subgraphs.map(s => s.id === graphId ? {...s, [kind]:s[kind].filter((_,i) => i !== index)} : s)})}>删除</button></div>)}</div>)}</>}
     </section>}
     <div className="program-mobile-panels"><button className="button secondary" onClick={() => setMobilePanel('library')}>卡片库</button><button className="button secondary" onClick={() => setMobilePanel('properties')}>属性与连接</button></div>
+    {graph.nodes.some(n => n.type === 'original_settings') && <div className="program-default-guide">原调度业务流程：读取任务 → 过滤启用与到期状态 → 按当前实例优先级排序 → 执行；没有到期任务时等待最近计划。任务结束后立即重新判断。维护检测、登录恢复和看门狗由原执行器处理。</div>}
     <div className={`program-workspace mobile-${mobilePanel} ${canvasExpanded ? 'canvas-expanded' : ''}`}>
       <aside className="program-library"><label className="program-search"><Search size={15}/><input placeholder="搜索卡片…" value={search} onChange={e => setSearch(e.target.value)}/></label>
         {[...new Set(catalog.cards.map(c => c.category))].map(category => <div key={category} style={{'--card-color':categoryColor(category)} as CSSProperties}><h3><i className="program-category-dot"/>{category}</h3>{catalog.cards.filter(c => c.category === category && `${c.label} ${c.type}`.toLowerCase().includes(search.toLowerCase())).map(card => <button key={card.type} draggable onDragStart={event => event.dataTransfer.setData('application/azurpilot-card', JSON.stringify({type:card.type}))} onClick={() => add(card.type)}><Plus size={12}/>{card.label}</button>)}</div>)}
@@ -296,9 +299,11 @@ function Editor() {
           onEdgeDoubleClick={(_,edge) => updateGraph({...graph, edges:graph.edges.filter(e => e.id !== edge.id)})}/>
         <div className="program-canvas-hint">左键框选 · 中键或空格拖动 · Ctrl/Cmd+C/V 复制粘贴 · 退格删除<br/>同色端口可连接 · 彩环为通用端口 · 方形为执行端口</div>
       </main>
-      <aside className="program-properties"><h2>{picked ? picked.label || spec?.label : '卡片属性'}</h2>
+      <aside className="program-properties"><h2>{picked ? spec?.label : '卡片属性'}</h2>
+        {picked?.label && <div className="program-card-alias" style={{marginBottom:10}}>别名：{picked.label}</div>}
         {!picked && <p className="muted">点击卡片设置参数。拖拽端口连线，也可以使用下方的连接表单。</p>}
-        {picked && <><label>卡片名称<input value={picked.label} onChange={e => updateNode({...picked, label:e.target.value})}/></label>
+        {picked && <><label htmlFor="program-card-label">卡片名称<input id="program-card-label" aria-label="卡片名称" placeholder="自定义别名（优先显示原名）" value={picked.label} onChange={e => updateNode({...picked, label:e.target.value})}/></label>
+          <label htmlFor="program-card-comment">卡片注释<textarea id="program-card-comment" aria-label="卡片注释" value={picked.comment ?? ''} maxLength={2000} placeholder="单独设置卡片注释，说明具体用途…" onChange={e => updateNode({...picked, comment:e.target.value})}/></label>
           {picked.type === 'call' && <button className="button secondary" onClick={() => {setGraphId(String(picked.params.graph)); setSelection([])}}>打开内部逻辑</button>}
           {graphId !== 'main' && currentGraph.pure && <button className="button secondary" onClick={() => updateGraph({...graph, entry:picked.id})}>作为数据输出入口</button>}
           {renderParams.map(([key,value]) => {
@@ -316,7 +321,19 @@ function Editor() {
             else if (key === 'kind') options = ['quota','cooldown']
             else if (key === 'valueType') options = Object.keys(typeLabels)
             else if (key === 'field' && picked.type === 'resource') options = ['value','limit','total']
-            if (options) return <label key={key}>{labels[key] ?? key}<select value={String(value)} onChange={e => changeParam(key,e.target.value)}><option value="">未设置</option>{options.map(option => <option key={option} value={option}>{doc.subgraphs.find(s => s.id === option)?.name ?? (graph.nodes.find(n => n.id === option)?.label || option)}</option>)}</select></label>
+            if (options) {
+              const optionLabel = (opt: string) => {
+                const sub = doc.subgraphs.find(s => s.id === opt)
+                if (sub) return sub.name
+                const target = graph.nodes.find(n => n.id === opt)
+                if (target) {
+                  const orig = definition(target, doc, catalog, graph).label
+                  return target.label ? `${orig}（${target.label}）` : orig
+                }
+                return opt
+              }
+              return <label key={key}>{labels[key] ?? key}<select value={String(value)} onChange={e => changeParam(key,e.target.value)}><option value="">未设置</option>{options.map(option => <option key={option} value={option}>{optionLabel(option)}</option>)}</select></label>
+            }
             if (typeof value === 'boolean') return <label className="program-checkbox" key={key}><input type="checkbox" checked={value} onChange={e => changeParam(key,e.target.checked)}/>{labels[key] ?? key}</label>
             if (typeof value === 'number' || typeof value === 'string') return <label key={key}>{labels[key] ?? key}<input type={typeof value === 'number' ? 'number' : 'text'} value={value} onChange={e => changeParam(key,typeof value === 'number' ? Number(e.target.value) : e.target.value)}/></label>
             return <JsonField key={key} label={labels[key] ?? key} value={value} onChange={next => changeParam(key,next)}/>
@@ -324,13 +341,24 @@ function Editor() {
           {spec?.inputs.filter(p => !renderParams.some(([key]) => key === p.name)).map(p => <JsonField key={p.name} label={`${p.name} · ${typeLabels[p.type]}（可用连线代替）`} value={picked.params[p.name]} onChange={value => changeParam(p.name,value)}/>)}
           {picked.type === 'resource' && status?.resources?.[String(picked.params.name)] && <pre className="program-observation">{JSON.stringify(status.resources[String(picked.params.name)],null,2)}</pre>}{picked.type === 'resource' && <small>{catalog.resources.find(r => r.name === picked.params.name)?.refreshable ? '支持在任务边界主动刷新' : '使用任务观察记录，不支持主动刷新'}</small>}
         </>}
-        <details className="program-connect"><summary>按钮式连接</summary><label>来源卡片<select aria-label="来源卡片" value={connector.source} onChange={e => setConnector({...connector,source:e.target.value,sourcePort:''})}><option value="">选择来源…</option>{graph.nodes.map(n => <option key={n.id} value={n.id}>{n.label || definition(n,doc,catalog,graph).label} · {n.id.slice(0,7)}</option>)}</select></label><label>输出端口<select aria-label="输出端口" value={connector.sourcePort} onChange={e => setConnector({...connector,sourcePort:e.target.value})}><option value="">选择输出…</option>{sourceSpec?.outputs.map(p => <option key={p.name} value={`data:${p.name}`}>{p.name} · {typeLabels[p.type]}</option>)}{sourceSpec?.exits.map(e => <option key={e} value={`control:${e}`}>{exits[e] ?? e} · 执行</option>)}</select></label><label>目标卡片<select aria-label="目标卡片" value={connector.target} onChange={e => setConnector({...connector,target:e.target.value,targetPort:''})}><option value="">选择目标…</option>{graph.nodes.map(n => <option key={n.id} value={n.id}>{n.label || definition(n,doc,catalog,graph).label} · {n.id.slice(0,7)}</option>)}</select></label><label>输入端口<select aria-label="输入端口" value={connector.targetPort} onChange={e => setConnector({...connector,targetPort:e.target.value})}><option value="">选择输入…</option>{targetSpec?.inputs.map(p => <option key={p.name} value={`data:${p.name}`}>{p.name} · {typeLabels[p.type]}</option>)}{targetSpec && !targetSpec.pure && <option value="control:in">执行入口</option>}</select></label><button className="button secondary" onClick={() => connect({source:connector.source,target:connector.target,sourceHandle:connector.sourcePort,targetHandle:connector.targetPort})}>连接</button></details>
+        <details className="program-connect"><summary>按钮式连接</summary><label>来源卡片<select aria-label="来源卡片" value={connector.source} onChange={e => setConnector({...connector,source:e.target.value,sourcePort:''})}><option value="">选择来源…</option>{graph.nodes.map(n => <option key={n.id} value={n.id}>{definition(n,doc,catalog,graph).label}{n.label ? `（${n.label}）` : ''} · {n.id.slice(0,7)}</option>)}</select></label><label>输出端口<select aria-label="输出端口" value={connector.sourcePort} onChange={e => setConnector({...connector,sourcePort:e.target.value})}><option value="">选择输出…</option>{sourceSpec?.outputs.map(p => <option key={p.name} value={`data:${p.name}`}>{p.name} · {typeLabels[p.type]}</option>)}{sourceSpec?.exits.map(e => <option key={e} value={`control:${e}`}>{exits[e] ?? e} · 执行</option>)}</select></label><label>目标卡片<select aria-label="目标卡片" value={connector.target} onChange={e => setConnector({...connector,target:e.target.value,targetPort:''})}><option value="">选择目标…</option>{graph.nodes.map(n => <option key={n.id} value={n.id}>{definition(n,doc,catalog,graph).label}{n.label ? `（${n.label}）` : ''} · {n.id.slice(0,7)}</option>)}</select></label><label>输入端口<select aria-label="输入端口" value={connector.targetPort} onChange={e => setConnector({...connector,targetPort:e.target.value})}><option value="">选择输入…</option>{targetSpec?.inputs.map(p => <option key={p.name} value={`data:${p.name}`}>{p.name} · {typeLabels[p.type]}</option>)}{targetSpec && !targetSpec.pure && <option value="control:in">执行入口</option>}</select></label><button className="button secondary" onClick={() => connect({source:connector.source,target:connector.target,sourceHandle:connector.sourcePort,targetHandle:connector.targetPort})}>连接</button></details>
       </aside>
     </div>
     <section className="program-console"><div className="program-console-tabs"><button className={tab === 'simulate' ? 'active' : ''} onClick={() => setTab('simulate')}>隔离模拟</button><button className={tab === 'runtime' ? 'active' : ''} onClick={() => setTab('runtime')}>运行轨迹</button><span>{status?.status ?? '尚未执行'}{status?.task ? ` · ${status.task}` : ''}{status?.reason ? ` · ${status.reason}` : ''}</span></div>
-      {validation && <div className={`program-diagnostics ${validation.valid ? 'valid' : ''}`}>{validation.valid ? '程序校验通过' : validation.diagnostics.map((d,index) => <button key={index} onClick={() => {setGraphId(d.graph); setSelection(d.node ? [d.node] : [])}}>{d.message}{d.node ? ` · ${d.node}` : ''}</button>)}</div>}
+      {validation && <div className={`program-diagnostics ${validation.valid ? 'valid' : ''}`}>{validation.valid ? '程序校验通过' : validation.diagnostics.map((d,index) => {
+        const g = d.graph === 'main' ? doc : doc.subgraphs.find(s => s.id === d.graph)
+        const target = g?.nodes.find(n => n.id === d.node)
+        const targetTitle = target ? `${definition(target, doc, catalog, g ?? graph).label}${target.label ? `（${target.label}）` : ''}` : d.node
+        return <button key={index} onClick={() => {setGraphId(d.graph); setSelection(d.node ? [d.node] : [])}}>{d.message}{targetTitle ? ` · ${targetTitle}` : ''}</button>
+      })}</div>}
       {tab === 'simulate' && <div className="program-simulator"><label>模拟时间<input type="datetime-local" value={simTime} onChange={e => {setSimTime(e.target.value); setSimSteps(0)}}/></label>{catalog.resources.map(r => <label key={r.name}>{r.name.startsWith('Emotion') ? `舰队 ${r.name.slice(-1)} 心情` : ui(`resource.${r.name}` as UiKey)}<input type="number" placeholder="数据不可用" value={resources[r.name] ?? ''} onChange={e => {setResources({...resources,[r.name]:e.target.value}); setSimSteps(0)}}/></label>)}<label>含体力箱的总行动力<input type="number" value={apTotal} onChange={e => {setApTotal(e.target.value); setSimSteps(0)}}/></label><label>任务结果序列<input value={outcomes} onChange={e => {setOutcomes(e.target.value); setSimSteps(0)}} placeholder="completed,yielded,failed"/></label><button className="button secondary" disabled={busy} onClick={() => void simulate(Math.min(simSteps+1,1000))}><StepForward size={14}/>单步</button><button className="button primary" disabled={busy} onClick={() => void simulate(100)}><Play size={14}/>模拟运行</button></div>}
-      <details><summary>模拟任务状态</summary><JsonField label="任务列表（名称、启用状态、下次运行时间）" value={simTasks} onChange={value => {if (Array.isArray(value)) {setSimTasks(value); setSimSteps(0)}}}/></details><div className="program-trace">{status?.trace?.length ? status.trace.map((line,index) => <div key={index}><span>{index + 1}</span><button onClick={() => {setGraphId(String(line.graph ?? 'main')); setSelection([String(line.node)])}}>{String(line.label || line.type || line.node)}</button><code>{JSON.stringify(line.input ?? line.value ?? line.output ?? line.exit ?? '')}</code></div>) : <p className="muted">模拟不会连接设备，也不会修改资源或持久变量。执行后可查看每张卡片的输入、出口和结果。</p>}</div>
+      <details><summary>模拟任务状态</summary><JsonField label="任务列表（名称、启用状态、下次运行时间）" value={simTasks} onChange={value => {if (Array.isArray(value)) {setSimTasks(value); setSimSteps(0)}}}/></details><div className="program-trace">{status?.trace?.length ? status.trace.map((line,index) => {
+        const cardDef = catalog.cards.find(c => c.type === line.type)
+        const sub = line.graph && line.graph !== 'main' ? doc.subgraphs.find(s => s.id === line.graph) : undefined
+        const orig = cardDef?.label ?? sub?.name ?? line.type ?? line.node
+        const displayLabel = line.label ? `${orig}（${line.label}） · ${line.type}` : `${orig} · ${line.type}`
+        return <div key={index}><span>{index + 1}</span><button onClick={() => {setGraphId(String(line.graph ?? 'main')); setSelection([String(line.node)])}}>{displayLabel}</button><code>{JSON.stringify(line.input ?? line.value ?? line.output ?? line.exit ?? '')}</code></div>
+      }) : <p className="muted">模拟不会连接设备，也不会修改资源或持久变量。执行后可查看每张卡片的输入、出口和结果。</p>}</div>
     </section>
   </div>
 }

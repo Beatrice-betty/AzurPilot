@@ -418,6 +418,12 @@
                 "title": "Label",
                 "type": "string"
               },
+              "comment": {
+                "default": "",
+                "maxLength": 2000,
+                "title": "Comment",
+                "type": "string"
+              },
               "params": {
                 "additionalProperties": true,
                 "title": "Params",
@@ -748,6 +754,12 @@
               "label": {
                 "default": "",
                 "title": "Label",
+                "type": "string"
+              },
+              "comment": {
+                "default": "",
+                "maxLength": 2000,
+                "title": "Comment",
                 "type": "string"
               },
               "params": {
@@ -1085,6 +1097,12 @@
               "label": {
                 "default": "",
                 "title": "Label",
+                "type": "string"
+              },
+              "comment": {
+                "default": "",
+                "maxLength": 2000,
+                "title": "Comment",
                 "type": "string"
               },
               "params": {
@@ -2183,6 +2201,12 @@
             "label": {
               "default": "",
               "title": "Label",
+              "type": "string"
+            },
+            "comment": {
+              "default": "",
+              "maxLength": 2000,
+              "title": "Comment",
               "type": "string"
             },
             "params": {

@@ -113,6 +113,18 @@ class FrontendInstallFallbackTests(unittest.TestCase):
         self.assert_commands(self.mirror, self.official, self.build)
         self.assert_current_marker()
 
+    def test_install_failure_logs_stderr_and_eperm_hint(self):
+        error = subprocess.CalledProcessError(
+            4294963248, self.mirror,
+            output='', stderr="npm error code EPERM\nnpm error syscall unlink\nfile in use"
+        )
+        self.subprocess_run.side_effect = [error, None, None]
+        with patch('module.logger.logger.warning') as warning, patch('module.logger.logger.error') as error_log:
+            ensure_frontend(self.root)
+            warning.assert_any_call('npm ci 错误输出:\nnpm error code EPERM\nnpm error syscall unlink\nfile in use')
+            error_log.assert_called_with('node_modules 中的文件被其他进程占用（如正在运行的 WebUI、Vite 或编辑器）。请先关闭占用进程后重新启动。')
+        self.assert_commands(self.mirror, self.official, self.build)
+
     def test_install_timeout_retries_official_source(self):
         self.subprocess_run.side_effect = [subprocess.TimeoutExpired(self.mirror, 600), None, None]
         ensure_frontend(self.root)

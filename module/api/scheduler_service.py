@@ -4,7 +4,7 @@ from datetime import datetime
 
 from module.api.protocol import ApiError
 from module.scheduler.catalog import CARDS, OVERRIDES, REFRESHABLE, RESOURCES
-from module.scheduler.context import original_order, snapshot
+from module.scheduler.context import snapshot, simulation_plan
 from module.scheduler.engine import simulate
 from module.scheduler.models import ProgramDocument, ResourceObservation
 from module.scheduler.store import ConflictError, ProgramStore
@@ -76,13 +76,12 @@ class SchedulerService:
         try:
             state['resources'] = {name: ResourceObservation.model_validate(row).model_dump() for name, row in state['resources'].items()}
             instant = parse_time(state['now'])
-            due = original_order(data, [t for t in state['tasks'] if t.get('enabled') and t.get('nextRun') and parse_time(t['nextRun']) <= instant])
+            plan = simulation_plan(data, state['tasks'], instant)
+            due = [task for name in plan['nativeOrder'] for task in state['tasks'] if task['name'] == name and task.get('enabled') and task.get('nextRun') and parse_time(task['nextRun']) < parse_time(plan['nativeDueBefore'])]
         except (ValueError, TypeError, KeyError) as exc:
             raise ApiError('INVALID_PARAMS', '模拟时间或资源记录格式无效') from exc
-        state.setdefault('nativeTask', due[0] if due else None)
-        future = sorted(t['nextRun'] for t in state['tasks'] if t.get('enabled') and t.get('nextRun') and parse_time(t['nextRun']) > instant)
-        from datetime import timedelta
-        state.setdefault('nativeDeadline', future[0] if future else (instant + timedelta(minutes=5)).isoformat(sep=' '))
+        for key, value in plan.items():
+            state.setdefault(key, value)
         if mode == 'enhance':
             state['tasks'] = due
         return {**result, **simulate(document, state, outcomes, steps)}

@@ -1,5 +1,5 @@
 """只读任务与资源快照；供 API 模拟器和 worker 共用。"""
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from module.scheduler.catalog import REFRESHABLE, RESOURCES
 
@@ -14,6 +14,20 @@ def original_order(data, tasks):
     priority = Filter(regex=r'(.*)', attr=['command'])
     priority.load(config.SCHEDULER_PRIORITY)
     return [item.task for item in priority.apply([SimpleNamespace(command=t['name'], task=t) for t in tasks])]
+
+
+def simulation_plan(data, tasks, instant):
+    """从入口模拟原队列；囤积等待在首次业务任务派发后解除。"""
+    from module.scheduler.engine import parse_time
+    duration = timedelta(minutes=max(int(data.get('Alas', {}).get('Optimization', {}).get('TaskHoardingDuration', 0)), 0))
+    cutoff = instant - duration
+    ordered = original_order(data, tasks)
+    enabled = [task for task in ordered if task.get('enabled') and task.get('nextRun')]
+    due = [task for task in enabled if parse_time(task['nextRun']) < cutoff]
+    waiting = [parse_time(task['nextRun']) + duration for task in enabled if parse_time(task['nextRun']) >= cutoff]
+    return {'nativeOrder': [task['name'] for task in ordered], 'nativeTask': due[0] if due else None,
+            'nativeDueBefore': cutoff.isoformat(sep=' '),
+            'nativeDeadline': (min(waiting) if waiting else instant + timedelta(minutes=5)).isoformat(sep=' ')}
 
 
 def snapshot(data, observations, now):

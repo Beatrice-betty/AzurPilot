@@ -190,18 +190,30 @@ class Engine:
                 due.sort(key=lambda t: order.get(t['name'], len(order)))
                 future = [parse_time(t['nextRun']) for t in enabled if parse_time(t['nextRun']) > self.now]
                 value = (due[0] if due else None) if output == 'value' else (min(future) if future else self.now + timedelta(minutes=5)).isoformat(sep=' ')
+        elif kind == 'original_settings':
+            if output == 'order':
+                from module.scheduler.catalog import REGISTRY
+                value = self.context.get('nativeOrder', REGISTRY['priority'].params['order'])
+            elif output == 'dueBefore':
+                value = self.context.get('nativeDueBefore', self.now.isoformat(sep=' '))
+            else:
+                value = self.context.get('nativeDeadline')
+                if not value:
+                    future = [parse_time(t['nextRun']) for t in self.context.get('tasks', []) if t.get('enabled') and t.get('nextRun') and parse_time(t['nextRun']) > self.now]
+                    value = (min(future) if future else self.now + timedelta(minutes=5)).isoformat(sep=' ')
         elif kind == 'filter':
             items = get('items') or []
             if p['rule'] == 'enabled':
                 value = [t for t in items if t.get('enabled')]
             elif p['rule'] == 'due':
-                value = [t for t in items if t.get('nextRun') and parse_time(t['nextRun']) <= self.now]
+                cutoff = parse_time(get('before', self.now))
+                value = [t for t in items if t.get('nextRun') and (parse_time(t['nextRun']) < cutoff if p['strict'] else parse_time(t['nextRun']) <= cutoff)]
             else:
                 value = [t for t in items if compare(t.get(p['field']), p['value'], p['operator'])]
         elif kind == 'priority':
             items = get('items') or []
             scores = get('scores')
-            order = {t: i for i, t in enumerate(p['order'])}
+            order = {t: i for i, t in enumerate(get('order') or [])}
             value = sorted(items, key=lambda t: -scores.get(t['name'], 0) if isinstance(scores, dict) else order.get(t['name'], len(order)))
         elif kind == 'sort':
             value = sorted(get('items') or [], key=lambda t: (t.get(p['field']) is None, t.get(p['field']) or ''), reverse=p['descending'])
@@ -285,7 +297,7 @@ class Engine:
                         available = {t['name'] for t in context.get('tasks', [])}
                         if name not in available:
                             raise ProgramError('任务不在当前允许的候选列表中')
-                        payload = {'task': name, 'overrides': p['overrides'], 'guard': p['guard']}
+                        payload = {'task': name, 'overrides': p['overrides'], 'guard': p['guard'], 'followOriginal': p['followOriginal']}
                         from module.scheduler.catalog import OVERRIDES
                         payload['overrides'] = copy.deepcopy(payload['overrides'])
                         for parameter in OVERRIDES:
@@ -322,6 +334,8 @@ class Engine:
                             if deadline <= self.now:
                                 raise ProgramError('等待目标必须在未来')
                         payload = {'deadline': deadline.isoformat(sep=' ')}
+                        if p.get('recheckOnConfigChange'):
+                            payload['recheckOnConfigChange'] = True
                     self.trace(node, input=payload)
                     self.state.status = 'task' if kind == 'execute' else 'waiting' if kind.startswith('wait') else 'refreshing'
                     self.state.task = payload.get('task')
@@ -447,9 +461,18 @@ def simulate(document, context, outcomes=None, steps=100, persistent=None):
             break
         if effect.kind == 'execute':
             status = outcomes.pop(0) if outcomes else 'completed'
+            if 'nativeDueBefore' in context:
+                context['nativeDueBefore'] = context['now']
             engine.resume({'task': effect.payload['task'], 'status': status, 'finishedAt': context['now']})
         elif effect.kind == 'wait':
-            context['now'] = effect.payload['deadline']
+            before = parse_time(context['now'])
+            instant = parse_time(effect.payload['deadline']) + timedelta(microseconds=1)
+            context['now'] = instant.isoformat(sep=' ')
+            if 'nativeDueBefore' in context:
+                context['nativeDueBefore'] = (parse_time(context['nativeDueBefore']) + (instant - before)).isoformat(sep=' ')
+            if 'nativeDeadline' in context:
+                future = [parse_time(t['nextRun']) for t in context.get('tasks', []) if t.get('enabled') and t.get('nextRun') and parse_time(t['nextRun']) > instant]
+                context['nativeDeadline'] = (min(future) if future else instant + timedelta(minutes=5)).isoformat(sep=' ')
             engine.resume()
         elif effect.kind == 'refresh':
             # 注入的有效资源代表模拟刷新结果；没有观察值时明确不可用。

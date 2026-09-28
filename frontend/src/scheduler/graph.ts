@@ -5,6 +5,11 @@ import {compatiblePorts} from './appearance'
 export const id = () => crypto.randomUUID()
 export const clone = <T,>(value: T): T => structuredClone(value)
 export const compatible = compatiblePorts
+/** 兼容旧方案没有注释字段的节点，保持保存前后的文档表示一致。 */
+export function withComments(doc: ProgramDocument): ProgramDocument {
+  const nodes = (items: ProgramNode[]) => items.map(node => node.comment === undefined ? {...node,comment:''} : node)
+  return {...doc,nodes:nodes(doc.nodes),subgraphs:doc.subgraphs.map(sub => ({...sub,nodes:nodes(sub.nodes)}))}
+}
 /** 通用端口已连接时显示对端类型；未连接时保留彩环，不把任意值伪装成某个具体类型。 */
 export function connectedPortType(graph: Graph, doc: ProgramDocument, catalog: Catalog, nodeId: string, name: string, direction: 'inputs' | 'outputs', seen = new Set<string>()): PortType {
   const key = `${nodeId}:${direction}:${name}`
