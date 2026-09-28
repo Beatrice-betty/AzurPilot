@@ -267,33 +267,6 @@ def gallery_list() -> List[Dict[str, Any]]:
     """
     entries = [entry for entry in _read_index() if isinstance(entry, dict) and (LIBRARY_DIR / str(entry.get('id', ''))).exists()]
     return entries
-    meta = fetch_once(url, allow_json=False)
-    digest = hashlib.sha1(meta['final_url'].encode('utf-8')).hexdigest()
-    PROXY_DIR.mkdir(parents=True, exist_ok=True)
-    cached = PROXY_DIR / digest
-    if cached.exists():
-        return cached.read_bytes(), meta['content_type']
-    try:
-        response = requests.get(meta['final_url'], timeout=TIMEOUT, stream=True, headers={'User-Agent': USER_AGENT})
-    except requests.RequestException as error:
-        raise BackgroundError(f'抓取失败：{type(error).__name__}') from error
-    chunks = []
-    total = 0
-    with response:
-        for chunk in response.iter_content(64 * 1024):
-            total += len(chunk)
-            if total > MAX_BYTES:
-                raise BackgroundError('文件超过 20 MB。')
-            chunks.append(chunk)
-    data = b''.join(chunks)
-    cached.write_bytes(data)
-    return data, meta['content_type']
-
-
-def gallery_list() -> List[Dict[str, Any]]:
-    """列出图库条目：``[{id, name, size, added, kind}]``。文件缺失的条目会被剔除。"""
-    entries = [entry for entry in _read_index() if isinstance(entry, dict) and (LIBRARY_DIR / str(entry.get('id', ''))).exists()]
-    return entries
 
 
 def gallery_add(url: str, name: str = '') -> Dict[str, Any]:
