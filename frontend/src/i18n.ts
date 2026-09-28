@@ -16,6 +16,7 @@ export const languages: Record<Language, string> = {
 }
 
 const zhCN = {
+  'nav.schedulerProgram': '自定义调度',
   'settings.colorMode': '主题模式',
   'settings.colorModeHelp': '自动模式跟随系统外观，配色随浅色或深色模式调整。',
   'settings.modeAuto': '自动',
@@ -573,6 +574,7 @@ export type UiKey = keyof typeof zhCN
 export type UiTranslator = (key: UiKey, params?: TranslationParams) => string
 
 const enUS: Record<UiKey, string> = {
+  'nav.schedulerProgram': 'Custom scheduler',
   'instance.deletePrompt2': 'Sure about that? {name} disappears — only the backup keeps its config.',
   'instance.rightClick': 'right-click',
   'instance.deletePrompt3': 'Last chance! One more click and {name} is gone for good.',
@@ -690,6 +692,7 @@ const enUS: Record<UiKey, string> = {
 }
 
 const jaJP: Record<UiKey, string> = {
+  'nav.schedulerProgram': 'カスタムスケジューラー',
   'instance.deletePrompt2': '本当に？{name} は消えます。設定はバックアップに残るだけです。',
   'instance.rightClick': '右クリック',
   'instance.deletePrompt3': 'これが最後！押すと {name} は完全に消えます。',
@@ -868,6 +871,7 @@ const jaJP: Record<UiKey, string> = {
 }
 
 const zhTW: Record<UiKey, string> = {
+  'nav.schedulerProgram': '自訂排程',
   'settings.colorMode': '主題模式',
   'settings.colorModeHelp': '自動模式跟隨系統外觀，配色隨淺色或深色模式調整。',
   'settings.modeAuto': '自動',
