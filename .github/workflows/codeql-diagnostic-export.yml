@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: codeql-diagnostic-dev
+  cancel-in-progress: true
+
 jobs:
   export:
     name: Export ${{ matrix.language }} SARIF
