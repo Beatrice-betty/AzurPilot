@@ -970,6 +970,10 @@ export function createMockState({ empty = false } = {}) {
       case 'events.subscribe':
         if (params.topics.some(topic => topic !== 'instances') && !name) fail('INVALID_PARAMS', '订阅此主题需要指定实例')
         return { topics: params.topics, instance: name ?? null }
+      case 'background.gallery.list': return []
+      case 'background.gallery.open': return { path: 'cache/background/library' }
+      case 'background.gallery.remove': return { removed: true }
+      case 'background.gallery.add': return { entry: { id: 'mock_bg', name: params.name || 'mock', kind: 'image', size: 1024, added: Date.now() } }
       default: fail('METHOD_NOT_FOUND', '此方法由连接层处理')
     }
   }

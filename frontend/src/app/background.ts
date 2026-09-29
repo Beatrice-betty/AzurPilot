@@ -233,8 +233,10 @@ subscribeTheme(() => {
   const next = readBackgroundPreference(getThemePreference().material)
   if (next.source === snapshot.source && activeBackgroundUrl(next) === activeBackgroundUrl(snapshot) && next.name === snapshot.name) return
   replaceObjectUrl()
-  publish({...next, assetUrl: directMediaUrl(activeBackgroundUrl(next)), loading: next.source === 'upload'})
+  const initialAsset = next.source === 'upload' && next.entry ? galleryUrl(next.entry) : (directMediaUrl(activeBackgroundUrl(next)) || lastGoodAssetUrl)
+  publish({...next, assetUrl: initialAsset, loading: next.source === 'upload'})
   if (next.source === 'upload') void loadUploadedBackground()
+  if (next.source === 'url') void resolveActiveBackground()
 })
 
 export async function loadUploadedBackground() {
@@ -279,7 +281,9 @@ export async function resolveActiveBackground() {
     publish({assetUrl: lastGoodAssetUrl, directUrl: result.final_url, resolving: false, resolveError: ''})
   } catch (error) {
     /* 解析失败就退回原地址直接当图片用（很多 API 本身就是图片），并把原因留给界面显示。 */
-    publish({assetUrl: lastGoodAssetUrl, resolving: false, resolveError: (error as Error).message})
+    const fallback = lastGoodAssetUrl || url
+    lastGoodAssetUrl = fallback
+    publish({assetUrl: fallback, resolving: false, resolveError: (error as Error).message})
   }
 }
 
