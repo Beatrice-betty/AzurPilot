@@ -24,6 +24,10 @@ class SchedulerRuntime:
         self.overlay = {}
         self.last_saved = None
 
+    def __deepcopy__(self, memo):
+        """共享运行时宿主：持有脚本实例与调度存储，深拷贝复用同一实例。"""
+        return self
+
     def attach(self, config):
         object.__setattr__(config, '_scheduler_runtime', self)
         object.__setattr__(config, '_scheduler_overrides', self.overlay)
