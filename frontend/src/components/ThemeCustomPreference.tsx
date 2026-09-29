@@ -4,7 +4,8 @@ import { applyCustomLayer, familyOf } from '../app/theme'
 import { MaterialDetailModal } from './MaterialDetailModal'
 import { clearFamilyPalette, readFamilyCustom, writeFamilyCustom, type FamilyCustom } from '../app/themeCustom'
 import { familyRegions, regionKnobs, regionLabels, type RegionId, type RegionKnob } from '../app/themeKnobs'
-import { Palette, RotateCcw } from 'lucide-react'
+import { Palette, RotateCcw, Tv } from 'lucide-react'
+import { MockInstancePreview } from './MockInstancePreview'
 
 import { SegmentedControl } from './SegmentedControl'
 import { PaletteSwatches } from './PaletteSwatches'
@@ -33,7 +34,7 @@ type PanelProps = {
 
 /** 二级菜单的内容：先选「作用的类别」（七选一），下面只列这一类别的五组滑块，避免把 35 条挤在一屏。
     控件复用主题自己的 `SegmentedControl` 与 `.field-row`，材质族与朴素族各按各自的风格渲染。 */
-export function MaterialDetailPanel({regions, custom, ui, onKnob, onResetKnob, onResetRegion, onResetAll, initialRegion}: PanelProps & {initialRegion?: RegionId}) {
+export function MaterialDetailPanel({regions, custom, ui, onKnob, onResetKnob, onResetRegion, onResetAll, initialRegion, onRegionChange}: PanelProps & {initialRegion?: RegionId; onRegionChange?: (region: RegionId) => void}) {
   const [region, setRegion] = useState<RegionId>(initialRegion ?? regions[0])
   const dirtyIn = (target: RegionId) => Object.keys(custom.params).some(id => id.startsWith(`${target}.`))
   const knobs = regionKnobs.filter(knob => knob.region === region)
@@ -46,7 +47,7 @@ export function MaterialDetailPanel({regions, custom, ui, onKnob, onResetKnob, o
             className="settings-segmented material-detail-scope"
             label={ui('settings.materialDetailScope')}
             value={region}
-            onChange={setRegion}
+            onChange={next => { setRegion(next); onRegionChange?.(next) }}
             options={regions.map(item => ({value: item, label: ui(regionLabels[item])}))}
           />
         </div>
@@ -68,8 +69,7 @@ export function MaterialDetailPanel({regions, custom, ui, onKnob, onResetKnob, o
               value={value}
               /* 已填充比例：滑块轨道的进度渐变按它绘制。 */
               style={{['--knob-fill']: `${Math.round(((value - knob.min) / (knob.max - knob.min)) * 100)}%`} as CSSProperties}
-              /* 只认真实用户操作：表单值恢复或脚本派发的合成事件不应改写用户偏好。 */
-              onChange={event => { if (event.nativeEvent.isTrusted) onKnob(knob.id, Number(event.target.value)) }}
+              onChange={event => onKnob(knob.id, Number(event.target.value))}
             />
             <span className="knob-value">{value}{knob.unit}</span>
             <button type="button" className="knob-reset" title={ui('settings.resetItem')} aria-label={`${ui('settings.resetItem')} · ${label}`} disabled={stored === undefined} onClick={() => onResetKnob(knob.id)}><RotateCcw size={14} aria-hidden="true"/></button>
@@ -91,6 +91,7 @@ export function MaterialDetailPreference() {
   const family = familyOf(theme)
   const [custom, setCustom] = useState<FamilyCustom>(() => readFamilyCustom(family))
   const [detail, setDetail] = useState(false)
+  const [livePreview, setLivePreview] = useState(false)
   /* 切换大类后要换成那一套已存的值。 */
   useEffect(() => setCustom(readFamilyCustom(family)), [family])
   const regions = familyRegions[family]
@@ -104,14 +105,19 @@ export function MaterialDetailPreference() {
         <label>{ui('settings.materialDetail')}</label>
         <p>{ui('settings.materialDetailHelp')}</p>
       </div>
-      <div className="field-control">
+      <div className="field-control" style={{display: 'flex', gap: '10px', flexWrap: 'wrap'}}>
         <button type="button" className="button" onClick={() => setDetail(true)}>
           <Palette size={16} aria-hidden="true"/>
           {ui('settings.materialDetailOpen')}{touched > 0 ? ` (${touched})` : ''}
         </button>
+        <button type="button" className="button secondary" onClick={() => setLivePreview(true)}>
+          <Tv size={16} aria-hidden="true"/>
+          {ui('settings.materialLivePreview')}
+        </button>
       </div>
     </div>
     {detail && <MaterialDetailModal onClose={() => setDetail(false)} onChange={refresh}/>}
+    {livePreview && <MockInstancePreview onClose={() => { setLivePreview(false); refresh() }}/>}
   </>
 }
 
