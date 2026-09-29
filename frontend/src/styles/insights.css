@@ -134,6 +134,7 @@
 .stat-card.is-folded > .statistics-table {min-height:44px}
 /* 编辑模式：卡片轮廓可见，控制台的说明与还原入口排成一行。 */
 .statistics-sections.is-editing .panel {outline:1px dashed var(--theme-accent);outline-offset:2px}
+.statistics-edit-console {margin-bottom:20px}
 .statistics-edit-console .panel-heading {display:flex;align-items:center;gap:10px}
 .monitor-segmented button.is-disabled {opacity:.55}
 /* 组合链的两段之间留出与卡片间隔一致的间距，交界处的连接符落在这段间隔里。 */
