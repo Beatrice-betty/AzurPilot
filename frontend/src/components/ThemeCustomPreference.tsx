@@ -4,7 +4,7 @@ import { applyCustomLayer, familyOf } from '../app/theme'
 import { MaterialDetailModal } from './MaterialDetailModal'
 import { clearFamilyPalette, readFamilyCustom, writeFamilyCustom, type FamilyCustom } from '../app/themeCustom'
 import { familyRegions, regionKnobs, regionLabels, type RegionId, type RegionKnob } from '../app/themeKnobs'
-import { RotateCcw } from 'lucide-react'
+import { Palette, RotateCcw } from 'lucide-react'
 
 import { SegmentedControl } from './SegmentedControl'
 import { PaletteSwatches } from './PaletteSwatches'
@@ -84,9 +84,9 @@ export function MaterialDetailPanel({regions, custom, ui, onKnob, onResetKnob, o
   </>
 }
 
-/** 有材质轴的家族专属的自定义外观：一级界面只放主题色与二级菜单入口，全部材质滑块都在二级菜单里。
-    区域只是默认值多数取自一级面（不想调的人不用管），每一区都能独立调、也能单独还原。 */
-export function ThemeCustomPreference() {
+/** 材质细节入口：紧跟在材质选择（玻璃/普通）之后，分区调整玻璃的不透明度、模糊、饱和度与圆角。
+    普通材质下没有材质层，返回 null。 */
+export function MaterialDetailPreference() {
   const {ui, theme, material} = useApp()
   const family = familyOf(theme)
   const [custom, setCustom] = useState<FamilyCustom>(() => readFamilyCustom(family))
@@ -94,31 +94,55 @@ export function ThemeCustomPreference() {
   /* 切换大类后要换成那一套已存的值。 */
   useEffect(() => setCustom(readFamilyCustom(family)), [family])
   const regions = familyRegions[family]
-  if (!regions.length) return null
+  if (!regions.length || material !== 'glass') return null
   const refresh = () => { applyCustomLayer(); setCustom(readFamilyCustom(family)) }
-  const brand = custom.palette
   const touched = Object.keys(custom.params).length
+
   return <>
-    <div className="field-row palette-field">
-      <div className="field-label">
-        <label>{ui('settings.brandColor')}</label>
-        <p>{ui('settings.brandColorHelp')}</p>
-      </div>
-      <div className="field-control palette-control">
-        {/* 第一项是「原版色」：选它等于清掉覆盖，回到该大类自带的强调色。 */}
-        <PaletteSwatches stock value={brand} onChange={palette => { if (palette) writeFamilyCustom(family, {palette}); else clearFamilyPalette(family); refresh() }} legend={ui('settings.brandColor')}/>
-      </div>
-    </div>
-    {/* 材质旋钮只对玻璃材质有意义：普通材质没有材质层，调了也看不见。 */}
-    {material === 'glass' && <div className="field-row">
+    <div className="field-row">
       <div className="field-label">
         <label>{ui('settings.materialDetail')}</label>
         <p>{ui('settings.materialDetailHelp')}</p>
       </div>
       <div className="field-control">
-        <button type="button" className="button" onClick={() => setDetail(true)}>{ui('settings.materialDetailOpen')}{touched > 0 ? ` (${touched})` : ''}</button>
+        <button type="button" className="button" onClick={() => setDetail(true)}>
+          <Palette size={16} aria-hidden="true"/>
+          {ui('settings.materialDetailOpen')}{touched > 0 ? ` (${touched})` : ''}
+        </button>
       </div>
-    </div>}
+    </div>
     {detail && <MaterialDetailModal onClose={() => setDetail(false)} onChange={refresh}/>}
+  </>
+}
+
+/** 品牌配色入口：仅新版与旧版主题支持自定义品牌色。 */
+export function BrandColorPreference() {
+  const {ui, theme} = useApp()
+  const family = familyOf(theme)
+  const [custom, setCustom] = useState<FamilyCustom>(() => readFamilyCustom(family))
+  /* 切换大类后要换成那一套已存的值。 */
+  useEffect(() => setCustom(readFamilyCustom(family)), [family])
+  const regions = familyRegions[family]
+  if (!regions.length) return null
+  const refresh = () => { applyCustomLayer(); setCustom(readFamilyCustom(family)) }
+  const brand = custom.palette
+
+  return <div className="field-row palette-field">
+    <div className="field-label">
+      <label>{ui('settings.brandColor')}</label>
+      <p>{ui('settings.brandColorHelp')}</p>
+    </div>
+    <div className="field-control palette-control">
+      {/* 第一项是「原版色」：选它等于清掉覆盖，回到该大类自带的强调色。 */}
+      <PaletteSwatches stock value={brand} onChange={palette => { if (palette) writeFamilyCustom(family, {palette}); else clearFamilyPalette(family); refresh() }} legend={ui('settings.brandColor')}/>
+    </div>
+  </div>
+}
+
+/** 有材质轴的家族专属的自定义外观：包含材质细节与品牌配色。 */
+export function ThemeCustomPreference() {
+  return <>
+    <MaterialDetailPreference/>
+    <BrandColorPreference/>
   </>
 }

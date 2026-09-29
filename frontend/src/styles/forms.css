@@ -222,27 +222,10 @@ input[type='range']:focus-visible {outline: 2px solid var(--theme-focus); outlin
 /* 滑块本身加高：整条都是可抓取区域，不必非要点中那个圆点。 */
 .material-detail-body input[type='range'] {flex: 1 1 auto; min-height: 40px}
 /* 单项还原只用图标，按钮小一圈。 */
-.knob-reset {display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: var(--theme-radius-control); background: transparent; color: var(--theme-muted); cursor: pointer; transition: color .15s ease, background .15s ease}
+.knob-reset {display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: var(--theme-radius-control); background: transparent; color: var(--theme-muted); cursor: pointer; transition: color .15s ease, background .15s ease; white-space: nowrap}
 .knob-reset:hover:not(:disabled) {color: var(--theme-accent); background: var(--theme-accent-soft)}
 .knob-reset:focus-visible {outline: 2px solid var(--theme-focus); outline-offset: 2px}
 .knob-reset:disabled {opacity: .5; cursor: default}
-.material-detail-scope {width: 100%}
-.material-detail-actions {display: flex; justify-content: space-between; gap: 8px; padding-top: 10px; margin-top: 8px; border-top: 1px solid var(--border)}
-.knob-row {gap: 16px}
-.knob-row .field-label label {font-weight: 400; color: var(--muted)}
-.knob-reset {white-space: nowrap}
-
-/* 运行总览工具栏里的材质细节入口：平时半透明，指上去/聚焦才显眼。 */
-/* 侧栏里的材质细节入口：与导航项同缩进同图标尺寸，常态隐藏，指到这一行或键盘聚焦才出现。 */
-/* 绝对定位：落在导航与下方任务列表之间那段既有间距里（.primary-nav 的 margin-bottom），
-   绝对定位，不占布局。 */
-.material-quick-slot {position: absolute; left: 12px; top: 100%; display: flex; align-items: center; height: 21px}
-/* 按钮比图标大 2px：负边距把图标对回导航图标那一列，点起来又不至于太小。 */
-.material-quick-button {display: inline-flex; align-items: center; justify-content: center; width: var(--sidebar-quick-size, 21px); height: var(--sidebar-quick-size, 21px); margin-left: -2px; padding: 0; border: 0; border-radius: var(--theme-radius-control); background: transparent; color: var(--theme-muted); opacity: 0; cursor: pointer; transition: opacity .15s ease, color .15s ease, background .15s ease}
-.sidebar:hover .material-quick-button, .material-quick-button:focus-visible {opacity: 1}
-.material-quick-button:hover {color: var(--theme-accent); background: var(--theme-accent-soft)}
-.material-quick-button:focus-visible {outline: 2px solid var(--theme-focus); outline-offset: 2px}
-.material-detail-actions {display: flex; justify-content: flex-end; padding-top: 10px; margin-top: 8px; border-top: 1px solid var(--border)}
 .knob-region-title {font-weight: 600; color: var(--text)}
 
 /* 材质细节二级菜单：先选「作用的类别」，下面只列该类别的五组滑块。 */
@@ -252,7 +235,6 @@ input[type='range']:focus-visible {outline: 2px solid var(--theme-focus); outlin
 .material-detail-actions {display: flex; justify-content: space-between; gap: 8px; padding-top: 10px; margin-top: 8px; border-top: 1px solid var(--border)}
 .knob-row {gap: 16px}
 .knob-row .field-label label {font-weight: 400; color: var(--muted)}
-.knob-reset {white-space: nowrap}
 
 /* 运行总览工具栏里的材质细节入口：平时半透明，指上去/聚焦才显眼。 */
 /* 覆盖工具栏 `.monitor-tabs button` 的高度与内边距。 */
