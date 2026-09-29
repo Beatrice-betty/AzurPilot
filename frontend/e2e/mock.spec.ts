@@ -999,8 +999,12 @@ test('卡片语义化图标呈现、全卡片排列与终结节点无下一步�
   await endNode.locator('.program-card-heading').click()
   await expect(page.locator('.program-properties-icon')).toBeVisible()
 
-  // 7. 保存全卡片展示截图
+  // 7. 保存全卡片展示截图与重点卡片截图
   await page.screenshot({path: 'test-results/scheduler-all-cards-no-terminal-exits.png', fullPage: true})
+  const compareNode = page.locator('.react-flow__node[data-id="compare"]')
+  if (await compareNode.count() > 0) {
+    await compareNode.screenshot({path: 'test-results/scheduler-card-compare.png'})
+  }
 })
 
 

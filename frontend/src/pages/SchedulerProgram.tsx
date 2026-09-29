@@ -34,13 +34,18 @@ const Card = memo(function Card({data, selected}: NodeProps<CanvasNode>) {
   return <div style={{'--card-color':categoryColor(spec.category)} as CSSProperties} className={`program-card ${spec.pure ? 'data' : 'action'} ${selected ? 'selected' : ''} ${data.current ? 'current' : ''} ${data.invalid ? 'invalid' : ''}`}>
     <div className="program-card-heading">{!spec.pure && !isEntry && <Handle type="target" position={Position.Left} id="control:in" className="control-handle" style={{background:controlColor}} title="执行入口"/>}<span className="program-card-category">{spec.category} · {spec.pure ? '数据' : '执行'}</span><strong className="program-card-title"><CardIcon size={16} className="program-card-icon" aria-hidden="true"/>{spec.label}</strong>{card.label && <small className="program-card-alias">名称：{card.label}</small>}</div>
     {card.comment && <div className="program-card-comment">{card.comment}</div>}
-    {spec.exits.length > 0 && <div className="program-card-exits">{spec.exits.map(exit => <div key={exit} className="program-port output"><span>{exits[exit] ?? exit}</span><Handle type="source" position={Position.Right} id={`control:${exit}`} className="control-handle" style={{background:controlColor}} title={`${exits[exit] ?? exit} · 执行`}/></div>)}</div>}
-    <div className="program-card-summary">{String(card.params.name ?? card.params.task ?? card.params.operator ?? (spec.pure ? '数据处理' : '流程控制'))}</div>
-    <InlineParams card={card} spec={spec} catalog={data.catalog} document={data.document} connectedInputs={data.connectedInputs} onChange={data.onParamsChange}/>
-    <div className="program-card-ports">
-      <div>{spec.inputs.map(p => <div key={p.name} className="program-port"><Handle type="target" position={Position.Left} id={`data:${p.name}`} style={handleStyle(p.type,data.inputTypes[p.name] ?? p.type,true)} title={`${labels[p.name] ?? p.name} · ${typeLabels[p.type]}`}/><span>{labels[p.name] ?? p.name}</span><small>{typeLabels[data.inputTypes[p.name] ?? p.type]}</small></div>)}</div>
-      <div>{spec.outputs.map(p => <div key={p.name} className="program-port output"><span>{labels[p.name] ?? p.name}</span><small>{typeLabels[data.outputTypes[p.name] ?? p.type]}</small><Handle type="source" position={Position.Right} id={`data:${p.name}`} style={handleStyle(p.type,data.outputTypes[p.name] ?? p.type,false)} title={`${labels[p.name] ?? p.name} · ${typeLabels[p.type]}`}/></div>)}</div>
-    </div>
+    {spec.exits.length > 0 && <div className="program-card-exits">{spec.exits.map(exit => <div key={exit} className="program-port output exit-port"><span>{exits[exit] ?? exit}</span><Handle type="source" position={Position.Right} id={`control:${exit}`} className="control-handle" style={{background:controlColor}} title={`${exits[exit] ?? exit} · 执行`}/></div>)}</div>}
+    <InlineParams
+      card={card}
+      spec={spec}
+      catalog={data.catalog}
+      document={data.document}
+      connectedInputs={data.connectedInputs}
+      inputTypes={data.inputTypes}
+      outputTypes={data.outputTypes}
+      handleStyle={handleStyle}
+      onChange={data.onParamsChange}
+    />
   </div>
 })
 const nodeTypes = {card: Card}
