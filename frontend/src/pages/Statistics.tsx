@@ -355,10 +355,12 @@ export function Statistics() {
       </label>
     )}
   </>
-  const hints = <>
-    {category === 'ships' && <span>{ui('stats.shipHint')}</span>}
-    {category === 'loot' && <span>{ui('stats.lootHint')}</span>}
-  </>
+  const hints = (
+    <span className="statistics-hints">
+      {category === 'ships' && <span>{ui('stats.shipHint')}</span>}
+      {category === 'loot' && <span>{ui('stats.lootHint')}</span>}
+    </span>
+  )
   /* 页面级卡片视图：键、组合链、顺序与渲染序列都由该页自身的数据决定。 */
   /* 单页的卡片键与默认连接：组合链的整链键表由链上各页拼出。 */
   const pageCards = (page: Category, report: StatisticsReport | undefined) => {
