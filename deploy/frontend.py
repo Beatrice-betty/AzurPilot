@@ -51,6 +51,19 @@ def source_fingerprint(directory):
     return digest.hexdigest()
 
 
+def _log_process_error(exc, stage='npm'):
+    """记录子进程执行失败的输出，对文件占用等常见错误给予友好提示。"""
+    from module.logger import logger
+    detail = (getattr(exc, 'stderr', None) or getattr(exc, 'stdout', None) or '').strip()
+    if detail:
+        lines = [line for line in detail.splitlines() if line.strip()]
+        summary = '\n'.join(lines[-15:]) if len(lines) > 15 else detail
+        logger.warning(f'{stage} 错误输出:\n{summary}')
+    retcode = getattr(exc, 'returncode', 0)
+    if 'EPERM' in detail or 'EBUSY' in detail or retcode in (4294963248, -4048):
+        logger.error('node_modules 中的文件被其他进程占用（如正在运行的 WebUI、Vite 或编辑器）。请先关闭占用进程后重新启动。')
+
+
 def _install_dependencies(command, directory, flags):
     """优先使用镜像安装，失败或超时后仅用官方源重试一次。
 
@@ -71,13 +84,19 @@ def _install_dependencies(command, directory, flags):
         try:
             subprocess.run(
                 [*command, 'ci', '--no-audit', '--no-fund', f'--registry={registry}'],
-                cwd=directory, check=True, timeout=600, **flags,
+                cwd=directory, check=True, timeout=600, capture_output=True, text=True,
+                encoding='utf-8', errors='replace', **flags,
             )
             return
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        except subprocess.CalledProcessError as exc:
+            _log_process_error(exc, stage='npm ci')
             if index == len(registries) - 1:
                 raise
             logger.warning(f'镜像源安装失败，切换至 npm 官方源重试: {exc}')
+        except subprocess.TimeoutExpired:
+            if index == len(registries) - 1:
+                raise
+            logger.warning('镜像源安装超时，切换至 npm 官方源重试')
 
 
 def ensure_frontend(root=None):
@@ -103,7 +122,15 @@ def ensure_frontend(root=None):
     logger.info('正在构建 React 前端资源')
     flags = {'creationflags': subprocess.CREATE_NO_WINDOW} if hasattr(subprocess, 'CREATE_NO_WINDOW') else {}
     _install_dependencies(command, directory, flags)
-    subprocess.run([*command, 'run', 'build'], cwd=directory, check=True, timeout=180, **flags)
+    try:
+        subprocess.run(
+            [*command, 'run', 'build'],
+            cwd=directory, check=True, timeout=180, capture_output=True, text=True,
+            encoding='utf-8', errors='replace', **flags,
+        )
+    except subprocess.CalledProcessError as exc:
+        _log_process_error(exc, stage='前端构建')
+        raise
     marker.write_text(fingerprint + '\n', encoding='utf-8')
 
 

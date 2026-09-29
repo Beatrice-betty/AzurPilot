@@ -41,14 +41,14 @@ class TestActionPointDashboardTotal(unittest.TestCase):
     def test_total_includes_box_when_box_use_enabled(self):
         handler, log_res = self.update(box_use=True)
 
-        self.assertEqual(log_res.ActionPoint, {'Value': self.current, 'Total': self.current + self.box_sum})
+        log_res.record.assert_any_call('ActionPoint', {'Value': self.current, 'Total': self.current + self.box_sum}, observed=True)
         self.assertEqual(handler._action_point_total, self.current + self.box_sum)
 
     def test_total_still_includes_box_when_box_use_disabled(self):
         # 防溢出任务临时关闭开箱开关，业务判据照旧不含箱，但仪表盘口径不应随之退化
         handler, log_res = self.update(box_use=False)
 
-        self.assertEqual(log_res.ActionPoint, {'Value': self.current, 'Total': self.current + self.box_sum})
+        log_res.record.assert_any_call('ActionPoint', {'Value': self.current, 'Total': self.current + self.box_sum}, observed=True)
         self.assertEqual(handler._action_point_total, self.current)
 
 

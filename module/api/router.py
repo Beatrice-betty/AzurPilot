@@ -37,6 +37,7 @@ class Router:
         """
         self.configs, self.runtime = configs, runtime
         self._accounts = None
+        self._scheduler_programs = None
         self.access_password = ''
         self.methods = {
             'system.ping': Method(p.Params, lambda _: {'pong': True}),
@@ -47,11 +48,19 @@ class Router:
             'instances.importConfig': Method(p.ImportParams, lambda x: configs.save_import(x.name, x.content), True),
             'instances.delete': Method(p.RevisionParams, self.delete, True),
             'config.get': Method(p.InstanceParams, lambda x: configs.get(x.instance)),
+            'config.export': Method(p.InstanceParams, lambda x: configs.export(x.instance)),
             'config.patch': Method(p.PatchParams, lambda x: configs.patch(x.instance, x.revision, x.changes), True),
             'shop_strategy.validate': Method(p.ShopStrategyValidateParams, self.validate_shop_strategy),
             'overview.get': Method(p.InstanceParams, lambda x: runtime.overview(x.instance)),
             'scheduler.start': Method(p.InstanceParams, lambda x: runtime.start(x.instance), True),
             'scheduler.stop': Method(p.InstanceParams, lambda x: runtime.stop(x.instance), True),
+            'scheduler.program.catalog': Method(p.InstanceParams, lambda x: self.programs.catalog(x.instance)),
+            'scheduler.program.get': Method(p.InstanceParams, lambda x: self.programs.get(x.instance)),
+            'scheduler.program.save': Method(p.ProgramSaveParams, lambda x: self.programs.save(x.instance, x.revision, x.document), True),
+            'scheduler.program.validate': Method(p.ProgramValidateParams, lambda x: self.programs.validation(x.instance, x.document, x.mode)),
+            'scheduler.program.simulate': Method(p.ProgramSimulateParams, lambda x: self.programs.simulate(x.instance, x.document, x.context, x.outcomes, x.steps, x.mode)),
+            'scheduler.program.apply': Method(p.ProgramApplyParams, lambda x: self.programs.apply(x.instance, x.revision, x.mode), True),
+            'scheduler.program.state': Method(p.InstanceParams, lambda x: self.programs.state(x.instance)),
             'tasks.run': Method(p.TaskParams, lambda x: runtime.start(x.instance, x.task), True),
             'logs.get': Method(p.LogsParams, lambda x: runtime.logs(x.instance, x.after)),
             'preview.capture': Method(p.InstanceParams, lambda x: runtime.capture(x.instance)),
@@ -81,6 +90,13 @@ class Router:
                                                     lambda x: {'removed': background.gallery_remove(x.id)}, True),
             'background.gallery.open': Method(p.Params, lambda _: background.gallery_open(), True),
         }
+
+    @property
+    def programs(self):
+        if self._scheduler_programs is None:
+            from module.api.scheduler_service import SchedulerService
+            self._scheduler_programs = SchedulerService(self.configs, self.runtime)
+        return self._scheduler_programs
 
     @property
     def accounts(self):
