@@ -1,15 +1,37 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { useApp } from '../app/context'
+import { openMaterialInspector } from '../app/materialInspectorState'
 import { applyCustomLayer, familyOf } from '../app/theme'
 import { MaterialDetailModal } from './MaterialDetailModal'
 import { clearFamilyPalette, readFamilyCustom, writeFamilyCustom, type FamilyCustom } from '../app/themeCustom'
 import { familyRegions, regionKnobs, regionLabels, type RegionId, type RegionKnob } from '../app/themeKnobs'
-import { Palette, RotateCcw, Tv } from 'lucide-react'
+import {
+  AppWindow,
+  Layers,
+  LayoutGrid,
+  Menu as MenuIcon,
+  Palette,
+  PanelLeft,
+  PanelTop,
+  RotateCcw,
+  Sliders,
+  SlidersHorizontal,
+  Tv,
+} from 'lucide-react'
 import { MockInstancePreview } from './MockInstancePreview'
 
-import { SegmentedControl } from './SegmentedControl'
 import { PaletteSwatches } from './PaletteSwatches'
 import type { UiKey } from '../i18n'
+
+export const REGION_ICONS: Record<RegionId, React.ComponentType<{size?: number; className?: string}>> = {
+  surface: Layers,
+  plate: LayoutGrid,
+  sidebar: PanelLeft,
+  topbar: PanelTop,
+  modal: AppWindow,
+  menu: MenuIcon,
+  control: SlidersHorizontal,
+}
 
 type Ui = (key: UiKey, params?: Record<string, string | number>) => string
 
@@ -36,20 +58,55 @@ type PanelProps = {
     控件复用主题自己的 `SegmentedControl` 与 `.field-row`，材质族与朴素族各按各自的风格渲染。 */
 export function MaterialDetailPanel({regions, custom, ui, onKnob, onResetKnob, onResetRegion, onResetAll, initialRegion, onRegionChange}: PanelProps & {initialRegion?: RegionId; onRegionChange?: (region: RegionId) => void}) {
   const [region, setRegion] = useState<RegionId>(initialRegion ?? regions[0])
+  useEffect(() => {
+    if (initialRegion) setRegion(initialRegion)
+  }, [initialRegion])
   const dirtyIn = (target: RegionId) => Object.keys(custom.params).some(id => id.startsWith(`${target}.`))
   const knobs = regionKnobs.filter(knob => knob.region === region)
   return <>
     <div className="material-detail-body">
-      <div className="field-row">
+      <div className="field-row material-scope-row">
         <div className="field-label"><label>{ui('settings.materialDetailScope')}</label></div>
         <div className="field-control">
-          <SegmentedControl
-            className="settings-segmented material-detail-scope"
-            label={ui('settings.materialDetailScope')}
-            value={region}
-            onChange={next => { setRegion(next); onRegionChange?.(next) }}
-            options={regions.map(item => ({value: item, label: ui(regionLabels[item])}))}
-          />
+          <div className="material-scope-chips" role="tablist" aria-label={ui('settings.materialDetailScope')}>
+            {regions.map((item, index) => {
+              const isSelected = region === item
+              const isDirty = dirtyIn(item)
+              const Icon = REGION_ICONS[item]
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  role="tab"
+                  aria-selected={isSelected}
+                  tabIndex={isSelected ? 0 : -1}
+                  className={`scope-chip ${isSelected ? 'active' : ''} ${isDirty ? 'has-changes' : ''}`}
+                  onClick={() => { setRegion(item); onRegionChange?.(item) }}
+                  onKeyDown={event => {
+                    const next = event.key === 'ArrowRight'
+                      ? (index + 1) % regions.length
+                      : event.key === 'ArrowLeft'
+                      ? (index - 1 + regions.length) % regions.length
+                      : event.key === 'Home'
+                      ? 0
+                      : event.key === 'End'
+                      ? regions.length - 1
+                      : -1
+                    if (next >= 0) {
+                      event.preventDefault()
+                      const nextRegion = regions[next]
+                      setRegion(nextRegion)
+                      onRegionChange?.(nextRegion)
+                    }
+                  }}
+                >
+                  {Icon && <Icon size={13} className="scope-chip-icon" aria-hidden="true" />}
+                  <span>{ui(regionLabels[item])}</span>
+                  {isDirty && <span className="scope-chip-dot" title="已自定义修改" aria-label="已自定义修改" />}
+                </button>
+              )
+            })}
+          </div>
         </div>
       </div>
       {knobs.map(knob => {
@@ -87,7 +144,7 @@ export function MaterialDetailPanel({regions, custom, ui, onKnob, onResetKnob, o
 /** 材质细节入口：紧跟在材质选择（玻璃/普通）之后，分区调整玻璃的不透明度、模糊、饱和度与圆角。
     普通材质下没有材质层，返回 null。 */
 export function MaterialDetailPreference() {
-  const {ui, theme, material} = useApp()
+  const {ui, theme, material, instances} = useApp()
   const family = familyOf(theme)
   const [custom, setCustom] = useState<FamilyCustom>(() => readFamilyCustom(family))
   const [detail, setDetail] = useState(false)
@@ -110,7 +167,28 @@ export function MaterialDetailPreference() {
           <Palette size={16} aria-hidden="true"/>
           {ui('settings.materialDetailOpen')}{touched > 0 ? ` (${touched})` : ''}
         </button>
-        <button type="button" className="button secondary" onClick={() => setLivePreview(true)}>
+        <button
+          type="button"
+          className="button secondary"
+          title={ui('settings.materialLiveOnInstanceHelp')}
+          onClick={() => {
+            openMaterialInspector()
+            const target = instances[0]?.name ? `/i/${instances[0].name}/overview` : '/'
+            if (typeof window !== 'undefined') {
+              window.location.hash = target
+            }
+          }}
+        >
+          <Sliders size={16} aria-hidden="true"/>
+          {ui('settings.materialLiveOnInstance')}
+        </button>
+        <button
+          type="button"
+          className="button secondary"
+          style={{opacity: 0.85}}
+          title={ui('settings.materialLivePreviewHelp')}
+          onClick={() => setLivePreview(true)}
+        >
           <Tv size={16} aria-hidden="true"/>
           {ui('settings.materialLivePreview')}
         </button>

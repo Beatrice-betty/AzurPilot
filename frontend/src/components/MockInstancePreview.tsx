@@ -47,6 +47,7 @@ import {
 } from '../app/themeCustom'
 import { familyRegions, type RegionId } from '../app/themeKnobs'
 import { MaterialDetailPanel } from './ThemeCustomPreference'
+import { ThemeWallpaper } from './GlassMaterial'
 
 export type MockInstancePreviewProps = {
   onClose: () => void
@@ -96,6 +97,7 @@ export function MockInstancePreview({onClose, initialRegion}: MockInstancePrevie
   const isDockedActive = isDocked && !isInspectorMinimized
   const overlay = (
     <div className={`mock-instance-preview-overlay ${isLegacy ? 'legacy-shell-preview' : 'apple-shell-preview'} ${isDockedActive ? 'has-docked-inspector' : ''}`}>
+      <ThemeWallpaper />
       {/* 全真模拟 AppShell 容器 */}
       <div className={`app-shell with-rail ${isLegacy ? 'legacy-shell' : ''} mock-preview-shell`}>
         {/* 侧栏 (sidebar 区域) */}

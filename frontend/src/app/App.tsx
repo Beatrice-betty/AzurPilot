@@ -32,6 +32,8 @@ import { useDevOverride } from './devOverride'
 import { usesLegacyLayout, usesLegacyShell, showsRightRail } from './theme'
 import { cycleTabSize, readLastPath, readTabSize, readTopbarMode, setTopbarMode, subscribeTopbarMode, writeLastInstance, writeLastPath } from './topbarPrefs'
 import { INSTANCE_NAME_PATTERN } from './instanceName'
+import { getMaterialInspector, subscribeMaterialInspector } from './materialInspectorState'
+import { MaterialInspector } from '../components/MaterialInspector'
 
 /* 旧版外壳下也要显示居中页名的顶层路由。 */
 const PRIMARY_NAV_PATHS = ['/announcement', '/updater', '/interface', '/remote', '/configs', '/settings', '/dev']
@@ -275,10 +277,12 @@ export function App() {
   const pageNav = <div className="legacy-page-nav"><div className={`breadcrumb${tabsShown ? ' with-tabs' : ''}`}>{topbarActions}{tabsShown ? tabStrip : <><span>/</span><InstanceSwitcher onCreate={() => setCreating(true)}/></>}{currentTask && <><span>/</span><TaskSwitcher/></>}</div></div>
   /* shell 自己必须订阅：收起状态变了要重渲染才能加上 nav-collapsed 类（按钮订阅管不到这里）。 */
   const layout = useSyncExternalStore(subscribeLayout, getLayout)
+  const materialInspector = useSyncExternalStore(subscribeMaterialInspector, getMaterialInspector)
+  const hasDockedInspector = materialInspector.open && materialInspector.docked && !materialInspector.minimized
   /* 登录页必须在 App 的所有 Hook 之后返回：否则同一次会话里 Hook 数量会随连接状态变化，React 抛 #300 崩掉整页。 */
   if (connection === 'auth') return <Login/>
 
-  return <div className={`app-shell ${layout.sidebarCollapsed ? 'nav-collapsed' : ''} ${showRail ? 'with-rail' : ''} ${currentTask ? 'task-config-shell' : ''} ${legacyShell ? 'legacy-shell' : ''} ${legacyHomeShell ? 'legacy-shell legacy-home-shell' : ''} ${mobileOpen ? 'mobile-open' : ''} ${railOpen ? 'rail-open' : ''}`}>
+  return <div className={`app-shell ${layout.sidebarCollapsed ? 'nav-collapsed' : ''} ${hasDockedInspector ? 'has-docked-inspector' : ''} ${showRail ? 'with-rail' : ''} ${currentTask ? 'task-config-shell' : ''} ${legacyShell ? 'legacy-shell' : ''} ${legacyHomeShell ? 'legacy-shell legacy-home-shell' : ''} ${mobileOpen ? 'mobile-open' : ''} ${railOpen ? 'rail-open' : ''}`}>
     <a className="skip-link" href="#main-content" onClick={event => {event.preventDefault(); document.getElementById('main-content')?.focus()}}>{ui('nav.skipContent')}</a>
     {(legacyShell || legacyHomeShell) && topbar}
     <NavHandle/>
@@ -304,6 +308,7 @@ export function App() {
     {!railFirst && instance && showRail && <RightRail instance={instance} onMobileClose={() => setRailOpen(false)}/>}
     <CompactScrollbars/>
     {creating && <CreateInstance onClose={() => setCreating(false)}/>}
+    <MaterialInspector/>
   </div>
 }
 
