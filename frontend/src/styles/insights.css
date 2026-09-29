@@ -61,7 +61,16 @@
   .monitor-panel .preview-stage {container-type:size}
   .monitor-panel .preview-screen {width:min(calc(100% - 32px),calc((100cqh - 32px)*16/9));max-height:none}
 }
-.statistics-controls {display:flex;flex-wrap:wrap;align-items:end;gap:14px;padding:18px 22px;background:var(--theme-plate-bg);-webkit-backdrop-filter:var(--theme-plate-filter);backdrop-filter:var(--theme-plate-filter);border-radius:var(--theme-plate-radius)}.statistics-controls label {display:flex;flex-direction:column;gap:7px;font-size:11px;color:var(--muted)}.statistics-controls select,.statistics-controls input {max-width:200px;min-height:34px}.period-controls {padding:0 0 16px;align-items:center;background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none}.period-controls > span {font-size:12px;color:var(--muted);flex-basis:100%}
+.statistics-controls {display:flex;flex-wrap:wrap;align-items:end;gap:14px;padding:18px 22px}
+.statistics-controls label {display:flex;flex-direction:column;gap:7px;font-size:11px;color:var(--muted)}
+.statistics-controls select,.statistics-controls input {max-width:200px;min-height:34px}
+/* 图表底部设置条：消除孤岛圆角与白底，作为图表卡片一体化底部工具栏 */
+.statistics-chart .statistics-controls {display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px;padding:14px 22px;background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none;border-radius:0;border-top:1px solid var(--border)}
+.statistics-chart .statistics-controls label {display:flex;flex-direction:column;gap:6px;font-size:11px;color:var(--muted);font-weight:500}
+.statistics-chart .statistics-controls select,.statistics-chart .statistics-controls input {max-width:200px;min-height:34px}
+.statistics-chart .panel-note {border-top:none;padding:0 22px 14px;margin:0;color:var(--muted);font-size:11px;line-height:1.5}
+.period-controls {padding:10px 16px;align-items:center;background:color-mix(in srgb, var(--surface) calc(var(--theme-surface-alpha, 0.72) * 100%), transparent);-webkit-backdrop-filter:var(--theme-surface-filter);backdrop-filter:var(--theme-surface-filter);border:1px solid var(--border);border-radius:var(--theme-radius-card, 12px);margin-bottom:16px}
+.period-controls > span {font-size:12px;color:var(--muted);flex-basis:100%}
 /* 月份格没有上方标签，与同排带标签的控件按底边对齐，两者的下边框落在同一条水平线上。 */
 .period-controls .statistics-inline-control:has(input) {align-self:flex-end}
 /* 卡片外壳：折叠开关与标题行右侧的按钮成组；没有标题行的卡片用角落开关，并给它留出一条带。 */
@@ -90,10 +99,12 @@
 /* 编辑模式：控件贴在卡片左上角、与标题行齐平；上移在上、把手居中、下移在下。 */
 /* 编辑模式下折叠的卡片至少要放得下左侧那一列控件，控件保持竖排。 */
 .statistics-sections.is-editing .stat-card.is-folded {min-height:84px}
-.stat-card-edit-bar {position:absolute;left:6px;top:6px;z-index:3;display:flex;flex-direction:column;align-items:center;gap:2px}
+.stat-card-edit-bar {position:absolute;left:8px;top:12px;z-index:3;display:flex;flex-direction:column;align-items:center;gap:2px}
 /* 卡片折叠后只有一条，左侧控件由竖排改为横排，容纳在卡片高度内。 */
-.stat-card-edit-bar .text-button {width:24px;min-height:22px;height:22px;padding:0;justify-content:center}
-.stat-card-drag-handle {display:inline-flex;align-items:center;justify-content:center;width:24px;height:22px;padding:0;border:0;background:transparent;color:var(--muted);cursor:grab;touch-action:none}
+.stat-card-edit-bar .text-button {width:22px;min-height:18px;height:18px;padding:0;justify-content:center;border-radius:4px;color:var(--muted);transition:all .15s ease}
+.stat-card-edit-bar .text-button:hover:not(:disabled) {color:var(--accent);background:var(--accent-soft)}
+.stat-card-drag-handle {display:inline-flex;align-items:center;justify-content:center;width:22px;height:18px;padding:0;border:0;border-radius:4px;background:transparent;color:var(--muted);cursor:grab;touch-action:none;transition:all .15s ease}
+.stat-card-drag-handle:hover {color:var(--accent);background:var(--accent-soft)}
 .stat-card-drag-handle:active {cursor:grabbing}
 /* 编辑模式下标题行让出左侧控件占用的宽度。 */
 .statistics-sections.is-editing .stat-card .panel-heading {padding-left:34px}
@@ -144,44 +155,97 @@
 .stat-card-seam.is-linked {margin:0}
 .stat-card-seam:has(.stat-card-hidden) {margin:0}
 .stat-card-seam > .stat-card-junction {top:50%;margin-top:0;left:50%;transform:translate(-50%,-50%)}
-.statistics-page-order {display:flex; flex-wrap:wrap; gap:6px 10px; padding:16px 22px 0}
-.statistics-page-order-item {display:inline-flex; align-items:center; gap:6px; padding:2px 6px; border:1px solid var(--theme-border); background:transparent}
-.statistics-page-order-item button {display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; padding:0; border:0; background:transparent; color:var(--theme-text); cursor:pointer; font-size:11px; line-height:1}
-.statistics-page-order-item button:disabled {opacity:.3; cursor:default}
-.statistics-page-order-label {font-size:12px; color:var(--theme-text)}
-.statistics-chain-slots {--chain-cell-width:136px;--chain-cell-height:44px;display:flex;flex-direction:column;gap:8px;padding:16px 22px 0;margin-bottom:16px}
+.statistics-page-order {display:flex; flex-wrap:wrap; gap:8px 10px; padding:16px 22px 0}
+.statistics-page-order-item {display:inline-flex; align-items:center; gap:6px; padding:3px 8px; border-radius:var(--theme-radius-sm, 8px); border:1px solid var(--border); background:color-mix(in srgb, var(--surface) calc(var(--theme-surface-alpha, 0.5) * 100%), transparent); transition:all .15s ease}
+.statistics-page-order-item:hover {border-color:color-mix(in srgb, var(--accent) 40%, var(--border)); background:color-mix(in srgb, var(--surface) calc(var(--theme-surface-alpha, 0.8) * 100%), transparent)}
+.statistics-page-order-item button {display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; padding:0; border:0; border-radius:4px; background:transparent; color:var(--text); cursor:pointer; font-size:11px; line-height:1; transition:all .15s ease}
+.statistics-page-order-item button:hover:not(:disabled) {background:var(--accent-soft); color:var(--accent)}
+.statistics-page-order-item button:disabled {opacity:.25; cursor:default}
+.statistics-page-order-label {font-size:12px; font-weight:500; color:var(--text); padding:0 2px}
+.statistics-chain-slots {--chain-cell-width:136px;--chain-cell-height:42px;display:flex;flex-direction:column;gap:8px;padding:16px 22px 0;margin-bottom:16px}
 .statistics-chain-row {display:flex;flex-wrap:wrap;align-items:center;gap:8px}
-.statistics-chain-card {display:inline-flex;align-items:center;justify-content:space-between;gap:6px;box-sizing:border-box;width:var(--chain-cell-width);height:var(--chain-cell-height);padding:0 10px 0 14px;border:1px solid var(--theme-border);border-radius:0;background:var(--theme-surface);font-size:13px}
+.statistics-chain-card {display:inline-flex;align-items:center;justify-content:space-between;gap:6px;box-sizing:border-box;width:var(--chain-cell-width);height:var(--chain-cell-height);padding:0 10px 0 14px;border:1px solid var(--border);border-radius:var(--theme-radius-sm, 8px);background:color-mix(in srgb, var(--surface) calc(var(--theme-surface-alpha, 0.72) * 100%), transparent);-webkit-backdrop-filter:var(--theme-surface-filter);backdrop-filter:var(--theme-surface-filter);font-size:13px;font-weight:500;color:var(--text)}
 .statistics-chain-slot {display:inline-flex;align-items:center}
 .statistics-chain-label {flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
-.statistics-chain-add, .statistics-chain-slot .select-control .select-trigger {display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:var(--chain-cell-width);height:var(--chain-cell-height);padding:0;border:1px dashed var(--theme-border);border-radius:0;background:transparent;color:var(--theme-muted);font-size:13px}
+.statistics-chain-add, .statistics-chain-slot .select-control .select-trigger {display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:var(--chain-cell-width);height:var(--chain-cell-height);padding:0;border:1px dashed var(--border);border-radius:var(--theme-radius-sm, 8px);background:color-mix(in srgb, var(--surface) calc(var(--theme-surface-alpha, 0.3) * 100%), transparent);color:var(--muted);font-size:13px;cursor:pointer;transition:all .15s ease}
 .statistics-chain-slot .select-control {width:var(--chain-cell-width);min-width:0;height:var(--chain-cell-height)}
 .statistics-category-control button.is-chained::after {content:'';width:5px;height:5px;margin-left:6px;border-radius:50%;background:currentColor;opacity:.45}
-.statistics-chain-link {align-self:center;width:10px;height:1px;background:var(--theme-border)}
-.statistics-chain-add:hover {color:var(--theme-accent);border-color:var(--theme-accent)}
+.statistics-chain-link {align-self:center;width:10px;height:1px;background:var(--border)}
+.statistics-chain-add:hover {color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
 .statistics-chain-picker {min-width:160px}
-.statistics-edit-actions.monitor-segmented {display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 22px;margin-bottom:8px}
-.statistics-edit-actions .button.is-disabled {opacity:.55}
-.statistics-edit-state {margin-left:auto;font-size:12px;color:var(--theme-muted)}
+.statistics-edit-actions {display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:12px 22px 18px}
+.statistics-page-toggle-chip {
+  display:inline-flex;align-items:center;gap:8px;padding:6px 14px;
+  border-radius:var(--theme-radius-button, 20px);border:1px solid var(--border);
+  background:color-mix(in srgb, var(--surface) calc(var(--theme-surface-alpha, 0.6) * 100%), transparent);
+  color:var(--text);font-size:12px;font-weight:500;cursor:pointer;
+  transition:all .18s cubic-bezier(0.16, 1, 0.3, 1);user-select:none;
+}
+.statistics-page-toggle-chip:hover {border-color:var(--accent);background:var(--accent-soft);transform:translateY(-1px)}
+.statistics-page-toggle-chip.active {border-color:color-mix(in srgb, var(--accent) 50%, var(--border));background:color-mix(in srgb, var(--accent) 12%, var(--surface));color:var(--text)}
+.statistics-page-toggle-chip.is-disabled {opacity:.5;border-style:dashed;border-color:var(--border);color:var(--muted);background:transparent;text-decoration:line-through}
+.statistics-page-toggle-chip .stat-chip-dot {width:7px;height:7px;border-radius:50%;flex-shrink:0;transition:transform .18s ease, box-shadow .18s ease}
+.statistics-page-toggle-chip.active .stat-chip-dot {box-shadow:0 0 6px color-mix(in srgb, var(--accent) 70%, transparent)}
+.statistics-edit-state {margin-left:auto;font-size:12px;color:var(--muted)}
 .statistics-edit-body {display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:0 22px 18px}
-.statistics-edit-body p {margin:0;font-size:12px;color:var(--theme-muted)}
-.statistics-edit-toggle[aria-pressed='true'] {border-color:var(--theme-accent);color:var(--theme-accent);background:var(--theme-accent-soft)}
-/* 以下工具栏规则只服务紧凑主题：分类、时间范围与操作合并为一行并置顶，滚动时仍可切换与刷新。
-   非旧版版式由 body 滚动，需让开吸顶的顶栏；旧版版式的 .instance-page-main 自身滚动，贴顶即可。 */
-:root[data-theme='extreme'] .statistics-toolbar-row {position:sticky;top:var(--topbar-height);z-index:30;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 0;margin-bottom:12px;background:var(--bg)}
-/* 分段控件放不下时换成单按钮下拉（指针移入即展开，见 Select 的 openOnFocus）。
-   is-compact 由 Statistics 测量可用宽度得出，不用固定断点：右侧控件宽度随分类变化。 */
-:root[data-theme='extreme'] .statistics-toolbar-row .statistics-category-select {display:none}
-:root[data-theme='extreme'] .statistics-toolbar-row.is-compact .statistics-category-control {display:none}
-:root[data-theme='extreme'] .statistics-toolbar-row.is-compact .statistics-category-select {display:inline-flex}
+.statistics-edit-body p {margin:0;font-size:12px;color:var(--muted)}
+.statistics-edit-toggle[aria-pressed='true'] {border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+
+/* 全局工具栏：分类分段控制器、单按钮下拉、时间范围筛选与操作按钮 */
+.statistics-toolbar-row {
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px;
+}
+.statistics-toolbar-row .statistics-category-control {
+  margin-bottom:0;flex:0 0 auto;
+}
+.statistics-toolbar-row .statistics-category-select {
+  display:none;
+}
+.statistics-toolbar-row.is-compact .statistics-category-control {
+  display:none;
+}
+.statistics-toolbar-row.is-compact .statistics-category-select {
+  display:inline-flex;
+}
+.statistics-toolbar-right {
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+}
+.statistics-actions {
+  display:flex;align-items:center;gap:8px;
+}
+.statistics-inline-control {
+  display:inline-flex;align-items:center;gap:8px;padding:4px 12px;
+  background:color-mix(in srgb, var(--surface) calc(var(--theme-plate-alpha, 0.72) * 100%), transparent);
+  -webkit-backdrop-filter:var(--theme-plate-filter);backdrop-filter:var(--theme-plate-filter);
+  border:1px solid var(--border);border-radius:var(--theme-radius-button, 20px);
+  box-shadow:0 1px 2px rgba(0,0,0,0.04);font-size:12px;color:var(--text);white-space:nowrap;
+}
+.statistics-inline-control .statistics-inline-label {
+  font-size:12px;color:var(--muted);font-weight:500;
+}
+.statistics-inline-control select,
+.statistics-inline-control input {
+  background:transparent;border:none;color:var(--text);
+  font-size:12px;font-weight:500;padding:2px 4px;min-height:26px;
+  cursor:pointer;outline:none;
+}
+.statistics-filter-bar {
+  display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px;
+}
+.statistics-hints {
+  display:flex;align-items:center;gap:12px;padding:8px 16px;
+  background:color-mix(in srgb, var(--surface) calc(var(--theme-surface-alpha, 0.6) * 100%), transparent);
+  -webkit-backdrop-filter:var(--theme-surface-filter);backdrop-filter:var(--theme-surface-filter);
+  border:1px solid var(--border);border-radius:var(--theme-radius-card, 12px);
+  font-size:12px;color:var(--muted);
+}
+
+/* 紧凑主题定制覆写 */
+:root[data-theme='extreme'] .statistics-toolbar-row {position:sticky;top:var(--topbar-height);z-index:30;padding:8px 0;margin-bottom:12px;background:var(--bg)}
 :root[data-theme='extreme'] .instance-page-main > .statistics-toolbar-row {top:0}
-:root[data-theme='extreme'] .statistics-toolbar-row .statistics-category-control {margin-bottom:0;flex:0 0 auto;width:max-content}
-:root[data-theme='extreme'] .statistics-toolbar-right {display:flex;align-items:center;gap:12px;margin-left:auto;flex-wrap:wrap}
-:root[data-theme='extreme'] .statistics-actions {display:flex;align-items:center;gap:8px}
-:root[data-theme='extreme'] .statistics-inline-control {display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted);white-space:nowrap}
-:root[data-theme='extreme'] .statistics-inline-control select,:root[data-theme='extreme'] .statistics-inline-control input {max-width:200px;min-height:var(--form-height)}
-/* 控件名收进提示：工具栏只留当前值，鼠标移入或键盘聚焦时把名称浮在控件下方。
-   文字仍渲染在 DOM 里（.statistics-inline-label），只是紧凑主题不占位，其它主题照旧。 */
+:root[data-theme='extreme'] .statistics-toolbar-right {margin-left:auto}
+:root[data-theme='extreme'] .statistics-inline-control {padding:0;background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none;border:none;box-shadow:none;border-radius:0}
+:root[data-theme='extreme'] .statistics-inline-control select,:root[data-theme='extreme'] .statistics-inline-control input {max-width:200px;min-height:var(--form-height);border:1px solid var(--border);background:var(--surface)}
 :root[data-theme='extreme'] .statistics-inline-label {display:none}
 :root[data-theme='extreme'] .statistics-inline-control {position:relative}
 :root[data-theme='extreme'] .statistics-inline-control[data-tip]:not([data-tip='']):hover::after,

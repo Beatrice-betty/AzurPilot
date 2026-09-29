@@ -552,6 +552,8 @@ export function Statistics() {
     )
   }
 
+  const hasHints = Boolean(category === 'ships' || category === 'loot')
+
   const content = <>
     {condensed
       ? <div className={`statistics-toolbar-row${compact ? ' is-compact' : ''}`} ref={toolbarRow}>
@@ -560,16 +562,20 @@ export function Statistics() {
           <Select openOnFocus className="statistics-category-select" aria-label={ui('stats.categoryLabel')} value={category} onChange={event => setCategory(event.target.value as Category)}>
             {visiblePageEntries.map(([value, label]) => <option value={value} key={value}>{ui(label)}</option>)}
           </Select>
-          <div className="statistics-toolbar-right" ref={toolbarRight}>{hasChart && activeView.foldControl(activeView.chartKey)}{hasChart && <button className="text-button" onClick={() => category && toggleExpanded(category)}>{expandedChart === category ? ui('stats.collapseChart') : ui('stats.expandChart')}</button>}{rangeControls}<div className="statistics-actions">{actions}</div></div>
+          <div className="statistics-toolbar-right" ref={toolbarRight}>
+            {hasChart && activeView.foldControl(activeView.chartKey)}
+            {hasChart && <button className="text-button" onClick={() => category && toggleExpanded(category)}>{expandedChart === category ? ui('stats.collapseChart') : ui('stats.expandChart')}</button>}
+            {rangeControls}
+            <div className="statistics-actions">{actions}</div>
+          </div>
         </div>
       : <>
           <div className="statistics-toolbar-row">
             <SegmentedControl className="statistics-category-control" label={ui('stats.categoryLabel')} value={category} onChange={selectPage} onItemContextMenu={editMode ? id => togglePage(id, false) : undefined} onItemMove={editMode ? movePageBy : undefined} itemClassName={id => `${isPageEnabled(layout, id) ? '' : 'is-disabled'}${!editMode && chainOf(id).length > 1 ? ' is-chained' : ''}`.trim()} trailing={singleViewToggle} options={visiblePageEntries.map(([value, label]) => ({value: value as Category, label: ui(label)}))}/>
             {legacy && <div className="statistics-actions">{actions}</div>}
           </div>
-          <div className="statistics-controls period-controls">{rangeControls}{hints}</div>
+          {(rangeControls || hasHints) && <div className="statistics-filter-bar">{rangeControls}{hasHints && hints}</div>}
         </>}
-    {condensed && (category === 'ships' || category === 'loot') && <div className="statistics-controls period-controls">{hints}</div>}
     {editMode && <StatisticsEditConsole customized={customized} pages={fixedPageOrder.map(id => ({id, label: ui(categories[id]), enabled: isPageEnabled(layout, id)}))} onTogglePage={id => togglePage(id, !isPageEnabled(layout, id))} onReset={resetLayout}>
       {/* 顺序控件：一次挪一格，组合链整体挪动。 */}
       <div className="statistics-page-order">
