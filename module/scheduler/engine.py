@@ -45,7 +45,20 @@ def compare(a, b, op):
     operations = {'==': operator.eq, '!=': operator.ne, '>': operator.gt, '>=': operator.ge, '<': operator.lt, '<=': operator.le}
     if op not in operations:
         raise ProgramError('未知比较运算')
-    return operations[op](a, b)
+    if type(a) in (int, float) and isinstance(b, str):
+        try:
+            b = float(b) if '.' in b else int(b)
+        except ValueError:
+            pass
+    elif type(b) in (int, float) and isinstance(a, str):
+        try:
+            a = float(a) if '.' in a else int(a)
+        except ValueError:
+            pass
+    try:
+        return operations[op](a, b)
+    except TypeError as exc:
+        raise ProgramError(f'类型不兼容，无法进行大小比较：{type(a).__name__} {op} {type(b).__name__}') from exc
 
 
 class Frame:

@@ -197,11 +197,13 @@ test('自定义调度从系统菜单进入，草稿、模拟与应用分离', as
   await page.locator('.field-row').filter({has:page.locator('[id="General.YukikazeTaskManager.TaskPriorityAdjustment"]')}).getByRole('link', {name:'自定义调度',exact:true}).click()
   await expect(page.locator('.program-editor h1')).toHaveText('自定义调度')
   await expect(page.locator('.program-toolbar small')).toContainText('当前使用原调度')
+  await expect(page.getByRole('button',{name:'全卡片排列',exact:true})).toBeVisible()
+  await expect(page.getByRole('button',{name:'载入原调度方案',exact:true})).toBeVisible()
+  await page.getByRole('button', {name:'载入原调度方案',exact:true}).click()
   await expect(page.locator('.react-flow__node[data-id="enabled"] .program-card-heading strong')).toHaveText('筛选任务列表')
   await expect(page.locator('.react-flow__node[data-id="enabled"] .program-card-comment')).toHaveText('只保留已启用任务')
   await expect(page.locator('.react-flow__node[data-id="due"] .program-card-comment')).toContainText('已到期')
   await expect(page.locator('.react-flow__node[data-id="order"] .program-card-comment')).toHaveText('按当前实例优先级排序')
-  await expect(page.getByRole('button',{name:'载入原调度方案',exact:true})).toBeVisible()
   await page.getByRole('button', {name:'校验',exact:true}).click()
   await expect(page.locator('.program-diagnostics')).toHaveText('程序校验通过')
   await page.getByRole('button', {name:'模拟运行',exact:true}).click()
@@ -950,6 +952,55 @@ test('调度程序在全量六套主题下背景与控件对比度正常无白�
   await page.reload()
   await expect(page.locator('.program-editor')).toBeVisible()
   await page.screenshot({path: 'test-results/scheduler-theme-light.png', fullPage: true})
+})
+
+test('卡片语义化图标呈现、全卡片排列与终结节点无下一步出口', async ({page}) => {
+  await page.goto('/#/i/demo-main/task/SchedulerProgram')
+  await expect(page.locator('.program-editor')).toBeVisible()
+
+  // 1. 点击“全卡片排列”模板按钮并验证加载全量卡片
+  await expect(page.getByRole('button', {name: '全卡片排列', exact: true})).toBeVisible()
+  await page.getByRole('button', {name: '全卡片排列', exact: true}).click()
+  await expect(page.locator('.react-flow__node')).toHaveCount(42)
+
+  // 2. 验证各卡片标题内渲染了带有 aria-hidden 的专属 SVG 图标
+  const icons = page.locator('.react-flow__node .program-card-icon')
+  await expect(icons.first()).toBeVisible()
+  expect(await icons.count()).toBeGreaterThanOrEqual(40)
+  await expect(icons.first()).toHaveAttribute('aria-hidden', 'true')
+
+  // 3. 验证终结节点（结束程序 end、结束本轮循环 loop_end）无右侧下一步出口
+  const endNode = page.locator('.react-flow__node[data-id="end"]')
+  await expect(endNode).toBeVisible()
+  await expect(endNode.locator('.program-card-heading strong')).toHaveText('结束程序')
+  // 具有执行入口（左侧 handle）
+  await expect(endNode.locator('[data-handleid="control:in"]')).toBeAttached()
+  // 严禁存在右侧出口（exits 容器为空或不存在）
+  await expect(endNode.locator('.program-card-exits')).toHaveCount(0)
+
+  const loopEndNode = page.locator('.react-flow__node[data-id="loop_end"]')
+  await expect(loopEndNode).toBeVisible()
+  await expect(loopEndNode.locator('.program-card-heading strong')).toHaveText('结束本轮循环')
+  await expect(loopEndNode.locator('[data-handleid="control:in"]')).toBeAttached()
+  await expect(loopEndNode.locator('.program-card-exits')).toHaveCount(0)
+
+  // 4. 验证程序入口（entry）只有下一步出口，严禁存在左侧执行入口
+  const entryNode = page.locator('.react-flow__node[data-id="entry"]')
+  await expect(entryNode).toBeVisible()
+  await expect(entryNode.locator('[data-handleid="control:in"]')).toHaveCount(0)
+  await expect(entryNode.locator('[data-handleid="control:next"]')).toBeAttached()
+  await expect(entryNode.locator('.program-card-exits')).toHaveCount(1)
+
+  // 5. 验证卡片库侧边栏包含专属图标
+  const libraryIcons = page.locator('.program-library button svg.lucide')
+  expect(await libraryIcons.count()).toBeGreaterThanOrEqual(40)
+
+  // 6. 点击选中卡片时，右侧属性面板标题展示对应图标
+  await endNode.locator('.program-card-heading').click()
+  await expect(page.locator('.program-properties-icon')).toBeVisible()
+
+  // 7. 保存全卡片展示截图
+  await page.screenshot({path: 'test-results/scheduler-all-cards-no-terminal-exits.png', fullPage: true})
 })
 
 

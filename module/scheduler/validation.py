@@ -97,7 +97,7 @@ def validate(document: ProgramDocument, tasks=None, mode='takeover'):
             if not source or not target:
                 continue
             if edge.kind == 'control':
-                if edge.sourcePort not in source.exits or target.pure or edge.targetPort != 'in':
+                if edge.sourcePort not in source.exits or target.pure or getattr(target, 'entry', False) or target.type == 'entry' or edge.targetPort != 'in':
                     error('执行连接端口无效', edge.target)
                 key = ('control', edge.source, edge.sourcePort)
                 control[edge.source].append(edge.target)

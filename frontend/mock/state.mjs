@@ -178,7 +178,11 @@ export function createMockState({ empty = false } = {}) {
   }
   function program(name) {
     if (!cardCatalog) cardCatalog = programPython('catalog', get(name).values)
-    if (!programs.has(name)) programs.set(name, {mode:'native', draft:structuredClone(cardCatalog.templates.takeover), active:null, generation:0})
+    if (!programs.has(name)) {
+      const isShowcase = name === 'demo-main' && cardCatalog.templates.all
+      const draft = isShowcase ? structuredClone(cardCatalog.templates.all) : structuredClone(cardCatalog.templates.takeover)
+      programs.set(name, {mode: 'native', draft, active:null, generation:0})
+    }
     const current = programs.get(name)
     return {...structuredClone(current), revision:revision(current)}
   }

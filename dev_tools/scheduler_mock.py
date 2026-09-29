@@ -8,7 +8,7 @@ from module.scheduler.catalog import CARDS, RESOURCES, REFRESHABLE, OVERRIDES
 from module.scheduler.context import snapshot, simulation_plan
 from module.scheduler.engine import simulate, parse_time
 from module.scheduler.models import ProgramDocument
-from module.scheduler.templates import builtins, default_program, enhance_program
+from module.scheduler.templates import all_cards_program, builtins, default_program, enhance_program
 from module.scheduler.validation import validate
 
 
@@ -19,7 +19,8 @@ def dispatch(request):
         return {'cards': [c.model_dump() for c in CARDS], 'resources': [
             {'name': n, 'label': n, 'refreshable': n in REFRESHABLE} for n in RESOURCES],
             'tasks': context['tasks'], 'overrides': OVERRIDES, 'builtins': [s.model_dump() for s in builtins()],
-            'templates': {'takeover': default_program().model_dump(), 'enhance': enhance_program().model_dump()}}
+            'templates': {'takeover': default_program().model_dump(), 'enhance': enhance_program().model_dump(),
+                          'all': all_cards_program().model_dump()}}
     doc = ProgramDocument.model_validate(request['document'])
     result = validate(doc, {t['name'] for t in context['tasks']}, request.get('mode', 'takeover'))
     if action == 'validate':

@@ -14,9 +14,9 @@ export interface ProgramDocument extends Graph {
   viewport: {x: number; y: number; zoom: number}
 }
 export type ProgramRequest = Parameters['scheduler.program.save']['document']
-export interface CardDefinition {type: string; label: string; category: string; pure: boolean; inputs: Port[]; outputs: Port[]; exits: string[]; params: Record<string, unknown>}
+export interface CardDefinition {type: string; label: string; category: string; pure: boolean; entry?: boolean; inputs: Port[]; outputs: Port[]; exits: string[]; params: Record<string, unknown>}
 export interface Catalog {
-  cards: CardDefinition[]; builtins: Subgraph[]; templates: Record<'takeover' | 'enhance', ProgramDocument>
+  cards: CardDefinition[]; builtins: Subgraph[]; templates: Record<'takeover' | 'enhance' | 'all', ProgramDocument>
   tasks: Array<{name: string; command: string; enabled: boolean; nextRun: string}>
   resources: Array<{name: string; label: string; refreshable: boolean}>
   overrides: Record<string, string | string[]>

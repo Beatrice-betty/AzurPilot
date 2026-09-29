@@ -135,17 +135,18 @@
 
 /* 卡片节点样式 */
 .program-card {width:220px; border:1px solid color-mix(in srgb,var(--card-color) 50%,var(--border,#d7dce3)); border-radius:12px; color:var(--text,#273244); background:var(--program-panel); box-shadow:0 3px 12px #192e4510; padding:0; overflow:visible}.program-card.selected {outline:2px solid var(--card-color); outline-offset:2px}.program-card.current {box-shadow:0 0 0 4px #39b99060}.program-card.invalid {border-color:#d85b65; box-shadow:0 0 0 2px #d85b6540}
-.program-card-heading {position:relative; display:flex; flex-direction:column; gap:5px; border-bottom:1px solid color-mix(in srgb,var(--card-color) 30%,var(--border)); background:color-mix(in srgb,var(--card-color) 14%,var(--program-panel)); border-radius:11px 11px 0 0; padding:12px 14px}.program-card-heading span {font-size:11px; color:var(--card-color); font-weight:600}.program-card-heading strong {font-size:16px}.program-card-summary {font-size:12px; color:var(--muted); padding:8px 14px; overflow-wrap:anywhere}
+.program-card-heading {position:relative; display:flex; flex-direction:column; gap:5px; border-bottom:1px solid color-mix(in srgb,var(--card-color) 30%,var(--border)); background:color-mix(in srgb,var(--card-color) 14%,var(--program-panel)); border-radius:11px 11px 0 0; padding:12px 14px}.program-card-heading>span, .program-card-category {font-size:11px; color:var(--card-color); font-weight:600}.program-card-heading strong {font-size:16px}.program-card-title {display:flex; align-items:center; gap:6px; font-size:16px; font-weight:700; line-height:1.25; min-width:0}.program-card-icon {flex-shrink:0; color:var(--card-color)}.program-card-summary {font-size:12px; color:var(--muted); padding:8px 14px; overflow-wrap:anywhere}
 .program-card-ports {display:flex; justify-content:space-between; gap:5px; border-top:1px solid var(--border)}.program-card-ports>div {flex:1; min-width:0}.program-port {position:relative; display:flex; flex-direction:column; justify-content:center; min-height:38px; padding:4px 10px; font-size:12px; overflow-wrap:anywhere}.program-port.output {text-align:right}.program-port small {font-size:10px; color:var(--muted)}
 .program-card .react-flow__handle {width:12px; height:12px; background:#8191a5; border:2px solid var(--program-panel); top:50%}.program-card .control-handle {background:var(--card-color); border-radius:3px}.program-card-exits {padding:4px 0}.program-card-exits .program-port {min-height:24px;font-size:12px}
-.program-category-dot {display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; background:var(--card-color)}.program-library button>svg {color:var(--card-color,var(--text))}
+.program-category-dot {display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; background:var(--card-color)}.program-library button>svg {color:var(--card-color,var(--text)); flex-shrink:0}
 
 /* 节点位置由画布直接更新，不对拖拽坐标或连线附加主题转场 */
 .program-canvas .react-flow__node, .program-canvas .react-flow__viewport, .program-card {transition:none; animation:none}
 .program-canvas .react-flow__edge-text {fill:var(--text)}.program-canvas .react-flow__edge-textbg {fill:var(--program-panel)}
 .program-mobile-back-bar, .program-mobile-back {display:none}
 .program-properties-title-row {display:flex; align-items:center; justify-content:space-between; margin-bottom:12px}
-.program-properties-title-row h2 {font-size:15px; margin:0}
+.program-properties-title-row h2 {display:flex; align-items:center; gap:7px; font-size:15px; margin:0}
+.program-properties-icon {flex-shrink:0}
 .program-properties h2 {font-size:15px; margin:0 0 12px}
 .program-properties>label,.program-properties details label {display:flex; flex-direction:column; gap:5px; font-size:11px; margin-bottom:10px}
 .program-properties fieldset {border:1px solid var(--border); border-radius:8px; margin:8px 0; padding:8px 10px; max-height:none; overflow:visible}
@@ -437,7 +438,7 @@
   border-radius: 8px;
   background: var(--program-panel);
 }
-.program-trace>div {display:flex;gap:10px;padding:6px 8px;border-top:1px solid var(--border)}.program-trace span {color:var(--muted);width:24px}.program-trace button {border:0;background:transparent;color:var(--accent);cursor:pointer;flex-shrink:0}.program-trace code {white-space:pre-wrap;overflow-wrap:anywhere}.program-diagnostics {display:flex;flex-direction:column;gap:4px;color:#c25461;font-size:12px;margin:8px 0}.program-diagnostics.valid {color:#329071}.program-diagnostics button {text-align:left;border:0;background:transparent;color:inherit;cursor:pointer}
+.program-trace>div {display:flex;gap:10px;padding:6px 8px;border-top:1px solid var(--border)}.program-trace span {color:var(--muted);width:24px}.program-trace button {display:inline-flex;align-items:center;gap:5px;border:0;background:transparent;color:var(--accent);cursor:pointer;flex-shrink:0}.program-trace code {white-space:pre-wrap;overflow-wrap:anywhere}.program-diagnostics {display:flex;flex-direction:column;gap:4px;color:#c25461;font-size:12px;margin:8px 0}.program-diagnostics.valid {color:#329071}.program-diagnostics button {display:inline-flex;align-items:center;gap:6px;text-align:left;border:0;background:transparent;color:inherit;cursor:pointer}
 .program-schema-panel {border-bottom:1px solid var(--border); background:var(--program-panel); padding:10px 16px; display:flex; flex-direction:column; gap:8px; font-size:12px; flex-shrink:0}.program-schema-panel>div:first-child {display:flex;align-items:center;gap:10px}.program-schema-row {display:flex;gap:10px;align-items:center;flex-wrap:wrap}.program-schema-row>label {display:flex;align-items:center;gap:5px}.program-schema-row textarea {min-height:32px;max-height:none;width:180px}
 
 /* React Flow 控制器与小地图：自动退避左右悬浮面板与抽屉，杜绝遮挡 */

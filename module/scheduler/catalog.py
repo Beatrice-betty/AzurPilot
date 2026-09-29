@@ -7,15 +7,17 @@ def port(name, kind='any', required=False):
     return PortDefinition(name=name, type=kind, required=required)
 
 
-def card(card_type, label, category, inputs=(), outputs=(('value', 'any'),), exits=(), **params):
-    return CardDefinition(type=card_type, label=label, category=category, pure=not exits,
+def card(card_type, label, category, inputs=(), outputs=(('value', 'any'),), exits=(), pure=None, entry=False, **params):
+    return CardDefinition(type=card_type, label=label, category=category,
+                          pure=not exits if pure is None else pure,
+                          entry=entry,
                           inputs=[port(*p) for p in inputs], outputs=[port(*p) for p in outputs],
                           exits=list(exits), params=params)
 
 
 CARDS = [
-    card('entry', '程序入口', '流程', outputs=(), exits=('next',)),
-    card('end', '结束程序', '流程', outputs=(), exits=('done',)),
+    card('entry', '程序入口', '流程', outputs=(), exits=('next',), entry=True),
+    card('end', '结束程序', '流程', outputs=(), exits=(), pure=False),
     card('literal', '常量', '逻辑', value=0, valueType='number'),
     card('compare', '比较', '逻辑', inputs=(('a', 'any', True), ('b', 'any', True)), outputs=(('value', 'boolean'),), operator='>=', a=0, b=0),
     card('logic', '且 / 或 / 非', '逻辑', inputs=(('a', 'boolean'), ('b', 'boolean')), outputs=(('value', 'boolean'),), operator='and', a=True, b=True),
@@ -53,11 +55,11 @@ CARDS = [
     card('record', '记录配额 / 冷却', '调度', outputs=(), exits=('next',), key='daily', kind='quota', reset='00:00'),
     card('loop', '条件 / 次数循环', '流程', inputs=(('condition', 'boolean'),), outputs=(('index', 'number'),), exits=('body', 'done'), count=-1, condition=True),
     card('foreach', '遍历列表', '流程', inputs=(('items', 'list', True),), outputs=(('item', 'any'), ('index', 'number')), exits=('body', 'done')),
-    card('loop_end', '结束本轮循环', '流程', outputs=(), exits=('next',), loop=''),
+    card('loop_end', '结束本轮循环', '流程', outputs=(), exits=(), pure=False, loop=''),
     card('call', '调用组合卡片', '流程', exits=('next',), graph=''),
     card('input', '组合卡片输入', '流程', name='value'),
     card('output', '组合数据输出', '流程', inputs=(('value', 'any'),)),
-    card('return', '组合卡片输出', '流程', inputs=(('value', 'any'),), outputs=(), exits=('done',), value=None),
+    card('return', '组合卡片输出', '流程', inputs=(('value', 'any'),), outputs=(), exits=(), pure=False, value=None),
     card('debug', '输出调试信息', '流程', inputs=(('value', 'any'),), outputs=(), exits=('next',), value=''),
 ]
 REGISTRY = {c.type: c for c in CARDS}

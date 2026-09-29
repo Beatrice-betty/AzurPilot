@@ -23,6 +23,7 @@ class CardDefinition(Model):
     label: str
     category: str
     pure: bool = True
+    entry: bool = False
     inputs: list[PortDefinition] = Field(default_factory=list)
     outputs: list[PortDefinition] = Field(default_factory=list)
     exits: list[str] = Field(default_factory=list)

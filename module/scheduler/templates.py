@@ -88,3 +88,53 @@ def enhance_program():
         node('start', 'entry'), node('tasks', 'tasks', 0, 200), node('choose', 'call', 250, 200, graph='builtin.priority'),
         node('run', 'execute', 500)], edges=[edge('start', 'run'), edge('tasks', 'choose', 'value', 'items', True),
                                            edge('choose', 'run', 'value', 'task', True)])
+
+
+def all_cards_program():
+    """将注册表中的所有基础卡片按分类整齐排列成网格，便于可视化审阅与调试。"""
+    from module.scheduler.catalog import CARDS
+    categories = ['流程', '逻辑', '变量', '时间', '资源', '任务', '列表', '调度']
+    col_spacing = 300
+    row_spacing = 380
+    nodes = []
+
+    for col_idx, cat in enumerate(categories):
+        cards = [c for c in CARDS if c.category == cat and c.type not in ('input', 'output', 'return')]
+        for row_idx, c in enumerate(cards):
+            params = dict(c.params)
+            if c.type in ('get_variable', 'set_variable'):
+                params['name'] = 'var1'
+            elif c.type == 'loop_end':
+                params['loop'] = 'loop'
+            elif c.type == 'call':
+                params['graph'] = 'builtin.original'
+            elif c.type == 'task':
+                params['name'] = 'Main'
+            elif c.type == 'priority':
+                params['order'] = ['Commission', 'Research', 'Reward', 'Main']
+            elif c.type == 'execute':
+                params['task'] = 'Main'
+            nodes.append(CardNode(id=c.type, type=c.type, params=params, position={'x': col_idx * col_spacing, 'y': row_idx * row_spacing}))
+
+    edges = [
+        edge('tasks', 'filter', 'value', 'items', True),
+        edge('tasks', 'sort', 'value', 'items', True),
+        edge('tasks', 'first', 'value', 'items', True),
+        edge('tasks', 'empty', 'value', 'items', True),
+        edge('tasks', 'priority', 'value', 'items', True),
+        edge('tasks', 'oldest', 'value', 'items', True),
+        edge('tasks', 'round_robin', 'value', 'items', True),
+        edge('tasks', 'foreach', 'value', 'items', True),
+        edge('resource', 'resource_fresh', 'record', 'resource', True),
+        edge('resource', 'field', 'record', 'object', True),
+    ]
+
+    return ProgramDocument(
+        entry='entry',
+        name='全卡片展示 · 整齐排列',
+        subgraphs=builtins(),
+        variables=[{'name': 'var1', 'type': 'number', 'initial': 0, 'persistent': False}],
+        viewport={'x': 0, 'y': 0, 'zoom': 0.75},
+        nodes=nodes,
+        edges=edges
+    )

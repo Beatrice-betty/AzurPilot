@@ -8,7 +8,7 @@ from module.scheduler.context import snapshot, simulation_plan
 from module.scheduler.engine import simulate
 from module.scheduler.models import ProgramDocument, ResourceObservation
 from module.scheduler.store import ConflictError, ProgramStore
-from module.scheduler.templates import builtins, default_program, enhance_program
+from module.scheduler.templates import all_cards_program, builtins, default_program, enhance_program
 from module.scheduler.validation import validate
 
 
@@ -28,7 +28,8 @@ class SchedulerService:
              'refreshable': name in REFRESHABLE} for name in RESOURCES],
             'tasks': snapshot(data, {}, datetime.now())['tasks'], 'overrides': OVERRIDES,
             'builtins': [s.model_dump() for s in builtins()],
-            'templates': {'takeover': default_program().model_dump(), 'enhance': enhance_program().model_dump()}}
+            'templates': {'takeover': default_program().model_dump(), 'enhance': enhance_program().model_dump(),
+                          'all': all_cards_program().model_dump()}}
 
     def validation(self, instance, document, mode='takeover'):
         data, _ = self.configs.read(instance)
