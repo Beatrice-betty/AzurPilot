@@ -905,6 +905,20 @@ test('调度程序在全量六套主题下背景与控件对比度正常无白�
   const darkRgb = darkBg.match(/\d+/g)?.map(Number) ?? [255, 255, 255]
   expect(darkRgb[0]).toBeLessThan(80)
   await page.screenshot({path: 'test-results/scheduler-theme-dark.png'})
+  const entry = page.locator('.react-flow__node').filter({has: page.locator('.program-card-title', {hasText: '程序入口'})}).first()
+  const entryBox = (await entry.boundingBox())!
+  const libraryBox = (await page.locator('.program-library').boundingBox())!
+  expect(entryBox.width).toBeGreaterThan(150)
+  expect(entryBox.x).toBeGreaterThan(libraryBox.x + libraryBox.width)
+  await expect(page.locator('.program-properties')).toBeHidden()
+  await entry.click()
+  await expect(page.locator('.program-properties')).toBeVisible()
+  const selectedBox = (await entry.boundingBox())!
+  expect(Math.abs(selectedBox.x - entryBox.x)).toBeLessThan(3)
+  await page.getByRole('button', {name: '展开画布', exact: true}).click()
+  const expandedBox = (await entry.boundingBox())!
+  expect(Math.abs(expandedBox.x - selectedBox.x)).toBeLessThan(3)
+  await page.getByRole('button', {name: '显示面板', exact: true}).click()
 
   // 2. 测试经典旧版深色 (legacy-dark)
   await page.evaluate(() => {
@@ -925,6 +939,7 @@ test('调度程序在全量六套主题下背景与控件对比度正常无白�
   await expect(page.locator('.program-editor')).toBeVisible()
   const minimalBackdrop = await page.locator('.program-library').evaluate(el => getComputedStyle(el).backdropFilter)
   expect(minimalBackdrop).toBe('none')
+  expect(await page.locator('.program-card').first().evaluate(el => getComputedStyle(el).boxShadow)).toBe('none')
   await page.screenshot({path: 'test-results/scheduler-theme-minimal.png'})
 
   // 4. 测试极致紧凑主题 (extreme)
@@ -935,6 +950,7 @@ test('调度程序在全量六套主题下背景与控件对比度正常无白�
   await expect(page.locator('.program-editor')).toBeVisible()
   const extremeBackdrop = await page.locator('.program-library').evaluate(el => getComputedStyle(el).backdropFilter)
   expect(extremeBackdrop).toBe('none')
+  expect(await page.locator('.program-card').first().evaluate(el => getComputedStyle(el).borderTopLeftRadius)).toBe('0px')
   await page.screenshot({path: 'test-results/scheduler-theme-extreme.png'})
 
   // 5. 测试经典旧版浅色 (legacy-light)

@@ -329,7 +329,7 @@ function Editor() {
       {catalog.templates && 'all' in catalog.templates && <button className="button secondary" onClick={() => {change(clone(catalog.templates.all)); setGraphId('main'); setSelection([]); setTimeout(() => void flow.fitView({padding:0.12}), 0)}}><Layers size={14}/>全卡片排列</button>}
       <button className="button secondary" onClick={() => setVariablesOpen(!variablesOpen)}>变量与端口</button>
       <button className="button secondary" onClick={() => {updateGraph(horizontalLayout(graph)); requestAnimationFrame(() => void flow.fitView({padding:0.12}))}}>从左到右排列</button>
-      <button className="button secondary" onClick={() => {setCanvasExpanded(value => !value); requestAnimationFrame(() => void flow.fitView({padding:0.12}))}}>{canvasExpanded ? '显示面板' : '展开画布'}</button>
+      <button className="button secondary" onClick={() => setCanvasExpanded(value => !value)}>{canvasExpanded ? '显示面板' : '展开画布'}</button>
       <button className="button secondary" onClick={() => copySelected()} disabled={!selection.length} title="复制（Ctrl/Cmd+C）"><Copy size={14}/>复制</button>
       <button className="button secondary" onClick={() => void pasteSelected()} title="粘贴（Ctrl/Cmd+V）">粘贴</button>
       <button className="button secondary" disabled={!selection.length} onClick={() => {try {change(encapsulate(doc, graphId, new Set(selection), '自定义组合卡片', catalog)); setSelection([])} catch (error) {notify((error as Error).message, true)}}}>封装卡片</button>
@@ -349,9 +349,9 @@ function Editor() {
       <button type="button" className={`button ${mobilePanel === 'library' ? 'primary active' : 'secondary'}`} onClick={() => setMobilePanel('library')}>卡片库</button>
       <button type="button" className={`button ${mobilePanel === 'properties' ? 'primary active' : 'secondary'}`} onClick={() => setMobilePanel('properties')}>属性与连接</button>
     </div>
-    <div className={`program-workspace mobile-${mobilePanel} ${canvasExpanded ? 'canvas-expanded' : ''}`}>
+    <div className={`program-workspace mobile-${mobilePanel} ${canvasExpanded ? 'canvas-expanded' : ''} ${picked ? 'has-selection' : ''}`}>
       <main className="program-canvas" tabIndex={0} aria-label="调度画布" onPointerDown={event => {if (!editingText(event.target)) event.currentTarget.focus({preventScroll:true})}} onDragOver={e => {e.preventDefault(); e.dataTransfer.dropEffect = 'copy'}} onDrop={e => {e.preventDefault(); try {const data = JSON.parse(e.dataTransfer.getData('application/azurpilot-card')); add(data.type, data.graph, flow.screenToFlowPosition({x:e.clientX,y:e.clientY}))} catch { /* 忽略非卡片拖放。 */ }}}>
-        <ProgramCanvas key={graphId} nodes={nodes} edges={edges} nodeTypes={nodeTypes} deleteKeyCode={null} onNodeClick={() => setMobilePanel('properties')} onSelectionChange={onSelectionChange} onConnect={connect} isValidConnection={connectValid}
+        <ProgramCanvas key={graphId} nodes={nodes} edges={edges} focusEntry={graphId === 'main' && graph.nodes.some(n => n.type === 'original_settings') ? graph.entry : undefined} nodeTypes={nodeTypes} deleteKeyCode={null} onNodeClick={() => setMobilePanel('properties')} onSelectionChange={onSelectionChange} onConnect={connect} isValidConnection={connectValid}
           onPositionsCommit={moved => {const positions = new Map(moved.map(n => [n.id, n.position])); if (moved.some(n => {const old=graph.nodes.find(x => x.id === n.id); return old && (old.position.x !== n.position.x || old.position.y !== n.position.y)})) updateGraph({...graph, nodes:graph.nodes.map(n => positions.has(n.id) ? {...n, position:positions.get(n.id)!} : n)})}}
           onEdgesDelete={deleted => updateGraph({...graph, edges:graph.edges.filter(e => !deleted.some(d => d.id === e.id))})}
           onEdgeDoubleClick={(_,edge) => updateGraph({...graph, edges:graph.edges.filter(e => e.id !== edge.id)})}/>

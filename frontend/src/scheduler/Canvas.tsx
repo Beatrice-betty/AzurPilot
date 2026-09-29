@@ -1,32 +1,35 @@
 /** 拖拽的瞬时状态由画布管理，松开后才提交文档，避免测量、选择和持久图互相覆盖。 */
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
-import {applyEdgeChanges, applyNodeChanges, Background, Controls, MiniMap, ReactFlow, SelectionMode, useReactFlow, type Edge, type EdgeChange, type Node, type NodeChange, type ReactFlowProps} from '@xyflow/react'
+import {applyEdgeChanges, applyNodeChanges, Background, Controls, MiniMap, ReactFlow, SelectionMode, useNodesInitialized, useReactFlow, type Edge, type EdgeChange, type Node, type NodeChange, type ReactFlowProps} from '@xyflow/react'
 import {categoryColor} from './appearance'
 import type {CardDefinition, Catalog, PortType, ProgramDocument, ProgramNode} from './types'
 
 export type CanvasNode = Node<{card: ProgramNode; spec: CardDefinition; current: boolean; invalid: boolean; catalog: Catalog; document: ProgramDocument; connectedInputs: string[]; inputTypes: Record<string,PortType>; outputTypes: Record<string,PortType>; onParamsChange: (node: string, patch: Record<string, unknown>) => void}, 'card'>
-type Props = ReactFlowProps<CanvasNode> & {onPositionsCommit: (nodes: CanvasNode[]) => void}
+type Props = ReactFlowProps<CanvasNode> & {onPositionsCommit: (nodes: CanvasNode[]) => void; focusEntry?: string}
 
-export function ProgramCanvas({nodes: documentNodes = [], edges: documentEdges = [], onPositionsCommit, ...props}: Props) {
+export function ProgramCanvas({nodes: documentNodes = [], edges: documentEdges = [], onPositionsCommit, focusEntry, ...props}: Props) {
   const [nodes, setNodes] = useState(documentNodes)
   const [edges, setEdges] = useState(documentEdges)
   const root = useRef<HTMLDivElement>(null)
   const flow = useReactFlow<CanvasNode>()
+  const nodesInitialized = useNodesInitialized()
+  const focused = useRef(false)
   useEffect(() => {
-    if (!root.current) return
-    let previous = '', frame = 0
-    const observer = new ResizeObserver(([entry]) => {
-      if (!entry || !entry.contentRect.width || !entry.contentRect.height) return
-      const size = `${entry.contentRect.width}:${entry.contentRect.height}`
-      if (previous && size !== previous) {
-        cancelAnimationFrame(frame)
-        frame = requestAnimationFrame(() => void flow.fitView({padding:0.12, minZoom:0.2, maxZoom:1}))
-      }
-      previous = size
+    if (!focusEntry) {focused.current = false; return}
+    if (!nodesInitialized || focused.current || !root.current) return
+    const entry = documentNodes.find(node => node.id === focusEntry)
+    if (!entry) return
+    const frame = requestAnimationFrame(() => {
+      const width = root.current?.clientWidth ?? 0
+      const height = root.current?.clientHeight ?? 0
+      if (!width || !height) return
+      focused.current = true
+      const zoom = width <= 850 ? 0.7 : 0.78
+      const left = width <= 850 ? 48 : width <= 1200 ? 240 : 278
+      void flow.setViewport({x:left - entry.position.x * zoom, y:Math.min(170, height * 0.22) - entry.position.y * zoom, zoom})
     })
-    observer.observe(root.current)
-    return () => {observer.disconnect(); cancelAnimationFrame(frame)}
-  }, [flow])
+    return () => cancelAnimationFrame(frame)
+  }, [documentNodes, flow, focusEntry, nodesInitialized])
   // 同步外部文档变更：在渲染周期即时对齐节点与连线数据，避免 useEffect 异步帧延迟导致受控状态回弹。
   const [prevDocumentNodes, setPrevDocumentNodes] = useState(documentNodes)
   if (prevDocumentNodes !== documentNodes) {

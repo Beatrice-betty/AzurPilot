@@ -125,9 +125,21 @@
   left: 14px;
   width: 230px;
 }
+.program-library .program-search {
+  position: sticky;
+  top: -12px;
+  z-index: 2;
+  padding: 4px 0 8px;
+  background: var(--program-panel);
+}
 .program-properties {
   right: 14px;
   width: 300px;
+}
+@media (min-width: 851px) {
+  .program-workspace:not(.has-selection) > .program-properties {display: none}
+  .program-workspace:not(.has-selection) > .program-default-guide {right: 14px}
+  .program-workspace:not(.has-selection) .react-flow__minimap {right: 14px !important}
 }
 
 .program-library h3, .program-properties h3 {font-size:11px; text-transform:uppercase; letter-spacing:.04em; margin:14px 0 6px; color:var(--muted)}.program-library button {display:flex; align-items:center; gap:6px; text-align:left; width:100%; padding:7px 5px; border:0; border-radius:6px; background:transparent; color:var(--text); font-size:12px; cursor:pointer}.program-library button:hover {background:var(--hover,rgba(90,120,160,.1))}
@@ -560,6 +572,8 @@
 .program-editor .react-flow__minimap {
   right: 328px !important;
   bottom: 14px !important;
+  width: 150px;
+  height: 100px;
   z-index: 5 !important;
   margin: 0 !important;
   background: var(--program-panel) !important;
@@ -609,6 +623,37 @@
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
   background: var(--program-panel) !important;
+}
+
+/* 紧凑主题沿用全站的平面、直角语言，避免编辑区独自出现悬浮玻璃卡片。 */
+:root[data-theme='minimal'] .program-card,
+:root[data-theme='minimal'] .program-library,
+:root[data-theme='minimal'] .program-properties,
+:root[data-theme='minimal'] .program-console,
+:root[data-theme='minimal'] .program-default-guide,
+:root[data-theme='minimal'] .program-editor .react-flow__controls,
+:root[data-theme='minimal'] .program-editor .react-flow__minimap,
+:root[data-theme='extreme'] .program-card,
+:root[data-theme='extreme'] .program-library,
+:root[data-theme='extreme'] .program-properties,
+:root[data-theme='extreme'] .program-console,
+:root[data-theme='extreme'] .program-default-guide,
+:root[data-theme='extreme'] .program-editor .react-flow__controls,
+:root[data-theme='extreme'] .program-editor .react-flow__minimap {
+  box-shadow: none !important;
+}
+:root[data-theme='extreme'] .program-card,
+:root[data-theme='extreme'] .program-card-heading,
+:root[data-theme='extreme'] .program-library,
+:root[data-theme='extreme'] .program-properties,
+:root[data-theme='extreme'] .program-console,
+:root[data-theme='extreme'] .program-default-guide,
+:root[data-theme='extreme'] .program-editor .react-flow__controls,
+:root[data-theme='extreme'] .program-editor .react-flow__minimap,
+:root[data-theme='extreme'] .program-editor input,
+:root[data-theme='extreme'] .program-editor select,
+:root[data-theme='extreme'] .program-editor textarea {
+  border-radius: 0 !important;
 }
 
 /* 当右侧调试面板展开时，小地图自动向左退避 */
