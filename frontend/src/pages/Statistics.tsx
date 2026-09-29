@@ -567,7 +567,7 @@ export function Statistics() {
             <SegmentedControl className="statistics-category-control" label={ui('stats.categoryLabel')} value={category} onChange={selectPage} onItemContextMenu={editMode ? id => togglePage(id, false) : undefined} onItemMove={editMode ? movePageBy : undefined} itemClassName={id => `${isPageEnabled(layout, id) ? '' : 'is-disabled'}${!editMode && chainOf(id).length > 1 ? ' is-chained' : ''}`.trim()} trailing={singleViewToggle} options={visiblePageEntries.map(([value, label]) => ({value: value as Category, label: ui(label)}))}/>
             {legacy && <div className="statistics-actions">{actions}</div>}
           </div>
-          <div className="statistics-controls period-controls"><strong>{ui(categories[category!])}</strong>{rangeControls}{hints}</div>
+          <div className="statistics-controls period-controls">{rangeControls}{hints}</div>
         </>}
     {condensed && (category === 'ships' || category === 'loot') && <div className="statistics-controls period-controls">{hints}</div>}
     {editMode && <StatisticsEditConsole customized={customized} pages={fixedPageOrder.map(id => ({id, label: ui(categories[id]), enabled: isPageEnabled(layout, id)}))} onTogglePage={id => togglePage(id, !isPageEnabled(layout, id))} onReset={resetLayout}>

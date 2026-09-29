@@ -490,9 +490,18 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
         <>
           {isSingle ? (
             <div className="stat-metrics">
-              {[[ui('stats.latest'), single.latest], [ui('stats.change'), single.change], [ui('stats.maximum'), single.maximum], [ui('stats.minimum'), single.minimum], [ui('stats.rawCount'), single.points.length]].map(([label, value]) => (
-                <div key={String(label)}><span>{label}</span><strong>{Number(value).toLocaleString(undefined, {maximumFractionDigits: 2})}</strong></div>
-              ))}
+              {[[ui('stats.latest'), single.latest], [ui('stats.change'), single.change], [ui('stats.maximum'), single.maximum], [ui('stats.minimum'), single.minimum], [ui('stats.rawCount'), single.points.length]].map(([label, value]) => {
+                const isChange = label === ui('stats.change')
+                const numVal = Number(value)
+                const diffClass = isChange ? (numVal > 0 ? 'positive' : numVal < 0 ? 'negative' : 'neutral') : ''
+                const formatted = isChange && numVal > 0 ? `+${numVal.toLocaleString(undefined, {maximumFractionDigits: 2})}` : numVal.toLocaleString(undefined, {maximumFractionDigits: 2})
+                return (
+                  <div key={String(label)}>
+                    <span>{label}</span>
+                    <strong className={diffClass}>{formatted}</strong>
+                  </div>
+                )
+              })}
             </div>
           ) : (
             <div className={`stat-multi-metrics${compact ? ' is-compact' : ''}`}>

@@ -32,8 +32,8 @@
   --theme-sidebar: var(--surface);
   --theme-glass: var(--theme-surface-bg); --theme-glass-edge: var(--glass-edge);
   --theme-glass-shadow: var(--glass-shadow); --theme-material-filter: var(--theme-surface-filter);
-  --theme-chrome-filter: none;
-  --theme-popover-filter: none; --theme-overlay-filter: none; --theme-overlay: color-mix(in srgb, var(--bg) 30%, transparent);
+  --theme-chrome-filter: var(--theme-sidebar-filter);
+  --theme-popover-filter: var(--theme-menu-filter); --theme-overlay-filter: blur(var(--theme-overlay-blur)); --theme-overlay: color-mix(in srgb, var(--bg) 30%, transparent);
   /* 玻璃参数由旧版玻璃变体使用；普通材质由 theme-material.css 覆写为无滤镜。 */
   --theme-glass-blur: var(--theme-surface-blur); --theme-glass-saturation: var(--theme-surface-saturation);
   /* 区域化材质：参数键由旋钮写入、合成键由皮肤消费；默认值关系是一级面为基准，
@@ -156,7 +156,6 @@
   --theme-instance-icon-bg: #7a77bb;
 }
 
-/* 本族的控件语言是硬朗直角（输入框 8px），按钮原来套着 apple.css 的 20px 药丸，同页两种形状。
-   带 data-theme 前缀是为了压过 apple.css 的同名 .button 规则（同为单类，靠文件顺序会输给它）。 */
-:root[data-theme='legacy-light'] .button, :root[data-theme='legacy-light'] .icon-button,
-:root[data-theme='legacy-dark'] .button, :root[data-theme='legacy-dark'] .icon-button {border-radius: var(--theme-radius-control)}
+/* MD3 规范：按钮为 20px 全胶囊操场形 (stadium pill)，图标按钮为圆形 50% */
+:root[data-theme='legacy-light'] .button, :root[data-theme='legacy-dark'] .button {border-radius: var(--theme-radius-button, 20px)}
+:root[data-theme='legacy-light'] .icon-button, :root[data-theme='legacy-dark'] .icon-button {border-radius: 50%}

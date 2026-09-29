@@ -77,9 +77,9 @@
   --theme-control-bg: color-mix(in srgb, var(--surface) var(--theme-control-alpha), transparent);
   --theme-control-filter: blur(var(--theme-control-blur)) saturate(var(--theme-control-saturation));
   --theme-control-edge: var(--theme-glass-edge); --theme-control-shadow: var(--theme-glass-shadow);
-  --theme-popover-blur: 28px;
+  --theme-popover-blur: var(--theme-menu-blur);
   --theme-overlay: #11111b40;
-  --theme-overlay-blur: 8px;
+  --theme-overlay-blur: var(--theme-modal-blur);
 
   /* Shape */
   --theme-radius-control: 10px;
@@ -202,7 +202,7 @@
 
 :root {
   --theme-material-filter: var(--theme-surface-filter);
-  --theme-chrome-filter: blur(18px) saturate(125%);
-  --theme-popover-filter: blur(var(--theme-popover-blur)) saturate(145%) brightness(1.04);
-  --theme-overlay-filter: blur(var(--theme-overlay-blur));
+  --theme-chrome-filter: var(--theme-sidebar-filter);
+  --theme-popover-filter: var(--theme-menu-filter);
+  --theme-overlay-filter: blur(var(--theme-modal-blur));
 }

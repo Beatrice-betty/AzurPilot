@@ -153,7 +153,8 @@ main:focus {outline: none}
 .home-summary strong {color: var(--text); font-size: 20px; font-variant-numeric: tabular-nums}
 .title-actions {position: relative; gap: 8px; padding: 4px}
 .panel-heading h2 {font-size: 15px}
-.panel, .resource-card, .instance-card {border-radius: var(--theme-radius-panel)}
+.panel {border-radius: var(--theme-radius-panel, 16px)}
+.resource-card, .instance-card, .stat-metric-card {border-radius: var(--theme-radius-card, 12px)}
 
 /* MD3 按钮规范：高度 40px，全胶囊圆角 20px，文字 14px Medium，标准状态层 */
 .button {
