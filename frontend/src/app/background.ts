@@ -38,17 +38,6 @@ export interface BackgroundSnapshot extends BackgroundPreference {
     R18 接口**不放进仓库**（人类要求：那份清单他自己留着用，不进代码）；需要时由用户自己加进地址列表。 */
 export const DEFAULT_BACKGROUND_URLS = [
   'https://api.yppp.net/api.php',
-  'https://www.loliapi.com/acg/',
-  'https://www.loliapi.com/acg/pc/',
-  'https://www.loliapi.com/acg/pe/',
-  'https://www.dmoe.cc/random.php',
-  'https://t.mwm.moe/pc',
-  'https://t.mwm.moe/mp',
-  'https://moe.jitsu.top/img/',
-  'https://api.anosu.top/img',
-  'https://api.lolicon.app/setu/v2',
-  'https://nekos.life/api/v2/img/neko',
-  'https://purrbot.site/api/img/sfw/neko/img',
 ]
 
 /** 单独一条内置地址。 */
