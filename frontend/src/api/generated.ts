@@ -41,6 +41,7 @@ export interface Parameters {
   "updater.apply": Record<string, never>
   "updater.cancel": Record<string, never>
   "announcement.get": { force?: boolean }
+  "background.access": Record<string, never>
   "background.resolve": { url: string }
   "background.gallery.list": Record<string, never>
   "background.gallery.add": { url: string; name?: string }

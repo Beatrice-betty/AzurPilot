@@ -1,5 +1,6 @@
 """显式方法注册表；所有阻塞业务操作在工作线程执行。"""
 import os
+import secrets
 from dataclasses import dataclass
 from typing import Callable
 
@@ -39,6 +40,7 @@ class Router:
         self._accounts = None
         self._scheduler_programs = None
         self.access_password = ''
+        self.background_token = secrets.token_urlsafe(32)
         self.methods = {
             'system.ping': Method(p.Params, lambda _: {'pong': True}),
             'schema.get': Method(p.SchemaParams, lambda x: configs.schema(x.language)),
@@ -82,6 +84,7 @@ class Router:
             'updater.apply': Method(p.Params, lambda _: self.updates.start('apply'), True),
             'updater.cancel': Method(p.Params, lambda _: self.updates.cancel(), True),
             'announcement.get': Method(p.AnnouncementParams, lambda x: self.announcements.get(force=x.force)),
+            'background.access': Method(p.Params, lambda _: {'token': self.background_token}),
             'background.resolve': Method(p.BackgroundUrlParams, lambda x: background.resolve(x.url)),
             'background.gallery.list': Method(p.Params, lambda _: background.gallery_list()),
             'background.gallery.add': Method(p.BackgroundGalleryAddParams,

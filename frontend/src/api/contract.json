@@ -2041,6 +2041,16 @@
         "type": "object"
       }
     },
+    "background.access": {
+      "mutates": false,
+      "params": {
+        "additionalProperties": false,
+        "description": "API 入参基础模型，禁止额外字段并启用严格类型校验。",
+        "properties": {},
+        "title": "Params",
+        "type": "object"
+      }
+    },
     "background.resolve": {
       "mutates": false,
       "params": {
