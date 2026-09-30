@@ -1238,6 +1238,10 @@
     "CheckPerCategory": {
       "name": "Check X ships per category",
       "help": "Prioritizes checking whether enhancement materials are available"
+    },
+    "SkipSingleCommonCV": {
+      "name": "Skip a single Common carrier material",
+      "help": "When enabled, skip the current ship if the recommended materials contain only one Common carrier selected for preservation. Disable to use that carrier for normal enhancement. Carrier preservation rules for other material combinations remain unchanged."
     }
   },
   "OldRetire": {

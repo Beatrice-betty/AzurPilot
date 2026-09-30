@@ -1017,6 +1017,10 @@
       "CheckPerCategory": {
         "type": "input",
         "value": 5
+      },
+      "SkipSingleCommonCV": {
+        "type": "checkbox",
+        "value": true
       }
     },
     "OldRetire": {
