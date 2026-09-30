@@ -14,6 +14,7 @@ from urllib.request import urlopen
 from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.routing import Route
 
+from deploy.atomic import atomic_write
 from module.api.android_update import android_update_service
 from module.api.protocol import ApiError
 from module.runtime.process_manager import ProcessManager
@@ -138,6 +139,31 @@ def routes(configs, runtime):
                 runtime.start(name, task)
             return status(request)
 
+    def _suspend_for_update():
+        """为整包更新挂起所有运行实例。
+
+        枚举运行中的调度器和工具任务，写 config/reloadalas 恢复清单后
+        逐个优雅停止。下次 WebUI 启动时 restart_processes() 读取该清单
+        自动复活被挂起的实例。
+
+        Returns:
+            dict: ``{'ok': True, 'suspended': [...]}``, suspended 列出被挂起
+            的实例配置名。
+        """
+        with _operation_lock:
+            instances = ProcessManager.running_instances()
+            names = [alas.config_name for alas in instances]
+            # 工具任务也记入恢复清单
+            tool_config, _ = active_tool()
+            if tool_config and tool_config not in names:
+                names.append(tool_config)
+            if names:
+                atomic_write('./config/reloadalas',
+                             ''.join(n + '\n' for n in names))
+            for alas in instances:
+                alas.stop()
+            return {'ok': True, 'suspended': names}
+
     async def dispatch(request):
         """分派处理 Android 宿主 HTTP 请求。"""
         if not _local(request):
@@ -150,6 +176,8 @@ def routes(configs, runtime):
                 return JSONResponse(await asyncio.to_thread(android_update_service.status))
             if path.endswith('/update/apply') and request.method == 'POST':
                 return JSONResponse(await asyncio.to_thread(android_update_service.apply))
+            if path.endswith('/update/suspend') and request.method == 'POST':
+                return JSONResponse(await asyncio.to_thread(_suspend_for_update))
             if path.endswith('/configs'):
                 return JSONResponse({'configs': configs.names()})
             if path.endswith('/status'):
@@ -171,4 +199,5 @@ def routes(configs, runtime):
             Route('/android/tool/start', dispatch, methods=['POST']),
             Route('/android/tool/stop', dispatch, methods=['POST']),
             Route('/android/update/status', dispatch),
-            Route('/android/update/apply', dispatch, methods=['POST'])]
+            Route('/android/update/apply', dispatch, methods=['POST']),
+            Route('/android/update/suspend', dispatch, methods=['POST'])]
