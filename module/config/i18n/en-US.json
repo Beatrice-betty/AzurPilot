@@ -1242,6 +1242,10 @@
     "CheckPerCategory": {
       "name": "Check X ships per category",
       "help": "Prioritizes checking whether enhancement materials are available"
+    },
+    "KeepCommonCV": {
+      "name": "Preserve Common carriers during enhancement",
+      "help": "Enabled by default. When Gems Farming is enabled, deselect Common carriers according to its carrier settings; skip the current ship if the only material is a carrier to preserve. Disable to use all recommended materials, including Common carriers, for normal enhancement. Retirement and full-dock handling are unchanged."
     }
   },
   "OldRetire": {

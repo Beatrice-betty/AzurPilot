@@ -270,6 +270,12 @@ class ConfigService:
                 for group, fields in groups.items():
                     if isinstance(fields, dict):
                         merged.setdefault(task, {}).setdefault(group, {}).update(fields)
+                        # 新名称出现前，WebUI 也要显示旧航母开关的实际值。
+                        if task == 'General' and group == 'Enhance':
+                            legacy = fields.get('SkipSingleCommonCV')
+                            if 'KeepCommonCV' not in fields and isinstance(legacy, bool):
+                                merged[task][group]['KeepCommonCV'] = legacy
+                            merged[task][group].pop('SkipSingleCommonCV', None)
         return merged, hashlib.sha256(raw).hexdigest()
 
     def schema(self, language='zh-CN'):

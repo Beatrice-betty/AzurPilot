@@ -640,6 +640,8 @@ class ConfigGenerator:
 class ConfigUpdater:
     # 格式：source, target, (可选) convert_func
     redirection = [
+        # 保留旧开关的布尔值，关闭后不再保留任何推荐材料中的普通航母。
+        ('General.Enhance.SkipSingleCommonCV', 'General.Enhance.KeepCommonCV'),
         # ('OpsiDaily.OpsiDaily.BuySupply', 'OpsiShop.Scheduler.Enable'),
         # ('OpsiDaily.Scheduler.Enable', 'OpsiDaily.OpsiDaily.DoMission'),
         # ('OpsiShop.Scheduler.Enable', 'OpsiShop.OpsiShop.BuySupply'),

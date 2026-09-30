@@ -426,6 +426,7 @@ Enhance:
     option: [all, favourite]
   Filter:
   CheckPerCategory: 5
+  KeepCommonCV: true
 OldRetire:
   N: true
   R: true
