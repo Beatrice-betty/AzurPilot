@@ -46,6 +46,20 @@
   background: transparent;
 }
 
+/* 新版主题的编辑区与顶栏共用左侧基线和轮廓，避免玻璃面板出现突兀的直角。 */
+:root:is([data-theme='light'], [data-theme='dark']) .program-editor {
+  width: calc(100% - 24px);
+  margin-left: 24px;
+  border-radius: var(--theme-topbar-radius, 26px) 0 0 var(--theme-topbar-radius, 26px);
+}
+
+@media (max-width: 950px) {
+  :root:is([data-theme='light'], [data-theme='dark']) .program-editor {
+    width: calc(100% - 12px);
+    margin-left: 12px;
+  }
+}
+
 .program-toolbar, .program-toolbar>div, .program-actions, .program-subtoolbar {display:flex; align-items:center; gap:8px; flex-wrap:wrap}
 .program-toolbar {justify-content:space-between; padding:8px 16px; background:var(--program-chrome); border-bottom:1px solid var(--border,#d7dce3); flex-shrink:0; -webkit-backdrop-filter:var(--theme-surface-filter); backdrop-filter:var(--theme-surface-filter)}
 .program-toolbar h1 {font-size:18px; margin:0 0 2px}.program-toolbar small {color:var(--muted); font-size:11px}
@@ -76,6 +90,7 @@
   outline: none;
   background: transparent;
 }
+
 :root[data-material='glass'] .program-workspace {
   background: var(--theme-surface-bg, color-mix(in srgb, var(--bg) 70%, transparent));
   -webkit-backdrop-filter: var(--theme-surface-filter);

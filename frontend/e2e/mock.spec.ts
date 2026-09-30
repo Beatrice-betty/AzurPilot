@@ -831,6 +831,9 @@ test('移动端窄屏下调度程序支持画布、卡片库与属性三态切�
   await page.setViewportSize({width: 414, height: 896})
   await page.goto('/#/i/demo-alt/task/SchedulerProgram')
   await expect(page.locator('.program-editor')).toBeVisible()
+  const mobileEditorBox = (await page.locator('.program-editor').boundingBox())!
+  const mobileTopbarBox = (await page.locator('.topbar').boundingBox())!
+  expect(Math.abs(mobileEditorBox.x - mobileTopbarBox.x)).toBeLessThan(1)
   const mobileNav = page.locator('.program-mobile-panels')
   await expect(mobileNav).toBeVisible()
   const canvasBtn = mobileNav.getByRole('button', {name: '画布', exact: true})
@@ -904,6 +907,10 @@ test('调度程序在全量六套主题下背景与控件对比度正常无白�
   const darkBg = await page.locator('.program-workspace').evaluate(el => getComputedStyle(el).backgroundColor)
   const darkRgb = darkBg.match(/\d+/g)?.map(Number) ?? [255, 255, 255]
   expect(darkRgb[0]).toBeLessThan(80)
+  const darkEditorBox = (await page.locator('.program-editor').boundingBox())!
+  const darkTopbarBox = (await page.locator('.topbar').boundingBox())!
+  expect(Math.abs(darkEditorBox.x - darkTopbarBox.x)).toBeLessThan(1)
+  expect(await page.locator('.program-editor').evaluate(el => getComputedStyle(el).borderTopLeftRadius)).toBe('26px')
   await page.screenshot({path: 'test-results/scheduler-theme-dark.png'})
   const entry = page.locator('.react-flow__node').filter({has: page.locator('.program-card-title', {hasText: '程序入口'})}).first()
   const entryBox = (await entry.boundingBox())!
@@ -967,6 +974,10 @@ test('调度程序在全量六套主题下背景与控件对比度正常无白�
   })
   await page.reload()
   await expect(page.locator('.program-editor')).toBeVisible()
+  const lightEditorBox = (await page.locator('.program-editor').boundingBox())!
+  const lightTopbarBox = (await page.locator('.topbar').boundingBox())!
+  expect(Math.abs(lightEditorBox.x - lightTopbarBox.x)).toBeLessThan(1)
+  expect(await page.locator('.program-editor').evaluate(el => getComputedStyle(el).borderTopLeftRadius)).toBe('26px')
   await page.screenshot({path: 'test-results/scheduler-theme-light.png', fullPage: true})
 })
 
