@@ -265,7 +265,7 @@ class ActionPointHandler(UI, MapEventHandler):
             total += box_sum
         oil = box[0]
 
-        if oil > 1:
+        if oil > 100:
             LogRes(self.config).record('Oil', oil, observed=True)
         logger.info(f'[大世界-行动点] 行动点: {current}({total}), 石油: {oil}')
         # 统计口径的总行动力始终包含体力箱，不受 OS_ACTION_POINT_BOX_USE 临时关闭的影响
