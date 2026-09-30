@@ -233,7 +233,7 @@ subscribeTheme(() => {
   const next = readBackgroundPreference(getThemePreference().material)
   if (next.source === snapshot.source && activeBackgroundUrl(next) === activeBackgroundUrl(snapshot) && next.name === snapshot.name) return
   replaceObjectUrl()
-  const initialAsset = next.source === 'upload' && next.entry ? galleryUrl(next.entry) : (directMediaUrl(activeBackgroundUrl(next)) || lastGoodAssetUrl)
+  const initialAsset = next.source === 'upload' ? (next.entry ? galleryUrl(next.entry) : '') : next.source === 'url' ? (directMediaUrl(activeBackgroundUrl(next)) || lastGoodAssetUrl) : ''
   publish({...next, assetUrl: initialAsset, loading: next.source === 'upload'})
   if (next.source === 'upload') void loadUploadedBackground()
   if (next.source === 'url') void resolveActiveBackground()
@@ -283,7 +283,6 @@ export async function resolveActiveBackground() {
   } catch (error) {
     /* 解析失败就退回原地址直接当图片用（很多 API 本身就是图片），并把原因留给界面显示。 */
     const fallback = lastGoodAssetUrl || url
-    lastGoodAssetUrl = fallback
     publish({assetUrl: fallback, resolving: false, resolveError: (error as Error).message})
   }
 }

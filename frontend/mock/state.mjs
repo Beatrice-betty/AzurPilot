@@ -549,6 +549,7 @@ export function createMockState({ empty = false } = {}) {
         return { deleted: name }
       case 'config.get': return snapshot(name)
       case 'config.export': {
+        if (!programs.has(name)) return snapshot(name).values
         const {mode, draft, active} = program(name)
         return {...snapshot(name).values, ...(programs.has(name) ? {_schedulerProgram: {mode,draft,active}} : {})}
       }

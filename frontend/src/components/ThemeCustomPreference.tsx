@@ -3,7 +3,7 @@ import { useApp } from '../app/context'
 import { openMaterialInspector } from '../app/materialInspectorState'
 import { applyCustomLayer, familyOf } from '../app/theme'
 import { MaterialDetailModal } from './MaterialDetailModal'
-import { clearFamilyPalette, readFamilyCustom, writeFamilyCustom, type FamilyCustom } from '../app/themeCustom'
+import { clearFamilyPalette, readFamilyCustom, subscribeFamilyCustom, writeFamilyCustom, type FamilyCustom } from '../app/themeCustom'
 import { familyRegions, regionKnobs, regionLabels, type RegionId, type RegionKnob } from '../app/themeKnobs'
 import {
   AppWindow,
@@ -95,6 +95,7 @@ export function MaterialDetailPanel({regions, custom, ui, onKnob, onResetKnob, o
                     if (next >= 0) {
                       event.preventDefault()
                       const nextRegion = regions[next]
+                      event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role=tab]')[next]?.focus()
                       setRegion(nextRegion)
                       onRegionChange?.(nextRegion)
                     }
@@ -206,6 +207,9 @@ export function BrandColorPreference() {
   const [custom, setCustom] = useState<FamilyCustom>(() => readFamilyCustom(family))
   /* 切换大类后要换成那一套已存的值。 */
   useEffect(() => setCustom(readFamilyCustom(family)), [family])
+  useEffect(() => subscribeFamilyCustom(changed => {
+    if (changed === family) setCustom(readFamilyCustom(family))
+  }), [family])
   const regions = familyRegions[family]
   if (!regions.length) return null
   const refresh = () => { applyCustomLayer(); setCustom(readFamilyCustom(family)) }

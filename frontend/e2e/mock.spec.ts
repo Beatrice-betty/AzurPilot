@@ -1,5 +1,44 @@
 import { expect, test } from '@playwright/test'
 
+test('PR1096 模拟预览焦点、区域键盘与窄屏布局回归', async ({page}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('azurpilot.theme', 'light')
+    localStorage.setItem('azurpilot.material', 'glass')
+    localStorage.setItem('azurpilot.language', 'zh-CN')
+    localStorage.setItem('azurpilot.background', JSON.stringify({source: 'off'}))
+  })
+  await page.goto('/#/interface')
+  const opener = page.getByRole('button', {name: '预览假实例页', exact: true})
+  await opener.click()
+  const preview = page.getByRole('dialog', {name: '预览假实例页', exact: true})
+  await expect(preview).toHaveAttribute('aria-modal', 'true')
+  const first = preview.locator('a[href]').first()
+  await expect(first).toBeFocused()
+  await page.keyboard.press('Shift+Tab')
+  const last = preview.locator('.inspector-footer button')
+  await expect(last).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(first).toBeFocused()
+  const tabs = preview.getByRole('tab')
+  await tabs.first().focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(tabs.nth(1)).toBeFocused()
+  await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true')
+  await page.keyboard.press('End')
+  await expect(tabs.last()).toBeFocused()
+  await page.keyboard.press('Home')
+  await expect(tabs.first()).toBeFocused()
+  for (const width of [375, 420]) {
+    await page.setViewportSize({width, height: 800})
+    await expect(preview.locator('.mock-preview-shell')).toHaveCSS('width', `${width}px`)
+  }
+  await page.screenshot({path: 'test-results/pr1096-preview-narrow.png'})
+  await page.setViewportSize({width: 1440, height: 1100})
+  await last.click()
+  await expect(preview).toHaveCount(0)
+  await expect(opener).toBeFocused()
+})
+
 test('画布框选、快捷键、中键平移与同色连接规则', async ({page}) => {
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))

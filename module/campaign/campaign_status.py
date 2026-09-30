@@ -133,16 +133,17 @@ class CampaignStatus(UI):
                 break
 
             _coin = {
-                'Value': self._get_num(OCR_COIN, 'OCR_COIN', (239, 239, 239)),
-                'Limit': self._get_num(OCR_COIN_LIMIT, 'OCR_COIN_LIMIT', (239, 239, 239))
+                'Value': self._get_num(OCR_COIN, 'OCR_COIN', (239, 239, 239), require_valid=True),
+                'Limit': self._get_num(OCR_COIN_LIMIT, 'OCR_COIN_LIMIT', (239, 239, 239), require_valid=True)
             }
-            if _coin['Value'] >= 100:
+            if _coin['Value'] is not None and _coin['Value'] >= 100:
                 break
-        LogRes(self.config).record('Coin', _coin, observed=_coin.get('Value', 0) >= 100)
+        LogRes(self.config).record('Coin', {key: value for key, value in _coin.items() if value is not None},
+                                   observed=_coin.get('Value') is not None and _coin['Value'] >= 100)
         if update:
             self.config.update()
 
-        return _coin['Value']
+        return _coin.get('Value') or 0
 
     def _get_num(self, _button, name, letter=(247, 247, 247), require_valid=False):
         """动态检测背景颜色并识别指定区域的数字。
@@ -205,16 +206,17 @@ class CampaignStatus(UI):
                 break
 
             _oil = {
-                'Value': self._get_num(OCR_OIL, 'OCR_OIL', (247, 247, 247)),
-                'Limit': self._get_num(OCR_OIL_LIMIT, 'OCR_OIL_LIMIT', (247, 247, 247))
+                'Value': self._get_num(OCR_OIL, 'OCR_OIL', (247, 247, 247), require_valid=True),
+                'Limit': self._get_num(OCR_OIL_LIMIT, 'OCR_OIL_LIMIT', (247, 247, 247), require_valid=True)
             }
-            if _oil['Value'] >= 100:
+            if _oil['Value'] is not None and _oil['Value'] >= 100:
                 break
-        LogRes(self.config).record('Oil', _oil, observed=_oil.get('Value', 0) >= 100)
+        LogRes(self.config).record('Oil', {key: value for key, value in _oil.items() if value is not None},
+                                   observed=_oil.get('Value') is not None and _oil['Value'] >= 100)
         if update:
             self.config.update()
 
-        return _oil['Value']
+        return _oil.get('Value') or 0
 
     def is_balancer_task(self):
         """判断当前任务是否为活动任务（排除每日活动任务）。

@@ -2,7 +2,7 @@
  * @fileoverview 全局真实例材质细节检视器：叠加在当前真实页面/真实例上方，实时调整 7 大区域 × 5 项材质属性。
  */
 
-import { useState, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
@@ -49,6 +49,7 @@ export function MaterialInspector() {
 
   const family = familyOf(theme)
   const [custom, setCustom] = useState<FamilyCustom>(() => readFamilyCustom(family))
+  useEffect(() => setCustom(readFamilyCustom(family)), [family])
   const [activeRegion, setActiveRegion] = useState<RegionId>('surface')
   const [showModal, setShowModal] = useState(false)
   const [showMenu, setShowMenu] = useState(false)

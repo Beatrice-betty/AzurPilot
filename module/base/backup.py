@@ -127,8 +127,11 @@ def backup_config(backup_dir):
         for source in scheduler.glob('*.sqlite3'):
             relative = source.relative_to(CONFIG_DIR)
             target = backup_dir / relative
-            store.backup(source.stem, target)
-            files.append({'name': str(relative), 'size': target.stat().st_size})
+            try:
+                store.backup(source.stem, target)
+                files.append({'name': str(relative), 'size': target.stat().st_size})
+            except Exception as exc:
+                logger.warning(f'调度数据库备份失败：{source}，{exc}')
 
     deploy = CONFIG_DIR / 'deploy.yaml'
 

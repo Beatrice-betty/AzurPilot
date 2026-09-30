@@ -64,7 +64,12 @@ class SchedulerRuntime:
 
     def program_changed(self):
         """原调度的长等待也需要响应旁路方案的应用操作。"""
-        return self.store.exists(self.script.config_name) and self.store.get(self.script.config_name)['generation'] != self.generation
+        try:
+            return self.store.exists(self.script.config_name) and self.store.get(self.script.config_name)['generation'] != self.generation
+        except (ValueError, TimeoutError, sqlite3.Error) as exc:
+            from module.logger import logger
+            logger.warning(f'读取调度方案失败，将在下次轮询重试：{exc}')
+            return False
 
     def context(self, config=None):
         config = config or self.script.config

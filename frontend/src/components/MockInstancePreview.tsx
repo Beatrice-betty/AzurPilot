@@ -4,7 +4,7 @@
  * 实时调整 7 大材质区域 × 5 项属性并获得即时视觉反馈。
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import {
   Activity,
@@ -55,6 +55,35 @@ export type MockInstancePreviewProps = {
 }
 
 export function MockInstancePreview({onClose, initialRegion}: MockInstancePreviewProps) {
+  const overlayRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const root = overlayRef.current
+    if (!root) return
+    const focusable = () => [...root.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea, [tabindex]')]
+      .filter(element => element.tabIndex >= 0 && !element.matches(':disabled') && element.getClientRects().length > 0)
+    const focusFirst = () => (focusable()[0] ?? root).focus()
+    const trapFocus = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return
+      const items = focusable()
+      const current = items.indexOf(document.activeElement as HTMLElement)
+      if (!items.length || current < 0 || (event.shiftKey ? current === 0 : current === items.length - 1)) {
+        event.preventDefault()
+        ;(event.shiftKey ? items.at(-1) ?? root : items[0] ?? root).focus()
+      }
+    }
+    const containFocus = (event: FocusEvent) => {
+      if (!root.contains(event.target as Node)) focusFirst()
+    }
+    focusFirst()
+    document.addEventListener('keydown', trapFocus, true)
+    document.addEventListener('focusin', containFocus)
+    return () => {
+      document.removeEventListener('keydown', trapFocus, true)
+      document.removeEventListener('focusin', containFocus)
+      if (previous?.isConnected) previous.focus()
+    }
+  }, [])
   const {ui, theme} = useApp()
   const family = familyOf(theme)
   const isLegacy = usesLegacyLayout(theme)
@@ -96,7 +125,7 @@ export function MockInstancePreview({onClose, initialRegion}: MockInstancePrevie
 
   const isDockedActive = isDocked && !isInspectorMinimized
   const overlay = (
-    <div className={`mock-instance-preview-overlay ${isLegacy ? 'legacy-shell-preview' : 'apple-shell-preview'} ${isDockedActive ? 'has-docked-inspector' : ''}`}>
+    <div ref={overlayRef} role="dialog" aria-modal="true" aria-label={ui('settings.materialLivePreview')} tabIndex={-1} className={`mock-instance-preview-overlay ${isLegacy ? 'legacy-shell-preview' : 'apple-shell-preview'} ${isDockedActive ? 'has-docked-inspector' : ''}`}>
       <ThemeWallpaper />
       {/* 全真模拟 AppShell 容器 */}
       <div className={`app-shell with-rail ${isLegacy ? 'legacy-shell' : ''} mock-preview-shell`}>

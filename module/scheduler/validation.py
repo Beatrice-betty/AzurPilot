@@ -1,5 +1,6 @@
 """程序静态校验；不加载配置，不运行卡片。"""
 import math
+import re
 from datetime import datetime
 from module.scheduler.catalog import OVERRIDES, RESOURCES, REFRESHABLE, definition
 from module.scheduler.models import Diagnostic, ProgramDocument
@@ -142,8 +143,15 @@ def validate(document: ProgramDocument, tasks=None, mode='takeover'):
                     if ('data', node.id, key) in occupied:
                         continue
                     try:
-                        for part in params[key].split(','):
-                            datetime.strptime(part.strip(), '%H:%M') if len(part) <= 5 else datetime.fromisoformat(part)
+                        parts = params[key].split(',') if key == 'reset' else [params[key]]
+                        for part in parts:
+                            part = part.strip()
+                            if re.fullmatch(r'\d{2}:\d{2}', part):
+                                datetime.strptime(part, '%H:%M')
+                            elif node.type == 'wait_until' and ',' not in part:
+                                datetime.fromisoformat(part)
+                            else:
+                                raise ValueError('需要 HH:MM 时间')
                     except ValueError:
                         error(f'时间格式无效：{key}', node.id)
             if node.type == 'time_window' and any(type(day) is not int or not 1 <= day <= 7 for day in params['weekdays']):
