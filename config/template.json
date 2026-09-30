@@ -94,6 +94,7 @@
       "HandleError": true,
       "SaveError": true,
       "StrictRestart": false,
+      "TaskRestartLimit": 3,
       "SaveErrorRetentionDays": 30,
       "SaveErrorBackUpMethod": "zip",
       "SaveErrorZipMethod": "zip",

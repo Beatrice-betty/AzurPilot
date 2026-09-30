@@ -117,6 +117,9 @@ class AzurLaneAutoScript:
         self.is_first_task = True
         # 任务失败计数器，key 为任务名，value 为连续失败次数
         self.failure_record = {}
+        # 按任务累计恢复次数；成功的 Restart 不代表原任务故障已解决。
+        self.task_restart_record = {}
+        self.task_restart_delays = {}
         # 连续卡死/ADB 离线计数，用于判断是否需要重启模拟器
         self.consecutive_game_stuck = 0
         self.consecutive_adb_offline = 0
@@ -2098,6 +2101,46 @@ class AzurLaneAutoScript:
         runtime = self.__dict__['_program_runtime']
         runtime.refresh_result = refresh_resources(self.config, self.device, runtime.refresh_names)
 
+    def _record_task_restart(self, task, success):
+        """重复恢复达到上限时，延后故障任务并发送错误推送。"""
+        if success is True:
+            self.task_restart_record.pop(task, None)
+            return False
+        limit = int(self.config.Error_TaskRestartLimit)
+        if limit <= 0:
+            self.task_restart_record.pop(task, None)
+            return False
+        count = self.task_restart_record.get(task, 0) + 1
+        self.task_restart_record[task] = count
+        if count < limit:
+            return False
+
+        # 使用服务器每日零点，避免带有多个日内触发点的任务当天再次运行。
+        next_run = get_server_next_update('00:00')
+        if next_run <= current_time():
+            next_run += timedelta(days=1)
+        self.config.task_delay(target=next_run, task=task)
+        self.task_restart_delays[task] = next_run
+        self.task_restart_record.pop(task, None)
+        self.failure_record.pop(task, None)
+        display = _get_task_display_name(task)
+        content = (
+            f'<{self.config_name}> 任务 {display}（{task}）连续恢复 {count} 次仍未成功，'
+            f'已延后至 {next_run:%Y-%m-%d %H:%M:%S}。请检查错误日志和截图。'
+        )
+        logger.warning(f'[Alas] {content}')
+        # 达到上限需要人工关注，即使开启低推送量模式也发送通知。
+        try:
+            handle_notify(self.config.Error_OnePushConfig,
+                          title=f'AzurPilot <{self.config_name}> 任务恢复次数已达上限', content=content)
+        except Exception as exc:
+            logger.warning(f'[Alas] 任务延后错误推送失败：{exc}')
+        try:
+            notify_webui(self.config_name, title='任务已延后至次日', content=content)
+        except Exception as exc:
+            logger.warning(f'[Alas] 任务延后 WebUI 通知失败：{exc}')
+        return True
+
     def get_next_task(self):
         """
         获取下一个待执行的任务。
@@ -2346,6 +2389,7 @@ class AzurLaneAutoScript:
         LONG_WAIT = 300
 
         while 1:
+            task = None
             try:
                 # 检查来自GUI的更新事件
                 if self.stop_event is not None:
@@ -2379,6 +2423,17 @@ class AzurLaneAutoScript:
 
                 # 获取任务
                 task = self.get_next_task()
+                deadline = self.task_restart_delays.get(task)
+                if deadline is not None:
+                    if deadline > current_time():
+                        # 自定义调度卡片或任务调用也不能绕过本轮故障冷却。
+                        self.config.task_delay(target=deadline, task=task)
+                        runtime = self.__dict__.get('_program_runtime')
+                        if runtime is not None:
+                            runtime.task_finished(task, False)
+                        self.wait_until(min(deadline, current_time() + timedelta(seconds=4)))
+                        continue
+                    self.task_restart_delays.pop(task, None)
                 # 初始化设备并更改服务器
                 _ = self.device
                 self.device.config = self.config
@@ -2478,6 +2533,11 @@ class AzurLaneAutoScript:
                     ApiClient.submit_bug_log(f"AzurPilot <{self.config_name}> crashed\nTask `{task}` failed {failed} or more times.")
                     exit(1)
 
+                deferred = self._record_task_restart(task, success)
+                if deferred:
+                    del_cached_property(self, 'config')
+                    continue
+
                 if failed >= 3:
                     # 非敏感任务连续失败：不退出，强制重启模拟器+游戏后继续调度
                     logger.warning(
@@ -2565,7 +2625,12 @@ class AzurLaneAutoScript:
                     except Exception as report_e:
                         logger.warning(f'[Alas] 错误日志上报失败: {report_e}')
 
-                # 尝试重启模拟器（始终尝试，永不放弃）
+                # 已选出任务的全局异常也计入恢复上限；配置/选任务异常没有任务归属。
+                if task is not None and self._record_task_restart(task, False):
+                    del_cached_property(self, 'config')
+                    continue
+
+                # 尝试重启模拟器
                 logger.warning("[Alas] 尝试通过重启模拟器 + 强制执行 RESTART 任务来恢复...")
                 try:
                     self._try_restart_emulator()

@@ -184,6 +184,9 @@ Error:
   HandleError: true
   SaveError: true
   StrictRestart: false
+  TaskRestartLimit:
+    value: 3
+    validate: [0, 999]
   SaveErrorRetentionDays:
     value: 30
     validate: [0, 3650]

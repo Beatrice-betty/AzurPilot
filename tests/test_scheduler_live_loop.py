@@ -1,5 +1,6 @@
 """运行真实配置、任务包装器和主循环，仅替换设备与游戏业务。"""
 import json
+import gc
 import tempfile
 import threading
 import unittest
@@ -64,6 +65,8 @@ class LiveLoopTests(unittest.TestCase):
         # 验收失败立即抛出，禁止进入生产的持续恢复与退避等待。
         self.enterContext(patch('alas.time.sleep', side_effect=BoundaryReached('发生意外恢复')))
         self.calls = []
+        # Windows 上先回收 SQLite 游标，避免清理临时目录时生成 WAL 辅助文件。
+        self.addCleanup(gc.collect)
 
     def virtual_wait(self, deadline):
         self.time = max(self.time, deadline + timedelta(milliseconds=1))
@@ -86,6 +89,30 @@ class LiveLoopTests(unittest.TestCase):
     def finish_research(self):
         self.calls.append('Research')
         self.script.stop_event.set()
+
+    def test_restart_limit_is_loaded_and_deferral_survives_config_reload(self):
+        config = self.script.config
+        self.assertEqual(config.Error_TaskRestartLimit, 3)
+        config.Error_TaskRestartLimit = 2
+        self.assertFalse(self.script._record_task_restart('Main', 'recoverable'))
+        deadline = datetime(2026, 9, 29)
+        with (patch('alas.get_server_next_update', return_value=deadline),
+              patch('alas.handle_notify'), patch('alas.notify_webui')):
+            self.assertTrue(self.script._record_task_restart('Main', 'recoverable'))
+        del self.script.__dict__['config']
+        reloaded = self.script.config
+        self.assertEqual(reloaded.Error_TaskRestartLimit, 2)
+        self.assertEqual(reloaded.cross_get('Main.Scheduler.NextRun'), deadline)
+
+    def test_takeover_program_skips_task_in_restart_cooldown(self):
+        self.apply(self.program(task='Main'))
+        self.script.task_restart_delays['Main'] = datetime(2026, 9, 29)
+        self.script.main = Mock()
+        self.script.research = self.finish_research
+        self.script.loop()
+        self.script.main.assert_not_called()
+        self.assertEqual(['Research'], self.calls)
+        self.assertEqual('failed', self.runtime.engine.records['results']['Main']['status'])
 
     def test_real_loop_task_end_wait_reload_and_overlay_cleanup(self):
         original = json.loads(self.path.read_text(encoding='utf-8'))
