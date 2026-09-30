@@ -459,6 +459,14 @@
         "type": "checkbox",
         "value": false
       },
+      "TaskRestartLimit": {
+        "type": "input",
+        "value": 3,
+        "validate": [
+          0,
+          999
+        ]
+      },
       "SaveErrorRetentionDays": {
         "type": "input",
         "value": 30,

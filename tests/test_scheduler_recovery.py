@@ -1,6 +1,7 @@
 """使用真实调度循环验证恢复边界，所有设备、通知和后台服务均隔离。"""
 
 import unittest
+from datetime import datetime, timedelta
 from unittest.mock import Mock, call, patch
 
 from alas import AzurLaneAutoScript
@@ -40,6 +41,7 @@ class TestSchedulerRecovery(unittest.TestCase):
             EmulatorManagement_ScheduledEmulatorRestart=False,
             Scheduler_PushNotification=False,
             Error_StrictRestart=strict,
+            Error_TaskRestartLimit=0,
             Error_GameStuckRestart=True,
             Error_GameStuckThreshold=3,
             Error_HandleError=True,
@@ -231,6 +233,110 @@ class TestSchedulerRecovery(unittest.TestCase):
                 self.assertTrue(script.run('commission'))
                 script.handle_channel_float.assert_called_once_with()
                 script.commission.assert_called_once_with()
+
+    def test_repeated_recovery_defers_only_failing_task_and_pushes_in_low_mode(self):
+        script = self.make_script()
+        script.config.Error_TaskRestartLimit = 3
+        script.config.Error_LowPushMode = True
+        script.config.Error_OnePushConfig = 'provider: null'
+        script.commission.side_effect = GameStuckError('重复故障')
+        script.research = Mock()
+        tomorrow = datetime.now().replace(microsecond=0) + timedelta(days=1)
+        with patch('alas.get_server_next_update', return_value=tomorrow):
+            self.run_tasks(script, ['Commission', 'Restart', 'Research',
+                                    'Commission', 'Restart', 'Commission'])
+
+        script.config.task_delay.assert_called_once_with(target=tomorrow, task='Commission')
+        self.assertEqual(script.task_restart_delays, {'Commission': tomorrow})
+        self.assertNotIn('Commission', script.task_restart_record)
+        self.assertEqual(script.restart.call_count, 2)
+        script.research.assert_called_once_with()
+        alerts = [c for c in self.notify.call_args_list if '已达上限' in c.kwargs['title']]
+        self.assertEqual(len(alerts), 1)
+        self.assertEqual(alerts[0].args, ('provider: null',))
+        self.assertIn('连续恢复 3 次', alerts[0].kwargs['content'])
+
+    def test_success_resets_only_its_own_restart_streak(self):
+        script = self.make_script()
+        script.config.Error_TaskRestartLimit = 3
+        script.task_restart_record = {'Commission': 2, 'Research': 2}
+        self.run_tasks(script, ['Restart', 'Commission'])
+        self.assertEqual(script.task_restart_record, {'Research': 2})
+        script.config.task_delay.assert_not_called()
+
+    def test_disabled_limit_keeps_existing_recovery(self):
+        script = self.make_script()
+        script.commission.side_effect = GameNotRunningError('未运行')
+        self.run_tasks(script, ['Commission'] * 5)
+        script.config.task_delay.assert_not_called()
+        self.assertEqual(script.config.task_call.call_count, 5)
+
+    def test_failed_restart_task_is_also_deferred(self):
+        script = self.make_script()
+        script.config.Error_TaskRestartLimit = 2
+        script.restart.side_effect = GameNotRunningError('无法启动')
+        tomorrow = datetime.now() + timedelta(days=1)
+        with patch('alas.get_server_next_update', return_value=tomorrow):
+            self.run_tasks(script, ['Restart', 'Restart'])
+        script.config.task_delay.assert_called_once_with(target=tomorrow, task='Restart')
+
+    def test_custom_dispatch_cannot_bypass_cooldown_and_resumes_after_deadline(self):
+        script = self.make_script()
+        script.config.Error_TaskRestartLimit = 3
+        now = datetime(2026, 10, 1, 12)
+        deadline = datetime(2026, 10, 2)
+        script.task_restart_delays['Commission'] = deadline
+        runtime = script.__dict__['_program_runtime'] = Mock(mode='takeover')
+        script.wait_until = Mock()
+        with patch('alas.current_time', return_value=now):
+            self.run_tasks(script, ['Commission'])
+        script.commission.assert_not_called()
+        runtime.task_finished.assert_called_once_with('Commission', False)
+        script.wait_until.assert_called_once_with(now + timedelta(seconds=4))
+        with patch('alas.current_time', return_value=deadline):
+            self.run_tasks(script, ['Commission'])
+        script.commission.assert_called_once_with()
+        self.assertEqual(script.task_restart_delays, {})
+
+    def test_global_failure_after_task_selection_counts_toward_limit(self):
+        script = self.make_script()
+        script.config.Error_TaskRestartLimit = 2
+        script.device.stuck_record_clear.side_effect = RuntimeError('设备故障')
+        tomorrow = datetime.now() + timedelta(days=1)
+        with patch('alas.get_server_next_update', return_value=tomorrow):
+            self.run_tasks(script, ['Commission', 'Commission'])
+        script.config.task_delay.assert_called_once_with(target=tomorrow, task='Commission')
+        script._try_restart_emulator.assert_called_once_with()
+
+    def test_notification_failure_does_not_undo_deferral(self):
+        script = self.make_script()
+        script.config.Error_TaskRestartLimit = 1
+        self.notify.side_effect = RuntimeError('推送失败')
+        tomorrow = datetime.now() + timedelta(days=1)
+        with patch('alas.get_server_next_update', return_value=tomorrow):
+            self.assertTrue(script._record_task_restart('Commission', 'recoverable'))
+        self.assertEqual(script.task_restart_delays['Commission'], tomorrow)
+
+    def test_emulator_restart_does_not_reset_task_restart_limit(self):
+        script = self.make_script()
+        script.config.Error_TaskRestartLimit = 5
+        script.run = Mock(return_value=False)
+        tomorrow = datetime.now() + timedelta(days=1)
+        with patch('alas.get_server_next_update', return_value=tomorrow):
+            self.run_tasks(script, ['Commission'] * 5)
+        script._try_restart_emulator.assert_called_once_with()
+        script.config.task_delay.assert_called_once_with(target=tomorrow, task='Commission')
+
+    def test_midnight_deferral_is_always_in_the_future(self):
+        script = self.make_script()
+        script.config.Error_TaskRestartLimit = 1
+        now = datetime(2026, 10, 1)
+        with (patch('alas.current_time', return_value=now),
+              patch('alas.get_server_next_update', return_value=now) as next_update):
+            script._record_task_restart('Commission', False)
+        next_update.assert_called_once_with('00:00')
+        script.config.task_delay.assert_called_once_with(
+            target=now + timedelta(days=1), task='Commission')
 
 
 if __name__ == '__main__':

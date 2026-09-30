@@ -738,6 +738,10 @@
       "name": "Prohibit restarting when errors occur in sensitive tasks",
       "help": "When an error occurs, directly terminate AzurPilot without restarting the game. Use for debugging, commission tasks, research tasks, Obscured Zones, Abyssal Zones, and other critical timing tasks"
     },
+    "TaskRestartLimit": {
+      "name": "Consecutive restart limit per task",
+      "help": "After this many consecutive failed recovery attempts, defer the task until the next server midnight and send an alert using error notification settings. Only success of that task resets its count; other tasks and successful game restarts do not. 0 = unlimited."
+    },
     "SaveErrorRetentionDays": {
       "name": "Error log expiration (days)",
       "help": "Error scenes older than this are handled by the method below\n0 = keep everything"

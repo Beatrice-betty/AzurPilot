@@ -116,6 +116,7 @@ class GeneratedConfig:
     Error_HandleError = True
     Error_SaveError = True
     Error_StrictRestart = False
+    Error_TaskRestartLimit = 3
     Error_SaveErrorRetentionDays = 30
     Error_SaveErrorBackUpMethod = 'zip'  # delete, zip, copy
     Error_SaveErrorZipMethod = 'zip'  # bz2, gzip, xz, zip
