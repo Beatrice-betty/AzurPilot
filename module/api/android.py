@@ -14,6 +14,7 @@ from urllib.request import urlopen
 from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.routing import Route
 
+from module.api.android_update import android_update_service
 from module.api.protocol import ApiError
 from module.runtime.process_manager import ProcessManager
 
@@ -143,6 +144,12 @@ def routes(configs, runtime):
             return JSONResponse({'error': 'loopback only'}, status_code=403)
         path = request.url.path
         try:
+            # 热更路由必须在通用 /status 之前拦截：'/android/update/status'
+            # 的后缀同样命中实例状态分支
+            if path.endswith('/update/status'):
+                return JSONResponse(await asyncio.to_thread(android_update_service.status))
+            if path.endswith('/update/apply') and request.method == 'POST':
+                return JSONResponse(await asyncio.to_thread(android_update_service.apply))
             if path.endswith('/configs'):
                 return JSONResponse({'configs': configs.names()})
             if path.endswith('/status'):
@@ -162,4 +169,6 @@ def routes(configs, runtime):
             Route('/android/logs', dispatch), Route('/android/start', dispatch, methods=['POST']),
             Route('/android/stop', dispatch, methods=['POST']),
             Route('/android/tool/start', dispatch, methods=['POST']),
-            Route('/android/tool/stop', dispatch, methods=['POST'])]
+            Route('/android/tool/stop', dispatch, methods=['POST']),
+            Route('/android/update/status', dispatch),
+            Route('/android/update/apply', dispatch, methods=['POST'])]
