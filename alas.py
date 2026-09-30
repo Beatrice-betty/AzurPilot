@@ -2133,9 +2133,12 @@ class AzurLaneAutoScript:
         try:
             handle_notify(self.config.Error_OnePushConfig,
                           title=f'AzurPilot <{self.config_name}> 任务恢复次数已达上限', content=content)
+        except Exception as exc:
+            logger.warning(f'[Alas] 任务延后错误推送失败：{exc}')
+        try:
             notify_webui(self.config_name, title='任务已延后至次日', content=content)
         except Exception as exc:
-            logger.warning(f'[Alas] 任务延后通知失败：{exc}')
+            logger.warning(f'[Alas] 任务延后 WebUI 通知失败：{exc}')
         return True
 
     def get_next_task(self):

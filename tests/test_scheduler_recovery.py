@@ -316,6 +316,20 @@ class TestSchedulerRecovery(unittest.TestCase):
         with patch('alas.get_server_next_update', return_value=tomorrow):
             self.assertTrue(script._record_task_restart('Commission', 'recoverable'))
         self.assertEqual(script.task_restart_delays['Commission'], tomorrow)
+        self.webui.assert_called_once()
+        self.assertEqual(self.webui.call_args.args, ('test',))
+        self.assertEqual(self.webui.call_args.kwargs['title'], '任务已延后至次日')
+
+    def test_webui_notification_failure_does_not_undo_deferral_or_push(self):
+        script = self.make_script()
+        script.config.Error_TaskRestartLimit = 1
+        self.webui.side_effect = RuntimeError('WebUI 通知失败')
+        tomorrow = datetime.now() + timedelta(days=1)
+        with patch('alas.get_server_next_update', return_value=tomorrow):
+            self.assertTrue(script._record_task_restart('Commission', 'recoverable'))
+        self.assertEqual(script.task_restart_delays['Commission'], tomorrow)
+        self.notify.assert_called_once()
+        self.webui.assert_called_once()
 
     def test_emulator_restart_does_not_reset_task_restart_limit(self):
         script = self.make_script()
