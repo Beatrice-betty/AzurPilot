@@ -65,6 +65,8 @@ class LiveLoopTests(unittest.TestCase):
         # 验收失败立即抛出，禁止进入生产的持续恢复与退避等待。
         self.enterContext(patch('alas.time.sleep', side_effect=BoundaryReached('发生意外恢复')))
         self.calls = []
+        # Windows 上先回收 SQLite 游标，避免清理临时目录时生成 WAL 辅助文件。
+        self.addCleanup(gc.collect)
 
     def virtual_wait(self, deadline):
         self.time = max(self.time, deadline + timedelta(milliseconds=1))
@@ -111,8 +113,6 @@ class LiveLoopTests(unittest.TestCase):
         self.script.main.assert_not_called()
         self.assertEqual(['Research'], self.calls)
         self.assertEqual('failed', self.runtime.engine.records['results']['Main']['status'])
-        # Windows 上先回收 SQLite 游标，避免清理临时目录时生成 WAL 辅助文件。
-        gc.collect()
 
     def test_real_loop_task_end_wait_reload_and_overlay_cleanup(self):
         original = json.loads(self.path.read_text(encoding='utf-8'))
