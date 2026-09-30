@@ -2,7 +2,7 @@
 import {memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties} from 'react'
 import {useParams} from 'react-router-dom'
 import {ReactFlowProvider, Handle, MarkerType, Position, useConnection as useFlowConnection, useReactFlow, type NodeProps, type Connection as FlowConnection} from '@xyflow/react'
-import {ArrowDown, ArrowLeft, ArrowUp, Bug, Copy, Download, FolderOpen, GripVertical, Layers, Play, Plus, Redo2, Save, Search, StepForward, Trash2, Undo2, Upload, X} from 'lucide-react'
+import {ArrowDown, ArrowLeft, ArrowUp, Bug, Copy, Download, FolderOpen, GripVertical, Layers, LocateFixed, Play, Plus, Redo2, Save, Search, StepForward, Trash2, Undo2, Upload, X} from 'lucide-react'
 import '@xyflow/react/dist/style.css'
 import '../scheduler/editor.css'
 import {api} from '../api/client'
@@ -120,6 +120,7 @@ function Editor() {
   const [apTotal, setApTotal] = useState('5300')
   const [simTasks, setSimTasks] = useState<Catalog['tasks']>()
   const [mobilePanel, setMobilePanel] = useState<'canvas' | 'library' | 'properties'>('canvas')
+  const [compactEditor, setCompactEditor] = useState(false)
   const [canvasExpanded, setCanvasExpanded] = useState(false)
   const [outcomes, setOutcomes] = useState('completed')
   const [simSteps, setSimSteps] = useState(0)
@@ -131,6 +132,15 @@ function Editor() {
   const clipboard = useRef<Pick<Graph,'nodes' | 'edges'> | undefined>(undefined)
   const requestVersion = useRef(0)
   const wrapper = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    if (!doc || !wrapper.current) return
+    setCompactEditor(wrapper.current.getBoundingClientRect().width <= 980)
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setCompactEditor(entry.contentRect.width <= 980)
+    })
+    observer.observe(wrapper.current)
+    return () => observer.disconnect()
+  }, [!!doc])
   const dirty = !!doc && !!saved && JSON.stringify(doc) !== JSON.stringify(saved.draft)
   const docRef = useRef(doc)
   docRef.current = doc
@@ -215,10 +225,20 @@ function Editor() {
     const spec = catalog.cards.find(c => c.type === kind)!
     const node: ProgramNode = {id:id(), type:kind, label:'', comment:'', params:{...clone(spec.params), ...(subId ? {graph:subId} : {})}, position:position ?? flow.screenToFlowPosition({x:(wrapper.current?.getBoundingClientRect().left ?? 0) + 360, y:(wrapper.current?.getBoundingClientRect().top ?? 0) + 180})}
     updateGraph({...graph, nodes:[...graph.nodes, node]}); setSelection([node.id])
-    if (window.innerWidth <= 850) setMobilePanel('canvas')
+    if (compactEditor) setMobilePanel('canvas')
   }
   function updateNode(node: ProgramNode) {
     if (graph) updateGraph({...graph, nodes:graph.nodes.map(n => n.id === node.id ? node : n)})
+  }
+  function focusStart() {
+    if (!graph) return
+    const entry = graph.nodes.find(node => node.id === graph.entry)
+    const canvas = wrapper.current?.querySelector<HTMLElement>('.program-flow')
+    if (!entry || !canvas) return
+    const width = canvas.clientWidth
+    const zoom = width <= 980 ? 0.7 : 0.78
+    const left = width <= 980 ? 48 : width <= 1200 ? 240 : 278
+    void flow.setViewport({x:left - entry.position.x * zoom, y:Math.min(170, canvas.clientHeight * 0.22) - entry.position.y * zoom, zoom}, {duration:220})
   }
   const connectValid = (link: {source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null}) => {
     if (!graph || !doc || !catalog || link.source === link.target) return false
@@ -300,7 +320,7 @@ function Editor() {
   const renderParams = Object.entries({...spec?.params, ...picked?.params})
   const status = (tab === 'simulate' ? simulation?.state : runtime)
 
-  return <div className="program-editor" ref={wrapper} onKeyDown={event => {
+  return <div className={`program-editor ${compactEditor ? 'is-compact' : ''}`} ref={wrapper} onKeyDown={event => {
     if (editingText(event.target)) return
     const command = editorCommand(event)
     if (!command) return
@@ -325,6 +345,7 @@ function Editor() {
     </header>
     {error && <ErrorBox message={error}/>}
     <div className="program-subtoolbar"><input aria-label="方案名称" value={doc.name} onChange={e => change({...doc, name:e.target.value})}/><select aria-label="编辑流程" value={graphId} onChange={e => {setGraphId(e.target.value); setSelection([]); setTimeout(() => void flow.fitView(), 0)}}><option value="main">主程序</option>{doc.subgraphs.map(s => <option key={s.id} value={s.id}>{s.name}{s.pure ? ' · 数据' : ' · 执行'}</option>)}</select>
+      <button className="button secondary" onClick={focusStart} title="将程序入口移回可视区域"><LocateFixed size={14}/>定位入口</button>
       <button className="button secondary" onClick={() => {change(clone(catalog.templates[mode === 'enhance' ? 'enhance' : 'takeover'])); setGraphId('main'); setSelection([])}}><FolderOpen size={14}/>载入原调度方案</button>
       {catalog.templates && 'all' in catalog.templates && <button className="button secondary" onClick={() => {change(clone(catalog.templates.all)); setGraphId('main'); setSelection([]); setTimeout(() => void flow.fitView({padding:0.12}), 0)}}><Layers size={14}/>全卡片排列</button>}
       <button className="button secondary" onClick={() => setVariablesOpen(!variablesOpen)}>变量与端口</button>
@@ -351,7 +372,7 @@ function Editor() {
     </div>
     <div className={`program-workspace mobile-${mobilePanel} ${canvasExpanded ? 'canvas-expanded' : ''} ${picked ? 'has-selection' : ''}`}>
       <main className="program-canvas" tabIndex={0} aria-label="调度画布" onPointerDown={event => {if (!editingText(event.target)) event.currentTarget.focus({preventScroll:true})}} onDragOver={e => {e.preventDefault(); e.dataTransfer.dropEffect = 'copy'}} onDrop={e => {e.preventDefault(); try {const data = JSON.parse(e.dataTransfer.getData('application/azurpilot-card')); add(data.type, data.graph, flow.screenToFlowPosition({x:e.clientX,y:e.clientY}))} catch { /* 忽略非卡片拖放。 */ }}}>
-        <ProgramCanvas key={graphId} nodes={nodes} edges={edges} focusEntry={graphId === 'main' && graph.nodes.some(n => n.type === 'original_settings') ? graph.entry : undefined} nodeTypes={nodeTypes} deleteKeyCode={null} onNodeClick={() => setMobilePanel('properties')} onSelectionChange={onSelectionChange} onConnect={connect} isValidConnection={connectValid}
+        <ProgramCanvas key={graphId} nodes={nodes} edges={edges} focusEntry={graphId === 'main' && graph.edges.some(e => e.kind === 'control') && graph.nodes.some(n => n.type === 'original_settings') ? graph.entry : undefined} nodeTypes={nodeTypes} deleteKeyCode={null} onNodeClick={() => {if (compactEditor) setMobilePanel('properties')}} onSelectionChange={onSelectionChange} onConnect={connect} isValidConnection={connectValid}
           onPositionsCommit={moved => {const positions = new Map(moved.map(n => [n.id, n.position])); if (moved.some(n => {const old=graph.nodes.find(x => x.id === n.id); return old && (old.position.x !== n.position.x || old.position.y !== n.position.y)})) updateGraph({...graph, nodes:graph.nodes.map(n => positions.has(n.id) ? {...n, position:positions.get(n.id)!} : n)})}}
           onEdgesDelete={deleted => updateGraph({...graph, edges:graph.edges.filter(e => !deleted.some(d => d.id === e.id))})}
           onEdgeDoubleClick={(_,edge) => updateGraph({...graph, edges:graph.edges.filter(e => e.id !== edge.id)})}/>
@@ -420,7 +441,7 @@ function Editor() {
         </>}
         <details className="program-connect"><summary>按钮式连接</summary><label>来源卡片<select aria-label="来源卡片" value={connector.source} onChange={e => setConnector({...connector,source:e.target.value,sourcePort:''})}><option value="">选择来源…</option>{graph.nodes.map(n => <option key={n.id} value={n.id}>{definition(n,doc,catalog,graph).label}{n.label ? `（${n.label}）` : ''} · {n.id.slice(0,7)}</option>)}</select></label><label>输出端口<select aria-label="输出端口" value={connector.sourcePort} onChange={e => setConnector({...connector,sourcePort:e.target.value})}><option value="">选择输出…</option>{sourceSpec?.outputs.map(p => <option key={p.name} value={`data:${p.name}`}>{p.name} · {typeLabels[p.type]}</option>)}{sourceSpec?.exits.map(e => <option key={e} value={`control:${e}`}>{exits[e] ?? e} · 执行</option>)}</select></label><label>目标卡片<select aria-label="目标卡片" value={connector.target} onChange={e => setConnector({...connector,target:e.target.value,targetPort:''})}><option value="">选择目标…</option>{graph.nodes.map(n => <option key={n.id} value={n.id}>{definition(n,doc,catalog,graph).label}{n.label ? `（${n.label}）` : ''} · {n.id.slice(0,7)}</option>)}</select></label><label>输入端口<select aria-label="输入端口" value={connector.targetPort} onChange={e => setConnector({...connector,targetPort:e.target.value})}><option value="">选择输入…</option>{targetSpec?.inputs.map(p => <option key={p.name} value={`data:${p.name}`}>{p.name} · {typeLabels[p.type]}</option>)}{targetSpec && !targetSpec.pure && targetSpec.type !== 'entry' && !targetSpec.entry && <option value="control:in">执行入口</option>}</select></label><button className="button secondary" onClick={() => connect({source:connector.source,target:connector.target,sourceHandle:connector.sourcePort,targetHandle:connector.targetPort})}>连接</button></details>
       </aside>
-      {!guideDismissed && graph.nodes.some(n => n.type === 'original_settings') && (
+      {!guideDismissed && graph.edges.some(e => e.kind === 'control') && graph.nodes.some(n => n.type === 'original_settings') && (
         <div className="program-default-guide">
           <span>原调度业务流程：读取任务 → 过滤启用与到期状态 → 按当前实例优先级排序 → 执行；没有到期任务时等待最近计划。任务结束后立即重新判断。维护检测、登录恢复和看门狗由原执行器处理。</span>
           <button type="button" className="program-guide-close" title="关闭说明" onClick={() => setGuideDismissed(true)}><X size={13}/></button>

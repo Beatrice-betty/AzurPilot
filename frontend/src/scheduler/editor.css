@@ -27,7 +27,10 @@
 }
 
 .program-editor {
-  --program-panel: var(--panel, var(--surface, #fff));
+  --program-panel: var(--surface, #fff);
+  --program-chrome: var(--theme-surface-bg, var(--program-panel));
+  --program-panel-material: var(--theme-sidebar-bg, var(--program-panel));
+  container: scheduler-editor / inline-size;
   display: flex;
   flex-direction: column;
   flex: 1 1 0;
@@ -40,14 +43,14 @@
   gap: 0;
   overflow: hidden;
   position: relative;
-  background: var(--program-panel);
+  background: transparent;
 }
 
 .program-toolbar, .program-toolbar>div, .program-actions, .program-subtoolbar {display:flex; align-items:center; gap:8px; flex-wrap:wrap}
-.program-toolbar {justify-content:space-between; padding:8px 16px; background:var(--program-panel); border-bottom:1px solid var(--border,#d7dce3); flex-shrink:0}
+.program-toolbar {justify-content:space-between; padding:8px 16px; background:var(--program-chrome); border-bottom:1px solid var(--border,#d7dce3); flex-shrink:0; -webkit-backdrop-filter:var(--theme-surface-filter); backdrop-filter:var(--theme-surface-filter)}
 .program-toolbar h1 {font-size:18px; margin:0 0 2px}.program-toolbar small {color:var(--muted); font-size:11px}
 .program-editor input, .program-editor select, .program-editor textarea {max-width:100%; min-width:0; padding:6px 8px; border:1px solid var(--border, #d7dce3); background:var(--surface-muted, var(--program-panel)); color:var(--text); border-radius:7px; font-size:12px}
-.program-subtoolbar {padding:6px 16px; background:var(--program-panel); border-bottom:1px solid var(--border,#d7dce3); flex-shrink:0}
+.program-subtoolbar {padding:6px 16px; background:var(--program-chrome); border-bottom:1px solid var(--border,#d7dce3); flex-shrink:0; -webkit-backdrop-filter:var(--theme-surface-filter); backdrop-filter:var(--theme-surface-filter)}
 .program-subtoolbar>input {max-width:180px}.program-subtoolbar select {max-width:200px}
 .program-editor .button {font-size:12px; min-height:30px; padding:5px 9px; display:inline-flex; align-items:center; gap:5px}
 
@@ -71,7 +74,12 @@
   min-height: 0;
   z-index: 1;
   outline: none;
-  background: var(--bg, var(--surface-muted, #f6f8fb));
+  background: transparent;
+}
+:root[data-material='glass'] .program-workspace {
+  background: var(--theme-surface-bg, color-mix(in srgb, var(--bg) 70%, transparent));
+  -webkit-backdrop-filter: var(--theme-surface-filter);
+  backdrop-filter: var(--theme-surface-filter);
 }
 .program-canvas-hint {
   position: absolute;
@@ -80,7 +88,7 @@
   pointer-events: none;
   font-size: 10px;
   color: var(--muted);
-  background: color-mix(in srgb, var(--program-panel) 85%, transparent);
+  background: var(--theme-control-bg, var(--program-panel));
   -webkit-backdrop-filter: var(--theme-control-filter);
   backdrop-filter: var(--theme-control-filter);
   padding: 6px 10px;
@@ -99,12 +107,12 @@
   display: flex;
   flex-direction: column;
   padding: 12px;
-  background: color-mix(in srgb, var(--program-panel) 92%, transparent);
+  background: var(--program-panel-material);
   -webkit-backdrop-filter: var(--theme-sidebar-filter);
   backdrop-filter: var(--theme-sidebar-filter);
   border: 1px solid var(--border, #d7dce3);
-  border-radius: 12px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+  border-radius: var(--theme-sidebar-radius, 12px);
+  box-shadow: var(--theme-sidebar-shadow, 0 8px 30px rgba(0, 0, 0, 0.08));
   overflow-y: auto;
   box-sizing: border-box;
   touch-action: pan-y;
@@ -130,13 +138,13 @@
   top: -12px;
   z-index: 2;
   padding: 4px 0 8px;
-  background: var(--program-panel);
+  background: var(--program-panel-material);
 }
 .program-properties {
   right: 14px;
   width: 300px;
 }
-@media (min-width: 851px) {
+@container scheduler-editor (min-width: 981px) {
   .program-workspace:not(.has-selection) > .program-properties {display: none}
   .program-workspace:not(.has-selection) > .program-default-guide {right: 14px}
   .program-workspace:not(.has-selection) .react-flow__minimap {right: 14px !important}
@@ -278,7 +286,7 @@
   padding: 8px 14px;
   border: 1px solid var(--border, #d7dce3);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--program-panel) 92%, transparent);
+  background: var(--theme-control-bg, var(--program-panel));
   -webkit-backdrop-filter: var(--theme-control-filter);
   backdrop-filter: var(--theme-control-filter);
   font-size: 11px;
@@ -324,7 +332,7 @@
   flex-direction: column;
   border: 1px solid var(--border, #d7dce3);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--program-panel) 96%, transparent);
+  background: var(--theme-modal-bg, var(--program-panel));
   -webkit-backdrop-filter: var(--theme-modal-filter);
   backdrop-filter: var(--theme-modal-filter);
   box-shadow: -8px 0 32px rgba(0, 0, 0, 0.12), 0 8px 30px rgba(0, 0, 0, 0.08);
@@ -857,7 +865,7 @@
 .program-observation {font-size:10px;white-space:pre-wrap;overflow-wrap:anywhere}
 .program-card-alias {font-size:11px;font-weight:400;color:var(--muted);overflow-wrap:anywhere}.program-card-comment {padding:9px 14px;border-bottom:1px solid var(--border);font-size:12px;line-height:1.5;color:var(--muted);white-space:pre-wrap;overflow-wrap:anywhere}
 
-@media(max-width:1200px) {
+@container scheduler-editor (max-width: 1200px) {
   .program-library {width:200px}
   .program-properties {width:250px}
   .program-default-guide {left:218px; right:268px}
@@ -868,12 +876,14 @@
   .program-workspace:has(.program-console.open) .react-flow__minimap {right:408px !important}
 }
 
-@media(max-width:850px) {
+@container scheduler-editor (max-width: 980px) {
   .program-mobile-panels {
     display: flex;
     gap: 6px;
     padding: 6px 12px;
-    background: var(--program-panel);
+    background: var(--program-chrome);
+    -webkit-backdrop-filter: var(--theme-surface-filter);
+    backdrop-filter: var(--theme-surface-filter);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
@@ -945,9 +955,9 @@
     box-shadow: none;
     border: none;
     z-index: 20;
-    background: var(--surface, var(--program-panel));
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
+    background: color-mix(in srgb, var(--surface) 82%, var(--program-panel-material));
+    -webkit-backdrop-filter: var(--theme-sidebar-filter);
+    backdrop-filter: var(--theme-sidebar-filter);
     padding: 14px;
   }
   .program-library button {
@@ -998,9 +1008,9 @@
     border-radius: 0;
     border: none;
     z-index: 30;
-    background: var(--surface, var(--program-panel)) !important;
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
+    background: color-mix(in srgb, var(--surface) 82%, var(--theme-modal-bg, var(--program-panel)));
+    -webkit-backdrop-filter: var(--theme-modal-filter);
+    backdrop-filter: var(--theme-modal-filter);
   }
   .program-editor .react-flow__controls {
     left: 14px !important;

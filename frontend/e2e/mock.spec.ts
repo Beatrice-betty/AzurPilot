@@ -970,6 +970,51 @@ test('调度程序在全量六套主题下背景与控件对比度正常无白�
   await page.screenshot({path: 'test-results/scheduler-theme-light.png', fullPage: true})
 })
 
+test('调度编辑区按实际宽度切换面板，并跟随玻璃材质参数', async ({page}) => {
+  await page.setViewportSize({width: 1180, height: 850})
+  await page.goto('/#/i/demo-alt/task/SchedulerProgram')
+  const editor = page.locator('.program-editor')
+  await expect(editor).toBeVisible()
+  await expect(editor).toHaveClass(/is-compact/)
+  await expect(page.locator('.program-mobile-panels')).toBeVisible()
+  await expect(page.locator('.program-library')).toBeHidden()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+
+  await page.locator('.program-mobile-panels').getByRole('button', {name: '卡片库'}).click()
+  await expect(page.locator('.program-library')).toBeVisible()
+  await page.locator('.program-library').getByRole('button', {name: '读取资源', exact: true}).click()
+  await expect(page.locator('.program-library')).toBeHidden()
+
+  const glass = await page.evaluate(() => {
+    const root = document.documentElement
+    root.dataset.material = 'glass'
+    root.style.setProperty('--theme-surface-alpha', '44%')
+    root.style.setProperty('--theme-sidebar-alpha', '52%')
+    const workspace = document.querySelector('.program-workspace')!
+    const toolbar = document.querySelector('.program-toolbar')!
+    const library = document.querySelector('.program-library')!
+    return {workspace: getComputedStyle(workspace).backgroundColor, toolbar: getComputedStyle(toolbar).backgroundColor, library: getComputedStyle(library).backgroundColor}
+  })
+  await page.screenshot({path: 'test-results/scheduler-editor-compact-glass.png'})
+  await page.locator('.program-mobile-panels').getByRole('button', {name: '卡片库'}).click()
+  await expect(page.locator('.program-mobile-panels').getByRole('button', {name: '卡片库'})).toHaveClass(/active/)
+  await expect(page.locator('.program-mobile-panels').getByRole('button', {name: '画布', exact: true})).not.toHaveClass(/active/)
+  await expect(page.locator('.program-library')).toBeVisible()
+  await page.screenshot({path: 'test-results/scheduler-editor-compact-glass-library.png'})
+  await page.locator('.program-mobile-panels').getByRole('button', {name: '画布', exact: true}).click()
+  const plain = await page.evaluate(() => {
+    document.documentElement.dataset.material = 'plain'
+    const workspace = document.querySelector('.program-workspace')!
+    const toolbar = document.querySelector('.program-toolbar')!
+    const library = document.querySelector('.program-library')!
+    return {workspace: getComputedStyle(workspace).backgroundColor, toolbar: getComputedStyle(toolbar).backgroundColor, library: getComputedStyle(library).backgroundColor}
+  })
+  expect(glass.workspace).not.toBe(plain.workspace)
+  expect(glass.toolbar).not.toBe(plain.toolbar)
+  expect(glass.library).not.toBe(plain.library)
+  await page.screenshot({path: 'test-results/scheduler-editor-compact-plain.png'})
+})
+
 test('卡片语义化图标呈现、全卡片排列与终结节点无下一步出口', async ({page}) => {
   await page.goto('/#/i/demo-main/task/SchedulerProgram')
   await expect(page.locator('.program-editor')).toBeVisible()
@@ -1021,6 +1066,12 @@ test('卡片语义化图标呈现、全卡片排列与终结节点无下一步�
   if (await compareNode.count() > 0) {
     await compareNode.screenshot({path: 'test-results/scheduler-card-compare.png'})
   }
+  await page.getByRole('button', {name: '定位入口', exact: true}).click()
+  await expect.poll(async () => {
+    const entryBox = await entryNode.boundingBox()
+    const libraryBox = await page.locator('.program-library').boundingBox()
+    return entryBox && libraryBox ? entryBox.x - (libraryBox.x + libraryBox.width) : -1
+  }).toBeGreaterThan(0)
 })
 
 

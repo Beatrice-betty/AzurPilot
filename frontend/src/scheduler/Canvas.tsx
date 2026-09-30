@@ -24,8 +24,8 @@ export function ProgramCanvas({nodes: documentNodes = [], edges: documentEdges =
       const height = root.current?.clientHeight ?? 0
       if (!width || !height) return
       focused.current = true
-      const zoom = width <= 850 ? 0.7 : 0.78
-      const left = width <= 850 ? 48 : width <= 1200 ? 240 : 278
+      const zoom = width <= 980 ? 0.7 : 0.78
+      const left = width <= 980 ? 48 : width <= 1200 ? 240 : 278
       void flow.setViewport({x:left - entry.position.x * zoom, y:Math.min(170, height * 0.22) - entry.position.y * zoom, zoom})
     })
     return () => cancelAnimationFrame(frame)
