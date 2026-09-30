@@ -293,18 +293,15 @@ class Enhancement(Dock):
         def state_enhance_recommend():
             # 判断是否填充了强化材料
             if not EMPTY_ENHANCE_SLOT_PLUS.match(self.device.image, offset=(20, 20)):
-                if self._retire_keep_common_cv:
-                    # 第二格在左侧 92px 处；仅有一艘普通 CV 时按设置跳过或使用，
-                    # 使用时不反选，避免移除唯一材料后反复推荐。
+                if self.config.Enhance_KeepCommonCV and self._retire_keep_common_cv:
+                    # 第二格在左侧 92px 处；保留唯一材料时跳过当前舰船，
+                    # 避免反选后反复推荐。关闭保留时直接使用推荐材料。
                     if EMPTY_ENHANCE_SLOT_PLUS.match(self.device.image, offset=(72, -20, 112, 20)) \
                             and self._enhance_get_deselect_cv(first_slot=True):
-                        if self.config.Enhance_SkipSingleCommonCV:
-                            logger.info('[退役-强化] 仅 1 个普通 CV 材料，视为无强化材料')
-                            logger.info('[退役-强化] 强化失败，滑动到下一艘舰船（如可行）')
-                            return "state_enhance_fail"
-                    else:
-                        # 其他材料组合仍按原规则反选普通 CV。
-                        self._enhance_deselect_cv()
+                        logger.info('[退役-强化] 仅 1 个普通 CV 材料，视为无强化材料')
+                        logger.info('[退役-强化] 强化失败，滑动到下一艘舰船（如可行）')
+                        return "state_enhance_fail"
+                    self._enhance_deselect_cv()
 
                 logger.info('找到材料，尝试强化...')
                 return "state_enhance_attempt"

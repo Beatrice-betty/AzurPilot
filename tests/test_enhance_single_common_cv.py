@@ -1,4 +1,4 @@
-"""单艘普通航母材料的开关回归；使用模拟画面状态和临时配置，不连接游戏。"""
+"""强化保留普通航母的开关回归；使用模拟画面状态和临时配置，不连接游戏。"""
 import json
 import shutil
 import tempfile
@@ -21,7 +21,7 @@ class SingleCommonCVTests(unittest.TestCase):
                    swipe=False, ship_count=5):
         instance = Enhancement.__new__(Enhancement)
         instance.config = SimpleNamespace(
-            Enhance_SkipSingleCommonCV=skip,
+            Enhance_KeepCommonCV=skip,
             is_task_enabled=Mock(return_value=keep_cv),
             cross_get=Mock(return_value='any'),
         )
@@ -66,14 +66,19 @@ class SingleCommonCVTests(unittest.TestCase):
         instance.equip_view_next.assert_called_once()
         instance._enhance_confirm.assert_not_called()
 
-    def test_other_material_combinations_keep_deselection(self):
+    def test_material_combinations_follow_preservation_setting(self):
         for skip in (True, False):
             for second_empty, first_cv in ((False, True), (True, False)):
                 with self.subTest(skip=skip, second_empty=second_empty, first_cv=first_cv):
                     instance, result = self.run_choose(
                         skip=skip, second_empty=second_empty, first_cv=first_cv)
                     self.assertTrue(result[0])
-                    instance._enhance_deselect_cv.assert_called_once()
+                    if skip:
+                        instance._enhance_deselect_cv.assert_called_once()
+                    else:
+                        instance._enhance_deselect_cv.assert_not_called()
+                        instance._enhance_get_deselect_cv.assert_not_called()
+                        instance.config.is_task_enabled.assert_not_called()
 
     def test_without_cv_preservation_uses_normal_enhancement(self):
         for skip in (True, False):
@@ -95,10 +100,23 @@ class SingleCommonCVTests(unittest.TestCase):
 class SingleCommonCVConfigTests(unittest.TestCase):
     def test_existing_config_defaults_to_enabled_and_preserves_false(self):
         updater = ConfigUpdater()
-        for old, expected in (({}, True), ({'SkipSingleCommonCV': False}, False)):
+        for old, expected in (({}, True), ({'KeepCommonCV': False}, False)):
             with self.subTest(expected=expected):
                 updated = updater.config_update({'General': {'Enhance': old}})
-                self.assertIs(updated['General']['Enhance']['SkipSingleCommonCV'], expected)
+                self.assertIs(updated['General']['Enhance']['KeepCommonCV'], expected)
+
+    def test_legacy_setting_migrates_without_overriding_new_setting(self):
+        updater = ConfigUpdater()
+        for old, expected in (
+            ({'SkipSingleCommonCV': False}, False),
+            ({'SkipSingleCommonCV': True}, True),
+            ({'SkipSingleCommonCV': False, 'KeepCommonCV': True}, True),
+            ({'SkipSingleCommonCV': True, 'KeepCommonCV': False}, False),
+        ):
+            with self.subTest(old=old):
+                updated = updater.config_update({'General': {'Enhance': old}})
+                self.assertIs(updated['General']['Enhance']['KeepCommonCV'], expected)
+                self.assertNotIn('SkipSingleCommonCV', updated['General']['Enhance'])
 
     def test_webui_schema_save_and_runtime_binding(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -110,27 +128,36 @@ class SingleCommonCVConfigTests(unittest.TestCase):
                 shutil.copyfile(ROOT / relative, destination)
             shutil.copyfile(root / 'config/template.json', root / 'config/testpilot.json')
             service = ConfigService(root)
-            field = service.schema()['args']['General']['Enhance']['SkipSingleCommonCV']
+            field = service.schema()['args']['General']['Enhance']['KeepCommonCV']
             self.assertEqual(field['type'], 'checkbox')
             self.assertIs(field['value'], True)
-            key = 'General.Enhance.SkipSingleCommonCV'
+            key = 'General.Enhance.KeepCommonCV'
+            path = str(root / 'config/testpilot.json')
+            legacy = json.loads(Path(path).read_text(encoding='utf-8'))
+            legacy['General']['Enhance'].pop('KeepCommonCV')
+            legacy['General']['Enhance']['SkipSingleCommonCV'] = False
+            Path(path).write_text(json.dumps(legacy), encoding='utf-8')
+            before = Path(path).read_bytes()
+            self.assertIs(service.get('testpilot')['values']['General']['Enhance']['KeepCommonCV'], False)
+            self.assertEqual(Path(path).read_bytes(), before)
+            service.patch('testpilot', None, [ConfigChange(path=key, value=True)])
+            self.assertIs(service.get('testpilot')['values']['General']['Enhance']['KeepCommonCV'], True)
             service.patch('testpilot', None, [ConfigChange(path=key, value=False)])
-            self.assertIs(service.get('testpilot')['values']['General']['Enhance']['SkipSingleCommonCV'], False)
+            self.assertIs(service.get('testpilot')['values']['General']['Enhance']['KeepCommonCV'], False)
             with self.assertRaises(ApiError):
                 service.validate(key, 'false')
-            path = str(root / 'config/testpilot.json')
             with patch('module.config.config.filepath_config', return_value=path), patch(
                 'module.config.config_updater.filepath_config', return_value=path
             ), patch.object(AzurLaneConfig, 'config_override'):
                 config = AzurLaneConfig('testpilot', task='Main')
-                self.assertIs(config.Enhance_SkipSingleCommonCV, False)
-                self.assertEqual(config.bound['Enhance_SkipSingleCommonCV'], key)
+                self.assertIs(config.Enhance_KeepCommonCV, False)
+                self.assertEqual(config.bound['Enhance_KeepCommonCV'], key)
 
     def test_all_translations_are_complete(self):
         for language in ('zh-CN', 'zh-MIAO', 'en-US', 'ja-JP', 'zh-TW'):
             with self.subTest(language=language):
                 data = json.loads((ROOT / 'module/config/i18n' / f'{language}.json').read_text(encoding='utf-8'))
-                field = data['Enhance']['SkipSingleCommonCV']
+                field = data['Enhance']['KeepCommonCV']
                 for text in field.values():
                     self.assertTrue(text)
-                    self.assertNotIn('Enhance.SkipSingleCommonCV.', text)
+                    self.assertNotIn('Enhance.KeepCommonCV.', text)

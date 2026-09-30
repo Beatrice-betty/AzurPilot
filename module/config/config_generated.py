@@ -213,7 +213,7 @@ class GeneratedConfig:
     Enhance_ShipToEnhance = 'all'  # all, favourite
     Enhance_Filter = None
     Enhance_CheckPerCategory = 5
-    Enhance_SkipSingleCommonCV = True
+    Enhance_KeepCommonCV = True
 
     # 配置组 `OldRetire`
     OldRetire_N = True

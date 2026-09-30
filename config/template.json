@@ -189,7 +189,7 @@
       "ShipToEnhance": "all",
       "Filter": null,
       "CheckPerCategory": 5,
-      "SkipSingleCommonCV": true
+      "KeepCommonCV": true
     },
     "OldRetire": {
       "N": true,

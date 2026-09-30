@@ -423,7 +423,7 @@ Enhance:
     option: [all, favourite]
   Filter:
   CheckPerCategory: 5
-  SkipSingleCommonCV: true
+  KeepCommonCV: true
 OldRetire:
   N: true
   R: true

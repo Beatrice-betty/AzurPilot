@@ -1018,7 +1018,7 @@
         "type": "input",
         "value": 5
       },
-      "SkipSingleCommonCV": {
+      "KeepCommonCV": {
         "type": "checkbox",
         "value": true
       }
