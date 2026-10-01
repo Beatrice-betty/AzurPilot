@@ -252,6 +252,8 @@ class AndroidUpdateService:
                 from module.api.lifecycle import clearup
                 clearup()
                 mark_update_restart()
+                from module.runtime.diagnostics import emit
+                emit('restart_request', trigger_reason='android_update', restart_event=True)
                 State.restart_event.set()
             self._write_state({'phase': 'done', 'result': 'updated', 'target': target,
                                'error': '', 'updatedAt': _now()})
@@ -269,6 +271,8 @@ class AndroidUpdateService:
                         from module.api.lifecycle import clearup
                         clearup()
                         mark_update_restart()
+                        from module.runtime.diagnostics import emit
+                        emit('restart_request', trigger_reason='android_update_recovery', restart_event=True)
                         State.restart_event.set()
             except Exception:
                 logger.exception('[Android-热更] 失败后的重载也失败，实例保持停止')

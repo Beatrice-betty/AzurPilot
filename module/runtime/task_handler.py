@@ -7,6 +7,7 @@ from collections.abc import Callable, Generator
 from typing import Optional
 
 from module.logger import logger
+from module.runtime.diagnostics import emit as diagnostic_event
 
 
 def get_generator(func: Callable):
@@ -242,11 +243,15 @@ class TaskHandler:
                 break
 
             try:
+                if task.name != 'check_update_loop':
+                    diagnostic_event('timer_begin', current_timer=task.name, next_run=task.next_run)
                 task.send(self)
             except Exception as e:
                 logger.exception(e)
                 self.remove_task(task, nowait=True)
             finally:
+                if task.name != 'check_update_loop':
+                    diagnostic_event('timer_end', current_timer=task.name)
                 with self._condition:
                     # 每次执行后从当前时间重新计时。系统休眠或事件循环长时间
                     # 阻塞后不会补跑大量已经过期的刷新任务。

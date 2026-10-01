@@ -13,6 +13,7 @@ from functools import wraps
 import psutil
 
 from deploy.Windows.utils import DataProcessInfo
+from module.runtime.process_control import trace_kill
 from module.base.decorator import run_once
 from module.base.timer import Timer
 from module.device.connection_attr import ConnectionAttr
@@ -329,7 +330,7 @@ class PlatformWindows(PlatformBase, EmulatorManager):
             cmdline = DataProcessInfo(proc=proc, pid=proc.pid).cmdline
             if re.search(regex, cmdline):
                 logger.info(f'[设备-Windows] 终止模拟器: {cmdline}')
-                proc.kill()
+                trace_kill(proc, 'platform_windows.emulator_stop')
                 count += 1
 
         return count
@@ -564,7 +565,7 @@ class PlatformWindows(PlatformBase, EmulatorManager):
                 if name.lower() in MUMU12_RESIDUE_PROCESS_NAMES:
                     has_mumu_process = True
                     logger.warning(f'[设备-Windows] 检测到MuMu残留进程: {name} (PID={proc.pid})')
-                    proc.kill()
+                    trace_kill(proc, 'platform_windows.emulator_stop')
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
         if has_mumu_process:
@@ -616,7 +617,7 @@ class PlatformWindows(PlatformBase, EmulatorManager):
                 name = proc.info['name'] or ''
                 if name.lower() in MUMU12_DEEP_PROCESS_NAMES:
                     logger.warning(f'[设备-Windows] 深度重启：结束进程 {name} (PID={proc.pid})')
-                    proc.kill()
+                    trace_kill(proc, 'platform_windows.emulator_stop')
                     killed += 1
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass

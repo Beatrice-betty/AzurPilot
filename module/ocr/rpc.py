@@ -10,6 +10,7 @@ import pickle
 import threading
 import time
 
+from module.runtime.process_control import trace_kill
 from module.logger import logger
 from module.runtime.setting import State
 
@@ -444,7 +445,7 @@ def stop_ocr_server_process():
     """终止 OCR 服务器子进程。"""
     global process
     if alive():
-        process.kill()
+        trace_kill(process, 'ocr.stop')
         process = None
 
 

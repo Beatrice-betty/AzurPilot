@@ -582,6 +582,9 @@ class AzurLaneAutoScript:
         启动后各检测由对应子开关单独控制。
         """
         # 检查是否需要启动看门狗
+        from module.runtime.diagnostics import start_process
+
+        start_process('alas-worker', self._diagnostic_state)
         try:
             master_enable = bool(self.config.Error_WatchdogEnable)
         except Exception:
@@ -610,6 +613,21 @@ class AzurLaneAutoScript:
             f'[Alas][看门狗] 看门狗已启动'
             f'（任务超时: {master_enable}, 强制定时重启: {force_restart}）'
         )
+
+    def _diagnostic_state(self):
+        """只读取已有内存状态，避免诊断线程初始化设备或保存配置。"""
+        config = self.__dict__.get('config')
+        return {
+            'instance': self.config_name,
+            'current_task': self._watchdog_task_name,
+            'task_started_monotonic': self._watchdog_task_start,
+            'watchdog_active': self._watchdog_active,
+            'last_emulator_restart_monotonic': self.last_emulator_restart_time,
+            'watchdog_enable': getattr(config, 'Error_WatchdogEnable', None),
+            'watchdog_task_timeout_minutes': getattr(config, 'Error_WatchdogTaskTimeout', None),
+            'force_scheduled_restart': getattr(config, 'EmulatorManagement_ForceScheduledRestart', None),
+            'emulator_restart_interval_hours': getattr(config, 'EmulatorManagement_RestartIntervalHours', None),
+        }
 
     def _stop_watchdog(self):
         """停止看门狗守护线程。"""
@@ -720,6 +738,8 @@ class AzurLaneAutoScript:
             reason (str): 触发原因，当前仅支持 'task_timeout'。
             task_name (str): 当前任务名。
         """
+        from module.runtime.diagnostics import emit
+        emit('watchdog_trigger', trigger_reason=reason, current_task=task_name, elapsed_seconds=elapsed)
         if reason == 'task_timeout':
             try:
                 timeout_min = int(self.config.Error_WatchdogTaskTimeout)
@@ -2042,7 +2062,8 @@ class AzurLaneAutoScript:
                 # 主线程等待进程退出
                 process.wait(timeout=30)
             except subprocess.TimeoutExpired:
-                process.kill()
+                from module.runtime.process_control import trace_kill
+                trace_kill(process, 'alas_ssh_timeout')
                 logger.error('[Alas-SSH] 远程SSH命令超时（30秒）')
                 return
             finally:

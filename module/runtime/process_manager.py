@@ -19,6 +19,7 @@ from rich.text import Text
 
 from module.config.utils import DEFAULT_CONFIG_NAME
 from module.logger import logger, set_file_logger, set_func_logger
+from module.runtime.diagnostics import emit as diagnostic_event, start_process
 from module.runtime.process_control import is_process_alive, stop_process, stop_process_tree
 from module.runtime.setting import State
 from module.runtime.worker_events import ExitEvent, TaskEvent, WorkerResult
@@ -649,6 +650,8 @@ class ProcessManager:
             except (EOFError, OSError):
                 break
         logger.info("日志队列处理循环结束")
+        diagnostic_event('worker_exit_observed', run_id=run_id, target_pid=getattr(process, 'pid', None),
+                         exit_code=getattr(process, 'exitcode', None))
 
     @property
     def alive(self) -> bool:
@@ -771,6 +774,9 @@ class ProcessManager:
         """
         from module.runtime.worker_events import initialize
 
+        start_process('alas-worker', lambda: {'run_id': run_id, 'instance': config_name,
+                                            'stop_event': e.is_set() if e is not None else None})
+        diagnostic_event('worker_start', run_id=run_id, instance=config_name)
         initialize(q.put, run_id)
         from module.scheduler.state_channel import initialize as initialize_program_channel
         initialize_program_channel(program_queue, run_id)
@@ -781,12 +787,16 @@ class ProcessManager:
         try:
             result = ProcessManager._run_process(config_name, func, q, e, preview_queue, run_id)
         except SystemExit as exc:
+            diagnostic_event('worker_system_exit', run_id=run_id,
+                             exit_code=exc.code if isinstance(exc.code, (int, type(None))) else None)
             if exc.code in (None, 0):
                 result = WorkerResult.UPDATE if e is not None and e.is_set() else WorkerResult.FINISHED
             raise
         except Exception as exc:
+            diagnostic_event('worker_exception', run_id=run_id, error_type=type(exc).__name__)
             logger.exception(exc)
         finally:
+            diagnostic_event('worker_exit', run_id=run_id, result=result.value)
             q.put(ExitEvent(run_id, result))
 
     @staticmethod

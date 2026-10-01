@@ -17,6 +17,7 @@ from subprocess import PIPE, Popen
 from typing import TYPE_CHECKING, List, Optional, Tuple
 from urllib.parse import urlsplit
 
+from module.runtime.process_control import trace_kill
 from module.base.ssh import clear_ssh_host_key
 from module.config.utils import random_id
 from module.logger import logger
@@ -391,7 +392,7 @@ class SSHRemoteAccessProvider(RemoteAccessProvider):
     def _terminate_process(self) -> None:
         """终止当前正在运行的 SSH 子进程。"""
         if self.process and self.process.poll() is None:
-            self.process.kill()
+            trace_kill(self.process, 'remote_access.kill')
             try:
                 self.process.wait(timeout=3)
             except Exception:
@@ -436,7 +437,7 @@ class SSHRemoteAccessProvider(RemoteAccessProvider):
 
         if self.process is not None and self.process.poll() is None:
             logger.warning(f"终止之前的SSH进程 [{self.process.pid}]")
-            self.process.kill()
+            trace_kill(self.process, 'remote_access.kill')
         try:
             self.process = Popen(args, stdout=PIPE, stderr=PIPE)
         except FileNotFoundError:
@@ -493,7 +494,7 @@ class SSHRemoteAccessProvider(RemoteAccessProvider):
                 time.sleep(wait_sec)
                 if not success and target_process.poll() is None:
                     logger.info("连接超时，终止SSH进程")
-                    target_process.kill()
+                    trace_kill(target_process, 'remote_access.timeout')
 
             threading.Thread(
                 target=timeout_killer,
@@ -507,7 +508,7 @@ class SSHRemoteAccessProvider(RemoteAccessProvider):
                 connection_info = json.loads(stdout)
             except json.JSONDecodeError:
                 if process.poll() is None:
-                    process.kill()
+                    trace_kill(process, 'remote_access.cleanup')
                 stderr = process.stderr.read().decode("utf8", errors="replace")
                 if HOST_KEY_CHANGED_MARKER in stderr.upper():
                     clear_ssh_host_key(current_server, current_port)
@@ -584,7 +585,7 @@ class SSHRemoteAccessProvider(RemoteAccessProvider):
                 logger.info("停止SSH远程访问服务")
             else:
                 logger.info("应用进程退出，终止SSH进程")
-            self.process.kill()
+            trace_kill(self.process, 'remote_access.kill')
         elif self.process:
             stderr = self.process.stderr.read().decode("utf8")
             if stderr:
@@ -648,14 +649,14 @@ class SSHRemoteAccessProvider(RemoteAccessProvider):
 
         if self.process and self.process.poll() is None:
             logger.info("停止SSH远程访问进程")
-            self.process.kill()
+            trace_kill(self.process, 'remote_access.kill')
         logger.info("退出SSH远程访问服务线程")
 
     def stop(self) -> None:
         """停止 SSH 远程访问并终止子进程。"""
         self.stop_event.set()
         if self.process and self.process.poll() is None:
-            self.process.kill()
+            trace_kill(self.process, 'remote_access.kill')
 
     def is_alive(self) -> bool:
         """检查 SSH 服务线程及子进程是否均处于运行状态。

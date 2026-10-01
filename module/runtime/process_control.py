@@ -2,11 +2,37 @@
 
 import math
 import os
+import sys
 import subprocess
 import time
 from pathlib import Path
 
+from module.runtime.diagnostics import emit, exit_code_fields
+
 PROCFS_PATH = Path("/proc")
+
+
+def trace_kill(process, reason, created_at=None):
+    """记录既有 kill 的发起与结果；不改变终止方法、范围或等待行为。"""
+    pid = getattr(process, 'pid', None)
+    if created_at is None:
+        try:
+            created_at = process_created_at(pid)
+        except Exception:
+            pass
+    caller = sys._getframe(1)
+    emit('terminate_intent', trigger_reason=reason, target_pid=pid,
+         target_created_at=created_at, method='kill',
+         caller=caller.f_code.co_name, caller_file=caller.f_code.co_filename, caller_line=caller.f_lineno)
+    del caller
+    try:
+        result = process.kill()
+    except BaseException as exc:
+        emit('terminate_result', trigger_reason=reason, target_pid=pid,
+             success=False, error_type=type(exc).__name__)
+        raise
+    emit('terminate_result', trigger_reason=reason, target_pid=pid, signal_sent=True)
+    return result
 
 
 def _warn(message: str):
@@ -207,10 +233,17 @@ def stop_process(process, timeout: float = 5, kill_timeout: float = 3, record: d
                 return True
             if _may_signal(record):
                 try:
+                    emit('terminate_intent', trigger_reason='stop_process', method=method,
+                         target_pid=process.pid, target_created_at=record.get('created_at') if record else None)
                     getattr(process, method)()
                 except OSError as exc:
+                    emit('terminate_result', trigger_reason='stop_process', method=method,
+                         target_pid=process.pid, success=False, error_type=type(exc).__name__)
                     _warn(f"进程 {process.pid} 的 {method} 失败: {exc}")
             process.join(timeout=wait)
+            emit('terminate_result', trigger_reason='stop_process', method=method,
+                 target_pid=process.pid,
+                 **exit_code_fields(getattr(process, 'exitcode', None)))
         return not is_process_alive(process)
     except (OSError, ValueError, AssertionError, RuntimeError) as exc:
         _warn(f"无法确认本地进程已停止: {exc}")
@@ -239,9 +272,13 @@ def _kill_record(record: dict) -> bool:
         if record["created_at"] < 0 and os.name != "nt":
             import signal
 
+            emit('terminate_intent', trigger_reason='process_tree_child', method='SIGKILL',
+                 target_pid=record['pid'], target_created_at=record['created_at'])
             os.kill(record["pid"], signal.SIGKILL)
+            emit('terminate_result', trigger_reason='process_tree_child',
+                 target_pid=record['pid'], signal_sent=True)
         else:
-            process.kill()
+            trace_kill(process, 'process_tree_child', record['created_at'])
         return True
     except ImportError:
         return False
@@ -266,6 +303,8 @@ def _kill_root(record: dict) -> bool:
     try:
         if not _may_signal(record):
             return True
+        emit('terminate_intent', trigger_reason='process_tree_root', method='taskkill_tree',
+             target_pid=record['pid'], target_created_at=record['created_at'])
         result = subprocess.run(
             ["taskkill", "/PID", str(record["pid"]), "/T", "/F"],
             check=False,
@@ -277,8 +316,12 @@ def _kill_root(record: dict) -> bool:
         # taskkill 返回非零也可能是进程刚退出，由后面的身份轮询作最终确认。
         if result.returncode:
             _warn(f"taskkill 返回 {result.returncode}: PID {record['pid']}")
+        emit('terminate_result', trigger_reason='process_tree_root', target_pid=record['pid'],
+             command_exit_code=result.returncode)
         return True
     except (OSError, subprocess.TimeoutExpired, RuntimeError) as exc:
+        emit('terminate_result', trigger_reason='process_tree_root', target_pid=record['pid'],
+             success=False, error_type=type(exc).__name__)
         _warn(f"终止进程树失败: {exc}")
         return False
 
@@ -369,6 +412,8 @@ def stop_process_tree(process=None, *, record: dict = None, name: str = "进程"
         return False
 
     stopped = True
+    emit('process_tree_cleanup', trigger_reason=name, target_pid=record['pid'],
+         target_created_at=record['created_at'], children=children)
     for child_record in reversed(children):
         stopped = _kill_record(child_record) and stopped
     # 后代未确认退出时保留根进程及亲子关系，后续仍能按根登记重新枚举。

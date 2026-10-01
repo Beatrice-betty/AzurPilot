@@ -32,6 +32,7 @@ from deploy.uv import (
 )
 from module.logger import logger
 from module.runtime import worker_registry
+from module.runtime.diagnostics import emit as diagnostic_event, exit_code_fields, start_process
 from module.runtime.process_control import pid_exists, stop_process, stop_process_tree
 from module.runtime.setting import (
     State,
@@ -223,6 +224,7 @@ def func(
 
     State.restart_event = ev
     State.dependency_sync_event = dependency_sync_event
+    start_process('webui', _webui_diagnostic_state)
 
     from deploy.frontend import ensure_frontend
     ensure_frontend()
@@ -344,6 +346,22 @@ def func(
             level=50,
         )
         raise
+
+
+def _webui_diagnostic_state():
+    """只采样状态和定时任务名称，不获取配置内容或等待业务锁。"""
+    # 启动早期只读取已经加载的模块，诊断不能提前初始化更新器或运行服务。
+    task_handler = getattr(sys.modules.get('module.api.lifecycle'), 'task_handler', None)
+    updater = getattr(sys.modules.get('module.runtime.updater'), 'updater', None)
+    task = getattr(task_handler, '_task', None)
+    return {
+        'restart_event': State.restart_event.is_set() if State.restart_event is not None else None,
+        'dependency_sync_event': State.dependency_sync_event.is_set() if State.dependency_sync_event is not None else None,
+        'restart_requested': State._restart_requested,
+        'updater_state': getattr(updater, 'state', None),
+        'current_timer': task.name if task is not None else None,
+        'scheduled_timers': [{'name': item.name, 'next_run': item.next_run} for item in tuple(getattr(task_handler, 'tasks', ()))],
+    }
 
 
 def _stop_process(process, timeout=5) -> bool:
@@ -540,12 +558,16 @@ def _stop_webui_process_tree(process) -> bool:
     Returns:
         bool: 根进程及所有登记的 worker 均成功停止返回 True，否则返回 False。
     """
+    diagnostic_event('webui_cleanup_begin', target_pid=getattr(process, 'pid', None))
     root_stopped = _stop_process_tree(process, "WebUI")
     if not root_stopped:
         # 根 WebUI 仍可能继续创建或管理 worker，不能清除其登记。
+        diagnostic_event('webui_cleanup_result', target_pid=getattr(process, 'pid', None), success=False)
         return False
     owner_pid = getattr(process, "pid", None) if process is not None else None
     workers_stopped = _stop_registered_workers(owner_pid, discard_reused=True)
+    diagnostic_event('webui_cleanup_result', target_pid=owner_pid, success=workers_stopped,
+                     **exit_code_fields(getattr(process, 'exitcode', None)))
     return root_stopped and workers_stopped
 
 
@@ -816,6 +838,11 @@ def run_webui_supervisor() -> int:
     startup_failures = 0
     runtime_failures = 0
     force_dependency_sync = False
+    unexpected_exit = None
+    supervisor_state = {'webui_pid': None, 'restart_event': False, 'dependency_sync_event': False}
+    if os.environ.get('AZURPILOT_DIAGNOSTIC_SESSION'):
+        start_process('gui-supervisor', lambda: dict(supervisor_state))
+    diagnostic_event('supervisor_start')
     if not _recover_orphaned_workers():
         fatal_error = FatalStartupError(
             "残留 worker 未能回收，无法保证设备控制任务唯一",
@@ -826,6 +853,8 @@ def run_webui_supervisor() -> int:
             fatal_error.reason,
             fatal_error.exit_code,
         )
+        diagnostic_event('supervisor_exit_complete', trigger_reason='orphan_cleanup_failure',
+                         **exit_code_fields(fatal_error.exit_code))
         return fatal_error.exit_code
     try:
         while not should_exit:
@@ -893,6 +922,9 @@ def run_webui_supervisor() -> int:
                 time.sleep(startup_failures)
                 continue
             logger.info(f"[GUI] 启动AzurPilot Web服务 (PID: {process.pid})")
+            supervisor_state['webui_pid'] = process.pid
+            supervisor_state.update(restart_event=False, dependency_sync_event=False)
+            diagnostic_event('webui_spawn', target_pid=process.pid, startup_failures=startup_failures)
 
             try:
                 ready = _wait_for_webui_ready(process, ready_event)
@@ -903,6 +935,9 @@ def run_webui_supervisor() -> int:
                 break
 
             if not ready:
+                diagnostic_event('webui_startup_failure', target_pid=process.pid,
+                                 trigger_reason='readiness_timeout_or_exit',
+                                 **exit_code_fields(process.exitcode))
                 stopped = _stop_webui_process_tree(process)
                 startup_failures += 1
                 if not stopped:
@@ -940,11 +975,14 @@ def run_webui_supervisor() -> int:
             startup_failures = 0
             ready_at = time.monotonic()
             logger.info(f"[GUI] WebUI 服务已就绪 (PID: {process.pid})")
+            diagnostic_event('webui_ready', target_pid=process.pid)
 
             while not should_exit:
                 try:
                     # 等待重启事件，超时1秒
                     restart_triggered = event.wait(1)
+                    supervisor_state.update(restart_event=restart_triggered,
+                                            dependency_sync_event=dependency_sync_event.is_set())
                 except KeyboardInterrupt:
                     logger.info("[GUI] 收到KeyboardInterrupt，退出中...")
                     should_exit = True
@@ -963,6 +1001,10 @@ def run_webui_supervisor() -> int:
                     ) from e
 
                 if restart_triggered:
+                    supervisor_state.update(restart_event=True,
+                                            dependency_sync_event=dependency_sync_event.is_set())
+                    diagnostic_event('restart_triggered', target_pid=process.pid,
+                                     trigger_reason='restart_event', **supervisor_state)
                     logger.info("[GUI] 重启事件触发，终止当前服务...")
                     if not _stop_webui_process_tree(process):
                         logger.error_context(
@@ -994,6 +1036,8 @@ def run_webui_supervisor() -> int:
                         logger.info("[GUI] 检测到更新请求，创建替代 WebUI 前将同步依赖")
                     break
                 elif not process.is_alive():
+                    diagnostic_event('webui_exit_observed', target_pid=process.pid,
+                                     restart_event=False, **exit_code_fields(process.exitcode))
                     if time.monotonic() - ready_at >= WEBUI_STABLE_RUNTIME:
                         runtime_failures = 0
                     runtime_failures += 1
@@ -1017,6 +1061,7 @@ def run_webui_supervisor() -> int:
                             f"[GUI] WebUI 意外退出，将在 {runtime_failures} 秒后重试 "
                             f"({runtime_failures}/{WEBUI_RUNTIME_RETRY_LIMIT})"
                         )
+                        diagnostic_event('webui_retry', target_pid=process.pid, runtime_failures=runtime_failures)
                         time.sleep(runtime_failures)
                     break
 
@@ -1037,9 +1082,17 @@ def run_webui_supervisor() -> int:
     except FatalStartupError as exc:
         # 致命路径统一收敛到此，只决定退出码；错误现场已在各自分支记录。
         fatal_error = exc
+    except BaseException as exc:
+        unexpected_exit = type(exc).__name__
+        diagnostic_event('supervisor_unhandled_exception', error_type=unexpected_exit)
+        raise
     finally:
+        exit_code = fatal_error.exit_code if fatal_error else (None if unexpected_exit else EXIT_SUCCESS)
+        diagnostic_event('supervisor_exit_begin', trigger_reason=unexpected_exit or ('fatal_error' if fatal_error else 'normal_exit'),
+                         **exit_code_fields(exit_code))
         _stop_webui_process_tree(process)
         _stop_dependency_sync_service(service, service_request_queue)
+        diagnostic_event('supervisor_exit_complete', **exit_code_fields(exit_code))
         if fatal_error is None:
             logger.info("[GUI] AzurPilot Web服务已成功退出")
         else:
@@ -1053,6 +1106,9 @@ def run_webui_supervisor() -> int:
 
 
 if __name__ == "__main__":
+    # 显式命名绕过 Windows MainProcess 自动日志过滤，保留父监督器恢复现场。
+    logger.set_file_logger('gui-supervisor')
+    start_process('gui-supervisor')
     # 设置multiprocessing启动方式为spawn（macOS兼容性要求）
     try:
         set_start_method("spawn", force=True)

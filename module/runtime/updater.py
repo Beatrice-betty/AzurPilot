@@ -56,6 +56,8 @@ class Updater(DeployConfig, GitManager):
     def alas_kill(self):
         """强制终止当前进程。"""
         import os
+        from module.runtime.diagnostics import emit
+        emit('process_exit_intent', trigger_reason='updater.alas_kill', method='os._exit', exit_code=1)
         os._exit(1)
 
     @property
@@ -561,6 +563,8 @@ class Updater(DeployConfig, GitManager):
     @staticmethod
     def _trigger_reload():
         """触发父进程的 WebUI 重载事件。"""
+        from module.runtime.diagnostics import emit
+        emit('restart_request', trigger_reason='updater._trigger_reload', restart_event=True)
         State.restart_event.set()
 
     def schedule_update(self) -> Generator:
