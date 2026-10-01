@@ -13,6 +13,7 @@ from module.config.redirect_utils.utils import opsi_explore_cleanup_state_redire
 from module.exception import GameStuckError, MapDetectionError, RequestHumanTakeover
 from module.os.globe_operation import GlobeOperation
 from module.os.map import OSMap
+from module.os.map_base import OSCampaignMap
 from module.os.tasks.explore import OpsiExplore
 from module.os.tasks.explore_cleanup import OpsiExploreCleanup
 from module.campaign.os_run import OSCampaignRun
@@ -50,7 +51,7 @@ class CleanupTests(unittest.TestCase):
         runner.fleet_selector = SimpleNamespace(get=lambda: 1)
         runner.map = SimpleNamespace(camera_data=[1, 2])
         runner.map_init = lambda **kw: runner.calls.append(('init', runner.zone.zone_id))
-        runner.full_scan = lambda **kw: runner.calls.append(('full', runner.zone.zone_id))
+        runner.full_scan = Mock(side_effect=AssertionError('大世界补扫不能调用普通战役扫描'))
         runner.map_rescan = lambda **kw: runner.calls.append(('rescan', runner.zone.zone_id)) or True
         runner.clear_question_any_fleet = lambda: runner.calls.append(('radar', runner.zone.zone_id))
         runner.os_map_goto_globe = Mock()
@@ -61,12 +62,44 @@ class CleanupTests(unittest.TestCase):
         with self.assertRaises(TaskEnd):
             runner.os_explore_cleanup()
         self.assertEqual(runner.calls, [(stage, zone) for zone in [44, 24, 22]
-                                      for stage in ['enter', 'init', 'full', 'rescan', 'radar']])
+                                      for stage in ['enter', 'rescan', 'radar']])
         self.assertEqual(runner.config.OpsiExploreCleanup_State['phase'], 'done')
         self.assertEqual(runner.config.OpsiExploreCleanup_Progress, '已补扫 3/3')
         self.assertEqual(runner.config.cross_get('OpsiExplore.OpsiExplore.ExploreProgress'), '已完成百分之100.00')
         self.assertFalse(runner._opsi_meowfficer_cleanup)
         runner.config.task_delay.assert_called_once_with(target=RESET)
+
+    def test_world_rescan_visits_all_camera_positions_without_spawn_data(self):
+        map_ = OSCampaignMap()
+        map_.shape = 'H8'
+        self.assertEqual(map_.spawn_data_stack, [])
+        runner = SimpleNamespace(
+            map=map_, camera=(0, 0), zone=SimpleNamespace(is_port=False),
+            config=SimpleNamespace(OpsiFleet_Fleet=1), _opsi_meowfficer_cleanup=True,
+            _solved_fleet_mechanism=False, _solved_map_event=set(), is_in_task_explore=True,
+            fleet_set=Mock(), map_data_init=Mock(), map_init=Mock(), handle_info_bar=Mock(),
+            update=Mock(), focus_to=Mock(), focus_to_grid_center=Mock(),
+            map_rescan_current=Mock(return_value=False),
+        )
+        runner.map_rescan_once = lambda **kw: OSMap.map_rescan_once(runner, **kw)
+        self.assertTrue(OSMap.map_rescan(runner, rescan_mode='full'))
+        expected = map_.camera_data.sort_by_camera_distance(runner.camera)
+        self.assertEqual(runner.focus_to.call_args_list,
+                         [call(grid, swipe_limit=(6, 5)) for grid in expected])
+        self.assertEqual(runner.map_rescan_current.call_count, len(expected) + 1)
+
+    def test_failed_world_scan_preserves_checkpoint_and_skips_radar(self):
+        for failure in (False, MapDetectionError('扫描失败')):
+            runner = self.runner(self.state())
+            runner.map_rescan = Mock(return_value=failure if failure is False else None,
+                                     side_effect=failure if isinstance(failure, Exception) else None)
+            runner.clear_question_any_fleet = Mock()
+            with self.assertRaises((GameStuckError, MapDetectionError)):
+                runner.os_explore_cleanup()
+            self.assertEqual(runner.config.OpsiExploreCleanup_State['next'], 0)
+            self.assertEqual(runner.config.OpsiExploreCleanup_State['attempts'], 1)
+            runner.clear_question_any_fleet.assert_not_called()
+            runner.os_map_goto_globe.assert_not_called()
 
     def test_incomplete_exploration_never_enters_any_zone(self):
         for progress in ('已完成百分之99.00', '', None):

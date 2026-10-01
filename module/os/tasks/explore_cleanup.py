@@ -78,9 +78,7 @@ class OpsiExploreCleanup(OSMap):
                 self.fleet_set(self.config.OpsiFleet_Fleet)
                 if self.fleet_selector.get() != self.config.OpsiFleet_Fleet:
                     raise GameStuckError('补扫主舰队切换失败')
-                self.map_init(map_=None)
-                # must_scan 保证已清理的地图不会因为没有敌人而提前结束识别。
-                self.full_scan(must_scan=self.map.camera_data)
+                # 大世界重扫会遍历全部相机位置；普通战役 full_scan 依赖出生数据，不能用于此处。
                 if not self.map_rescan(rescan_mode='full'):
                     raise GameStuckError(f'海域 {zone} 全图补扫未完成')
                 self.clear_question_any_fleet()
