@@ -37,7 +37,7 @@ class CleanupTests(unittest.TestCase):
         runner.os_map_goto_globe = Mock()
         runner.zone_has_safe = Mock(return_value=True)
         def enter(zone, **kwargs):
-            self.assertEqual(kwargs, {'types': 'SAFE', 'require_safe': True})
+            self.assertEqual(kwargs, {'types': 'DANGEROUS', 'require_cleared': True})
             runner.calls.append(('enter', zone))
             runner.zone = SimpleNamespace(zone_id=zone)
         runner.globe_goto = enter
@@ -141,11 +141,59 @@ class CleanupTests(unittest.TestCase):
             runner._os_explore_meowfficer_cleanup()
         self.assertEqual(runner.calls, [])
 
-    def test_cleanup_scan_ignores_battle_producing_events(self):
-        runner = SimpleNamespace(_opsi_meowfficer_cleanup=True, _solved_map_event=set())
+    def test_cleanup_scans_all_existing_event_types(self):
+        runner = SimpleNamespace(_opsi_meowfficer_cleanup=True, _solved_map_event=set(), is_in_task_explore=True)
         runner.view = SimpleNamespace(select=Mock(return_value=[]))
         self.assertFalse(OSMap.map_rescan_current(runner))
-        self.assertEqual(runner.view.select.call_args_list, [unittest.mock.call(is_akashi=True)])
+        self.assertEqual(runner.view.select.call_args_list, [unittest.mock.call(**{key: True}) for key in (
+            'is_exploration_container', 'is_exploration_reward', 'is_akashi',
+            'is_scanning_device', 'is_logging_tower', 'is_fleet_mechanism',
+        )])
+
+    def test_cleanup_keeps_scanning_fleets_after_first_event(self):
+        runner = SimpleNamespace(
+            _opsi_meowfficer_cleanup=True, _solved_map_event=set(),
+            config=SimpleNamespace(OpsiFleet_Fleet=1), zone=SimpleNamespace(is_port=False),
+            device=SimpleNamespace(image=None, screenshot=Mock()),
+            radar=SimpleNamespace(predict_question=Mock(return_value=(0, -1))),
+        )
+        current = [1]
+        runner.fleet_set = Mock(side_effect=lambda fleet: current.__setitem__(0, fleet))
+        runner.fleet_selector = SimpleNamespace(get=lambda: current[0])
+        runner.clear_question = Mock(side_effect=lambda **kw: runner._solved_map_event.add('is_logging_tower'))
+        runner.map_rescan = Mock(return_value=True)
+        self.assertTrue(OSMap.clear_question_any_fleet(runner))
+        self.assertEqual(runner.fleet_set.call_args_list, [unittest.mock.call(fleet) for fleet in (1, 2, 3, 4)])
+        self.assertEqual(runner.map_rescan.call_count, 4)
+
+    def test_ordinary_zone_entry_never_falls_back_to_safe(self):
+        runner = SimpleNamespace(
+            zone=0, name_to_zone=lambda zone: zone, is_in_special_zone=lambda: False,
+            is_in_map=lambda: False, globe_update=Mock(), globe_focus_to=Mock(),
+            zone_has_safe=lambda: True, zone_type_select=Mock(),
+            get_zone_pinned_name=lambda: 'SAFE', globe_enter=Mock(),
+        )
+        with self.assertRaises(GameStuckError):
+            OSMap.globe_goto(runner, 44, types='DANGEROUS', require_cleared=True)
+        runner.zone_type_select.assert_called_once_with(types='DANGEROUS')
+        runner.globe_enter.assert_not_called()
+
+    def test_cleanup_reuses_logging_tower_interaction(self):
+        grid = SimpleNamespace(is_logging_tower=True)
+        runner = SimpleNamespace(
+            _opsi_meowfficer_cleanup=True, _solved_map_event=set(),
+            view=SimpleNamespace(select=lambda **kw: [grid] if 'is_logging_tower' in kw else []),
+            device=SimpleNamespace(click=Mock()),
+            config=SimpleNamespace(temporary=lambda **kw: nullcontext()),
+            wait_until_walk_stable=Mock(return_value='event'),
+        )
+        self.assertTrue(OSMap.map_rescan_current(runner))
+        self.assertEqual(runner._solved_map_event, {'is_logging_tower'})
+        runner.device.click.assert_called_once_with(grid)
+
+    def test_cleanup_does_not_move_fleets_to_hazard_one_fixed_positions(self):
+        runner = SimpleNamespace(_opsi_meowfficer_cleanup=True)
+        OSMap._execute_fixed_patrol_scan(runner, ExecuteFixedPatrolScan=True)
 
     def test_cleanup_radar_errors_are_not_swallowed(self):
         runner = SimpleNamespace(_opsi_meowfficer_cleanup=True, config=SimpleNamespace(OpsiFleet_Fleet=1))

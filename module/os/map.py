@@ -253,7 +253,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
 
     def globe_goto(
         self, zone, types=("SAFE", "DANGEROUS"), refresh=False, stop_if_safe=False,
-        require_safe=False,
+        require_cleared=False,
     ):
         """
         导航到大世界中的另一个海域。
@@ -265,7 +265,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
                 按列表顺序优先尝试选择，不可用时尝试下一个。
             refresh (bool): 已在目标海域时，设为 False 跳过切换，设为 True 重新进入以刷新。
             stop_if_safe (bool): 海域为 SAFE 时返回 False。
-            require_safe (bool): 进入前必须确认海域已解锁为 SAFE。
+            require_cleared (bool): 进入前必须确认已解锁 SAFE，随后严格选择请求类型。
 
         Returns:
             bool: 是否切换了海域。
@@ -276,7 +276,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
         """
         zone = self.name_to_zone(zone)
         logger.hr(f"地球仪前往: {zone}")
-        if self.zone == zone and not require_safe:
+        if self.zone == zone and not require_cleared:
             if refresh:
                 logger.info("[大世界-地图] 前往其他区域刷新当前区域")
                 self.globe_goto(
@@ -299,15 +299,17 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
         # self.ensure_no_zone_pinned()
         self.globe_update()
         self.globe_focus_to(zone)
-        if require_safe and not self.zone_has_safe():
+        if require_cleared and not self.zone_has_safe():
             raise ScriptError(f'补扫海域尚未开荒完成: {zone}')
         if stop_if_safe and self.zone_has_safe():
             logger.info("[大世界-地图] 区域安全，停止")
             self.ensure_no_zone_pinned()
             return False
         self.zone_type_select(types=types)
-        if require_safe and self.get_zone_pinned_name() != "SAFE":
-            raise GameStuckError(f'补扫未选中安全海域: {zone}')
+        if require_cleared:
+            requested = (types,) if isinstance(types, str) else types
+            if self.get_zone_pinned_name() not in requested:
+                raise GameStuckError(f'补扫未选中要求的海域类型 {types}: {zone}')
         # 点击太快碧蓝反应不过来
         time.sleep(0.01)
         self.globe_enter(zone)
@@ -328,8 +330,6 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
                 super().os_map_goto_globe(*args, **kwargs)
                 return
             except RewardUncollectedError:
-                if getattr(self, "_opsi_meowfficer_cleanup", False):
-                    raise GameStuckError("补扫退出失败：海域仍有未领取的探索奖励")
                 # 禁用 after_auto_search 因为它会退出当前海域。
                 # 否则会导致 RecursionError: maximum recursion depth exceeded
                 self.run_auto_search(rescan=True, after_auto_search=False)
@@ -1326,10 +1326,6 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
                 continue
 
             # ========== 移动前检查：是否为塞壬研究装置且功能未开启 ==========
-            if getattr(self, "_opsi_meowfficer_cleanup", False) and not grid.is_akashi:
-                # 白色雷达问号也可能是研究装置，必须用地图识别确认明石后才移动。
-                logger.info("[大世界-补扫] 雷达问号未确认为明石，跳过")
-                return False
             if self._should_skip_siren_research(grid):
                 record_siren_research_device(self)
                 self._solved_map_event.add("is_scanning_device")
@@ -1461,6 +1457,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
             bool: 是否解决了目标事件（明石/记录塔/信息探测装置）。
         """
         logger.hr("[大世界] 遍历舰队查找问号", level=2)
+        cleanup = getattr(self, "_opsi_meowfficer_cleanup", False)
         primary = self.config.OpsiFleet_Fleet
         fleets = [primary] + [f for f in [1, 2, 3, 4] if f != primary]
         self._question_unreachable = False
@@ -1468,13 +1465,13 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
             try:
                 self.fleet_set(fleet)
                 self.device.screenshot()
-                if getattr(self, "_opsi_meowfficer_cleanup", False) and self.fleet_selector.get() != fleet:
+                if cleanup and self.fleet_selector.get() != fleet:
                     raise GameStuckError(f'补扫切换到舰队 {fleet} 失败')
                 grid = self.radar.predict_question(
                     self.device.image, in_port=self.zone.is_port
                 )
             except Exception as e:
-                if getattr(self, "_opsi_meowfficer_cleanup", False):
+                if cleanup:
                     raise
                 logger.warning(f"[大世界-搜索] 舰队 {fleet} 雷达检测异常: {e}")
                 continue
@@ -1484,14 +1481,18 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
             logger.info(f"[大世界-搜索] 舰队 {fleet} 雷达上找到问号 {grid}，前往处理")
             # 保持当前舰队处于激活状态再走原有清除逻辑（雷达坐标系跟随舰队）
             self.clear_question(drop=drop)
-            # 清问号直接命中目标事件（明石/记录塔/信息探测装置），立即停止遍历。
-            if self._solved_map_event & ALREADY_SOLVED_MAP_EVENTS:
+            # 短猫命中目标事件即停止；月度补扫还要检查其他事件与舰队。
+            if self._solved_map_event & ALREADY_SOLVED_MAP_EVENTS and not cleanup:
                 logger.info("[大世界-搜索] 已解决目标事件，停止遍历舰队")
                 return True
             # 清问号后未命中目标事件：做一次全图扫描，把整张地图上被遮挡、
             # 清问号后才显现的事件捞出来；全图扫完仍没有，才继续切换下一支舰队。
             try:
-                self.map_rescan_once(rescan_mode="full", drop=drop)
+                if cleanup:
+                    if not self.map_rescan(rescan_mode="full", drop=drop):
+                        raise GameStuckError('雷达补扫后的全图事件处理未完成')
+                else:
+                    self.map_rescan_once(rescan_mode="full", drop=drop)
             except (
                 TaskEnd,
                 GameStuckError,
@@ -1500,15 +1501,18 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
             ):
                 raise
             except Exception as e:
-                if getattr(self, "_opsi_meowfficer_cleanup", False):
+                if cleanup:
                     raise
                 logger.debug(
                     f"[大世界-搜索] 清问号后全图扫描异常，继续: {e}", exc_info=True
                 )
             # 全图扫描可能捞到目标事件，命中则停止遍历。
-            if self._solved_map_event & ALREADY_SOLVED_MAP_EVENTS:
+            if self._solved_map_event & ALREADY_SOLVED_MAP_EVENTS and not cleanup:
                 logger.info("[大世界-搜索] 已解决目标事件，停止遍历舰队")
                 return True
+        if cleanup:
+            logger.info("[大世界-搜索] 所有舰队雷达扫描结束")
+            return bool(self._solved_map_event & ALREADY_SOLVED_MAP_EVENTS)
         logger.info("[大世界-搜索] 遍历所有舰队后仍未发现目标事件")
         return False
 
@@ -1635,8 +1639,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
         Returns:
             bool: 是否解决了地图随机事件。
         """
-        cleanup = getattr(self, "_opsi_meowfficer_cleanup", False)
-        grids = self.view.select(is_exploration_container=True) if not cleanup else []
+        grids = self.view.select(is_exploration_container=True)
         if (
             "is_exploration_container" not in self._solved_map_event
             and grids
@@ -1654,7 +1657,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
                 return True
             return False
 
-        grids = self.view.select(is_exploration_reward=True) if not cleanup else []
+        grids = self.view.select(is_exploration_reward=True)
         if (
             "is_exploration_reward" not in self._solved_map_event
             and grids
@@ -1717,9 +1720,6 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
                 self.handle_akashi_supply_buy(grid)
                 self._solved_map_event.add("is_akashi")
                 return True
-
-        if cleanup:
-            return False
 
         grids = self.view.select(is_scanning_device=True)
         if (
@@ -2211,6 +2211,9 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
         if not ExecuteFixedPatrolScan:
             logger.info("[大世界] ExecuteFixedPatrolScan 未启用，跳过强制移动。")
             return
+        if getattr(self, "_opsi_meowfficer_cleanup", False):
+            logger.info('[大世界-补扫] 使用逐队雷达和事件移动，不执行侵蚀一固定坐标巡逻')
+            return
         if self.config.task.command == "OpsiMeowfficerFarming":
             # 短猫相接不走这套共享强制移动：它的 L2 把舰队挪到固定的
             # C1/D1/E1/F1，那是照侵蚀1 那张图定的；短猫跑的海域地图各不相同，
@@ -2563,8 +2566,6 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
                 if grids and grids[0].is_akashi:
                     grid = grids[0]
                 else:
-                    if getattr(self, "_opsi_meowfficer_cleanup", False):
-                        continue
                     grid = self._radar_question_to_local()
                     if grid is None:
                         logger.info(f"[大世界] 舰队 {fleet} 视野内没有明石，切换下一队")

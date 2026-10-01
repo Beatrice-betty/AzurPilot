@@ -39,7 +39,7 @@ class OpsiExplore(OSMap):
                 raise OSExploreError
 
     def _os_explore_meowfficer_cleanup(self):
-        """只进入已开荒海域，复用全图扫描和短猫的逐队雷达补查。
+        """只进入已开荒普通海域，复用全图事件扫描和短猫的逐队雷达补查。
 
         每张图退出成功后保存断点；失败保留当前图，最多跨重启尝试三次。
 
@@ -61,8 +61,9 @@ class OpsiExplore(OSMap):
                 state = dict(state, attempts=state['attempts'] + 1)
                 self.config.OpsiExplore_MeowfficerCleanupState = state
                 zone = state['order'][index]
-                logger.hr(f'每月开荒后漏猫补扫 {index + 1}/{len(state["order"])}: {zone}', level=1)
-                self.globe_goto(zone, types='SAFE', require_safe=True)
+                logger.hr(f'每月开荒后事件补扫 {index + 1}/{len(state["order"])}: {zone}', level=1)
+                # SAFE 解锁只用作开荒完成的证明；补查原始普通海域，不刷新安全海域。
+                self.globe_goto(zone, types='DANGEROUS', require_cleared=True)
                 if self.zone.zone_id != zone:
                     raise GameStuckError(f'补扫未进入目标海域 {zone}')
                 self._solved_map_event = set()
