@@ -6,7 +6,7 @@ import type {Catalog, ProgramSaved, ProgramSimulation, ProgramValidation, Runtim
 
 export type Scalar = string | number | boolean | null
 export type Value = Scalar | Value[] | {[key: string]: Value}
-export type Values = Record<string, Record<string, Record<string, Value>>>
+type Values = Record<string, Record<string, Record<string, Value>>>
 export type Status = 'running' | 'stopped' | 'error' | 'updating'
 export interface Instance { name: string; status: Status; serial: string; server: string; currentTask?: string | null }
 export interface UpdateStatus {
@@ -16,7 +16,7 @@ export interface UpdateStatus {
   shaMismatch?: boolean
   managedByAndroid?: boolean
 }
-export interface Commit { sha: string; author: string; date: string; message: string }
+interface Commit { sha: string; author: string; date: string; message: string }
 export interface CommitHistory { entries: Commit[]; total: number; hasMore: boolean; localHead: string | null; upstreamHead: string | null }
 export interface Field { type: string; value: Value; mode?: string; display?: string; option?: Value[]; validate?: string | number[]; preserve_empty?: boolean }
 export interface Schema {
@@ -25,7 +25,7 @@ export interface Schema {
   translations: Record<string, unknown>
 }
 export interface Config { instance: string; revision: string; values: Values }
-export interface ScheduledTask { name: string; nextRun: string; pending: boolean; state: 'running' | 'pending' | 'waiting' }
+interface ScheduledTask { name: string; nextRun: string; pending: boolean; state: 'running' | 'pending' | 'waiting' }
 export interface Resource { name: string; label: string; value: number | null; limit?: number; total?: number | null; record?: string }
 export interface Overview {
   instance: string; revision: string; status: Status; tasks: ScheduledTask[]
@@ -72,8 +72,8 @@ export interface MeowfficerCat {
 }
 /** 「指挥喵评分」任务写入 log/meowfficer_score.json 的结构化结果，报告不存在时后端返回 NOT_FOUND。 */
 export interface MeowfficerScoreReport { instance: string; generatedAt: string; count: number; cats: MeowfficerCat[] }
-export interface DeployField { key: string; type: string; label: string; help: string; value: Value; options: Value[] }
-export interface RemoteAccessStatus { enabled: boolean; state: string; address: string; error: string }
+interface DeployField { key: string; type: string; label: string; help: string; value: Value; options: Value[] }
+interface RemoteAccessStatus { enabled: boolean; state: string; address: string; error: string }
 export interface Settings { groups: {key: string; label: string; fields: DeployField[]}[]; notice: string; demo: boolean; remote?: RemoteAccessStatus }
 export interface ApiEvent { v: 1; type: 'event'; topic: string; seq: number; data: unknown }
 export interface ApiResponse { v: 1; type: 'response'; id: string; ok: boolean; result?: unknown; error?: {code: string; message: string; details?: unknown} }
@@ -98,6 +98,7 @@ export interface BackgroundGalleryEntry {
 
 export interface Results {
   'config.export': Values & {_schedulerProgram?: Pick<ProgramSaved, 'mode' | 'draft' | 'active'>}
+  'background.access': {token: string}
   'scheduler.program.catalog': Catalog
   'scheduler.program.get': ProgramSaved
   'scheduler.program.save': ProgramSaved
@@ -108,7 +109,6 @@ export interface Results {
   'accounts.status': AccountStatus
   'accounts.manage': AccountStatus
   'announcement.get': Announcement | null
-  'background.access': {token: string}
   'background.resolve': {final_url: string; content_type: string}
   'background.gallery.list': BackgroundGalleryEntry[]
   'background.gallery.add': {entry: BackgroundGalleryEntry}

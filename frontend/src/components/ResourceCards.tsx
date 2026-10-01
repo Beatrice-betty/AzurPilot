@@ -167,7 +167,7 @@ export function ResourceCards({resources, selected}: {resources: Resource[]; sel
     prefs.fitText && 'resource-fit-text',
     prefs.dense && 'resource-dense'].filter(Boolean).join(' ')
 
-  /* 通用卡片只换外层容器：两种排法共用这段卡片内部渲染。 */
+  /* 两种排法共用同一段卡片内部渲染，也都套在 .resource-card-body 里——那张二级面。 */
   const cardBody = (entry: typeof entries[number]) => <>
     <div className="resource-heading"><span>{entry.label}</span><div className="resource-image-wrap"><ResourceIcon resourceKey={entry.key} size={32} src={entry.iconSrc}/></div></div>
     <ResourceValue value={entry.displayValue} suffix={entry.suffix}/>
@@ -175,8 +175,12 @@ export function ResourceCards({resources, selected}: {resources: Resource[]; sel
   </>
 
   return <div className={className} ref={gridRef}>{prefs.merged
-    ? <section className="resource-card resource-merged" ref={mergedRef}>{entries.map(entry => <section key={entry.key} className={`resource-card resource-merged-item resource-${entry.index % 4}`}>{cardBody(entry)}</section>)}</section>
-    : entries.map(entry => <section key={entry.key} className={`resource-card resource-${entry.index % 4}`}>{cardBody(entry)}</section>)}</div>
+    ? <section className="resource-card resource-merged" ref={mergedRef}>
+      <div className="resource-card-body">{entries.map(entry => <section key={entry.key} className={`resource-merged-item resource-${entry.index % 4}`}>{cardBody(entry)}</section>)}</div>
+    </section>
+    : entries.map(entry => <section key={entry.key} className={`resource-card resource-${entry.index % 4}`}>
+      <div className="resource-card-body">{cardBody(entry)}</div>
+    </section>)}</div>
 }
 export function ResourceSettings({resources, selected, onChange}: {resources: Resource[]; selected: string[]; onChange: (keys: string[]) => void}) {
   const {ui} = useApp()
@@ -516,7 +520,7 @@ export function ResourceSettings({resources, selected, onChange}: {resources: Re
           }}
           onPointerCancel={event => finishDrag(event.pointerId, false)}>
           <span className="resource-editor-grip" aria-hidden="true"><GripVertical size={16}/></span>
-          <span className="resource-editor-icon resource-editor-icon-image"><ResourceIcon resourceKey={key} size={30} src={dogIcon(key, resources.find(item => item.name === key))}/></span>
+          <span className="resource-editor-icon resource-editor-icon-image"><ResourceIcon resourceKey={key} size={30} src={dogIcon(key, resource)}/></span>
           <span className="resource-editor-label">{label}</span>
           <button type="button" className="resource-editor-remove" aria-label={ui('resource.remove', {label})} title={ui('resource.remove', {label})} onClick={() => remove(key)}><X size={15}/></button>
         </div>

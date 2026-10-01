@@ -10,7 +10,7 @@ import { useConnection } from '../app/context'
 import type { StatisticsCategory } from '../app/statisticsPrefs'
 
 /** 单个页面的取数参数，与该页在布局文档里保存的一致。 */
-export interface CategoryParams {
+interface CategoryParams {
   instance: string
   category: StatisticsCategory
   days: number

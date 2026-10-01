@@ -25,10 +25,6 @@ import {
 
 echarts.use([LineChart, CandlestickChart, GridComponent, TooltipComponent, DataZoomComponent, ToolboxComponent, LegendComponent, CanvasRenderer])
 
-/* 涨跌分段的固定配色。 */
-const RISE_COLOR = '#dc2626'
-const FALL_COLOR = '#16a34a'
-
 const RESOURCE_PALETTE: Record<string, string> = {
   oil: '#10b981', coin: '#f59e0b', cube: '#0ea5e9', gem: '#f43f5e', pt: '#8b5cf6',
   core: '#06b6d4', medal: '#e11d48', merit: '#d97706', guild_coin: '#64748b',
@@ -100,8 +96,7 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
   onToggleFilter?: (key: string) => void
   expanded?: boolean
   onToggleExpanded: () => void
-  /* 放大视图用当前分区的名字当标题：整页工具栏（含分区切换）被面板盖住后，
-     只写「趋势与细节」就分不出看的是资源趋势还是委托收益。 */
+  /* 放大视图用分区名字当标题：此时整页工具栏（含分区切换）已被面板盖住。 */
   title?: string
   initialMode?: ChartMode
   category?: string
@@ -236,29 +231,33 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
       const colors = getComputedStyle(document.documentElement)
       const text = colors.getPropertyValue('--text').trim() || '#82929f'
       const minimal = !usesMaterial(theme)
-      const primary = minimal ? colors.getPropertyValue('--accent').trim() : '#159b88'
-      const secondary = minimal ? colors.getPropertyValue('--secondary').trim() : '#de7861'
+      const primary = colors.getPropertyValue('--theme-chart-primary').trim() || colors.getPropertyValue('--accent').trim()
+      const secondary = colors.getPropertyValue('--theme-chart-secondary').trim() || colors.getPropertyValue('--secondary').trim()
+      const rise = colors.getPropertyValue('--theme-chart-rise').trim() || '#dc2626'
+      const fall = colors.getPropertyValue('--theme-chart-fall').trim() || '#16a34a'
+      /* 网格线只铺在图表内部那张二级面上，透明度跟随它的不透明度。 */
+      const gridOpacity = Math.min(1, Math.max(0, (parseFloat(colors.getPropertyValue('--theme-plate-alpha')) || 100) / 100))
       const surface = colors.getPropertyValue('--surface').trim()
       const border = colors.getPropertyValue('--border').trim()
       const accentSoft = colors.getPropertyValue('--accent-soft').trim()
-      const signature = `${theme}|${text}|${primary}|${secondary}|${surface}|${border}|${accentSoft}`
+      const signature = `${theme}|${text}|${primary}|${secondary}|${rise}|${fall}|${surface}|${border}|${accentSoft}|${gridOpacity}`
       if (signature === renderedSignature) return
       renderedSignature = signature
       const colorFor = (item: typeof seriesData[number]) => isSingle ? (minimal ? primary : item.color) : item.color
 
       let yAxes: any[] = []
       if (isSingle || axisMode === 'unified') {
-        yAxes = [{type: 'value', scale: true, splitLine: {lineStyle: {color: border}}, axisLabel: {color: text}}]
+        yAxes = [{type: 'value', scale: true, splitLine: {lineStyle: {color: border, opacity: gridOpacity}}, axisLabel: {color: text}}]
       } else if (shownData.length === 2) {
         const c0 = colorFor(seriesData[0]), c1 = colorFor(seriesData[1])
         yAxes = [
-          {type: 'value', scale: true, position: 'left', splitLine: {lineStyle: {color: border}}, axisLine: {show: true, lineStyle: {color: c0}}, axisLabel: {color: c0}},
+          {type: 'value', scale: true, position: 'left', splitLine: {lineStyle: {color: border, opacity: gridOpacity}}, axisLine: {show: true, lineStyle: {color: c0}}, axisLabel: {color: c0}},
           {type: 'value', scale: true, position: 'right', splitLine: {show: false}, axisLine: {show: true, lineStyle: {color: c1}}, axisLabel: {color: c1}},
         ]
       } else {
         yAxes = seriesData.map((item, idx) => {
           const color = colorFor(item)
-          if (idx === 0) return {type: 'value', scale: true, position: 'left', splitLine: {lineStyle: {color: border}}, axisLine: {show: true, lineStyle: {color}}, axisLabel: {color}}
+          if (idx === 0) return {type: 'value', scale: true, position: 'left', splitLine: {lineStyle: {color: border, opacity: gridOpacity}}, axisLine: {show: true, lineStyle: {color}}, axisLabel: {color}}
           if (idx === 1) return {type: 'value', scale: true, position: 'right', splitLine: {show: false}, axisLine: {show: true, lineStyle: {color}}, axisLabel: {color}}
           return {type: 'value', scale: true, show: false, splitLine: {show: false}}
         })
@@ -277,7 +276,7 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
           const bucketMap = new Map(item.buckets.map(b => [b.time, b]))
           if (item.index === 0) {
             const candle = riseFall
-              ? {color: RISE_COLOR, color0: FALL_COLOR, borderColor: RISE_COLOR, borderColor0: FALL_COLOR}
+              ? {color: rise, color0: fall, borderColor: rise, borderColor0: fall}
               : {color: primary, color0: secondary, borderColor: primary, borderColor0: secondary}
             return [{
               name: item.series.label, type: 'candlestick' as const, yAxisIndex: 0,
@@ -296,9 +295,9 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
           /* 拐点同属上涨与下跌两个系列，高亮会在同一坐标叠两个符号。 */
           return [
             {name: item.series.label, type: 'line' as const, yAxisIndex: axisIndexFor(item), showSymbol: false, connectNulls: false,
-              emphasis: {disabled: true}, lineStyle: {width: 2, color: RISE_COLOR}, data: segments.rise},
+              emphasis: {disabled: true}, lineStyle: {width: 2, color: rise}, data: segments.rise},
             {name: item.series.label, type: 'line' as const, yAxisIndex: axisIndexFor(item), showSymbol: false, connectNulls: false,
-              emphasis: {disabled: true}, lineStyle: {width: 2, color: FALL_COLOR}, data: segments.fall},
+              emphasis: {disabled: true}, lineStyle: {width: 2, color: fall}, data: segments.fall},
           ]
         }
         return [{
@@ -433,9 +432,7 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
 
   return (
     <section className={`panel statistics-chart ${expanded ? 'chart-expanded' : ''}`}>
-      {/* 紧凑主题把标题与「放大查看」上提到页面工具栏：分类切换已经说明了这是什么，
-          面板里再写一遍「趋势与细节」是重复的。但放大视图会盖住整页工具栏（含分区切换），
-          所以放大时必须把标题行放回来，否则只剩 Esc 能退出。 */}
+      {/* 紧凑主题把标题提到页面工具栏；放大视图盖住工具栏，此时必须把标题行放回来。 */}
       {(heading || expanded) && <div className="panel-heading">
         <h2>{expanded && title ? title : headingLabel}</h2>
         <div className="stat-card-actions">{foldControl}<button className="text-button" onClick={onToggleExpanded}>{expanded ? ui('stats.collapseChart') : ui('stats.expandChart')}</button></div>
@@ -490,18 +487,9 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
         <>
           {isSingle ? (
             <div className="stat-metrics">
-              {[[ui('stats.latest'), single.latest], [ui('stats.change'), single.change], [ui('stats.maximum'), single.maximum], [ui('stats.minimum'), single.minimum], [ui('stats.rawCount'), single.points.length]].map(([label, value]) => {
-                const isChange = label === ui('stats.change')
-                const numVal = Number(value)
-                const diffClass = isChange ? (numVal > 0 ? 'positive' : numVal < 0 ? 'negative' : 'neutral') : ''
-                const formatted = isChange && numVal > 0 ? `+${numVal.toLocaleString(undefined, {maximumFractionDigits: 2})}` : numVal.toLocaleString(undefined, {maximumFractionDigits: 2})
-                return (
-                  <div key={String(label)}>
-                    <span>{label}</span>
-                    <strong className={diffClass}>{formatted}</strong>
-                  </div>
-                )
-              })}
+              {[[ui('stats.latest'), single.latest], [ui('stats.change'), single.change], [ui('stats.maximum'), single.maximum], [ui('stats.minimum'), single.minimum], [ui('stats.rawCount'), single.points.length]].map(([label, value]) => (
+                <div key={String(label)}><span>{label}</span><strong>{Number(value).toLocaleString(undefined, {maximumFractionDigits: 2})}</strong></div>
+              ))}
             </div>
           ) : (
             <div className={`stat-multi-metrics${compact ? ' is-compact' : ''}`}>
@@ -560,8 +548,6 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
           {controls}
           {rangeError}
           <p className="panel-note">{ui('stats.chartHint')}</p>
-
-          {/* 原始记录表由页面当卡片渲染，这里只把表投进那张卡留出的容器：数据仍用图表自己的分桶与选中序列算。 */}
         </>
       ) : (
         <>

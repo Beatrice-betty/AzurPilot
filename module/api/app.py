@@ -111,6 +111,7 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
         return FileResponse(path, media_type='text/html', headers={'Cache-Control': 'no-cache'})
 
     from module.api.android import routes as android_routes
+
     def background_authorized(request, *, allow_query=False):
         """背景 HTTP 能力令牌只通过已授权的 WebSocket 下发，不复用访问密码。"""
         supplied = request.headers.get('x-azurpilot-background-token', '')
@@ -120,6 +121,7 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
             supplied.encode('utf-8'), gateway.router.background_token.encode('ascii'))
 
     async def background_upload(request):
+        """接收浏览器上传的本地背景图，存进 cache/background/library（本地图片的唯一落点）。"""
         """接收浏览器上传的本地背景图，存进 cache/background/library（本地图片的唯一落点）。"""
         if not background_authorized(request):
             return JSONResponse({'error': '请先登录'}, status_code=401)

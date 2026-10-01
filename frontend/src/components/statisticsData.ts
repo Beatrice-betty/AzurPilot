@@ -62,8 +62,6 @@ export function mergeMultiSeriesRows(
   })
 }
 
-
-
 /** 图表与原始记录表共用的视图：同一份选中、聚合与时间范围，两边各自算出同一结果。 */
 export interface StatisticsView {
   selectedSeries: StatSeries[]
@@ -83,7 +81,7 @@ export interface StatisticsView {
 }
 
 /* 选中系列按保存顺序排列；没有可用记录时取第一条有数据的系列。 */
-export function resolveSelectedKeys(series: StatSeries[], saved: string[]): string[] {
+function resolveSelectedKeys(series: StatSeries[], saved: string[]): string[] {
   const valid = saved.filter(key => series.some(item => item.key === key))
   if (valid.length) return valid
   const active = series.find(item => item.points.length)?.key ?? series[0]?.key

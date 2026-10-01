@@ -95,13 +95,6 @@ class Router:
         }
 
     @property
-    def programs(self):
-        if self._scheduler_programs is None:
-            from module.api.scheduler_service import SchedulerService
-            self._scheduler_programs = SchedulerService(self.configs, self.runtime)
-        return self._scheduler_programs
-
-    @property
     def accounts(self):
         """获取账号管理服务单例。
 
@@ -112,6 +105,18 @@ class Router:
             from module.api.account_service import AccountService
             self._accounts = AccountService(self.configs)
         return self._accounts
+
+    @property
+    def programs(self):
+        """获取调度程序服务单例。
+
+        Returns:
+            SchedulerService: 调度程序草稿、校验与模拟服务实例。
+        """
+        if self._scheduler_programs is None:
+            from module.api.scheduler_service import SchedulerService
+            self._scheduler_programs = SchedulerService(self.configs, self.runtime)
+        return self._scheduler_programs
 
     @property
     def announcements(self):

@@ -710,6 +710,7 @@
           }
         },
         "additionalProperties": false,
+        "description": "按修订号保存调度程序草稿。",
         "properties": {
           "instance": {
             "maxLength": 64,
@@ -1048,6 +1049,7 @@
           }
         },
         "additionalProperties": false,
+        "description": "调度程序草稿的校验请求。",
         "properties": {
           "instance": {
             "maxLength": 64,
@@ -1391,6 +1393,7 @@
           }
         },
         "additionalProperties": false,
+        "description": "带模拟上下文与步数上限的试运行请求。",
         "properties": {
           "instance": {
             "maxLength": 64,
@@ -1450,6 +1453,7 @@
       "mutates": true,
       "params": {
         "additionalProperties": false,
+        "description": "把草稿应用到运行中的调度器。",
         "properties": {
           "instance": {
             "maxLength": 64,
