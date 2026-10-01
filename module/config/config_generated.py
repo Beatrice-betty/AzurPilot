@@ -663,6 +663,8 @@ class GeneratedConfig:
     OpsiExplore_ForceRun = False
     OpsiExplore_LastZone = 0
     OpsiExplore_AllowHazard1Leveling = False
+    OpsiExplore_MeowfficerCleanup = False
+    OpsiExplore_MeowfficerCleanupState = None
     OpsiExplore_ExploreProgress = None
 
     # 配置组 `OpsiShop`

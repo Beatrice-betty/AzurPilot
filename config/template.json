@@ -2665,6 +2665,8 @@
       "ForceRun": false,
       "LastZone": 0,
       "AllowHazard1Leveling": false,
+      "MeowfficerCleanup": false,
+      "MeowfficerCleanupState": null,
       "ExploreProgress": null
     },
     "OpsiFleet": {

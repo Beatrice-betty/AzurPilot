@@ -13780,6 +13780,15 @@
         "type": "checkbox",
         "value": false
       },
+      "MeowfficerCleanup": {
+        "type": "checkbox",
+        "value": false
+      },
+      "MeowfficerCleanupState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
+      },
       "ExploreProgress": {
         "type": "textarea",
         "value": "",

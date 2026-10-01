@@ -272,7 +272,9 @@ OCR：行动力面板 / 黄币 / 紫币 ──▶ 决策（智能调度+ 状态�
 
 ## 13. 缓存与持久化
 
-- 进度状态全部持久化在配置文件：`OpsiExplore_LastZone`、智能调度+ 的状态键（`_get_smart_scheduling_state_value`，存于配置而非内存，防进程重启丢账）、各任务 `NextRun/LastRun`。
+- 进度状态全部持久化在配置文件：`OpsiExplore_LastZone`、`OpsiExplore_MeowfficerCleanupState`、智能调度+ 的状态键（`_get_smart_scheduling_state_value`，存于配置而非内存，防进程重启丢账）、各任务 `NextRun/LastRun`。
+- 每月开荒的 `OpsiExplore.MeowfficerCleanup` 开关默认关闭。开启后，遍历完成还需逐海域确认已解锁安全海域，再按原开荒顺序进入安全海域执行全图识别、明石补查和逐队雷达扫描；只处理确认的明石，不处理可能触发战斗的研究装置或机关，不使用侵蚀一的固定坐标挪队。补扫沿用明石移动和商店购买配置。
+- 补扫状态保存服务器下次重置时间、原始顺序、下一海域索引及当前海域尝试次数。退出当前图成功后才推进断点，重启后跳过初始化自律并续扫，全部结束后本月不再执行；跨月清除旧断点并恢复正常开荒。单图三次未完成后请求人工检查，修复原因后可在停止实例时将 `OpsiExplore.OpsiExplore.MeowfficerCleanupState.attempts` 改为 `0` 再继续。若开关是在本月开荒结束后才开启，需将该任务的 `Scheduler.NextRun` 设为当前时间以调起完成确认和补扫。
 - `OSStatus._last_yellow_coins` 内存缓存仅作 OCR 失败降级。
 - 代理上下文（`_opsi_task_context`）存活于一次任务调用栈，退出即恢复——它刻意不持久化，防止代理身份泄漏到下一个任务。
 

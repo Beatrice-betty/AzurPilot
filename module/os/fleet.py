@@ -30,7 +30,7 @@ from module.base.filter import Filter
 from module.base.timer import Timer
 from module.base.utils import point_limit
 from module.config.utils import dict_to_kv
-from module.exception import MapWalkError
+from module.exception import MapWalkError, RequestHumanTakeover
 from module.handler.assets import MAINTENANCE_ANNOUNCE
 from module.logger import logger
 from module.map.fleet import Fleet
@@ -533,6 +533,8 @@ class OSFleet(OSCamera, Combat, Fleet, OSAsh):
 
             # 战斗
             if self.combat_appear():
+                if getattr(self, "_opsi_meowfficer_cleanup", False):
+                    raise RequestHumanTakeover('漏猫补扫意外进入战斗，停止补扫，请检查海域状态')
                 # 使用 ui_back() 进行测试，因为每月深渊日志太少。
                 # self.ui_back(check_button=self.is_in_map)
                 self.combat(expected_end=abyssal_expected_end, fleet_index=self.fleet_show_index, save_get_items=drop)

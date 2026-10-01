@@ -3531,6 +3531,14 @@
       "name": "Allow Corrosion 1 leveling during exploration",
       "help": "If enabled, Corrosion 1 Leveling will not be postponed. Use with caution, as you might run out of Action Points for exploration."
     },
+    "MeowfficerCleanup": {
+      "name": "Post-exploration Akashi cleanup",
+      "help": "After all monthly exploration zones are confirmed safe, revisit them in exploration order, scan the full map and check each fleet radar for missed Akashi shops. No auto-search battles. Progress is saved per zone and completed only once per month. Stop for inspection after three unfinished attempts in one zone."
+    },
+    "MeowfficerCleanupState": {
+      "name": "Monthly cleanup state",
+      "help": ""
+    },
     "ExploreProgress": {
       "name": "Monthly exploration progress",
       "help": "Shows the current completion percentage of monthly exploration."

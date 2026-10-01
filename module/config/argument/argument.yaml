@@ -1273,6 +1273,11 @@ OpsiExplore:
   ForceRun: false
   LastZone: 0
   AllowHazard1Leveling: false
+  MeowfficerCleanup: false
+  MeowfficerCleanupState:
+    type: stored
+    value: null
+    display: hide
   ExploreProgress:
     type: textarea
     display: disabled
