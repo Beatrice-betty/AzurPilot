@@ -122,7 +122,6 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
 
     async def background_upload(request):
         """接收浏览器上传的本地背景图，存进 cache/background/library（本地图片的唯一落点）。"""
-        """接收浏览器上传的本地背景图，存进 cache/background/library（本地图片的唯一落点）。"""
         if not background_authorized(request):
             return JSONResponse({'error': '请先登录'}, status_code=401)
         async with request.form() as form:
@@ -144,7 +143,8 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
         if not target:
             return JSONResponse({'error': '缺少 url 参数。'}, status_code=400)
         try:
-            data, content_type = proxy_fetch(target)
+            # 代抓走线程池：同步 requests 会占住事件循环，一次下载最长 20 秒。
+            data, content_type = await asyncio.to_thread(proxy_fetch, target)
         except Exception as error:
             return JSONResponse({'error': str(error)}, status_code=400)
         return Response(data, media_type=content_type, headers={'Cache-Control': 'no-cache'})
