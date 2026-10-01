@@ -41,7 +41,7 @@ class OSStatus(UI):
 
     @property
     def is_in_task_explore(self) -> bool:
-        return self.config.task.command == 'OpsiExplore'
+        return self.config.task.command in ('OpsiExplore', 'OpsiExploreCleanup')
 
     @property
     def is_in_task_cl1_leveling(self) -> bool:

@@ -396,7 +396,7 @@ YukikazeTaskManager:
       > Reward
       > ShopFrequent > ShopOnce > Shipyard > Freebies
       > PrivateQuarters
-      > OpsiExplore
+      > OpsiExplore > OpsiExploreCleanup
       > OpsiPreventActionPointOverflow
       > Minigame > Awaken
       > OpsiAshBeacon
@@ -1273,10 +1273,26 @@ OpsiExplore:
   ForceRun: false
   LastZone: 0
   AllowHazard1Leveling: false
+  MeowfficerCleanup:
+    value: false
+    display: hide
+  MeowfficerCleanupState:
+    type: stored
+    value: null
+    display: hide
   ExploreProgress:
     type: textarea
     display: disabled
     value: ""
+OpsiExploreCleanup:
+  Progress:
+    type: textarea
+    display: disabled
+    value: ""
+  State:
+    type: stored
+    value: null
+    display: hide
 OpsiShop:
   PresetFilter:
     value: max_benefit_meta

@@ -20,6 +20,24 @@ class OpsiExplore(OSMap):
     # 探索失败的区域 ID 列表
     _os_explore_failed_zone = []
 
+    def _os_explore_end(self):
+        """保存开荒完成状态，并唤起已启用的独立补扫任务。"""
+        reset = get_os_next_reset().isoformat()
+        state = self.config.OpsiExplore_MeowfficerCleanupState
+        if isinstance(state, dict) and state.get('reset') != reset:
+            raise GameStuckError('开荒期间跨月，停止本轮收尾，下次重新开荒')
+        logger.info('每月开荒+已完成，延迟到下次重置')
+        with self.config.multi_set():
+            self.config.OpsiExplore_LastZone = 0
+            self.config.OpsiExplore_MeowfficerCleanupState = {'reset': reset, 'phase': 'done'}
+            self.config.OpsiExplore_ExploreProgress = '已完成百分之100.00'
+            self.config.OpsiExplore_SpecialRadar = False
+            self.config.task_delay(target=get_os_next_reset())
+            self.config.task_call('OpsiExploreCleanup', force_call=False)
+            self.config.task_call('OpsiDaily', force_call=False)
+            self.config.task_call('OpsiShop', force_call=False)
+        self.config.task_stop()
+
     def _os_explore_task_delay(self):
         """在大世界探索期间延迟其他大世界任务。"""
         logger.info('每月开荒+运行中，延迟其他大世界任务')
@@ -51,20 +69,6 @@ class OpsiExplore(OSMap):
             out: page_os, 大世界地图
         """
 
-        def end():
-            logger.info('每月开荒+已完成，延迟到下次重置')
-            next_reset = get_os_next_reset()
-            logger.attr('大世界下次重置', next_reset)
-            logger.info('[大世界-探索] 如需重新运行，请清除 OpsiExplore.Scheduler.NextRun 并设置 OpsiExplore.OpsiExplore.LastZone=0')
-            with self.config.multi_set():
-                self.config.OpsiExplore_LastZone = 0
-                self.config.OpsiExplore_ExploreProgress = '已完成百分之100.00'
-                self.config.OpsiExplore_SpecialRadar = False
-                self.config.task_delay(target=next_reset)
-                self.config.task_call('OpsiDaily', force_call=False)
-                self.config.task_call('OpsiShop', force_call=False)
-            self.config.task_stop()
-
         logger.hr('大世界-每月开荒+', level=1)
         full_order = [int(f.strip(' \t\r\n')) for f in self.config.OS_EXPLORE_FILTER.split('>')]
         total_zones = len(full_order)
@@ -93,7 +97,7 @@ class OpsiExplore(OSMap):
             raise ScriptError(f'Invalid last_zone: {last_zone}')
 
         if not len(order):
-            end()
+            self._os_explore_end()
 
         # 开始探索
         self._os_explore_failed_zone = []
@@ -135,7 +139,7 @@ class OpsiExplore(OSMap):
 
             # 到达最后一个区域
             if zone == order[-1]:
-                end()
+                self._os_explore_end()
 
     def os_explore(self):
         """执行大世界每月开荒任务主流程。
@@ -146,6 +150,16 @@ class OpsiExplore(OSMap):
         Raises:
             GameStuckError: 开荒重试失败且无法解锁目标海域时抛出。
         """
+        state = self.config.OpsiExplore_MeowfficerCleanupState
+        reset = get_os_next_reset().isoformat()
+        if isinstance(state, dict) and state.get('reset') != reset:
+            with self.config.multi_set():
+                self.config.OpsiExplore_LastZone = 0
+                self.config.OpsiExplore_ExploreProgress = '已完成百分之0.00'
+                self.config.OpsiExplore_MeowfficerCleanupState = None
+            state = None
+        if state is None:
+            self.config.OpsiExplore_MeowfficerCleanupState = {'reset': reset, 'phase': 'explore'}
         for _ in range(2):
             try:
                 self._os_explore()
