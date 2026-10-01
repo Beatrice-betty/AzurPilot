@@ -194,18 +194,8 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
         ) or 22
         overflow_target_task = self._get_prevent_action_point_overflow_target_task()
 
-        if (
-            self.config.task.command == "OpsiExplore"
-            and (
-                getattr(self, "_os_explore_post_processing_pending", lambda: False)()
-                or (
-                    self.config.OpsiExplore_MeowfficerCleanup
-                    and self.config.OpsiExplore_ExploreProgress == '已完成百分之100.00'
-                )
-            )
-        ):
-            # 开荒已结束后才打开补扫时，也先跳过战斗；是否真正完成由海域解锁确认。
-            logger.info("每月开荒后处理阶段，跳过初始化自律寻敌")
+        if self.config.task.command == "OpsiExploreCleanup":
+            logger.info("独立事件补扫任务，跳过初始化自律寻敌")
         elif (
             (
                 self.config.task.command == "OpsiScheduling"
@@ -253,7 +243,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
 
     def globe_goto(
         self, zone, types=("SAFE", "DANGEROUS"), refresh=False, stop_if_safe=False,
-        require_cleared=False,
+        require_cleared=False, force_enter=False,
     ):
         """
         导航到大世界中的另一个海域。
@@ -265,6 +255,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
                 按列表顺序优先尝试选择，不可用时尝试下一个。
             refresh (bool): 已在目标海域时，设为 False 跳过切换，设为 True 重新进入以刷新。
             stop_if_safe (bool): 海域为 SAFE 时返回 False。
+            force_enter (bool): 即使已在目标海域，也从全球地图确认类型后重新进入。
             require_cleared (bool): 进入前必须确认已解锁 SAFE，随后严格选择请求类型。
 
         Returns:
@@ -276,7 +267,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
         """
         zone = self.name_to_zone(zone)
         logger.hr(f"地球仪前往: {zone}")
-        if self.zone == zone and not require_cleared:
+        if self.zone == zone and not require_cleared and not force_enter:
             if refresh:
                 logger.info("[大世界-地图] 前往其他区域刷新当前区域")
                 self.globe_goto(
@@ -306,7 +297,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
             self.ensure_no_zone_pinned()
             return False
         self.zone_type_select(types=types)
-        if require_cleared:
+        if require_cleared or force_enter:
             requested = (types,) if isinstance(types, str) else types
             if self.get_zone_pinned_name() not in requested:
                 raise GameStuckError(f'补扫未选中要求的海域类型 {types}: {zone}')

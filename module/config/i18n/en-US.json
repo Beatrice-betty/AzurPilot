@@ -250,6 +250,10 @@
       "name": "Monthly Exploration Plus",
       "help": ""
     },
+    "OpsiExploreCleanup": {
+      "name": "Ordinary-zone event cleanup",
+      "help": "Requires 100% monthly exploration. Revisit original DANGEROUS zones in exploration order, scan the full map and every fleet radar, and handle missed events and their enemies. Never enter SAFE zones. Uses separate monthly checkpoints saved after leaving each zone, without repeating completed months. If exploration is incomplete, ask to rerun monthly exploration."
+    },
     "OpsiShop": {
       "name": "OpSi Shop Plus",
       "help": ""
@@ -3542,6 +3546,20 @@
     "ExploreProgress": {
       "name": "Monthly exploration progress",
       "help": "Shows the current completion percentage of monthly exploration."
+    }
+  },
+  "OpsiExploreCleanup": {
+    "_info": {
+      "name": "Ordinary-zone event cleanup",
+      "help": "Requires 100% monthly exploration. Revisit original DANGEROUS zones in exploration order, scan the full map and every fleet radar, and handle missed events and their enemies. Never enter SAFE zones. Uses separate monthly checkpoints saved after leaving each zone, without repeating completed months. If exploration is incomplete, ask to rerun monthly exploration."
+    },
+    "Progress": {
+      "name": "Cleanup progress",
+      "help": "Completed zones for this task only; monthly exploration progress is unchanged."
+    },
+    "State": {
+      "name": "Cleanup state",
+      "help": ""
     }
   },
   "OpsiShop": {

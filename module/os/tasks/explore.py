@@ -10,7 +10,7 @@ Classes:
 """
 
 from module.config.utils import get_os_next_reset, DEFAULT_TIME
-from module.exception import GameStuckError, RequestHumanTakeover, ScriptError
+from module.exception import GameStuckError, ScriptError
 from module.logger import logger
 from module.os.globe_operation import OSExploreError
 from module.os.map import OSMap
@@ -20,99 +20,20 @@ class OpsiExplore(OSMap):
     # 探索失败的区域 ID 列表
     _os_explore_failed_zone = []
 
-    def _os_explore_post_processing_pending(self):
-        """重启后仍在本月后处理阶段时，不再执行初始化战斗。"""
-        state = self.config.OpsiExplore_MeowfficerCleanupState
-        return isinstance(state, dict) and state.get('reset') == get_os_next_reset().isoformat() \
-            and state.get('phase') in ('cleanup', 'done')
-
-    def _os_explore_confirm_complete(self, order):
-        """百分比仅表示遍历进度；逐海域确认安全解锁才允许补扫。"""
-        if not order:
-            raise ScriptError('每月开荒海域顺序为空，无法确认完成')
-        self.os_map_goto_globe()
-        self.globe_update()
-        for zone in order:
-            self.globe_focus_to(self.name_to_zone(zone))
-            if not self.zone_has_safe():
-                logger.warning(f'[大世界-补扫] 海域 {zone} 尚未解锁安全海域，继续正常开荒')
-                raise OSExploreError
-
-    def _os_explore_meowfficer_cleanup(self):
-        """只进入已开荒普通海域，复用全图事件扫描和短猫的逐队雷达补查。
-
-        每张图退出成功后保存断点；失败保留当前图，最多跨重启尝试三次。
-
-        Pages:
-            in: IN_MAP 或 IN_GLOBE
-            out: IN_GLOBE
-        """
-        state = self.config.OpsiExplore_MeowfficerCleanupState
-        reset = get_os_next_reset().isoformat()
-        if not self._os_explore_post_processing_pending() or state['phase'] == 'done':
-            return
-        self._opsi_meowfficer_cleanup = True
-        try:
-            for index in range(state['next'], len(state['order'])):
-                if get_os_next_reset().isoformat() != reset:
-                    raise GameStuckError('补扫期间跨月，停止旧月份补扫')
-                if state['attempts'] >= 3:
-                    raise RequestHumanTakeover(f"海域 {state['order'][index]} 补扫连续三次未完成，请检查日志")
-                state = dict(state, attempts=state['attempts'] + 1)
-                self.config.OpsiExplore_MeowfficerCleanupState = state
-                zone = state['order'][index]
-                logger.hr(f'每月开荒后事件补扫 {index + 1}/{len(state["order"])}: {zone}', level=1)
-                # SAFE 解锁只用作开荒完成的证明；补查原始普通海域，不刷新安全海域。
-                self.globe_goto(zone, types='DANGEROUS', require_cleared=True)
-                if self.zone.zone_id != zone:
-                    raise GameStuckError(f'补扫未进入目标海域 {zone}')
-                self._solved_map_event = set()
-                self._solved_fleet_mechanism = False
-                self.fleet_set(self.config.OpsiFleet_Fleet)
-                if self.fleet_selector.get() != self.config.OpsiFleet_Fleet:
-                    raise GameStuckError('补扫主舰队切换失败')
-                self.map_init(map_=None)
-                # must_scan 保证已清理的地图不会因为没有敌人而提前结束识别。
-                self.full_scan(must_scan=self.map.camera_data)
-                if not self.map_rescan(rescan_mode='full'):
-                    raise GameStuckError(f'海域 {zone} 全图补扫未完成')
-                self.clear_question_any_fleet()
-                self.fleet_set(self.config.OpsiFleet_Fleet)
-                self.os_map_goto_globe()
-                if get_os_next_reset().isoformat() != reset:
-                    raise GameStuckError('补扫期间跨月，停止保存旧月份进度')
-                state = dict(state, next=index + 1, attempts=0)
-                self.config.OpsiExplore_MeowfficerCleanupState = state
-                self.config.check_task_switch()
-            self.config.OpsiExplore_MeowfficerCleanupState = dict(state, phase='done')
-        finally:
-            self._opsi_meowfficer_cleanup = False
-
     def _os_explore_end(self):
-        """完成开荒后运行独立补扫阶段，全部结束才延迟到下月。"""
+        """保存开荒完成状态，并唤起已启用的独立补扫任务。"""
         reset = get_os_next_reset().isoformat()
         state = self.config.OpsiExplore_MeowfficerCleanupState
         if isinstance(state, dict) and state.get('reset') != reset:
             raise GameStuckError('开荒期间跨月，停止本轮收尾，下次重新开荒')
-        if self.config.OpsiExplore_MeowfficerCleanup:
-            if not self._os_explore_post_processing_pending():
-                order = [int(f.strip()) for f in self.config.OS_EXPLORE_FILTER.split('>')]
-                self._os_explore_confirm_complete(order)
-                if get_os_next_reset().isoformat() != reset:
-                    raise GameStuckError('开荒完成确认期间跨月，停止本轮收尾')
-                with self.config.multi_set():
-                    self.config.OpsiExplore_ExploreProgress = '已完成百分之100.00'
-                    self.config.OpsiExplore_MeowfficerCleanupState = {
-                        'reset': reset, 'phase': 'cleanup',
-                        'order': order, 'next': 0, 'attempts': 0,
-                    }
-            self._os_explore_meowfficer_cleanup()
         logger.info('每月开荒+已完成，延迟到下次重置')
         with self.config.multi_set():
             self.config.OpsiExplore_LastZone = 0
+            self.config.OpsiExplore_MeowfficerCleanupState = {'reset': reset, 'phase': 'done'}
             self.config.OpsiExplore_ExploreProgress = '已完成百分之100.00'
             self.config.OpsiExplore_SpecialRadar = False
             self.config.task_delay(target=get_os_next_reset())
+            self.config.task_call('OpsiExploreCleanup', force_call=False)
             self.config.task_call('OpsiDaily', force_call=False)
             self.config.task_call('OpsiShop', force_call=False)
         self.config.task_stop()
@@ -237,9 +158,6 @@ class OpsiExplore(OSMap):
                 self.config.OpsiExplore_ExploreProgress = '已完成百分之0.00'
                 self.config.OpsiExplore_MeowfficerCleanupState = None
             state = None
-        if self._os_explore_post_processing_pending():
-            self._os_explore_end()
-            return
         if state is None:
             self.config.OpsiExplore_MeowfficerCleanupState = {'reset': reset, 'phase': 'explore'}
         for _ in range(2):
