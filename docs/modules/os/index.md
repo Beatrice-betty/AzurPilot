@@ -126,6 +126,7 @@ flowchart BT
 | `archive.py` | `OpsiArchive` | `os_archive` | 档案坐标购买与清理（延迟到周三） |
 | `month_boss.py` | `OpsiMonthBoss` | `clear_month_boss` | 月度 Boss（适应性预检查 203/203/156） |
 | `explore.py` | `OpsiExplore` | `os_explore` | 每月开荒+（逐区解锁，失败重试后抛 `GameStuckError`） |
+| `explore_cleanup.py` | `OpsiExploreCleanup` | `os_explore_cleanup` | 普通海域事件补扫（开荒完成后按原顺序补查，使用独立月度断点） |
 | `cross_month.py` | `OpsiCrossMonth` | `os_cross_month(_end)` | 等到重置前 10 分钟抢清每日+ |
 | `fleet_auto_change.py` | `OpsiFleetAutoChange` | `run()` | 练级队列轮换舰队 |
 | `task_context.py` | 上下文管理器 | —— | 代理任务的临时身份与延迟请求（见下） |
@@ -272,9 +273,10 @@ OCR：行动力面板 / 黄币 / 紫币 ──▶ 决策（智能调度+ 状态�
 
 ## 13. 缓存与持久化
 
-- 进度状态全部持久化在配置文件：`OpsiExplore_LastZone`、`OpsiExplore_MeowfficerCleanupState`、智能调度+ 的状态键（`_get_smart_scheduling_state_value`，存于配置而非内存，防进程重启丢账）、各任务 `NextRun/LastRun`。
-- 每月开荒的 `OpsiExplore.MeowfficerCleanup` 开关默认关闭。开启后，遍历完成还需逐海域确认已解锁安全海域，再按原开荒顺序进入已完成开荒的普通海域（`DANGEROUS`）执行全图识别、事件处理和逐队雷达扫描；安全海域（`SAFE`）仅作为开荒完成的证明，补扫不会进入或刷新安全海域。覆盖明石、探索容器、探索奖励、记录塔、信息收集装置及双舰队机关等现有事件；找到一种事件后仍继续扫描其他舰队。沿用现有事件处理、移动及商店购买配置，事件生成敌人时允许现有逻辑战斗处理，不主动开启反复刷图，也不使用侵蚀一的固定坐标挪队。
-- 补扫状态保存服务器下次重置时间、原始顺序、下一海域索引及当前海域尝试次数。退出当前图成功后才推进断点，重启后跳过初始化自律并续扫，全部结束后本月不再执行；跨月清除旧断点并恢复正常开荒。单图三次未完成后请求人工检查，修复原因后可在停止实例时将 `OpsiExplore.OpsiExplore.MeowfficerCleanupState.attempts` 改为 `0` 再继续。若开关是在本月开荒结束后才开启，需将该任务的 `Scheduler.NextRun` 设为当前时间以调起完成确认和补扫。
+- 进度状态全部持久化在配置文件：`OpsiExplore_LastZone`、`OpsiExploreCleanup_State`、智能调度+ 的状态键（`_get_smart_scheduling_state_value`，存于配置而非内存，防进程重启丢账）、各任务 `NextRun/LastRun`。
+- “普通海域事件补扫”是独立任务 `OpsiExploreCleanup`，使用自己的 `Scheduler.Enable`、`Progress` 和 `State`。初始化游戏前检查 `OpsiExplore.ExploreProgress` 是否为 `已完成百分之100.00`，已有开荒月度标记时还检查月份，避免沿用上月完成状态；不满足则提示重新运行每月开荒并延期。每月开荒完成后只唤起已启用的补扫任务，不在开荒任务内部执行补扫。
+- 补扫按原开荒顺序严格进入普通海域（`DANGEROUS`），不选择或刷新安全海域（`SAFE`）。每张图先全图识别，再处理地图事件并逐队检查雷达；找到一种事件后仍检查其他舰队。沿用现有事件及战斗逻辑，不使用侵蚀一的固定坐标挪队。进入同一海域也重新确认类型，不把“当前海域相同”当作已经进入目标地图。
+- 补扫状态保存月份、原始顺序、下一海域索引和尝试次数，成功退出当前图才推进断点。重启续扫，本月完成后延迟到下次重置；跨月先清除补扫自己的旧进度。单图三次未完成后请求检查，修复原因后可在停止实例时将 `OpsiExploreCleanup.OpsiExploreCleanup.State.attempts` 改为 `0`。旧开关和旧补扫断点通过配置迁移进入独立任务；开荒自身的月度标记不会被当成补扫进度。
 - `OSStatus._last_yellow_coins` 内存缓存仅作 OCR 失败降级。
 - 代理上下文（`_opsi_task_context`）存活于一次任务调用栈，退出即恢复——它刻意不持久化，防止代理身份泄漏到下一个任务。
 

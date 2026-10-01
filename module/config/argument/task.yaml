@@ -329,6 +329,10 @@ Opsi:
       - Scheduler
       - OpsiExplore
       - OpsiFleet
+    OpsiExploreCleanup:
+      - Scheduler
+      - OpsiExploreCleanup
+      - OpsiFleet
     OpsiShop:
       - Scheduler
       - OpsiShop

@@ -96,6 +96,26 @@ class OSCampaignRun(OSMapOperation):
         except ActionPointLimit as e:
             self.delay_opsi_tasks_after_ap_limit(e)
 
+    def opsi_explore_cleanup(self):
+        """先检查每月开荒进度，满足条件后才初始化设备与独立补扫任务。"""
+        from module.os.tasks.explore_cleanup import OpsiExploreCleanup
+        OpsiExploreCleanup.reset_monthly_state(self.config)
+        if not OpsiExploreCleanup.explore_complete(self.config):
+            logger.warning('本月每月开荒进度未达到 100%，请重新运行一遍每月开荒')
+            self.config.task_delay(server_update=True)
+            self.config.task_stop()
+            return
+        state = self.config.OpsiExploreCleanup_State
+        if isinstance(state, dict) and state.get('phase') == 'done':
+            from module.config.utils import get_os_next_reset
+            self.config.task_delay(target=get_os_next_reset())
+            self.config.task_stop()
+            return
+        try:
+            self._run_opsi_task_with_ap_overflow_guard(lambda campaign: campaign.os_explore_cleanup())
+        except ActionPointLimit as e:
+            self.delay_opsi_tasks_after_ap_limit(e)
+
     def opsi_shop(self):
         """执行大世界港口商店购买任务。"""
         try:
