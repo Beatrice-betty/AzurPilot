@@ -194,6 +194,8 @@ flowchart TD
 
 代理执行用 `_run_with_opsi_task_context(任务名, 函数)`：临时换身份 → 调用子任务的 `run_*_once` → 恢复身份。`ActionPointLimit` 在代理层被翻译为「达到保留值，正常返回」。
 
+决策读到的行动力会随代理调用传给子任务（`fresh_ap`）：侵蚀 1 开工检查、耄耋相接指定海域循环在读数足够时复用该读数跳过重复的行动点弹窗（每次弹窗 = 一组 `ACTION_POINT_REMAIN_OS` + `ACTION_POINT_CANCEL` 点击）；行动力不足时子任务仍照常开弹窗开箱/购买。
+
 ### 防溢出任务（OpsiPreventActionPointOverflow）
 
 继承 `OpsiScheduling` 但方向相反：它自己不消耗行动力，而是**在其他任务运行时被临时关闭**（`os_run.py` 的 guard：`cross_set` 关 Enable → 运行任务 → finally 里按当前 AP 重算下次运行时间并重新启用）。它自身运行时按「距上限的分钟数 = (上限 − 当前 AP) × 600 秒」排期，到达上限后以当前真实 AP 代跑一轮目标任务（智能调度+ / 侵蚀 1 / 耄耋相接），把行动力压到下限。代理上下文里的 `TaskEnd` 延迟请求会被截获改写到防溢出任务自身，保证子任务的延迟意图不丢失。
@@ -305,6 +307,7 @@ OCR：行动力面板 / 黄币 / 紫币 ──▶ 决策（智能调度+ 状态�
 - **`is_in_opsi_explore` 是全包的路由闸门**。开荒期间（任务启用且 next_run 早于重置前 12 小时）几乎所有任务都要让路；新任务不要绕过这个检查。跨月任务用 `false_func` 覆盖它是刻意的例外。
 - **`os_init` 的首次自律寻敌是决策点不是固定动作**。智能调度+ 与防溢出代理会把该决策延后（`_smart_scheduling_first_auto_search_pending`），改动 `os_init` 时保持该挂起机制，否则会重复全图扫描浪费 AP。
 - **行动力语义分「总/当前」**：决策用总行动力（含箱子），实际进入海域用当前行动力；混用会造成 `ActionPointLimit` 误判或箱子漏开。
+- **行动力读数复用有严格前提**。`fresh_ap` 只允许在「刚读到、且读数与复用点之间没有任何行动力消耗」时传入（目前仅智能调度+ 决策读 → 同轮代理子任务，且必须在同一 `OS_ACTION_POINT_BOX_USE` 上下文中，保证含箱口径一致）；复用判定 `action_point_reusable()` 必须与开弹窗行为完全等价（当前行动力达到开工线且总行动力高于保留值），不满足时必须照常 `action_point_set` 开箱/购买，独立运行的侵蚀 1 / 耄耋相接也保持自行读数的原路径。
 - **黄币 OCR 必须双读**。单次读取会拿到弹窗遮挡下的错误值；`get_yellow_coins` 的连续一致确认与缓存回退是有意为之。
 - **敏感任务默认值**：`OpsiCrossMonth/OpsiObscure/OpsiAbyssal` 的 `Sensitive: true` 意味着运行到一半失败会让调度器停机（等待人工），新增高危任务时才追加，勿扩大范围。
 - **月末清理优先于黄币/CL1 调度**。`run_smart_scheduling_once` 的分支顺序是产品行为（月底清 AP 避免浪费），重排决策顺序会改变玩家收益。

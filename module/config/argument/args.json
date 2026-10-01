@@ -13541,6 +13541,10 @@
           1,
           240
         ]
+      },
+      "SkipStrategicSearchCheck": {
+        "type": "checkbox",
+        "value": false
       }
     },
     "Storage": {
