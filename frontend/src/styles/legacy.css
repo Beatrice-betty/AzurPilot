@@ -591,7 +591,8 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
   }
   /* 高度逐层传到右列：网格行高必须能压住这两层，内层的滚动才拿得到约束。 */
   .task-config-rail-slot {display: flex; flex-direction: column; min-height: 0; overflow: hidden}
-  .task-config-rail {display: flex; flex-direction: column; gap: 10px; min-height: 0; max-height: 100%; overflow: hidden}
+  /* 一级面与二级贴片之间的间隙。 */
+  .task-config-rail {--rail-plate-gap: 4px; display: flex; flex-direction: column; gap: 10px; min-height: 0; max-height: 100%; overflow: hidden}
   /* 切换按钮即各视图标题左侧的图标，两态共用同一坐标与尺寸。 */
   .task-rail-toggle {display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; margin-right: 1px; border: 0; background: none; color: var(--muted); cursor: pointer; flex-shrink: 0}
   .task-rail-toggle:hover {color: var(--accent)}
@@ -600,8 +601,8 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 /* 调度块的外边距归零，内边距与目录卡片一致。 */
   .task-rail-scheduler .scheduler-widget-heading > div, .task-rail-directory .rail-section-heading > div {gap: 7px; font-size: 12px; font-weight: 650; color: var(--text)}
   /* 整列面板即一张卡片，内部层次靠分隔线而非嵌套卡片。 */
-  .task-rail-scheduler {border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 14px; background: var(--theme-surface-bg); -webkit-backdrop-filter: var(--theme-surface-filter); backdrop-filter: var(--theme-surface-filter)}
-  .task-rail-scheduler .scheduler-widget {margin: 0; flex-shrink: 0}
+  .task-rail-scheduler {border: 1px solid var(--border); border-radius: var(--radius); padding: var(--rail-plate-gap); background: var(--theme-surface-bg); -webkit-backdrop-filter: var(--theme-surface-filter); backdrop-filter: var(--theme-surface-filter)}
+  .task-rail-scheduler .scheduler-widget {margin: 0; flex-shrink: 0; border-radius: calc(var(--radius) - var(--rail-plate-gap))}
 /* 右栏里的调度器组件与新版本同层：二级贴片。 */
 .scheduler-widget {background: var(--theme-plate-bg); -webkit-backdrop-filter: var(--theme-plate-filter); backdrop-filter: var(--theme-plate-filter)}
   .task-rail-scheduler .rail-schedule {border-top: 1px solid var(--border); padding-top: 14px; margin-top: 4px}
@@ -615,7 +616,7 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
     display: flex;
     flex-direction: column;
     min-height: 0;
-    padding: 16px 14px;
+    padding: var(--rail-plate-gap);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--theme-surface-bg);
@@ -629,7 +630,7 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
     min-height: 0;
     padding: 16px 18px;
     border: 1px solid var(--border);
-    border-radius: var(--theme-radius-panel, 16px);
+    border-radius: calc(var(--radius) - var(--rail-plate-gap));
     background: var(--theme-plate-bg);
     -webkit-backdrop-filter: var(--theme-plate-filter);
     backdrop-filter: var(--theme-plate-filter);
