@@ -261,18 +261,29 @@ class OpsiMeowfficerFarming(MeowfficerTargetZoneMixin, CoinTaskMixin, OSMap):
         self._meow_record_akashi_if_solved()
         self.config.check_task_switch()
 
-    def _meow_handle_stay_in_zone(self, zone):
+    def _meow_handle_stay_in_zone(self, zone, fresh_ap=None):
         """处理驻留指定海域的连续循环搜索流程。
 
         Args:
             zone (Zone): 目标海域对象。
+            fresh_ap (tuple[int, int] | None): 调用方刚读到的
+                (总行动力, 当前行动力)，开工检查足够时复用它跳过弹窗。
         """
         logger.hr(f'大世界-耄耋相接（指定海域循环）, zone_id={zone.zone_id}', level=1)
         self.get_current_zone()
         if self.zone.zone_id != zone.zone_id or not self.is_zone_name_hidden:
             self.globe_goto(zone, types='SAFE', refresh=True)
 
-        self.action_point_set(cost=120, keep_current_ap=True, check_rest_ap=True)
+        # 智能调度+ 代跑时决策读刚读过行动力：达到开工线时弹窗只会
+        # 读数再关掉，复用它跳过；不足 120 时仍需弹窗开箱/购买。
+        if self.action_point_reusable(fresh_ap, cost=120):
+            _fresh_total, _fresh_current = fresh_ap
+            logger.info(
+                f'[大世界-耄耋相接] 复用刚读到的行动力'
+                f'(当前={_fresh_current}, 总={_fresh_total})，跳过行动点弹窗'
+            )
+        else:
+            self.action_point_set(cost=120, keep_current_ap=True, check_rest_ap=True)
         self.fleet_set(self.config.OpsiFleet_Fleet)
         self.os_order_execute(recon_scan=False, submarine_call=self.config.OpsiFleet_Submarine)
 
@@ -474,13 +485,16 @@ class OpsiMeowfficerFarming(MeowfficerTargetZoneMixin, CoinTaskMixin, OSMap):
                 prepared=True,
             )
 
-    def run_meowfficer_farming_once(self, ap_preserve=None, ap_checked=False, prepared=False):
+    def run_meowfficer_farming_once(self, ap_preserve=None, ap_checked=False, prepared=False, fresh_ap=None):
         """执行单轮耄耋相接任务。
 
         Args:
             ap_preserve (int | None): 行动力保留值。
             ap_checked (bool): 是否已完成本轮前的行动力检查。
             prepared (bool): 是否已完成运行环境准备。
+            fresh_ap (tuple[int, int] | None): 调用方刚读到的
+                (总行动力, 当前行动力)；仅在读数与本次调用之间没有任何
+                行动力消耗时传入（智能调度+ 决策读），供开工检查复用。
 
         Returns:
             bool: 最新的行动力检查状态标志。
@@ -512,7 +526,7 @@ class OpsiMeowfficerFarming(MeowfficerTargetZoneMixin, CoinTaskMixin, OSMap):
             zone, _ = self._meow_target_zone_at(target_zones, getattr(self, '_meow_target_zone_index', 0))
             self._meow_target_zone_index = getattr(self, '_meow_target_zone_index', 0) + 1
             if len(target_zones) == 1:
-                self._meow_handle_stay_in_zone(zone)
+                self._meow_handle_stay_in_zone(zone, fresh_ap=fresh_ap)
             else:
                 self._meow_handle_target_zone_search(zone)
             return ap_checked
