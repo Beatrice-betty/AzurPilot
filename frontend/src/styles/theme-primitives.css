@@ -341,9 +341,12 @@ button:focus-visible, a:focus-visible, summary:focus-visible {outline-color: var
 /* 状态色只落在图标与实例名上：颜色即状态，不另加文字。 */
 .instance-tab.running {color: var(--theme-success)}
 .instance-tab.updating {color: var(--muted)}
+.instance-tab.error {color: var(--theme-danger)}
+/* 状态色要落在图标与实例名上：这两层会被 .breadcrumb span 一类规则改成 muted。 */
+.instance-tab.running .instance-tab-icon, .instance-tab.running .instance-tab-name {color: var(--theme-success)}
+.instance-tab.error .instance-tab-icon, .instance-tab.error .instance-tab-name {color: var(--theme-danger)}
 .instance-tab.running .instance-tab-icon,
 .instance-tab.updating .instance-tab-icon {animation: spin 1.1s linear infinite}
-.instance-tab.error {color: var(--theme-danger)}
 
 /* 加号：静态只有图标，悬停与按下才现出圆圈。圆圈由伪元素画，盒子比它左右各宽出一段间距——
    左侧那条短竖线仍画在盒子左边缘（也就是紧贴前一个标签），圆因此不会压到线上。 */

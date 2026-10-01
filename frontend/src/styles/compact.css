@@ -108,6 +108,7 @@
    直角、命中区 12px。标记是扫描得到的，新增滚动容器不必回来改这里。 */
 :root[data-theme='extreme'] {scrollbar-width: none}
 :root[data-theme='extreme']::-webkit-scrollbar {width: 0; height: 0}
+:root[data-theme='extreme'] [data-overlay-scroll='on'] {scrollbar-width: none}
 :root[data-theme='extreme'] [data-overlay-scroll='on']::-webkit-scrollbar {width: 0; height: 0}
 
 .overlay-scrollbar {position: fixed; width: 12px; z-index: 120; opacity: 0; pointer-events: none; transition: opacity .12s ease}
