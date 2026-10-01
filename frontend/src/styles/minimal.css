@@ -27,7 +27,7 @@
 body {background-attachment: scroll}
 .app-shell {gap: 0}
 
-.sidebar, .right-rail {background: var(--surface)}
+.sidebar, .right-rail, .topbar {border-radius: 0; background: var(--surface)}
 .sidebar {padding: 0 14px 14px}
 .sidebar-brand {height: var(--topbar-height); padding: 0 8px; margin-bottom: 14px}
 .brand-title {font-size: 22px}

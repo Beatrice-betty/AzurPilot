@@ -341,8 +341,9 @@
 .statistics-table.is-single-row th:not(:first-child),.statistics-table.is-single-row td:not(:first-child) {border-left:1px solid var(--border)}.statistics-table th {position:sticky;top:0;z-index:1}.statistics-table th button {border:0;background:none;color:var(--text);cursor:pointer;font:inherit;padding:0}.statistics-table tbody tr:hover {background:color-mix(in srgb, var(--theme-inset-bg) 60%, transparent)}.table-resource-cell {display:inline-flex;align-items:center;gap:8px;vertical-align:middle}.table-resource-icon {width:26px;height:26px;object-fit:contain;flex-shrink:0;display:block;user-select:none;pointer-events:none;filter:drop-shadow(0 1px 3px rgb(0 0 0 / .2))}.table-header-icon {width:24px;height:24px;margin-right:2px}
 /* 卡片适应：列数由脚本按容器宽度写入，末排因此不会各自撑满整行。 */
 .resource-grid.resource-fit {display:grid}
-/* 卡片适应把网格切成多列，合并卡片仍占满整行。 */
+/* 合并卡横跨整行，卡片的列布局由它内层承载——脚本把列数写在内层，这一层因此要是网格。 */
 .resource-grid.resource-fit .resource-merged {grid-column:1/-1}
+.resource-grid.resource-fit .resource-merged > .resource-card-body {display:grid}
 /* 紧凑视图：只收紧间距；旧版主题有更具体的规则，仍按主题的紧凑度走。 */
 .resource-grid.resource-dense {gap:4px;margin-bottom:6px}
 /* 字体适应：窄卡片按容器宽度重排字号层级——数值统一收小并各卡一致（覆盖上游窄视口下的固定字号）；

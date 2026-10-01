@@ -118,7 +118,7 @@ export function ResourceCards({resources, selected}: {resources: Resource[]; sel
   const {ui} = useApp()
   const prefs = useSyncExternalStore(subscribeDashboardPrefs, readDashboardPrefs, readDashboardPrefs)
   const gridRef = useRef<HTMLDivElement>(null)
-  const mergedRef = useRef<HTMLElement>(null)
+  const mergedRef = useRef<HTMLDivElement>(null)
 
   /* 卡片适应：按容器宽度算一行放得下几张，列数即「卡片数与一排容量」的较小者 ——
      溢出到第二排以后时末排沿用第一排尺寸，总数不足一排时列数就等于卡片数因而仍均分。 */
@@ -175,8 +175,8 @@ export function ResourceCards({resources, selected}: {resources: Resource[]; sel
   </>
 
   return <div className={className} ref={gridRef}>{prefs.merged
-    ? <section className="resource-card resource-merged" ref={mergedRef}>
-      <div className="resource-card-body">{entries.map(entry => <section key={entry.key} className={`resource-merged-item resource-${entry.index % 4}`}>{cardBody(entry)}</section>)}</div>
+    ? <section className="resource-card resource-merged">
+      <div className="resource-card-body" ref={mergedRef}>{entries.map(entry => <section key={entry.key} className={`resource-merged-item resource-${entry.index % 4}`}>{cardBody(entry)}</section>)}</div>
     </section>
     : entries.map(entry => <section key={entry.key} className={`resource-card resource-${entry.index % 4}`}>
       <div className="resource-card-body">{cardBody(entry)}</div>
