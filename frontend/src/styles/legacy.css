@@ -358,7 +358,7 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 .resource-editor-remove:hover {background: var(--theme-danger-soft)}
 .resource-editor-add-icon, .resource-editor-add, .resource-editor-add:hover, .resource-editor-add.open {background: var(--accent-soft)}
 .statistics-note {border-left-color: var(--secondary)}
-.chart-expanded {inset: 0; border-radius: 0; z-index: 150}
+.panel.chart-expanded {inset: 0; border-radius: 0; z-index: 150}
 /* 旧版版式：只在实例视图生效（App.tsx 的 .legacy-shell）。
    旧版外壳是「顶栏跨全宽 + 文字菜单在顶栏下方」，与共享层的「侧栏整列 + 顶栏在主内容列内」
    是两套网格，所以在这里整块重排，主页视图不受影响。 */

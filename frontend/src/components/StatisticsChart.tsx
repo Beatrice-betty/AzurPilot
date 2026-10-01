@@ -3,6 +3,7 @@
  */
 
 import type {ReactNode, KeyboardEvent as ReactKeyboardEvent} from 'react'
+import { createPortal } from 'react-dom'
 import { Select } from './FormControls'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as echarts from 'echarts/core'
@@ -430,7 +431,7 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
   /* 组合页里两张图卡标题相同、分不出是哪一张，带短名前缀后可以区分。 */
   const headingLabel = category === 'resources' ? ui('stats.chartHeading.resources') : category === 'action' ? ui('stats.chartHeading.action') : ui('stats.trendDetails')
 
-  return (
+  const chart = (
     <section className={`panel statistics-chart ${expanded ? 'chart-expanded' : ''}`}>
       {/* 紧凑主题把标题提到页面工具栏；放大视图盖住工具栏，此时必须把标题行放回来。 */}
       {(heading || expanded) && <div className="panel-heading">
@@ -558,6 +559,9 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
       )}
     </section>
   )
+
+  /* 放大态挂到 body：卡片链给每张卡设了 z-index，面板留在卡内会被顶栏盖住。 */
+  return expanded ? createPortal(chart, document.body) : chart
 }
 
 

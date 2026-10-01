@@ -89,7 +89,7 @@ button:disabled, input:disabled, textarea:disabled, select:disabled, .select-tri
 .resource-editor-add-icon {background: var(--accent-soft)}
 .resource-editor-add, .resource-editor-add:hover, .resource-editor-add.open {background: var(--accent-soft)}
 .statistics-note {border-left-color: var(--secondary)}
-.chart-expanded {inset: 0; border-radius: 0; z-index: 150}
+.panel.chart-expanded {inset: 0; border-radius: 0; z-index: 150}
 @media (min-width: 951px) {
   /* 外壳给确定高度，内层 height:100% 才解析得到；只设 min-height 时整条链按内容长。 */
   .app-shell:has(.overview-page) {height: var(--viewport-height)}

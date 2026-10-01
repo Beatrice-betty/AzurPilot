@@ -327,7 +327,8 @@
 /* 统计图表面板：自然垂直流式布局，不设内部纵向滚动；图表保持适宜高度，下方内容自然排列。 */
 .statistics-chart {display: flex; flex-direction: column}
 .statistics-chart:not(.chart-expanded) > .statistics-chart-plot > .chart-canvas {height: 380px; min-height: 320px; width: 100%; flex: 0 0 auto}
-.chart-expanded {position:fixed;inset:20px;z-index:100;overflow:auto;background:var(--surface);box-shadow:0 0 0 50px #0008}.chart-expanded .chart-canvas {flex: none; height:55vh}
+/* 与 .panel.statistics-chart 同特异性：后者带 position: relative，低特异性会压掉放大态的 fixed。 */
+.panel.chart-expanded {position:fixed;inset:20px;z-index:100;overflow:auto;background:var(--surface);box-shadow:0 0 0 50px #0008}.panel.chart-expanded .chart-canvas {flex: none; height:55vh}
 /* 放大视图铺满窗口后，右上角是 Electron 的窗口控制按钮，会压住「收起图表」；
    同时面板自身可滚动，滚动后标题行会滚出视口。右侧让开按钮宽度并让它吸顶。
    这里必须带 !important：紧凑主题用 padding 简写加 !important 压过面板内边距。 */
@@ -370,7 +371,7 @@
 .dashboard-option-label span {color:var(--muted);font-size:11px;line-height:1.6}
 .dashboard-option .toggle {flex:0 0 auto;margin-top:2px}
 
-@media(max-width:950px) {.resource-grid:not(.resource-fit) {grid-template-columns:repeat(auto-fit,minmax(140px,1fr)) !important}.resource-card-editor,.resource-picker-grid {grid-template-columns:1fr}.resource-settings-heading {gap:10px}.task-row {grid-template-columns:minmax(0,1fr) 48px 74px 10px !important}.stat-metrics {grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.statistics-controls {padding:15px;gap:10px}.statistics-controls label {max-width:100%}.statistics-controls input {max-width:100%}.statistics-sections {flex:none;grid-template-rows:auto auto}.schedule-panel, .monitor-panel {height:500px}.chart-expanded {inset:5px}.statistics-note {font-size:11px}}
+@media(max-width:950px) {.resource-grid:not(.resource-fit) {grid-template-columns:repeat(auto-fit,minmax(140px,1fr)) !important}.resource-card-editor,.resource-picker-grid {grid-template-columns:1fr}.resource-settings-heading {gap:10px}.task-row {grid-template-columns:minmax(0,1fr) 48px 74px 10px !important}.stat-metrics {grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.statistics-controls {padding:15px;gap:10px}.statistics-controls label {max-width:100%}.statistics-controls input {max-width:100%}.statistics-sections {flex:none;grid-template-rows:auto auto}.schedule-panel, .monitor-panel {height:500px}.panel.chart-expanded {inset:5px}.statistics-note {font-size:11px}}
 
 /* 手机端：165px 起的网格在窄屏只放得下一列，而卡片是按多列设计的。
    窄屏改成「图标 + 名字在左、数值在右」的紧凑行，并允许名字折行，长物品名不再被省略号吃掉。 */
