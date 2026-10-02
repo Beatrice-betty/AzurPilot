@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from module.config.time_source import now as current_time
 from module.config.utils import get_server_next_update, get_os_reset_remain, get_os_next_reset
 from module.logger import logger
+from module.exception import GameStuckError
 from module.os.map import OSMap
 from module.os_shop.assets import OS_SHOP_CHECK
 
@@ -49,14 +50,17 @@ class OpsiShop(OSMap):
         self.config.task_delay(target=next_reset)
         self.config.task_stop()
 
-    def perform_port_shop_purchase(self):
+    def perform_port_shop_purchase(self, action_point_only=False):
         """执行一次港口商店购买流程，不包含任务延迟和停止逻辑。
 
         供 os_shop 和智能调度+月末清理共用。前往最近友方港口，
         进入商店购买所有补给，购买完成后退出港口。
 
+        Args:
+            action_point_only (bool): 专购全部行动力箱并核验剩余库存，不更新普通商店购买状态。
+
         Returns:
-            bool: True 表示商店非空且已尝试购买，False 表示商店为空。
+            bool: 普通购买返回商店是否非空；专购返回行动力是否全部售罄。
 
         Pages:
             in: page_os, 大世界地图
@@ -68,11 +72,26 @@ class OpsiShop(OSMap):
         self.port_enter()
         self.port_shop_enter()
 
-        if self.appear(OS_SHOP_CHECK):
-            not_empty = self.handle_port_supply_buy()
-        else:
-            not_empty = False
-            logger.warning('[大世界-商店] 港口中没有商店')
+        previous = getattr(self, '_opsi_action_point_purchase', False)
+        self._opsi_action_point_purchase = action_point_only
+        try:
+            if self.appear(OS_SHOP_CHECK):
+                not_empty = self.handle_port_supply_buy()
+                if action_point_only:
+                    scanned = self.scan_all()
+                    if not scanned or any(not item.is_known_item() for item in scanned):
+                        raise GameStuckError('行动力购买后商店扫描为空或存在未识别商品，无法确认售罄')
+                    remaining = [item for item in self.pretreatment(scanned)
+                                 if item.group == 'actionpoint' and item.count != 0]
+                    # 再扫确认全部售罄，货币不足或 OCR 漏购不能标记本月购买完成。
+                    not_empty = not remaining
+            else:
+                not_empty = False
+                logger.warning('[大世界-商店] 港口中没有商店')
+                if action_point_only:
+                    raise GameStuckError('未确认港口商店，无法验证行动力购买')
+        finally:
+            self._opsi_action_point_purchase = previous
 
         self.port_shop_quit()
         self.port_quit()

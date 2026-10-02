@@ -42,6 +42,7 @@ from module.config.utils import (
 from module.logger import logger
 from module.os.map import OSMap
 from module.os.tasks.task_context import TaskDelayRequest, current_opsi_context, opsi_task_context
+from module.os.tasks.smart_explore import SmartExploreMixin
 from module.os_handler.action_point import ActionPointLimit
 
 
@@ -927,7 +928,7 @@ class CoinTaskMixin:
         return True
 
 
-class OpsiScheduling(CoinTaskMixin, OSMap):
+class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
     """
     智能调度+任务主类
     
@@ -1098,6 +1099,10 @@ class OpsiScheduling(CoinTaskMixin, OSMap):
 
         logger.info('[大世界-智能调度+] 执行一轮侵蚀 1 练级')
         self.handle_first_auto_search(run=False)
+        # 开荒跳过安全海域后停在总览；练度检查和练级都必须从海域地图开始。
+        if self.is_in_globe():
+            self.os_globe_goto_map()
+            self.zone_init()
         if hasattr(self, 'os_check_leveling'):
             self._run_with_opsi_task_context(
                 self.TASK_NAME_HAZARD1_LEVELING,
@@ -1186,6 +1191,17 @@ class OpsiScheduling(CoinTaskMixin, OSMap):
 
         yellow_coins = self.get_yellow_coins()
         total_ap, current_ap = self._get_scheduling_action_point()
+        coin_target_scheduling = self._is_coin_target_scheduling_enabled()
+        self._sync_smart_scheduling_mode_state(coin_target_scheduling)
+
+        # 购买被中断时先续购，避免库存尚未买完就恢复练级。
+        purchase = self._get_smart_scheduling_state_value('ActionPointPurchase')
+        if (isinstance(purchase, dict) and purchase.get('reset') == get_os_next_reset().isoformat()
+                and purchase.get('phase') == 'buying' and self._try_scheduling_action_point_purchase()):
+            return
+
+        if total_ap <= self._get_effective_cl1_ap_preserve() and self._try_scheduling_action_point_purchase():
+            return
 
         # 月末清理行动力检查（优先级最高，先于黄币和侵蚀1调度）
         self._reset_month_end_cleanup_first_run_if_new_month()
@@ -1219,11 +1235,20 @@ class OpsiScheduling(CoinTaskMixin, OSMap):
                     self.config.task_stop()
                     return
 
+        try:
+            if self._run_smart_explore_once(yellow_coins, total_ap, current_ap):
+                return
+        except ActionPointLimit as exc:
+            if self._try_scheduling_action_point_purchase():
+                return
+            self._delay_smart_scheduling_for_ap_limit(
+                getattr(exc, 'total', None) or total_ap, getattr(exc, 'preserve', None) or 0,
+            )
+            return
+
         cl1_preserve = self._get_smart_scheduling_operation_coins_preserve()
         cl1_ap_preserve = self._get_effective_cl1_ap_preserve()
         meow_ap_preserve = self._get_coin_task_action_point_preserve()
-        coin_target_scheduling = self._is_coin_target_scheduling_enabled()
-        self._sync_smart_scheduling_mode_state(coin_target_scheduling)
         coin_replenish_active = self._is_coin_replenish_active()
         ap_replenish_active = self._is_ap_replenish_active()
 
@@ -1318,6 +1343,8 @@ class OpsiScheduling(CoinTaskMixin, OSMap):
             self._execute_hazard1_leveling(yellow_coins, total_ap, current_ap)
         except ActionPointLimit as e:
             logger.warning(f'[大世界-智能调度+] 智能调度+执行子任务时行动力不足: {e}')
+            if self._try_scheduling_action_point_purchase():
+                return
             preserve = getattr(e, 'preserve', None) or cl1_ap_preserve
             current = getattr(e, 'total', None) or getattr(e, 'current', None) or total_ap
             self._delay_smart_scheduling_for_ap_limit(current, preserve)

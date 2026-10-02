@@ -640,6 +640,7 @@ class ConfigGenerator:
 class ConfigUpdater:
     # 格式：source, target, (可选) convert_func
     redirection = [
+        ('OpsiScheduling.OpsiSmartExplore.BuyActionPoint', 'OpsiScheduling.OpsiScheduling.BuyActionPoint'),
         ('OpsiExplore.OpsiExplore.MeowfficerCleanup', 'OpsiExploreCleanup.Scheduler.Enable'),
         ('OpsiExplore.OpsiFleet', 'OpsiExploreCleanup.OpsiFleet'),
         ('OpsiExplore.OpsiExplore.MeowfficerCleanupState', 'OpsiExploreCleanup.OpsiExploreCleanup.State',

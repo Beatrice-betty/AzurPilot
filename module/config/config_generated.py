@@ -748,6 +748,7 @@ class GeneratedConfig:
     OpsiFleetAutoChange_LastRun = datetime.datetime(2020, 1, 1, 0, 0)
 
     # 配置组 `OpsiScheduling`
+    OpsiScheduling_BuyActionPoint = False
     OpsiScheduling_UseSmartSchedulingOperationCoinsPreserve = True  # True, False
     OpsiScheduling_OperationCoinsPreserve = 40000
     OpsiScheduling_ActionPointPreserve = 200
@@ -762,6 +763,12 @@ class GeneratedConfig:
     OpsiScheduling_MonthEndActionPointCleanupDays = 0
     OpsiScheduling_MonthEndActionPointPreserve = 0
     OpsiScheduling_MonthEndShopPurchase = True  # True, False
+
+    # 配置组 `OpsiSmartExplore`
+    OpsiSmartExplore_Enable = False
+    OpsiSmartExplore_EventCleanup = False
+    OpsiSmartExplore_ForceRun = False
+    OpsiSmartExplore_Progress = None
 
     # 配置组 `OpsiPreventActionPointOverflow`
     OpsiPreventActionPointOverflow_Task = 'OpsiScheduling'  # OpsiScheduling, OpsiHazard1Leveling, OpsiMeowfficerFarming

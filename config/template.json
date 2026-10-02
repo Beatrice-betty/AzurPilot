@@ -2980,6 +2980,7 @@
       "Sensitive": false
     },
     "OpsiScheduling": {
+      "BuyActionPoint": false,
       "UseSmartSchedulingOperationCoinsPreserve": true,
       "OperationCoinsPreserve": 40000,
       "ActionPointPreserve": 200,
@@ -2994,6 +2995,12 @@
       "MonthEndActionPointCleanupDays": 0,
       "MonthEndActionPointPreserve": 0,
       "MonthEndShopPurchase": true
+    },
+    "OpsiSmartExplore": {
+      "Enable": false,
+      "EventCleanup": false,
+      "ForceRun": false,
+      "Progress": null
     },
     "Storage": {
       "Storage": {}

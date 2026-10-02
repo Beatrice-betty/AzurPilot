@@ -15018,6 +15018,10 @@
       }
     },
     "OpsiScheduling": {
+      "BuyActionPoint": {
+        "type": "checkbox",
+        "value": false
+      },
       "UseSmartSchedulingOperationCoinsPreserve": {
         "type": "checkbox",
         "value": true,
@@ -15101,6 +15105,25 @@
           true,
           false
         ]
+      }
+    },
+    "OpsiSmartExplore": {
+      "Enable": {
+        "type": "checkbox",
+        "value": false
+      },
+      "EventCleanup": {
+        "type": "checkbox",
+        "value": false
+      },
+      "ForceRun": {
+        "type": "checkbox",
+        "value": false
+      },
+      "Progress": {
+        "type": "textarea",
+        "value": "",
+        "display": "disabled"
       }
     },
     "Storage": {

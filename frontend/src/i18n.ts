@@ -16,6 +16,8 @@ export const languages: Record<Language, string> = {
 }
 
 const zhCN = {
+  'task.clearExploreProgress': '清空开荒进度',
+  'task.clearExploreProgressHelp': '清空本任务进度和断点；请先停止任务。保留本月行动力购买记录与另一种开荒进度。',
   'settings.colorMode': '主题模式',
   'settings.colorModeHelp': '自动模式跟随系统外观，配色随浅色或深色模式调整。',
   'settings.modeAuto': '自动',
@@ -571,6 +573,8 @@ export type UiKey = keyof typeof zhCN
 export type UiTranslator = (key: UiKey, params?: TranslationParams) => string
 
 const enUS: Record<UiKey, string> = {
+  'task.clearExploreProgress': 'Clear exploration progress',
+  'task.clearExploreProgressHelp': 'Stop the task first. Clear its progress and checkpoint, keeping monthly AP purchase records and the other exploration mode.',
   'instance.deletePrompt2': 'Sure about that? {name} disappears — only the backup keeps its config.',
   'instance.rightClick': 'right-click',
   'instance.deletePrompt3': 'Last chance! One more click and {name} is gone for good.',
@@ -689,6 +693,8 @@ const enUS: Record<UiKey, string> = {
 }
 
 const jaJP: Record<UiKey, string> = {
+  'task.clearExploreProgress': '探索進捗をクリア',
+  'task.clearExploreProgressHelp': '先にタスクを停止してください。このタスクの進捗と再開地点のみを消去し、当月の行動力購入記録と別モードの進捗を保持します。',
   'instance.deletePrompt2': '本当に？{name} は消えます。設定はバックアップに残るだけです。',
   'instance.rightClick': '右クリック',
   'instance.deletePrompt3': 'これが最後！押すと {name} は完全に消えます。',
@@ -868,6 +874,8 @@ const jaJP: Record<UiKey, string> = {
 }
 
 const zhTW: Record<UiKey, string> = {
+  'task.clearExploreProgress': '清空開荒進度',
+  'task.clearExploreProgressHelp': '請先停止任務。清空本任務進度與斷點，保留本月行動力購買紀錄與另一種開荒進度。',
   'settings.colorMode': '主題模式',
   'settings.colorModeHelp': '自動模式跟隨系統外觀，配色隨淺色或深色模式調整。',
   'settings.modeAuto': '自動',
@@ -1096,6 +1104,8 @@ const zhTW: Record<UiKey, string> = {
 
 const zhMiao: Record<UiKey, string> = {
   ...zhCN,
+  'task.clearExploreProgress': '清空开荒进度喵',
+  'task.clearExploreProgressHelp': '请先停止任务喵。清空本任务进度和断点，保留本月行动力购买记录与另一种开荒进度。',
   'script.modeRequiresScript': '请先检查并应用非空策略脚本，再切换到高级模式喵。',
   'auth.welcome': '欢迎回来喵，指挥官！',
   'home.commandCenter': '你的指挥中心喵',

@@ -1421,6 +1421,7 @@ OpsiFleetAutoChange:
     option: [12, 24, 48, 72]
   LastRun: 2020-01-01 00:00:00
 OpsiScheduling:
+  BuyActionPoint: false
   UseSmartSchedulingOperationCoinsPreserve:
     type: checkbox
     value: true
@@ -1462,6 +1463,15 @@ OpsiScheduling:
   MonthEndShopPurchase:
     value: true
     option: [true, false]
+OpsiSmartExplore:
+  # 智能开荒仅支持默认黄币目标调度，与每月开荒任务互斥。
+  Enable: false
+  EventCleanup: false
+  ForceRun: false
+  Progress:
+    type: textarea
+    display: disabled
+    value: ""
 OpsiPreventActionPointOverflow:
   Task:
     value: OpsiScheduling
