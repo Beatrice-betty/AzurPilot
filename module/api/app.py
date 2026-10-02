@@ -81,15 +81,18 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
                 if mcp_app is not None:
                     await mcp_app.state.tools.close()
             finally:
-                if manage_runtime:
-                    try:
-                        from module.runtime.discord_presence import async_close_discord_rpc
-                        await async_close_discord_rpc()
-                    except Exception:
-                        logger.exception('Discord RPC 清理失败，继续回收共享运行时')
-                    finally:
-                        from module.api.lifecycle import clearup
-                        await asyncio.to_thread(clearup)
+                try:
+                    await asyncio.to_thread(gateway.router.close)
+                finally:
+                    if manage_runtime:
+                        try:
+                            from module.runtime.discord_presence import async_close_discord_rpc
+                            await async_close_discord_rpc()
+                        except Exception:
+                            logger.exception('Discord RPC 清理失败，继续回收共享运行时')
+                        finally:
+                            from module.api.lifecycle import clearup
+                            await asyncio.to_thread(clearup)
 
     dist = root / 'frontend/dist'
 

@@ -63,6 +63,10 @@
 | `scheduler.stop` | instance | 停止调度器并执行配置的收尾动作 |
 | `tasks.run` | instance、task | 运行允许单独执行的工具 |
 | `logs.get` | instance、可选 after | 游标之后的日志，有界保留 |
+| `opsi.simulator.status` | instance、可选 after | 离线模拟状态、进度、结果、图表标识及独立日志增量 |
+| `opsi.simulator.start` | instance | 按当前实例配置快照启动后台模拟，返回模拟状态 |
+| `opsi.simulator.stop` | instance | 请求中断模拟，返回模拟状态；等待当前计算批次结束 |
+| `opsi.simulator.figure` | instance | 最近生成的 PNG 图表，image 为 data URL；无图时为 null |
 | `preview.capture` | instance | 读取最近一张缓存 JPEG；不主动截图，无缓存时 image/capturedAt 为 null |
 | `statistics.resources` | instance、days、resource | 兼容资源时间线，支持全部 12 种资源，最多 5,000 点 |
 | `statistics.report` | instance、category、month、days、period | 六类统计，返回 metrics、series、tables 和 notes |
@@ -81,6 +85,12 @@
 `instance` 必须指向 config 目录内已存在的实例，禁止路径分隔符、符号链接和系统保留名称。创建实例名称以字母或汉字开头，可包含字母、数字、汉字、短横线和下划线，总长不超过 64。运行实例禁止删除，已有运行实例禁止重复启动。
 
 状态枚举：`running`、`stopped`、`error`、`updating`。枚举表示工作进程状态，不能据此推断游戏中的具体画面。
+
+大世界模拟器沿用原蒙特卡洛收益模型，独立于游戏进程。启动不修改实例配置，也不调用调度器。
+模拟状态为 `idle`、`running`、`stopping`、`completed`、`interrupted`、`failed`；`completedSamples/totalSamples` 为采样进度，
+`runId` 随每次启动递增，防止旧响应覆盖新模拟；`result` 包含刷图次数、坠机概率、总时长（秒）、最终行动力与黄币，未汇总时为 null。
+日志结构与 `logs.get` 一致但缓冲独立，重跑或游标过旧时返回 reset；页面每 500 毫秒查询状态，图表标识变化后单独读取图片。
+刷新或切换页面不终止模拟；启动和中断受认证及 DEMO 只读限制，模拟运行期间禁止删除对应实例。
 
 更新器接口不接收实例名；三个写方法沿用认证和 DEMO 只读限制。前端每三秒读取一次更新状态，重连后重新读取；后台操作立即响应，不占用 WebSocket 请求等待时间。HEAD 变化时提交列表返回第一页。`upstreamHead` 指配置分支的 `origin/<Branch>` 远程跟踪引用，获取更新后刷新；未获取时为 null。本地与上游分叉、没有新提交、更新器忙碌或监督器重启/依赖同步事件不可用时，`canApply` 为 false。
 

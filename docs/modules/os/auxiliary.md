@@ -10,9 +10,9 @@
 - **os_ash** 处理余烬（META）体系：信标收集、信标攻击、信标协助。它与大世界联动（战斗结算会检查信标收集进度）但有自己的页面与调度节奏，因此单独成包。
 - **os_combat** 只有一件事：把通用 `Combat` 适配到大世界的结算时序（连续战斗、S 评价自动点击、掉落收集）。
 - **os_shop** 实现大世界两类商店（港口商店、明石商店）的货架扫描与购买策略，被 `PortHandler` 与智能调度的购买流程复用。
-- **os_simulator** 是一个离线蒙特卡洛模拟器，估算不同侵蚀等级刷黄币的收益。**当前没有任何生产代码调用它**（`alas.py`、API、前端均无引用），属于保留的实验工具。
+- **os_simulator** 是一个离线蒙特卡洛模拟器，估算不同侵蚀等级刷黄币的收益。WebUI 的「大世界模拟器 Alpha」页面通过 `opsi.simulator.*` 接口控制它，独立于游戏调度器。
 
-五个包的共同点：都是被组合（mixin）而非被调用的库，最终都汇入 `OSMap` 或其任务类。
+前四个包作为 mixin 汇入 `OSMap` 或其任务类；模拟器由 WebUI 运行时服务独立管理。
 
 ## 2. 模块职责
 
@@ -81,7 +81,7 @@ module/os_simulator/
 | `OpsiAshBeacon.run()` / `AshBeaconAssist.run()` | os_ash | 两个独立调度任务 |
 | `os_combat.Combat` | os_combat | `OSFleet` 的战斗基类 |
 | `OSShop.os_shop_buy(select_func)` / `handle_port_supply_buy` | os_shop | 购买执行；港口扫货由智能调度与 OpsiShop 共用 |
-| `OSSimulator.start()/interrupt()` | os_simulator | 手动触发（无生产调用方） |
+| `OSSimulator.start()/interrupt()` | os_simulator | WebUI 模拟器页启动和中断离线计算 |
 
 ## 5. 核心组件
 
@@ -123,7 +123,9 @@ module/os_simulator/
 
 ### os_simulator
 
-`OSSimulator` 用 Numba `@njit` 加速蒙特卡洛，`start()` 起 `threading.Thread` 跑模拟、`stop_event` 支持中断，参数读 `OpsiSimulator.OpsiSimulatorParameters.*`（Cl1Coin/Meow3Coin/Meow5Coin/明石概率等）。**孤儿模块**：`alas.py` 无对应任务、API 与前端无引用，且 numba 曾在 `import_smoke_test` 的已知失败名单中。文档保留其说明，避免后来者误以为有隐藏入口。
+`OSSimulator` 用 Numba `@njit` 加速蒙特卡洛，`start()` 起后台线程跑模拟、`stop_event` 在批次边界中断，参数读 `OpsiSimulator.OpsiSimulatorParameters.*`（Cl1Coin/Meow3Coin/Meow5Coin/明石概率等）。`module/runtime/os_simulator.py` 按实例管理只读配置快照、独立日志与图表，`module/api/opsi_simulator_service.py` 校验实例并提供 WebSocket 接口。页面刷新不终止模拟，服务关闭时请求中断并回收线程。
+
+初始行动力、黄币、耗时和总时长为 0 时沿用原来的仪表盘、统计及月末默认值；无短猫耗时统计时使用 3 级 100 秒、5 级 200 秒。模拟器保留原收益模型，提供不绘图、单样本轨迹、多样本平均轨迹三种模式。中断只汇总已完成样本，不将未计算的数组尾部计入结果。
 
 ## 6. 工作流程
 
@@ -230,11 +232,11 @@ META 页截图 → MetaState 状态机 → 攻击/领奖循环
 - **`MetaReward` 领奖后必须回主界面**：`OpsiAshBeacon.run`/`AshBeaconAssist.run` 末尾的 `ui_goto_main` 有注释说明——删掉会让下个任务在 META 页启动而卡识别。
 - **明石货架是 `@Config.when(SERVER=...)` 三分支**，新服务器适配要新增分支而不是改默认分支。
 - **`ActionPointLimit.delay_minutes` 的换算依赖行动力恢复速率**，修改恢复速率常量（如游戏改动）时同步检查大世界核心的延迟逻辑。
-- **os_simulator 无生产调用方**：修改 `module/os` 调度时无需考虑它，但也不要顺手「清理」其配置组（前端仍可编辑参数，删除会破坏配置兼容）。
+- **os_simulator 独立于游戏调度**：保留配置兼容，WebUI 只用配置快照和已有统计模拟，不运行实际游戏任务；启动前需等待页面参数保存完成。
 
 ## 17. 已知限制
 
-- `OSSimulator` 是孤儿模块：无任务入口、无 API/前端调用，numba 依赖曾列入 `import_smoke_test` 已知失败白名单；其结论只具参考价值。
+- `OSSimulator` 沿用 Alpha 收益模型，结论只具参考价值；中断需等待当前计算批次（或首次 JIT 编译）结束，部分结果以已完成样本为分母。
 - 行动力 OCR 对面板动画敏感，`action_point_safe_get` 的重试能容忍常见动画，但极端卡顿时仍会把动画帧读成错误值。
 - 商店货架识别依赖固定阈值与模板，游戏改版后需重新采集资源离线验证。
 - 信标数字 OCR（`MetaDigitCounter` 左裁剪）与 META 伤害 OCR 按 JP 服单独调色，其他服务器改版需补分支。

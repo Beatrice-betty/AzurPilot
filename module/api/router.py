@@ -1,6 +1,7 @@
 """显式方法注册表；所有阻塞业务操作在工作线程执行。"""
 import os
 import secrets
+import threading
 from dataclasses import dataclass
 from typing import Callable
 
@@ -39,6 +40,8 @@ class Router:
         self.configs, self.runtime = configs, runtime
         self._accounts = None
         self._scheduler_programs = None
+        self._opsi_simulator = None
+        self._opsi_simulator_lock = threading.Lock()
         self.access_password = ''
         self.background_token = secrets.token_urlsafe(32)
         self.methods = {
@@ -65,6 +68,10 @@ class Router:
             'scheduler.program.state': Method(p.InstanceParams, lambda x: self.programs.state(x.instance)),
             'tasks.run': Method(p.TaskParams, lambda x: runtime.start(x.instance, x.task), True),
             'logs.get': Method(p.LogsParams, lambda x: runtime.logs(x.instance, x.after)),
+            'opsi.simulator.status': Method(p.LogsParams, lambda x: self.opsi_simulator.status(x.instance, x.after)),
+            'opsi.simulator.start': Method(p.InstanceParams, lambda x: self.opsi_simulator.start(x.instance), True),
+            'opsi.simulator.stop': Method(p.InstanceParams, lambda x: self.opsi_simulator.stop(x.instance), True),
+            'opsi.simulator.figure': Method(p.InstanceParams, lambda x: self.opsi_simulator.figure(x.instance)),
             'preview.capture': Method(p.InstanceParams, lambda x: runtime.capture(x.instance)),
             'statistics.refreshLoot': Method(p.InstanceParams, self.refresh_loot, True),
             'statistics.report': Method(p.StatisticsReportParams, self.statistics_report),
@@ -93,6 +100,20 @@ class Router:
                                                     lambda x: {'removed': background.gallery_remove(x.id)}, True),
             'background.gallery.open': Method(p.Params, lambda _: background.gallery_open(), True),
         }
+
+    @property
+    def opsi_simulator(self):
+        """获取独立于游戏调度器的大世界模拟服务。"""
+        with self._opsi_simulator_lock:
+            if self._opsi_simulator is None:
+                from module.api.opsi_simulator_service import OpsiSimulatorService
+                self._opsi_simulator = OpsiSimulatorService(self.configs)
+            return self._opsi_simulator
+
+    def close(self):
+        """回收离线模拟线程，不触发游戏任务。"""
+        if self._opsi_simulator is not None:
+            self._opsi_simulator.manager.close()
 
     @property
     def accounts(self):
@@ -246,7 +267,11 @@ class Router:
             manager = self.runtime.manager(params.instance)
             if manager.alive:
                 raise p.ApiError('INSTANCE_RUNNING', '请先停止实例再删除')
+            if self._opsi_simulator is not None and self._opsi_simulator.manager.status(params.instance)['running']:
+                raise p.ApiError('SIMULATOR_RUNNING', '请先中断大世界模拟器再删除实例')
             result = self.configs.delete(params.instance, params.revision)
+            if self._opsi_simulator is not None:
+                self._opsi_simulator.manager.discard(params.instance)
             from module.runtime.account_vault import OPERATIONS
             with OPERATIONS:
                 account_vault = self.accounts.vault

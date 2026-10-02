@@ -165,6 +165,23 @@ function validateField(path, value) {
 export function createMockState({ empty = false } = {}) {
   const instances = new Map()
   const programs = new Map()
+  const simulations = new Map()
+  function simulation(name) {
+    if (!simulations.has(name)) simulations.set(name, {
+      state: 'idle', running: false, runId: 0, completedSamples: 0, totalSamples: 0,
+      error: '', result: null, figure: null, image: null, entries: [], cursor: 0, floor: 0,
+    })
+    return simulations.get(name)
+  }
+  function simulationLog(item, text) {
+    item.entries.push({id: ++item.cursor, level: 'INFO', text: `INFO ${timestamp(new Date())} │ [大世界模拟器] ${text}`})
+  }
+  function simulationStatus(name, after = 0) {
+    const {image, entries, cursor, floor, ...status} = simulation(name)
+    const reset = after <= floor || after > cursor
+    return structuredClone({...status, instance: name,
+      logs: {instance: name, cursor, reset, entries: entries.filter(entry => reset || entry.id > after)}})
+  }
   let cardCatalog
   function programPython(action, config, params = {}) {
     const run = spawnSync('uv', ['run', '--no-sync', 'python', '-X', 'utf8', '-m', 'dev_tools.scheduler_mock'], {
@@ -544,8 +561,9 @@ export function createMockState({ empty = false } = {}) {
       }
       case 'instances.delete':
         if (get(name).status === 'running') fail('INSTANCE_RUNNING', '请先停止实例再删除')
+        if (simulations.get(name)?.running) fail('SIMULATOR_RUNNING', '请先中断大世界模拟器再删除实例')
         if (params.revision !== snapshot(name).revision) fail('CONFLICT', '配置已变化，请重新加载后删除')
-        instances.delete(name); startup.delete(name); programs.delete(name)
+        instances.delete(name); startup.delete(name); programs.delete(name); simulations.delete(name)
         return { deleted: name }
       case 'config.get': return snapshot(name)
       case 'config.export': {
@@ -610,6 +628,26 @@ export function createMockState({ empty = false } = {}) {
         const reset = params.after > item.cursor || params.after < (item.logs[0]?.id ?? 1) - 1
         return { instance: name, cursor: item.cursor, reset, entries: item.logs.filter(entry => reset || entry.id > params.after) }
       }
+      case 'opsi.simulator.status': return simulationStatus(name, params.after)
+      case 'opsi.simulator.start': {
+        const item = simulation(name)
+        if (item.running) fail('SIMULATOR_RUNNING', '模拟正在进行，请先中断或等待完成')
+        const settings = get(name).values.OpsiSimulator.OpsiSimulatorParameters
+        Object.assign(item, {state: 'running', running: true, runId: item.runId + 1,
+          completedSamples: 0, totalSamples: settings.Deterministic ? 1 : settings.Samples,
+          error: '', result: null, figure: null, image: null, entries: [], floor: item.cursor})
+        simulationLog(item, '模拟服务示例已启动。')
+        return simulationStatus(name)
+      }
+      case 'opsi.simulator.stop': {
+        const item = simulation(name)
+        if (item.running) {
+          item.state = 'interrupted'; item.running = false
+          simulationLog(item, '模拟中断。')
+        }
+        return simulationStatus(name)
+      }
+      case 'opsi.simulator.figure': return {instance: name, image: simulation(name).image}
       case 'preview.capture': {
         if (!get(name).previewAt) return { instance: name, image: null, capturedAt: null }
         const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><rect width="1280" height="720" fill="#142d3a"/><circle cx="640" cy="300" r="145" fill="none" stroke="#78dac4" stroke-width="3"/><path d="M640 190 720 370 640 330 560 370Z" fill="#78dac4"/><text x="640" y="530" text-anchor="middle" fill="#d5ede9" font-size="32">AzurPilot · 模拟器测试画面</text></svg>'
@@ -984,6 +1022,24 @@ export function createMockState({ empty = false } = {}) {
     }
   }
   function tick() {
+    for (const [name, item] of simulations) if (item.running) {
+      const settings = get(name).values.OpsiSimulator.OpsiSimulatorParameters
+      item.running = false
+      if (!(settings.TimeUseRatio > 0 && settings.TimeUseRatio <= 1) || item.totalSamples <= 0) {
+        item.state = 'failed'; item.error = '样本数和时间利用率必须为正数，利用率不能超过 1'
+        simulationLog(item, item.error)
+        continue
+      }
+      item.state = 'completed'; item.completedSamples = item.totalSamples
+      item.result = {cl1Count: 123, meowCount: 45, crashedProbability: .02,
+        cl1Time: 7380, meowTime: 9000, ap: 485.3, coin: 100510}
+      if (settings.Draw !== 'do_not') {
+        item.figure = `mock-${item.runId}.svg`
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="900" height="300"><rect width="900" height="300" fill="white"/><text x="40" y="35" font-size="18">模拟服务示例轨迹</text><path d="M40 70 250 140 450 90 650 180 860 200" fill="none" stroke="blue"/><path d="M40 230 250 180 450 140 650 100 860 70" fill="none" stroke="orange"/></svg>'
+        item.image = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
+      }
+      simulationLog(item, '[模拟结果] 最终行动力: 485.3，最终黄币: 100510（模拟服务示例）。')
+    }
     for (const [name, item] of instances) if (item.status === 'running') {
       item.previewAt = new Date().toISOString()
       log(name, '模拟任务正在运行，等待下一轮调度。')

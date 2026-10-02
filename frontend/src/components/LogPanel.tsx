@@ -180,7 +180,7 @@ function loadLogViewMode(): 'cards' | 'classic' {
   return 'cards'
 }
 
-export function LogPanel({active = true}: {active?: boolean}) {
+export function LogPanel({active = true, logs}: {active?: boolean; logs?: LogsData | null}) {
   const {instance = ''} = useParams()
   const [entries, setEntries] = useState<LogEntry[]>([])
   const [search, setSearch] = useState('')
@@ -191,6 +191,7 @@ export function LogPanel({active = true}: {active?: boolean}) {
   const [viewMode, setViewMode] = useState<'cards' | 'classic'>(() => loadLogViewMode())
   const [floor, setFloor] = useState(0)
   const connection = useConnection()
+  const external = logs !== undefined
   const {notify, ui} = useApp()
   const scroll = useRef<HTMLDivElement>(null)
   /* 已渲染到的最大日志 id：大于它的增量行做入场动画（初始加载不播）。 */
@@ -253,7 +254,7 @@ export function LogPanel({active = true}: {active?: boolean}) {
   }
 
   useEffect(() => {
-    if (connection !== 'ready') return
+    if (connection !== 'ready' || external) return
     let active = true
     const buf = logBuffer.current
     if (buf.rafId !== null) {
@@ -279,9 +280,16 @@ export function LogPanel({active = true}: {active?: boolean}) {
       buf.reset = false
       buf.cursor = null
     }
-  }, [connection, instance, notify])
+  }, [connection, instance, notify, external])
 
   useEffect(() => {
+    if (!logs || logs.instance !== instance) return
+    queueLogEvent(logBuffer.current, logs)
+    flushBuffer.current()
+  }, [logs, instance])
+
+  useEffect(() => {
+    if (external) return
     const unsubscribe = api.onEvent(event => {
       if (event.topic !== 'logs') return
       const data = event.data as LogsData
@@ -309,7 +317,7 @@ export function LogPanel({active = true}: {active?: boolean}) {
       buf.reset = false
       buf.cursor = null
     }
-  }, [instance])
+  }, [instance, external])
 
   useLayoutEffect(() => {
     freshFrom.current = entries.at(-1)?.id ?? null
