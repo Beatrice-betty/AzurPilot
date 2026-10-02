@@ -245,29 +245,68 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
       if (signature === renderedSignature) return
       renderedSignature = signature
       const colorFor = (item: typeof seriesData[number]) => isSingle ? (minimal ? primary : item.color) : item.color
+      /* 观感补全用的整图时间跨度。 */
+      let axisStart = Number.POSITIVE_INFINITY
+      let axisEnd = Number.NEGATIVE_INFINITY
+      for (const item of shownData) {
+        for (const bucket of item.buckets) {
+          const ms = new Date(bucket.time.replace(' ', 'T')).getTime()
+          if (!Number.isFinite(ms)) continue
+          if (ms < axisStart) axisStart = ms
+          if (ms > axisEnd) axisEnd = ms
+        }
+      }
+      const padRange = Number.isFinite(axisStart) && axisEnd > axisStart
+      /* 只补绘制用的点，不改数据、指标与记录。 */
+      const padPairs = (pairs: Array<[number, number]>): Array<[number, number]> => {
+        if (!padRange || pairs.length === 0) return pairs
+        const padded: Array<[number, number]> = [...pairs]
+        if (padded[0][0] > axisStart) padded.unshift([axisStart, 0])
+        const last = padded[padded.length - 1]
+        if (last[0] < axisEnd) padded.push([axisEnd, last[1]])
+        return padded
+      }
+      /* 涨跌分段模式下只补下跌段。 */
+      const padFall = (segments: Array<number[] | '-'>): Array<number[] | '-'> => {
+        if (!padRange || segments.length === 0) return segments
+        const pairs = segments.filter((entry): entry is number[] => entry !== '-')
+        if (pairs.length === 0) return segments
+        const padded: Array<number[] | '-'> = [...segments]
+        if (pairs[0][0] > axisStart) padded.unshift([axisStart, 0])
+        const last = pairs[pairs.length - 1]
+        if (last[0] < axisEnd) padded.push([axisEnd, last[1]])
+        return padded
+      }
 
       let yAxes: any[] = []
       if (isSingle || axisMode === 'unified') {
         yAxes = [{type: 'value', scale: true, splitLine: {lineStyle: {color: border, opacity: gridOpacity}}, axisLabel: {color: text}}]
-      } else if (shownData.length === 2) {
+      } else {
         const c0 = colorFor(seriesData[0]), c1 = colorFor(seriesData[1])
         yAxes = [
           {type: 'value', scale: true, position: 'left', splitLine: {lineStyle: {color: border, opacity: gridOpacity}}, axisLine: {show: true, lineStyle: {color: c0}}, axisLabel: {color: c0}},
           {type: 'value', scale: true, position: 'right', splitLine: {show: false}, axisLine: {show: true, lineStyle: {color: c1}}, axisLabel: {color: c1}},
         ]
-      } else {
-        yAxes = seriesData.map((item, idx) => {
-          const color = colorFor(item)
-          if (idx === 0) return {type: 'value', scale: true, position: 'left', splitLine: {lineStyle: {color: border, opacity: gridOpacity}}, axisLine: {show: true, lineStyle: {color}}, axisLabel: {color}}
-          if (idx === 1) return {type: 'value', scale: true, position: 'right', splitLine: {show: false}, axisLine: {show: true, lineStyle: {color}}, axisLabel: {color}}
-          return {type: 'value', scale: true, show: false, splitLine: {show: false}}
-        })
       }
 
       if (zeroBase) yAxes = yAxes.map(axis => ({...axis, min: 0}))
 
       /* 每条曲线落在哪个 Y 轴上：单页与统一轴都用左轴。 */
-      const axisIndexFor = (item: {index: number}) => (isSingle || axisMode === 'unified' ? 0 : Math.min(item.index, yAxes.length - 1))
+      /* 大小轴归属：左轴小值、右轴大值。 */
+      const BIG_AXIS_KEYS = new Set(['asset', 'yellow_coins', 'distance'])
+      const SMALL_AXIS_KEYS = new Set(['ap', 'purple_coins'])
+      const BIG_AXIS_RATIO = 0.05
+      const peakOf = (item: {points: Array<{high?: number; close?: number; value?: number}>}) =>
+        item.points.reduce((max, point) => {
+          const value = point.high ?? point.close ?? point.value
+          return typeof value === 'number' && Number.isFinite(value) ? Math.max(max, Math.abs(value)) : max
+        }, 0)
+      const sessionPeak = Math.max(0, ...shownData.map(peakOf))
+      const axisIndexFor = (item: {series: {key: string}; points: Array<{high?: number; close?: number; value?: number}>}) => {
+        if (isSingle || axisMode === 'unified' || SMALL_AXIS_KEYS.has(item.series.key)) return 0
+        if (BIG_AXIS_KEYS.has(item.series.key)) return 1
+        return sessionPeak > 0 && peakOf(item) >= sessionPeak * BIG_AXIS_RATIO ? 1 : 0
+      }
 
       /* 叠涨时该曲线按涨跌配色：折线分成两段，蜡烛线用涨跌色。 */
       const echartsSeries = shownData.map(item => {
@@ -298,13 +337,16 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
             {name: item.series.label, type: 'line' as const, yAxisIndex: axisIndexFor(item), showSymbol: false, connectNulls: false,
               emphasis: {disabled: true}, lineStyle: {width: 2, color: rise}, data: segments.rise},
             {name: item.series.label, type: 'line' as const, yAxisIndex: axisIndexFor(item), showSymbol: false, connectNulls: false,
-              emphasis: {disabled: true}, lineStyle: {width: 2, color: fall}, data: segments.fall},
+              emphasis: {disabled: true}, lineStyle: {width: 2, color: fall}, data: padFall(segments.fall)},
           ]
         }
         return [{
           name: item.series.label, type: 'line' as const, yAxisIndex: axisIndexFor(item),
-          showSymbol: item.points.length < 80, symbolSize: 5, connectNulls: false, lineStyle: {width: 2, color}, itemStyle: {color},
-          data: item.buckets.map(b => [new Date(b.time.replace(' ', 'T')).getTime(), b.close]),
+          showSymbol: item.points.length < 80, symbolSize: 5, connectNulls: false,
+          /* 关闭悬停强调：相交处互相覆盖会看起来在闪。 */
+          emphasis: {disabled: true},
+          lineStyle: {width: 2, color}, itemStyle: {color},
+          data: padPairs(item.buckets.map(b => [new Date(b.time.replace(' ', 'T')).getTime(), b.close] as [number, number])),
         }]
       }).flat()
 
@@ -356,7 +398,8 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
     const observer = new ResizeObserver(() => chart.resize())
     observer.observe(element.current)
     const themeObserver = new MutationObserver(render)
-    themeObserver.observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme', 'data-palette', 'data-color-mode', 'style']})
+    themeObserver.observe(document.documentElement, {attributes: true, /* 不监听 style：指针光效每次移动都写 --mx/--my，会把重绘拖进鼠标热路径并造成闪烁。 */
+      attributeFilter: ['data-theme', 'data-palette', 'data-color-mode', 'style']})
     return () => {
       container.removeEventListener('wheel', onWheel, {capture: true})
       observer.disconnect()

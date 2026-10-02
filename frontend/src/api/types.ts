@@ -47,6 +47,11 @@ export interface Preview { instance: string; image: string | null; capturedAt: s
 export interface Statistics { instance: string; resource: string; points: {time: string; value: number}[]; truncated: boolean }
 export interface StatPoint {time: string; value: number; source?: string}
 export interface StatSeries {key: string; label: string; points: StatPoint[]}
+export interface StatPointCompact {t: number; v: number; s?: string}
+export interface StatSeriesCompact {key: string; label: string; points: StatPointCompact[]}
+/** 数值按顺序对应报表的共用时间轴。 */
+export interface StatSeriesColumn {key: string; label: string; values: number[]; sources?: string[]}
+export type StatSeriesWire = StatSeriesCompact | StatSeriesColumn
 export interface StatTable {title: string; columns: string[]; rows: Scalar[][]; note?: string; defaultSort?: TableSort}
 export interface TableSort {index: number; descending: boolean}
 export interface StatisticsReport {
@@ -56,6 +61,12 @@ export interface StatisticsReport {
   series: StatSeries[]; tables: StatTable[]; notes: string[]
   /** 大世界掉落专用：任务筛选选项（含当前时间窗口内没有记录的任务），count 表示窗口内掉落记录数。 */
   taskOptions?: {key: string; label: string; count: number}[]
+}
+
+export interface StatisticsReportWire extends Omit<StatisticsReport, 'series'> {
+  /** 共用时间轴（微秒整数）。 */
+  axis?: number[]
+  series: StatSeriesWire[]
 }
 /** 指挥喵评分的单条天赋。`kind` 为 `special`（彩天赋）时高亮，`inferred` 表示这条由识别推断而来。 */
 export interface MeowfficerTalent { name: string; level?: number; kind?: string; inferred?: boolean }
@@ -152,7 +163,7 @@ export interface Results {
   'logs.get': Logs
   'preview.capture': Preview
   'statistics.resources': Statistics
-  'statistics.report': StatisticsReport
+  'statistics.report': StatisticsReportWire
   'statistics.refreshLoot': {refreshed: boolean}
   'meowfficer.scoreReport': MeowfficerScoreReport
   'meowfficer.clearReport': {cleared: boolean; removed: string[]}

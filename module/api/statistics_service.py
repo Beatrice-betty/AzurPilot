@@ -2,6 +2,7 @@
 import math
 import os
 import threading
+import calendar
 from datetime import datetime, timedelta
 
 from module.api.protocol import ApiError
@@ -100,6 +101,39 @@ def table(title: str, columns: list[str], rows: list[list], note: str = '', defa
     return result
 
 
+def wallclock_micros(timestamp: datetime) -> int:
+    """把墙上时钟编码为微秒整数：按协调世界时解释，客户端同样按协调世界时取回，换时区访问也不偏移。"""
+    return calendar.timegm(timestamp.timetuple()) * 1000000 + timestamp.microsecond
+
+
+def compact_axis(series_list: list) -> dict:
+    """时间轴完全一致时改列式下发：共用一份时间轴，数值按序列成数组。
+
+    九条资源序列取自同一批快照，时刻逐点相同；逐点各带一份时间戳会造成九倍重复。
+    轴不一致（其它分类可能不同源）或没有点时按逐点形式返回，避免前端对不齐。
+
+    Args:
+        series_list: 报表里的序列列表。
+
+    Returns:
+        dict: 含 axis 与列式 series，或原样的 series。
+    """
+    if not series_list or not series_list[0]['points']:
+        return {'series': series_list}
+    times = [point['t'] for point in series_list[0]['points']]
+    if any([point['t'] for point in item['points']] != times for item in series_list):
+        return {'series': series_list}
+    columns = []
+    for item in series_list:
+        column = {'key': item['key'], 'label': item['label'],
+                  'values': [point['v'] for point in item['points']]}
+        sources = [point.get('s', '') for point in item['points']]
+        if any(sources):
+            column['sources'] = sources
+        columns.append(column)
+    return {'axis': times, 'series': columns}
+
+
 def series(rows: list[dict], key: str, label: str) -> dict:
     """提取时间线序列数据，保留真实采集时间与来源，跳过无效值。
 
@@ -122,9 +156,11 @@ def series(rows: list[dict], key: str, label: str) -> dict:
                 continue
         except (KeyError, ValueError, TypeError):
             continue
-        points.append({'time': timestamp.isoformat(sep=' '), 'value': float(value),
-                       'source': row.get('source', '')})
-    points.sort(key=lambda item: item['time'])
+        point = {'t': wallclock_micros(timestamp), 'v': float(value)}
+        if row.get('source'):
+            point['s'] = row['source']
+        points.append(point)
+    points.sort(key=lambda item: item['t'])
     return {'key': key, 'label': label, 'points': points}
 
 
@@ -222,9 +258,9 @@ def report(configs, instance: str, category: str, month: str, days: int, period:
 
     if category == 'resources':
         from module.statistics.resource_stats import RESOURCE_COLUMNS, get_resource_timeline
-        rows = get_resource_timeline(instance, limit=50001)
         cutoff = (now - timedelta(days=days)).isoformat(sep=' ')
-        rows = [row for row in rows if str(row['ts']).replace('T', ' ') >= cutoff]
+        # 窗口过滤下推到 SQL，只读窗口内的行。
+        rows = get_resource_timeline(instance, limit=50001, since=cutoff.replace(' ', 'T'))
         if len(rows) > 50000:
             result['notes'].append('记录超过 50,000 条，当前展示最近 50,000 条，请缩短时间范围查看细节。')
             rows = rows[-50000:]

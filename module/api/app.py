@@ -62,10 +62,10 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
                 from module.api.lifecycle import startup
                 from module.runtime.deploy_settings import parse_run_config
                 from module.runtime.startup_memory import consume_update_restart, startup_runs
-                update_restart = consume_update_restart()
                 runs = args.run or parse_run_config(State.deploy_config.Run)
                 if not args.run:
-                    # --run 是显式清单，不叠加记忆。
+                    # 只在决定启动清单这一支消费更新标记。
+                    update_restart = consume_update_restart()
                     runs = startup_runs(runs, update_restart=update_restart)
                 await asyncio.to_thread(startup, runs)
                 if State.deploy_config.DiscordRichPresence:

@@ -200,10 +200,11 @@ class Router:
         Returns:
             dict: 统计报表数据。
         """
-        from module.api.statistics_service import report
-        return report(self.configs, params.instance, params.category, params.month,
-                      params.days, params.period, research_series=params.series,
-                      research_scope=params.scope, loot_task=params.task)
+        from module.api.statistics_service import compact_axis, report
+        result = report(self.configs, params.instance, params.category, params.month,
+                        params.days, params.period, research_series=params.series,
+                        research_scope=params.scope, loot_task=params.task)
+        return {**result, **compact_axis(result.get('series') or [])}
 
     def meowfficer_score_report(self, params: p.MeowfficerScoreReportParams):
         """获取指挥喵评分报告。
