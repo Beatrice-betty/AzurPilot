@@ -15314,10 +15314,10 @@
       "MeowHazardLevel": {
         "type": "select",
         "value": "level5",
-        "option": {
-          "level3": 3,
-          "level5": 5
-        }
+        "option": [
+          "level3",
+          "level5"
+        ]
       },
       "CrossWeek": {
         "type": "checkbox",
