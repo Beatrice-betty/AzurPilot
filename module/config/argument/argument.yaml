@@ -1467,6 +1467,7 @@ OpsiSmartExplore:
   # 智能开荒仅支持默认黄币目标调度，与每月开荒任务互斥。
   Enable: false
   EventCleanup: false
+  ForceRun: false
   Progress:
     type: textarea
     display: disabled

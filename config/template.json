@@ -2999,6 +2999,7 @@
     "OpsiSmartExplore": {
       "Enable": false,
       "EventCleanup": false,
+      "ForceRun": false,
       "Progress": null
     },
     "Storage": {

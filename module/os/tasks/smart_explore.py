@@ -147,7 +147,8 @@ class SmartExploreMixin:
         self.fleet_set(self.config.OpsiFleet_Fleet)
         self.os_order_execute(recon_scan=not self.config.OpsiExplore_SpecialRadar,
                               submarine_call=self.config.OpsiFleet_Submarine)
-        if not self.config.OpsiExplore_SpecialRadar and not self.config.OpsiExplore_ForceRun:
+        # 智能开荒独立读取自己的开关，不沿用已关闭的每月开荒任务设置。
+        if not self.config.OpsiExplore_SpecialRadar and not self._config_enabled(SMART_EXPLORE_CONFIG + 'ForceRun'):
             self.config.task_delay(minute=27, task='OpsiScheduling')
         self.run_auto_search(question=False, rescan='full')
         self.handle_after_auto_search()

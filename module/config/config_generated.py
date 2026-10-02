@@ -767,6 +767,7 @@ class GeneratedConfig:
     # 配置组 `OpsiSmartExplore`
     OpsiSmartExplore_Enable = False
     OpsiSmartExplore_EventCleanup = False
+    OpsiSmartExplore_ForceRun = False
     OpsiSmartExplore_Progress = None
 
     # 配置组 `OpsiPreventActionPointOverflow`

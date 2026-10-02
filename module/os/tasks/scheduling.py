@@ -1099,6 +1099,10 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
 
         logger.info('[大世界-智能调度+] 执行一轮侵蚀 1 练级')
         self.handle_first_auto_search(run=False)
+        # 开荒跳过安全海域后停在总览；练度检查和练级都必须从海域地图开始。
+        if self.is_in_globe():
+            self.os_globe_goto_map()
+            self.zone_init()
         if hasattr(self, 'os_check_leveling'):
             self._run_with_opsi_task_context(
                 self.TASK_NAME_HAZARD1_LEVELING,

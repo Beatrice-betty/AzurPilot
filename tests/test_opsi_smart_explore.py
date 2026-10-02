@@ -165,6 +165,38 @@ class SmartExploreTests(unittest.TestCase):
         self.assertTrue(self.decide())
         self.assertEqual(self.runner._run_smart_explore_node.call_args.args[1], 0)
 
+    def test_leveling_returns_to_map_before_ship_check_even_when_check_skips(self):
+        for in_globe in (False, True):
+            with self.subTest(in_globe=in_globe):
+                calls = []
+                self.runner.is_in_globe = Mock(return_value=in_globe)
+                self.runner.os_globe_goto_map = Mock(side_effect=lambda: calls.append('map'))
+                self.runner.zone_init = Mock(side_effect=lambda: calls.append('zone'))
+                self.runner.os_check_leveling = Mock(side_effect=lambda: calls.append('check'))
+                self.runner.run_hazard1_leveling_once = Mock(side_effect=lambda **kw: calls.append('leveling'))
+                self.runner._run_scheduled_hazard1_leveling(200, fresh_ap=(2000, 150))
+                self.assertEqual(calls, (['map', 'zone'] if in_globe else []) + ['check', 'leveling'])
+                self.runner.run_hazard1_leveling_once.assert_called_once_with(ap_preserve=200, fresh_ap=(2000, 150))
+
+    def test_smart_force_run_controls_interval_independently_from_monthly_setting(self):
+        config = self.runner.config
+        config.OpsiExplore_SpecialRadar = False
+        config.OpsiExplore_ForceRun = True
+        config.OpsiFleet_Fleet = 1
+        config.OpsiFleet_Submarine = False
+        for method in ('tuning_sample_use', 'fleet_set', 'os_order_execute', 'run_auto_search', 'handle_after_auto_search'):
+            setattr(self.runner, method, Mock())
+        for force in (False, True):
+            with self.subTest(force=force):
+                config.cross_set(SMART_EXPLORE_CONFIG + 'ForceRun', force)
+                config.task_delay.reset_mock()
+                self.runner._clear_smart_explore_zone()
+                if force:
+                    config.task_delay.assert_not_called()
+                else:
+                    config.task_delay.assert_called_once_with(minute=27, task='OpsiScheduling')
+                self.runner.run_auto_search.assert_called_with(question=False, rescan='full')
+
     def test_1360_boundary_and_purchase_switch(self):
         for ap, buy, expected in ((1361, False, 1), (1360, False, None),
                                   (1359, False, None), (1360, True, 1), (1359, True, 1)):
@@ -440,6 +472,9 @@ class SmartExploreTests(unittest.TestCase):
         self.assertIs(template['OpsiScheduling']['BuyActionPoint'], False)
         self.assertIs(template['OpsiSmartExplore']['Enable'], False)
         self.assertIs(template['OpsiSmartExplore']['EventCleanup'], False)
+        self.assertIs(template['OpsiSmartExplore']['ForceRun'], False)
+        monthly = json.loads((root / 'config/template.json').read_text(encoding='utf-8'))['OpsiExplore']
+        self.assertIs(monthly['OpsiExplore']['ForceRun'], False)
         for lang in ('zh-CN', 'zh-MIAO', 'zh-TW', 'en-US', 'ja-JP'):
             texts = json.loads((root / f'module/config/i18n/{lang}.json').read_text(encoding='utf-8'))
             for value in texts['OpsiSmartExplore'].values():

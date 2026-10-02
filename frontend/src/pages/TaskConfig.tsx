@@ -4,7 +4,7 @@
 
 import { Suspense, lazy, useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { CalendarClock, Clock3, ListTree, Play, Search, Settings2, Ship, Terminal } from 'lucide-react'
+import { CalendarClock, Clock3, ListTree, Play, RotateCcw, Search, Settings2, Ship, Terminal } from 'lucide-react'
 import { api } from '../api/client'
 import type { Config } from '../api/types'
 import { useApp, useConnection } from '../app/context'
@@ -158,6 +158,8 @@ export function TaskConfig() {
         const shopMode = group === 'ShopAdvanced' && arg === 'Mode'
         // 「立刻运行」只对每个任务的调度时间有意义，其他时间字段（如仪表盘记录时间）不显示。
         const runNow = group === 'Scheduler' && arg === 'NextRun' && !readonly
+        const clearProgress = path === 'OpsiExplore.OpsiExplore.ExploreProgress'
+          || path === 'OpsiScheduling.OpsiSmartExplore.Progress'
         const isMultiline = ['textarea', 'task_priority', 'yaml', 'storage'].includes(field.type) || field.mode === 'yaml' || restrictedLua
 
         return (
@@ -226,6 +228,13 @@ export function TaskConfig() {
                       const {payload, text, error} = prepareValue('', field)
                       queue.change(path, text ?? '', payload, error)
                     }}><Play size={15}/></button>
+                </div>
+              )}
+              {clearProgress && (
+                <div className="field-actions">
+                  <button type="button" className="button subtle icon-only" aria-label={ui('task.clearExploreProgress')}
+                    title={ui('task.clearExploreProgressHelp')} disabled={connection !== 'ready' || edit?.status === 'saving'}
+                    onClick={() => queue.change(path, '')}><RotateCcw size={15}/></button>
                 </div>
               )}
               {!isMultiline && (shopMode && shopModeError && !edit ? (

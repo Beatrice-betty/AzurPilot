@@ -3968,6 +3968,10 @@
       "name": "Normal-zone event cleanup",
       "help": "After all 72 normal zones are explored, check the original normal zones for missed events, then resume normal coin replenishment."
     },
+    "ForceRun": {
+      "name": "Run without the exploration interval",
+      "help": "Skip the 27-minute reconnaissance interval for smart exploration. This may spend additional AP. Monthly exploration settings, AP limits, monthly completion and mutual exclusion still apply."
+    },
     "Progress": {
       "name": "Smart exploration progress",
       "help": "Normal zones completed across all three rounds this month. Progress is saved automatically and resets with the Operation Siren monthly cycle."
