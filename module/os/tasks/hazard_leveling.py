@@ -214,8 +214,8 @@ class OpsiHazard1Leveling(CoinTaskMixin, OSMap):
                 avoid_ap_overflow=True,
             )
 
-        yellow_coins = self.get_yellow_coins()
         if not self.is_running_smart_scheduling_task():
+            yellow_coins = self.get_yellow_coins()
             self._cl1_resource_check(yellow_coins)
             self.check_and_notify_action_point_threshold()
             self._cl1_ap_check()

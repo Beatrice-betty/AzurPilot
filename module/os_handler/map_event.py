@@ -204,6 +204,20 @@ class MapEventHandler(EnemySearchingHandler):
 
     _story_timeout = Timer(60)
 
+    def story_skip(self, drop=None):
+        """侵蚀1按新截图快速推进剧情，其余大世界任务保留原间隔。"""
+        command = getattr(getattr(self.config, 'task', None), 'command', None)
+        click_interval = 0.5 if command == 'OpsiHazard1Leveling' else 2
+        if (click_interval < 2 or '_os_story_click_interval' in self.__dict__) \
+                and self.__dict__.get('_os_story_click_interval') != click_interval:
+            # 计时器属于本任务对象，避免共用基类计时器或把快速间隔带到其他任务。
+            self._os_story_click_interval = click_interval
+            self._story_option_timer = Timer(click_interval)
+            self._story_option_confirm = Timer(0.3).start()
+            self._story_option_record = 0
+            self._story_confirm = Timer(0.2 if click_interval < 2 else 0.5, count=1).start()
+        return super().story_skip(drop=drop, click_interval=click_interval)
+
     def handle_story_skip(self, drop=None):
         """处理大世界剧情跳过及卡剧情超时恢复。
 
@@ -336,6 +350,7 @@ class MapEventHandler(EnemySearchingHandler):
         Returns:
             bool: 是否点击了选项。
         """
+        command = getattr(getattr(self.config, 'task', None), 'command', None)
         if self.match_template_color(AUTO_SEARCH_OS_MAP_OPTION_OFF, offset=(5, 120)):
             if self.info_bar_count() >= 2:
                 self.device.screenshot_interval_set()
@@ -348,7 +363,15 @@ class MapEventHandler(EnemySearchingHandler):
                 raise CampaignEnd
         if self.appear(AUTO_SEARCH_REWARD, offset=(50, 50)):
             self.device.screenshot_interval_set()
-            if self.os_auto_search_quit(drop=drop):
+            cleared = self.os_auto_search_quit(drop=drop)
+            if command == 'OpsiHazard1Leveling' and enable is True \
+                    and getattr(self, '_os_auto_search_started', False):
+                # 正常侵蚀1奖励表示本次搜索已结束，不再开一次空自律探测。
+                # 未确认本轮已开启时，奖励可能是上一海域延迟弹出的，保留原恢复。
+                # META、退役等中断仍由 os_auto_search_run 的外层恢复分支处理。
+                logger.info('[大世界-搜索] 侵蚀1奖励已确认，结束本次搜索')
+                raise CampaignEnd
+            if cleared:
                 # 当前地图没有更多物品
                 raise CampaignEnd
             else:
@@ -358,14 +381,26 @@ class MapEventHandler(EnemySearchingHandler):
         if enable is None:
             pass
         elif enable:
-            if self.match_template_color(AUTO_SEARCH_OS_MAP_OPTION_OFF, offset=(5, 120), interval=3):
+            click_interval = 0.5 if command == 'OpsiHazard1Leveling' else 3
+            if click_interval < 3:
+                # 剧情可能透出地图按钮，先处理剧情；回到地图后才重试开启自律。
+                if self.appear(STORY_SKIP_3, offset=(20, 20)):
+                    return False
+                if not self.is_in_map():
+                    return False
+            if self.match_template_color(AUTO_SEARCH_OS_MAP_OPTION_OFF,
+                                         offset=(5, 120), interval=click_interval):
                 self.device.click(AUTO_SEARCH_OS_MAP_OPTION_OFF)
-                self.interval_reset(AUTO_SEARCH_OS_MAP_OPTION_OFF_DISABLED)
+                # 两种关闭外观共用重试间隔，避免按钮变灰后在下一帧重复点击。
+                self.get_interval_timer(AUTO_SEARCH_OS_MAP_OPTION_OFF_DISABLED,
+                                        interval=click_interval, renew=True).reset()
                 return True
             # 游戏客户端有时会 bug，AUTO_SEARCH_OS_MAP_OPTION_OFF 灰显但仍可点击
-            if self.match_template_color(AUTO_SEARCH_OS_MAP_OPTION_OFF_DISABLED, offset=(5, 120), interval=3):
+            if self.match_template_color(AUTO_SEARCH_OS_MAP_OPTION_OFF_DISABLED,
+                                         offset=(5, 120), interval=click_interval):
                 self.device.click(AUTO_SEARCH_OS_MAP_OPTION_OFF_DISABLED)
-                self.interval_reset(AUTO_SEARCH_OS_MAP_OPTION_OFF)
+                self.get_interval_timer(AUTO_SEARCH_OS_MAP_OPTION_OFF,
+                                        interval=click_interval, renew=True).reset()
                 return True
         else:
             if self.match_template_color(AUTO_SEARCH_OS_MAP_OPTION_ON, offset=(5, 120), interval=3):
