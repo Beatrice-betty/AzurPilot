@@ -51,7 +51,7 @@ class TestSmartSchedulingModes(unittest.TestCase):
                 scheduling, _ = self.make_scheduling(coin_target)
                 dispatch, leveling = self.run_decision(scheduling, yellow_coins=60000)
                 dispatch.assert_not_called()
-                leveling.assert_called_once_with(60000, 500)
+                leveling.assert_called_once_with(60000, 500, 100)
 
     def test_both_modes_replenish_when_below_own_coin_reserve(self):
         # 侵蚀 1 的保留值更低，仍应按智能调度保留值进入补币阶段。
@@ -59,7 +59,7 @@ class TestSmartSchedulingModes(unittest.TestCase):
             with self.subTest(coin_target=coin_target):
                 scheduling, _ = self.make_scheduling(coin_target, cl1_preserve=10000)
                 dispatch, leveling = self.run_decision(scheduling, yellow_coins=30000)
-                dispatch.assert_called_once_with(30000, 500, target, 200)
+                dispatch.assert_called_once_with(30000, 500, target, 200, 100)
                 leveling.assert_not_called()
 
     def test_zero_coin_reserve_is_valid_in_both_modes(self):
@@ -68,7 +68,7 @@ class TestSmartSchedulingModes(unittest.TestCase):
                 scheduling, _ = self.make_scheduling(coin_target, smart_preserve=0)
                 dispatch, leveling = self.run_decision(scheduling, yellow_coins=0)
                 dispatch.assert_not_called()
-                leveling.assert_called_once_with(0, 500)
+                leveling.assert_called_once_with(0, 500, 100)
 
     def test_missing_coin_reserve_defaults_to_zero(self):
         for coin_target in (True, False):

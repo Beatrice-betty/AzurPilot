@@ -1,6 +1,6 @@
 # 大世界智能调度+流程图
 
-本图依据当前 `module/os/tasks/scheduling.py`、`prevent_action_point_overflow.py` 和 `task_context.py` 的实际实现。用于核对现有行为与预期；数值示例是演示值，不读取真实账号配置。
+本图依据当前 `module/os/tasks/scheduling.py`、`smart_explore.py`、`prevent_action_point_overflow.py` 和 `task_context.py` 的实际实现。用于核对现有行为与预期；数值示例是演示值，不读取真实账号配置。
 
 ## 1. 保留值与符号
 
@@ -29,16 +29,80 @@ flowchart TD
     E -->|是| W[延期到服务器刷新并结束]
     E -->|否| S{智能调度任务已启用?}
     S -->|否| Q[跳过运行]
-    S -->|是| READ[读取 Y、P、C<br/>同步月末清理周期]
-    READ --> MONTH{已启用月末清理<br/>且进入配置的最后 N 个自然日?}
+    S -->|是| READ[读取 Y、P、C<br/>同步当前模式]
+    READ --> RESUME{本月购买断点处于 buying?}
+    RESUME -->|是| BUY[尝试港口行动力购买]
+    RESUME -->|否| LOW{P 小于或等于 L?}
+    BUY --> BOUGHT{本次完成购买?}
+    BOUGHT -->|是| BACK[结束本轮<br/>下轮重新读取资源]
+    BOUGHT -->|否| LOW
+    LOW -->|是| BUYLOW[尝试港口行动力购买]
+    BUYLOW --> BL{本次完成购买?}
+    BL -->|是| BACK
+    BL -->|否| RESET
+    LOW -->|否| RESET[同步月末清理周期]
+    RESET --> MONTH{已启用月末清理<br/>且进入配置的最后 N 个自然日?}
     MONTH -->|是| CLEAN[进入月末清理流程<br/>优先于普通黄币与体力调度]
-    MONTH -->|否| MODE[读取 K、R、B、L<br/>同步当前模式]
+    MONTH -->|否| EXPLORE{智能开荒接管本轮?}
+    EXPLORE -->|是| EX[执行开荒或开荒期间练级<br/>结束本轮]
+    EXPLORE -->|否| MODE[读取 K、R、B、L]
     MODE --> SWITCH{模式开关开启?}
     SWITCH -->|是| COIN[黄币目标调度]
     SWITCH -->|否| AP[体力调度]
 ```
 
 切换两种模式时清理旧模式的补币状态和通知状态。补币状态保存在智能调度的 `Storage.Storage`，进程重启后仍可继续当前阶段。
+
+港口行动力续购与 P 不超过 L 时的购买尝试在月末判断之前；月末清理在智能开荒与普通补币之前。购买或开荒返回后，普通入口会重新进入下一轮读取资源。购买异常正常上抛，不按“未购买”继续运行。
+
+### 2.1 月度港口行动力购买
+
+```mermaid
+flowchart TD
+    A[尝试购买港口行动力箱] --> OVER{防溢出代理?}
+    OVER -->|是| SKIP[返回未购买]
+    OVER -->|否| ENABLE{购买开关已开启?}
+    ENABLE -->|否| SKIP
+    ENABLE -->|是| READY{本月每月开荒已完成 100%<br/>或智能开荒第一轮已完成?}
+    READY -->|否| SKIP
+    READY -->|是| DONE{本月购买已完成?}
+    DONE -->|是| SKIP
+    DONE -->|否| RETRY{已有三次未完成尝试?}
+    RETRY -->|是| HUMAN[请求人工接管]
+    RETRY -->|否| RUN[保存 buying 断点并增加次数<br/>代理港口商店，仅购买行动力箱]
+    RUN --> CHECK{所有行动力箱确认售罄?}
+    CHECK -->|是| SAVE[保存 done<br/>返回已完成购买]
+    CHECK -->|否| FAIL[上抛恢复异常<br/>保留 buying 断点]
+```
+
+每月只购买一轮港口全部行动力箱，中断后续购尚未售罄的库存。这条流程不调用耗油的每日行动力购买。除入口条件外，智能开荒第一轮后 P 不超过 1360 时也会尝试购买；智能开荒或普通子任务抛出实际 `ActionPointLimit` 时也会先尝试购买，未购买才延期。普通补币仅因 P 不超过 B 而延期时，不额外触发购买，除非入口的 P 不超过 L 条件已满足。
+
+### 2.2 智能开荒
+
+智能开荒只在黄币目标模式生效，要求智能调度任务开关和智能开荒开关均开启，每月开荒任务开关关闭。防溢出代理不执行智能开荒。本月每月开荒已完成 100% 时跳过新开荒，但已有智能开荒事件补扫断点仍会继续。
+
+```mermaid
+flowchart TD
+    A[满足智能开荒接管条件] --> FIRST{第一轮路线未完成?}
+    FIRST -->|是| NODE1[执行第一轮下一个节点<br/>成功确认后保存断点并返回]
+    FIRST -->|否| SECOND{第二轮路线未完成?}
+    SECOND -->|是| DECIDE[首次判定第二轮策略<br/>P 不超过 1360 且购买开启时先尝试购买]
+    DECIDE --> START{判定时 P 大于 1360<br/>或购买开关开启?}
+    START -->|是| NODE2[执行第二轮下一个节点<br/>保存断点并返回]
+    START -->|否| ALL
+    SECOND -->|否| ALL{三轮路线全部完成?}
+    ALL -->|是| CLEAN[写入本月开荒 100%<br/>按开关逐海域事件补扫<br/>完成后保存 done 并返回]
+    ALL -->|否| COINS{Y 小于 K<br/>或已有黄币补币状态?}
+    COINS -->|是| TARGET{Y 仍小于 K 加 R?}
+    TARGET -->|是| NODE[按第二轮、第三轮顺序<br/>执行一个未完成节点并返回]
+    TARGET -->|否| CLEAR[清理黄币补币状态]
+    CLEAR --> AP
+    COINS -->|否| AP{P 大于 L?}
+    AP -->|是| LEVEL[代理侵蚀 1<br/>下轮继续开荒期间决策]
+    AP -->|否| BUY[尝试月度港口行动力购买<br/>未购买则延期并结束]
+```
+
+第二轮策略每月只判定一次，之后沿用断点。第一轮及自动启动的第二轮不等待黄币不足；剩余路线在需要补币时逐节点执行，达到 K + R 即回侵蚀 1，尚未完成的路线留待后续补币。开荒节点使用行动力保留 0，不使用普通补币的 B；路线包含普通海域和解锁港口。这里的补币来源是开荒路线，普通补币任务优先级要在开荒不接管后才生效。
 
 ## 3. 黄币目标调度
 
@@ -111,7 +175,7 @@ flowchart TD
 - 深渊的潜艇冷却可使本轮跳过该任务，继续尝试其他任务。
 - 每次只代理一轮有内容的任务，再回主循环重新判断资源。优先级靠前的任务可能连续被选中，并非轮询平均分配。
 - 不因代理执行而启用或关闭子任务的独立调度开关。既有任务进度、清空状态与统计按原职责保存。
-- 子任务抛出实际 `ActionPointLimit` 时，普通主决策延期到服务器刷新；短猫达到本轮正数保留值时可正常返回主决策。
+- 子任务抛出实际 `ActionPointLimit` 时，普通主决策先尝试月度港口行动力购买，未购买则延期到服务器刷新；短猫达到本轮正数保留值时可正常返回主决策。
 - 要塞所有可用舰队均失败时请求人工接管；设备卡死、重复点击等异常正常交给上层恢复。
 
 ## 6. 月末清理
@@ -175,7 +239,7 @@ flowchart TD
 
 ## 8. 用数值核对预期
 
-假设 K = 40000、R = 20000、B = 1000、L = 200；未进入月末窗口，普通运行，补币任务有内容。
+假设 K = 40000、R = 20000、B = 1000、L = 200；未进入月末窗口，普通运行，智能开荒不接管、月度港口购买不触发，补币任务有内容。
 
 | 场景 | 黄币目标模式 | 体力模式 |
 | --- | --- | --- |
@@ -194,8 +258,9 @@ flowchart TD
 ## 9. 代码与验证入口
 
 - 主决策与模式：`OpsiScheduling.run_smart_scheduling_once()`。
+- 智能开荒与月度港口购买：`SmartExploreMixin._run_smart_explore_once()`、`_try_scheduling_action_point_purchase()`。
 - 补币选择：`OpsiScheduling._dispatch_coin_task()`。
 - 月末清理：`OpsiScheduling._run_month_end_cleanup()`。
 - 防溢出：`OpsiPreventActionPointOverflow.run_prevent_action_point_overflow()`。
 - 代理身份和强制覆盖恢复：`opsi_task_context()`。
-- 离线回归：`tests/test_opsi_scheduling_modes.py`、`test_opsi_month_end_cleanup.py`、`test_opsi_coin_task_preserve.py`、`test_opsi_task_context.py`、`test_opsi_stronghold_outcome.py`。
+- 离线回归：`tests/test_opsi_scheduling_modes.py`、`test_opsi_month_end_cleanup.py`、`test_opsi_coin_task_preserve.py`、`test_opsi_task_context.py`、`test_opsi_stronghold_outcome.py`、`test_opsi_smart_explore.py`、`test_opsi_scheduling.py`。
