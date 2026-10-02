@@ -895,7 +895,7 @@ class TestMonthEndCleanupGrace(unittest.TestCase):
             patch.object(
                 scheduling,
                 '_get_scheduling_action_point',
-                side_effect=[(5000, 1000), (400, 100), (400, 100)],
+                side_effect=[(5000, 1000), (4900, 1000), (4800, 1000), (400, 100), (400, 100)],
             ),
         ):
             # 记录仍在推迟期内（正常派发路径会跳过），但月末清理照样拉起隐秘/深渊

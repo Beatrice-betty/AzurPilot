@@ -3885,22 +3885,22 @@
       "help": "Allowed only after monthly exploration reaches 100% or smart round one finishes this month. Neither exploration task needs to remain enabled. Once per month, buy all port-shop AP boxes without spending oil. Also triggers at 1360 AP or below after round one; otherwise at the CL1 AP reserve or when a subtask runs out of AP. May spend coins reserved for leveling. Requires sufficient currency; interrupted purchases resume remaining stock only."
     },
     "UseSmartSchedulingOperationCoinsPreserve": {
-      "name": "Reserve X operation supply coins",
-      "help": "When enabled, will use the 'Obtain X Combat Supply Vouchers' configuration below. When disabled, will use the Corrosion 1 Leveling yellow coin retention configuration.\nWhen disabled, Action Points are used for control.\nWhen enabled, yellow coins are used for control.",
+      "name": "Coin target scheduling",
+      "help": "When enabled, replenish coins to the coin reserve plus the refill amount before returning to corrosion 1 leveling. When disabled, use AP scheduling and replenish coins until AP reaches its reserve. Both modes use Smart Scheduling's own coin reserve.",
       "True": "Enabled",
       "False": "Disabled"
     },
     "OperationCoinsPreserve": {
-      "name": "Corrosion 1 leveling: preserve X combat supply vouchers",
+      "name": "Smart Scheduling: preserve X combat supply vouchers",
       "help": "When Combat Supply Vouchers are lower than X, run yellow coin replenishment task. Not recommended to modify."
     },
     "ActionPointPreserve": {
-      "name": "Meowfficer farming: preserve X action points",
-      "help": "Stop when Action Points are lower than X, and automatically open AP boxes. X includes AP in boxes. It is recommended to preserve 1000 AP for Corrosion 1 Leveling."
+      "name": "Coin replenishment: preserve X action points",
+      "help": "Stop coin replenishment when total AP reaches X. Total AP includes AP in boxes. Set to 0 to use the Meowfficer Farming AP reserve."
     },
     "OperationCoinsReturnThreshold": {
-      "name": "Return when supply coins below X",
-      "help": "During the yellow coin acquisition task, obtain (increase) X Combat Supply Vouchers in total, then return to Corrosion 1 Leveling."
+      "name": "Coin refill amount",
+      "help": "In coin target scheduling, replenish coins to the coin reserve plus X before returning to corrosion 1 leveling. AP scheduling does not use this amount."
     },
     "EnableMeowfficerFarming": {
       "name": "Enable meowfficer farming",
