@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 
 from module.config.config import AzurLaneConfig, TaskEnd
 from module.config.deep import deep_get, deep_set
-from module.exception import GameStuckError, RequestHumanTakeover
+from module.exception import GameStuckError
 from module.os.map_data import DIC_OS_MAP
 from module.os.operation_siren import OperationSiren
 from module.os.tasks.smart_explore import SMART_EXPLORE_CONFIG, SMART_EXPLORE_ROUTES, SMART_EXPLORE_ZONES
@@ -328,26 +328,35 @@ class SmartExploreTests(unittest.TestCase):
         restarted.config = self.runner.config
         self.assertFalse(restarted._try_scheduling_action_point_purchase())
 
-    def test_purchase_failed_confirmation_resumes_remaining_stock(self):
+    def test_interrupted_purchase_resumes_and_normal_return_marks_done(self):
         self.state()
         self.runner.config.cross_set(ACTION_POINT_PURCHASE_CONFIG, True)
-        self.runner.perform_port_shop_purchase.side_effect = [False, True]
+        self.runner.perform_port_shop_purchase.side_effect = [GameStuckError('购买中断'), True]
         with self.assertRaises(GameStuckError):
             self.runner._try_scheduling_action_point_purchase()
         self.assertEqual(self.runner._get_smart_scheduling_state_value('ActionPointPurchase')['phase'], 'buying')
         self.assertTrue(self.runner._try_scheduling_action_point_purchase())
         self.assertEqual(self.runner._get_smart_scheduling_state_value('ActionPointPurchase')['phase'], 'done')
 
-    def test_three_failed_purchases_require_human_review(self):
+    def test_legacy_false_stock_check_retry_counter_does_not_block_resume(self):
         self.state()
         self.runner.config.cross_set(ACTION_POINT_PURCHASE_CONFIG, True)
-        self.runner.perform_port_shop_purchase.return_value = False
-        for _ in range(3):
+        self.runner._set_smart_scheduling_state_value('ActionPointPurchase',
+                                                     dict(reset=RESET.isoformat(), phase='buying', attempts=3))
+        self.assertTrue(self.runner._try_scheduling_action_point_purchase())
+        self.assertFalse(self.runner._try_scheduling_action_point_purchase())
+        self.assertEqual(self.runner.perform_port_shop_purchase.call_count, 1)
+        self.assertEqual(self.runner._get_smart_scheduling_state_value('ActionPointPurchase')['phase'], 'done')
+
+    def test_purchase_crossing_month_does_not_mark_old_month_done(self):
+        self.state()
+        self.runner.config.cross_set(ACTION_POINT_PURCHASE_CONFIG, True)
+        with patch('module.os.tasks.smart_explore.get_os_next_reset',
+                   side_effect=[RESET, RESET, datetime(2026, 12, 1)]):
             with self.assertRaises(GameStuckError):
                 self.runner._try_scheduling_action_point_purchase()
-        with self.assertRaises(RequestHumanTakeover):
-            self.runner._try_scheduling_action_point_purchase()
-        self.assertEqual(self.runner.perform_port_shop_purchase.call_count, 3)
+        self.assertEqual(self.runner._get_smart_scheduling_state_value('ActionPointPurchase'),
+                         dict(reset=RESET.isoformat(), phase='buying'))
 
     def test_node_confirms_safe_zone_before_advancing_and_retries_same_zone(self):
         state = self.state(first=False)
@@ -516,42 +525,55 @@ class PortActionPointTests(unittest.TestCase):
         self.assertEqual(runner.ui_ensure_index.call_args.args[0], 25)
         self.assertEqual(item._shop_strategy_executed_quantity, 25)
 
-    def test_unrecognized_stock_does_not_confirm_purchase_or_leak_filter_scope(self):
+    def test_purchase_does_not_rescan_locked_or_unrecognized_goods(self):
         runner = OperationSiren.__new__(OperationSiren)
         runner.zone = SimpleNamespace(is_azur_port=True)
         runner.appear = Mock(return_value=True)
-        for name in ('port_enter', 'port_shop_enter'):
+        for name in ('port_enter', 'port_shop_enter', 'port_shop_quit', 'port_quit'):
             setattr(runner, name, Mock())
         runner.handle_port_supply_buy = Mock(return_value=True)
         runner.scan_all = Mock(return_value=[self.item('DefaultItem')])
-        with self.assertRaises(GameStuckError):
-            runner.perform_port_shop_purchase(action_point_only=True)
+        self.assertTrue(runner.perform_port_shop_purchase(action_point_only=True))
+        runner.scan_all.assert_not_called()
         self.assertFalse(runner._opsi_action_point_purchase)
 
-    def test_empty_shop_scan_does_not_mark_action_point_stock_as_sold_out(self):
+    def test_resumed_purchase_with_no_available_action_points_completes(self):
         runner = OperationSiren.__new__(OperationSiren)
         runner.zone = SimpleNamespace(is_azur_port=True)
         runner.appear = Mock(return_value=True)
         runner.port_enter = Mock()
         runner.port_shop_enter = Mock()
+        runner.port_shop_quit = Mock()
+        runner.port_quit = Mock()
         runner.handle_port_supply_buy = Mock(return_value=False)
         runner.scan_all = Mock(return_value=[])
-        with self.assertRaises(GameStuckError):
-            runner.perform_port_shop_purchase(action_point_only=True)
+        self.assertTrue(runner.perform_port_shop_purchase(action_point_only=True))
+        runner.scan_all.assert_not_called()
         self.assertFalse(runner._opsi_action_point_purchase)
 
-    def test_port_purchase_verifies_stock_and_restores_filter_scope(self):
-        for remaining_count, expected in ((0, True), (2, False), (-1, False)):
-            with self.subTest(remaining_count=remaining_count):
+    def test_normal_shop_result_is_preserved_and_filter_scope_restored(self):
+        for action_only, empty in ((False, False), (False, True), (True, False), (True, True)):
+            with self.subTest(action_only=action_only, empty=empty):
                 runner = OperationSiren.__new__(OperationSiren)
                 runner.zone = SimpleNamespace(is_azur_port=True)
                 runner.appear = Mock(return_value=True)
                 for name in ('port_enter', 'port_shop_enter', 'port_shop_quit', 'port_quit'):
                     setattr(runner, name, Mock())
-                runner.handle_port_supply_buy = Mock(return_value=True)
-                runner.scan_all = Mock(return_value=[self.item(count=remaining_count)])
-                self.assertEqual(OpsiShop.perform_port_shop_purchase(runner, action_point_only=True), expected)
+                runner.handle_port_supply_buy = Mock(return_value=not empty)
+                runner.scan_all = Mock(side_effect=AssertionError('购买后不应全商店复扫'))
+                self.assertEqual(OpsiShop.perform_port_shop_purchase(runner, action_point_only=action_only),
+                                 action_only or not empty)
                 self.assertFalse(runner._opsi_action_point_purchase)
+
+    def test_missing_shop_still_raises_and_restores_filter_scope(self):
+        runner = OperationSiren.__new__(OperationSiren)
+        runner.zone = SimpleNamespace(is_azur_port=True)
+        runner.appear = Mock(return_value=False)
+        runner.port_enter = Mock()
+        runner.port_shop_enter = Mock()
+        with self.assertRaises(GameStuckError):
+            runner.perform_port_shop_purchase(action_point_only=True)
+        self.assertFalse(runner._opsi_action_point_purchase)
 
 
 if __name__ == '__main__':

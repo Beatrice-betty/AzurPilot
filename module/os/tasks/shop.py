@@ -57,10 +57,10 @@ class OpsiShop(OSMap):
         进入商店购买所有补给，购买完成后退出港口。
 
         Args:
-            action_point_only (bool): 专购全部行动力箱并核验剩余库存，不更新普通商店购买状态。
+            action_point_only (bool): 专购全部行动力箱，不更新普通商店购买状态，不再扫描核验其他商品。
 
         Returns:
-            bool: 普通购买返回商店是否非空；专购返回行动力是否全部售罄。
+            bool: 普通购买返回商店是否非空；专购正常完成流程即返回 True，已无可购行动力也算完成。
 
         Pages:
             in: page_os, 大世界地图
@@ -78,18 +78,14 @@ class OpsiShop(OSMap):
             if self.appear(OS_SHOP_CHECK):
                 not_empty = self.handle_port_supply_buy()
                 if action_point_only:
-                    scanned = self.scan_all()
-                    if not scanned or any(not item.is_known_item() for item in scanned):
-                        raise GameStuckError('行动力购买后商店扫描为空或存在未识别商品，无法确认售罄')
-                    remaining = [item for item in self.pretreatment(scanned)
-                                 if item.group == 'actionpoint' and item.count != 0]
-                    # 再扫确认全部售罄，货币不足或 OCR 漏购不能标记本月购买完成。
-                    not_empty = not remaining
+                    # 第一轮已开 29 张普通海域，超过全部行动力解锁所需的 25 张。
+                    # 不以其他商品是否解锁或可识别来确认行动力售罄；中断续购无库存也算完成。
+                    not_empty = True
             else:
                 not_empty = False
                 logger.warning('[大世界-商店] 港口中没有商店')
                 if action_point_only:
-                    raise GameStuckError('未确认港口商店，无法验证行动力购买')
+                    raise GameStuckError('未确认港口商店，无法完成行动力购买')
         finally:
             self._opsi_action_point_purchase = previous
 
