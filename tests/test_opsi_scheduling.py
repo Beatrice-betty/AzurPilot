@@ -927,6 +927,7 @@ class ActionPointPopupStub:
     def __init__(self):
         self.device = _ClickRecordDevice()
         self.cancel_clicked = False
+        self.interval_clear = Mock()
 
     def open(self):
         """模拟点击 ACTION_POINT_REMAIN_OS 打开弹窗。"""
@@ -975,6 +976,7 @@ class TestActionPointPopupClickRecord(unittest.TestCase):
 
         self.assertNotIn(str(ACTION_POINT_REMAIN_OS), list(stub.device.click_record))
         self.assertNotIn(str(ACTION_POINT_CANCEL), list(stub.device.click_record))
+        self.assertEqual(stub.interval_clear.call_args_list, [unittest.mock.call(OS_CHECK)] * 10)
 
 
 class TestActionPointReuse(unittest.TestCase):
@@ -1027,25 +1029,38 @@ class TestHazard1FreshActionPoint(unittest.TestCase):
         runner.zone = SimpleNamespace(zone_id=1, hazard_level=2)
         return runner
 
-    def run_once(self, runner, fresh_ap):
+    def run_once(self, runner, fresh_ap, smart_scheduling=True):
         with (
             patch.object(runner, 'get_current_zone'),
             patch.object(runner, 'name_to_zone', return_value=Mock()),
             patch.object(runner, 'globe_goto'),
             patch.object(runner, 'fleet_set'),
-            patch.object(runner, 'get_yellow_coins', return_value=999),
-            patch.object(runner, 'is_running_smart_scheduling_task', return_value=True),
+            patch.object(runner, 'get_yellow_coins', return_value=999) as get_yellow_coins,
+            patch.object(runner, 'is_running_smart_scheduling_task', return_value=smart_scheduling),
+            patch.object(runner, '_cl1_resource_check') as resource_check,
+            patch.object(runner, '_cl1_ap_check'),
+            patch.object(runner, 'check_and_notify_action_point_threshold'),
             patch.object(runner, '_record_ap_and_coins'),
             patch.object(runner, '_cl1_run_battle'),
             patch.object(runner, '_cl1_handle_telemetry'),
             patch.object(runner, 'action_point_set') as action_point_set,
         ):
             runner.run_hazard1_leveling_once(ap_preserve=200, fresh_ap=fresh_ap)
+            if smart_scheduling:
+                get_yellow_coins.assert_not_called()
+                resource_check.assert_not_called()
+            else:
+                get_yellow_coins.assert_called_once()
+                resource_check.assert_called_once_with(999)
         return action_point_set
 
     def test_skips_popup_when_fresh_read_is_sufficient(self):
         runner = self.make_runner()
         self.run_once(runner, fresh_ap=(2381, 131)).assert_not_called()
+
+    def test_independent_task_still_reads_coins_for_resource_protection(self):
+        runner = self.make_runner()
+        self.run_once(runner, fresh_ap=(2381, 131), smart_scheduling=False)
 
     def test_keeps_popup_when_fresh_read_is_below_start_line(self):
         runner = self.make_runner()

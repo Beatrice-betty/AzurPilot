@@ -755,13 +755,15 @@ class Cl1Database:
             data["battle_count"] = data.get("battle_count", 0) + delta
             self._save_stats_in_connection(conn, instance, month, data)
 
-    def increment_akashi_encounter(self, instance: str):
-        """增加明石奇遇次数"""
-        month = datetime.now().strftime("%Y-%m")
+    def increment_akashi_encounter(self, instance: str, month: Optional[str] = None) -> int:
+        """增加明石奇遇次数，返回事务提交后的累计值。"""
+        month = month or datetime.now().strftime("%Y-%m")
         with self._stats_transaction() as conn:
             data = self._get_stats_in_connection(conn, instance, month)
             data["akashi_encounters"] = data.get("akashi_encounters", 0) + 1
             self._save_stats_in_connection(conn, instance, month, data)
+            encounters = data["akashi_encounters"]
+        return encounters
 
     def add_akashi_ap_entry(
         self, instance: str, amount: int, base: int, count: int, source: str
@@ -1560,11 +1562,11 @@ class Cl1Database:
 
         return async_executor.submit(self.increment_battle_count, instance, delta)
 
-    def async_increment_akashi_encounter(self, instance: str):
+    def async_increment_akashi_encounter(self, instance: str, month: Optional[str] = None):
         """异步增加明石遭遇次数。"""
         from module.base.async_executor import async_executor
 
-        return async_executor.submit(self.increment_akashi_encounter, instance)
+        return async_executor.submit(self.increment_akashi_encounter, instance, month)
 
     def async_add_akashi_ap_entry(
         self, instance: str, amount: int, base: int, count: int, source: str

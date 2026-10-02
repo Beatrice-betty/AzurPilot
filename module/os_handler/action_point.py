@@ -497,6 +497,8 @@ class ActionPointHandler(UI, MapEventHandler):
         # 只在弹窗确实关闭后清理：真卡死时上面的循环不会跳出，仍由单按钮 ≥12 次兜底。
         self.device.click_record_remove(ACTION_POINT_REMAIN_OS)
         self.device.click_record_remove(ACTION_POINT_CANCEL)
+        # 已正向确认弹窗关闭；下一次有意打开无需继承上一次的3秒重试冷却。
+        self.interval_clear(OS_CHECK)
 
     def handle_action_point(self, zone, pinned, cost=None, keep_current_ap=True, check_rest_ap=False, avoid_ap_overflow=False):
         """

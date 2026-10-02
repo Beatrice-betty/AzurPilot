@@ -154,6 +154,8 @@ flowchart TD
 
 ### 6.5 剧情跳过
 
+`InfoHandler.story_skip(drop=None, *, click_interval=2, prefer_skip=False)` 可由领域处理器调整重试间隔和对话跳过策略。大世界 `MapEventHandler` 只在当前绑定任务为侵蚀1时使用 0.5 秒间隔、实例独立计时器及 `prefer_skip=True`；无选项对话点击右上角 `STORY_SKIP`，不修改 `os_init()` 设置的全局剧情配置。游戏世界剧情把选项步骤标为重要步骤，跳过会停在这些选项；快速路径仍逐帧检测选项，在 0.3 秒稳定确认后选择，跳过确认弹窗也继续处理。其他任务遵循原配置，领奖界面的空白关闭保持原行为。
+
 `story_skip()` 按优先级处理四类画面：剧情确认弹窗（`story_popup_timeout` 窗口内）、黑底纯文字对话（`STORY_LETTERS_ONLY`）、剧情选项（三套峰值检测适配旧版/新版大白色/右侧白色三种样式）、关闭按钮。选项选择支持 `STORY_OPTION` 指定序号；大世界塞壬装置由 `_identify_siren_device_option()` 按选项数量与跨任务配置识别。每次剧情点击后清空设备点击记录，防止不同剧情段复用同一按钮名触发 `GameTooManyClickError`，卡死改由 `_story_option_click` 连续计数兜底。
 
 ## 7. 调用关系

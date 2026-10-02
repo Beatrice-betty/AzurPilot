@@ -293,6 +293,8 @@ stateDiagram-v2
 
 统计层被至少四类线程同时访问：游戏任务线程（同步写）、`async_executor` 工作线程（异步写）、日报后台线程（生成与推送）、WebUI 工作线程（查询）。
 
+侵蚀1明石遭遇由 `opsi_runtime.record_cl1_akashi_encounter()` 提交到串行异步队列，并返回写入 Future，主游戏流程不做同步回读。`increment_akashi_encounter(instance, month=None)` 在事务提交后返回实际累计次数；传入事件发生月份避免跨月排队计入下个月。完成回调只在提交成功后打印累计次数，失败记录异常并保留事务回滚；进程正常退出沿用异步执行器的队列刷新。
+
 | 对象 | 保护方式 |
 | --- | --- |
 | `Cl1Database` | 每次读改写都在 `_stats_transaction()`（`BEGIN IMMEDIATE`）内完成，跨线程与跨进程串行化；不依赖调用方持锁。跨月结算在一个事务里同时写来源月与归档月 |
