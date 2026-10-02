@@ -737,7 +737,7 @@ class InfoHandler(ModuleBase):
 
         return None
 
-    def story_skip(self, drop=None, *, click_interval=2):
+    def story_skip(self, drop=None, *, click_interval=2, prefer_skip=False):
         """跳过剧情对话。
 
         2023.09.14 剧情选项变更为中间大白色选项样式，
@@ -751,6 +751,7 @@ class InfoHandler(ModuleBase):
         Args:
             drop (DropImage | None): 掉落记录对象。默认为 None。
             click_interval (float): 剧情操作的最小重试间隔，默认 2 秒。
+            prefer_skip (bool): 无选项对话优先点击右上角跳过，不修改全局剧情配置。
 
         Returns:
             bool: 是否进行了剧情跳过或选项操作。
@@ -838,7 +839,7 @@ class InfoHandler(ModuleBase):
             if story_confirmed or (click_interval >= 2 and self._story_confirm.reached()):
                 if drop:
                     drop.handle_add(self, before=2)
-                if self.config.STORY_ALLOW_SKIP:
+                if prefer_skip or self.config.STORY_ALLOW_SKIP:
                     logger.info(f'{STORY_SKIP_3} -> {STORY_SKIP}')
                     self.device.click(STORY_SKIP)
                 else:

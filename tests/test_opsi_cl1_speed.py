@@ -47,7 +47,7 @@ class TestFastCl1Story(unittest.TestCase):
         self.time_patch.start()
         self.addCleanup(self.time_patch.stop)
 
-    def test_dialogue_advances_again_without_two_second_wait(self):
+    def test_dialogue_uses_skip_even_when_os_initialization_disabled_it(self):
         handler = FastStoryStub(options=[])
         with patch.object(STORY_SKIP_3, 'match', side_effect=lambda *a, **k: handler.story_present):
             self.assertFalse(handler.story_skip())
@@ -60,7 +60,9 @@ class TestFastCl1Story(unittest.TestCase):
             handler.story_present = False
             self.clock.now += 0.35
             self.assertFalse(handler.story_skip())
-        self.assertEqual(handler.device.count_of('CLICK_SAFE_AREA'), 2)
+        self.assertEqual(handler.device.count_of('STORY_SKIP'), 2)
+        self.assertEqual(handler.device.count_of('CLICK_SAFE_AREA'), 0)
+        self.assertFalse(handler.config.STORY_ALLOW_SKIP)
 
     def test_visible_options_are_confirmed_before_clicking_and_never_blank_clicked(self):
         handler = FastStoryStub(options=make_options())
@@ -72,6 +74,53 @@ class TestFastCl1Story(unittest.TestCase):
             self.assertFalse(handler.story_skip())
         self.assertEqual(handler.device.count_of('STORY_OPTION_2_OF_3'), 1)
         self.assertEqual(handler.device.count_of('CLICK_SAFE_AREA'), 0)
+        self.assertEqual(handler.device.count_of('STORY_SKIP'), 0)
+
+    def test_required_choice_after_skip_is_still_selected(self):
+        handler = FastStoryStub(options=[])
+        with patch.object(STORY_SKIP_3, 'match', return_value=True):
+            self.assertFalse(handler.story_skip())
+            self.clock.now += 0.35
+            self.assertTrue(handler.story_skip())
+            handler._options = make_options()
+            self.clock.now += 0.35
+            self.assertFalse(handler.story_skip())
+            self.clock.now += 0.35
+            self.assertTrue(handler.story_skip())
+        self.assertEqual(handler.device.count_of('STORY_SKIP'), 1)
+        self.assertEqual(handler.device.count_of('STORY_OPTION_2_OF_3'), 1)
+        self.assertEqual(handler.device.count_of('CLICK_SAFE_AREA'), 0)
+
+    def test_skip_confirmation_is_processed_before_retrying_skip(self):
+        handler = FastStoryStub(options=[])
+        with patch.object(STORY_SKIP_3, 'match', return_value=True):
+            handler.story_skip()
+            self.clock.now += 0.35
+            self.assertTrue(handler.story_skip())
+            handler.handle_popup_confirm.side_effect = (
+                lambda *args, **kwargs: StoryHandlerStub.handle_popup_confirm(handler, *args, **kwargs)
+            )
+            self.clock.now += 0.35
+            self.assertTrue(handler.story_skip())
+        handler.handle_popup_confirm.assert_called_once_with('STORY_SKIP', interval=0.5)
+        self.assertEqual(handler.device.count_of('STORY_SKIP'), 1)
+        self.assertEqual(handler.device.count_of('POPUP_CONFIRM_STORY_SKIP'), 1)
+
+    def test_other_task_restores_configured_blank_click_after_cl1_skip(self):
+        handler = FastStoryStub(options=[])
+        with patch.object(STORY_SKIP_3, 'match', return_value=True):
+            handler.story_skip()
+            self.clock.now += 0.35
+            self.assertTrue(handler.story_skip())
+            handler.config.task.command = 'OpsiMeowfficerFarming'
+            self.assertFalse(handler.story_skip())
+            self.clock.now += 0.35
+            self.assertFalse(handler.story_skip())
+            self.clock.now += 0.35
+            self.assertTrue(handler.story_skip())
+        self.assertEqual(handler.device.count_of('STORY_SKIP'), 1)
+        self.assertEqual(handler.device.count_of('CLICK_SAFE_AREA'), 1)
+        self.assertFalse(handler.config.STORY_ALLOW_SKIP)
 
     def test_enabled_skip_uses_skip_button_with_fast_cadence(self):
         handler = FastStoryStub(options=[])

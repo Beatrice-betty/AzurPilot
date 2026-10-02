@@ -205,7 +205,7 @@ class MapEventHandler(EnemySearchingHandler):
     _story_timeout = Timer(60)
 
     def story_skip(self, drop=None):
-        """侵蚀1按新截图快速推进剧情，其余大世界任务保留原间隔。"""
+        """侵蚀1按新截图快速点击右上角跳过，必选项仍优先处理。"""
         command = getattr(getattr(self.config, 'task', None), 'command', None)
         click_interval = 0.5 if command == 'OpsiHazard1Leveling' else 2
         if (click_interval < 2 or '_os_story_click_interval' in self.__dict__) \
@@ -216,7 +216,8 @@ class MapEventHandler(EnemySearchingHandler):
             self._story_option_confirm = Timer(0.3).start()
             self._story_option_record = 0
             self._story_confirm = Timer(0.2 if click_interval < 2 else 0.5, count=1).start()
-        return super().story_skip(drop=drop, click_interval=click_interval)
+        # 大世界初始化关闭通用剧情跳过；侵蚀1在无选项对话中局部使用右上角跳过。
+        return super().story_skip(drop=drop, click_interval=click_interval, prefer_skip=click_interval < 2)
 
     def handle_story_skip(self, drop=None):
         """处理大世界剧情跳过及卡剧情超时恢复。
