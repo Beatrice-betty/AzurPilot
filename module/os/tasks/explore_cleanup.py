@@ -47,10 +47,13 @@ class OpsiExploreCleanup(OSMap):
         self.config.task_delay(target=get_os_next_reset())
         self.config.task_stop()
 
-    def _run_explore_cleanup(self):
+    def _run_explore_cleanup(self, max_zones=None):
         """只进入已开荒普通海域，复用全图事件扫描和短猫的逐队雷达补查。
 
         每张图退出成功后保存断点；失败保留当前图，最多跨重启尝试三次。
+
+        Args:
+            max_zones (int | None): 本轮最多补扫的海域数；智能调度每轮一张，独立任务默认全部。
 
         Pages:
             in: IN_MAP 或 IN_GLOBE
@@ -60,7 +63,8 @@ class OpsiExploreCleanup(OSMap):
         reset = get_os_next_reset().isoformat()
         self._opsi_meowfficer_cleanup = True
         try:
-            for index in range(state['next'], len(state['order'])):
+            end = len(state['order']) if max_zones is None else min(state['next'] + max_zones, len(state['order']))
+            for index in range(state['next'], end):
                 if get_os_next_reset().isoformat() != reset:
                     raise GameStuckError('补扫期间跨月，停止旧月份补扫')
                 if state['attempts'] >= 3:
@@ -91,6 +95,7 @@ class OpsiExploreCleanup(OSMap):
                     self.config.OpsiExploreCleanup_State = state
                     self.config.OpsiExploreCleanup_Progress = f'已补扫 {index + 1}/{len(state["order"])}'
                 self.config.check_task_switch()
-            self.config.OpsiExploreCleanup_State = dict(state, phase='done')
+            if state['next'] >= len(state['order']):
+                self.config.OpsiExploreCleanup_State = dict(state, phase='done')
         finally:
             self._opsi_meowfficer_cleanup = False

@@ -281,6 +281,11 @@ class MissionHandler(GlobeOperation, ZoneManager):
         Returns:
             bool: 每月开荒+是否正在调度中。
         """
+        from module.os.tasks.smart_explore import smart_explore_enabled
+
+        if smart_explore_enabled(self.config):
+            # 智能开荒由智能调度按黄币状态推进，不能被月度开荒闸门挡住。
+            return False
         enable = self.config.is_task_enabled('OpsiExplore')
         next_run = self.config.cross_get(keys='OpsiExplore.Scheduler.NextRun', default=DEFAULT_TIME)
         next_reset = get_os_next_reset()

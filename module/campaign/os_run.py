@@ -91,6 +91,14 @@ class OSCampaignRun(OSMapOperation):
 
     def opsi_explore(self):
         """执行大世界海域开荒探索任务。"""
+        from module.os.tasks.smart_explore import smart_explore_enabled
+
+        if smart_explore_enabled(self.config):
+            logger.info('智能开荒已接管普通海域，唤起智能调度')
+            self.config.task_call('OpsiScheduling', force_call=False)
+            self.config.task_delay(server_update=True)
+            self.config.task_stop()
+            return
         try:
             self._run_opsi_task_with_ap_overflow_guard(lambda campaign: campaign.os_explore())
         except ActionPointLimit as e:
