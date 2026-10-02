@@ -6534,8 +6534,8 @@
     "MeowHazardLevel": {
       "name": "オフニャ侵蝕レベル",
       "help": "オフニャタスクの実行レベルを選択（レベル3またはレベル5）。",
-      "level3": "level3",
-      "level5": "level5"
+      "level3": "3",
+      "level5": "5"
     },
     "CrossWeek": {
       "name": "週跨ぎ計算",

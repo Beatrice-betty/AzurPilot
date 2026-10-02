@@ -25,6 +25,16 @@ export interface Schema {
   translations: Record<string, unknown>
 }
 export interface Config { instance: string; revision: string; values: Values }
+export interface OpsiSimulatorResult {
+  cl1Count: number; meowCount: number; crashedProbability: number
+  cl1Time: number; meowTime: number; ap: number; coin: number
+}
+export interface OpsiSimulatorStatus {
+  instance: string; state: 'idle' | 'running' | 'stopping' | 'completed' | 'interrupted' | 'failed'
+  running: boolean; completedSamples: number; totalSamples: number; error: string
+  runId: number
+  result: OpsiSimulatorResult | null; figure: string | null; logs: Logs
+}
 interface ScheduledTask { name: string; nextRun: string; pending: boolean; state: 'running' | 'pending' | 'waiting' }
 export interface Resource { name: string; label: string; value: number | null; limit?: number; total?: number | null; record?: string }
 export interface Overview {
@@ -97,6 +107,10 @@ export interface BackgroundGalleryEntry {
 }
 
 export interface Results {
+  'opsi.simulator.status': OpsiSimulatorStatus
+  'opsi.simulator.start': OpsiSimulatorStatus
+  'opsi.simulator.stop': OpsiSimulatorStatus
+  'opsi.simulator.figure': {instance: string; image: string | null}
   'config.export': Values & {_schedulerProgram?: Pick<ProgramSaved, 'mode' | 'draft' | 'active'>}
   'background.access': {token: string}
   'scheduler.program.catalog': Catalog

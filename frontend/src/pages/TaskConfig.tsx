@@ -15,6 +15,7 @@ import { smoothScrollToElement } from '../app/scroll'
 import { Empty, ErrorBox, Loading, Modal, PageTitle } from '../components/ui'
 import { LogPanel } from '../components/LogPanel'
 import { MeowfficerScorePanel } from '../components/MeowfficerScorePanel'
+import { OpsiSimulatorPanel } from '../components/OpsiSimulatorPanel'
 import { FieldInput } from '../components/FieldInput'
 import { ShopStrategyHelp } from '../components/ShopStrategyHelp'
 import { StorageField } from '../components/StorageField'
@@ -353,7 +354,9 @@ export function TaskConfig() {
     </Empty>
   ) : groupCardsBlock
 
-  const toolPanel = tool && <section className="panel tool-log-panel" aria-label={ui('monitor.logs')}>
+  const toolPanel = task === 'OpsiSimulator'
+    ? <OpsiSimulatorPanel key={instance} instance={instance} beforeStart={() => queue.settled()}/>
+    : tool && <section className="panel tool-log-panel" aria-label={ui('monitor.logs')}>
     <div className="panel-heading">
       <div><Terminal size={18}/><h2>{ui('monitor.logs')}</h2></div>
       <button className="button primary" onClick={() => setConfirmRun(true)} disabled={busy || connection !== 'ready'}>
