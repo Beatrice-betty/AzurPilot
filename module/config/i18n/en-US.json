@@ -3882,7 +3882,7 @@
     },
     "BuyActionPoint": {
       "name": "Buy port AP when AP is insufficient",
-      "help": "Allowed only after monthly exploration reaches 100% or smart round one finishes this month. Neither exploration task needs to remain enabled. Once per month, buy all port-shop AP boxes without spending oil. Also triggers at 1360 AP or below after round one; otherwise at the CL1 AP reserve or when a subtask runs out of AP. May spend coins reserved for leveling. Requires sufficient currency; interrupted purchases resume remaining stock only."
+      "help": "Allowed only after monthly exploration reaches 100% or smart round one finishes this month. Neither exploration task needs to remain enabled. Once per month, buy all port-shop AP boxes without spending oil. Also triggers at 1360 AP or below after round one; otherwise at the CL1 AP reserve or when a subtask runs out of AP. May spend coins reserved for leveling; sufficient currency is required. Record the monthly purchase when the buying flow finishes, without rescanning other goods. Interrupted purchases can resume; no AP stock left also completes the flow."
     },
     "UseSmartSchedulingOperationCoinsPreserve": {
       "name": "Coin target scheduling",

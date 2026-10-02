@@ -154,6 +154,10 @@ OpsiAshBeacon.run() → META 页攻击 → MetaReward 领奖 → task_delay(serv
 
 `os_shop` / 智能调度月末清理都调 `perform_port_shop_purchase()`：找最近友方港口 → `port_shop_enter` → `os_shop_get_items`（ItemGrid 扫描 + 滚动翻页）→ `Selector` 过滤 → 逐项 `os_shop_buy`（金额确认、黄/紫币校验）→ 退出。返回「是否买到了东西」，任务层据此决定延迟策略。
 
+智能调度的 `OpsiScheduling.OpsiScheduling.BuyActionPoint` 默认关闭，独立于两种开荒任务；仅本月每月开荒达到 100% 或智能开荒第一轮完成后允许执行。专购通过 `perform_port_shop_purchase(action_point_only=True)` 只买全部行动力箱，正常退出港口即在 `OpsiScheduling.Storage.Storage` 的 `ActionPointPurchase` 中记录本月完成，不修改普通商店购买状态。购买中断保留断点；恢复时已无可购行动力也正常收尾。进入商店失败、购买异常或跨月不会记录完成。
+
+行动力箱在普通海域开满 25 个后全部解锁，智能第一轮开完 29 个海域已满足条件（本地 Lua `world_newshop_data.lua` 的行动力商品 `unlock_num` 为 0、10、25）。其他商品仍可能未解锁，不能在购买后复扫全商店、要求所有货架都有可识别商品来确认行动力购买完成；旧版由此留下的购买失败计数也不应阻止恢复。
+
 ## 7. 调用关系
 
 ### 上游
