@@ -186,6 +186,8 @@ flowchart TD
 
 ### 智能调度+ 决策循环
 
+完整决策图、配置来源与数值示例见[智能调度+流程图](scheduling-flowchart.md)，用于核对两种调度模式、月末清理和防溢出代理的实际行为。
+
 `run_smart_scheduling()` = `while True: run_smart_scheduling_once(); check_task_switch()`。单轮决策优先级：
 
 1. **开荒拦截**：`is_in_opsi_explore()`（OpsiExplore 已启用且 next_run 早于重置前 12 小时）→ 延迟到服务器刷新。
