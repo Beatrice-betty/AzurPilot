@@ -8,7 +8,7 @@
 import typing as t
 from dataclasses import dataclass
 
-from module.azur_stats.image.auto_search_reward import AutoSearchItem
+from module.azur_stats.image.auto_search_reward import AutoSearchItem, AutoSearchItemGrid
 from module.azur_stats.image.get_items import GetItems
 from module.azur_stats.image.opsi_reward import OpsiReward
 from module.azur_stats.image.opsi_zone import OpsiZone, DataOpsiZone
@@ -44,6 +44,12 @@ class DataOpsiItems:
     tag: str
 
 
+class OpsiItemGrid(AutoSearchItemGrid):
+    """获得道具页按底色限定稀有度，仍使用原生模板的匹配阈值。"""
+
+    TIER_SIMILARITY = 0.92
+
+
 class SceneOperationSiren(SceneBase, OpsiReward, GetItems, OpsiZone):
     """大型作战（大世界）场景分析器。
 
@@ -52,6 +58,7 @@ class SceneOperationSiren(SceneBase, OpsiReward, GetItems, OpsiZone):
 
     AUTO_SEARCH_ITEM_TEMPLATE_FOLDER = './assets/stats/opsi_reward_items'
     ITEM_TEMPLATE_FOLDER = './assets/stats/opsi_items'
+    ITEM_GRID_CLASS = OpsiItemGrid
 
     def extract_assets(self):
         """提取大型作战掉落截图中的未知物品模板。"""

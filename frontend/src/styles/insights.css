@@ -300,7 +300,7 @@
   -webkit-backdrop-filter:var(--theme-control-filter);backdrop-filter:var(--theme-control-filter);
   border:1px solid var(--theme-control-edge, var(--border));border-radius:var(--theme-radius-button, 20px);
   box-shadow:0 1px 2px rgba(0,0,0,0.04), inset 0 0.5px 0 rgba(255,255,255,0.45);
-  font-size:12px;color:var(--muted);white-space:nowrap;
+  font-size:12px;color:var(--muted);white-space:normal;line-height:1.5;max-width:100%;
   min-height:30px;box-sizing:border-box;
 }
 [data-theme='dark'] .statistics-hints {

@@ -55,7 +55,7 @@ module/statistics/
 ├── ship_exp_stats.py         # ShipExpStats：战斗计时与经验效率
 ├── opsi_month.py             # OpsiMonthStats：月度大世界汇总与时间线
 ├── opsi_runtime.py           # 大世界运行期事件 → 落库的集中入口
-├── opsi_drop_stats.py        # 大世界掉落聚合（金菜/彩图纸口径，供「大世界掉落」页）
+├── opsi_drop_stats.py        # 大世界掉落聚合（部件、图纸、材料、计划及突破部件）
 ├── drop_statistics.py        # 离线批量掉落分析（可独立运行）
 ├── drop_cleanup.py           # 掉落截图保留天数清理与备份
 ├── get_items.py / item.py / battle_status.py / campaign_bonus.py
@@ -79,6 +79,12 @@ module/log_res/
 模板资源：`assets/stats_basic/`（基础物品模板，掉落统计启动时复制到用户目录）、`assets/stats/`（opsi_items、opsi_reward_items 等场景模板）。
 
 **两个模板集不能互相顶替**：`opsi_reward_items`（自律寻敌结算页）与 `opsi_items`（获得道具页）里的图标缩放不同，跨页匹配常在 0.6~0.9，低于阈值就不会命中，金菜/图纸会退化成数字代号。`SceneOperationSiren.ITEM_TEMPLATE_FOLDER` 用的是 `opsi_items`，其中新增的模板都是从获得道具页真实截图里裁的；例外是 `opsi_items/PlatePlaneT4.png`——舰载机部件T4 在现有素材里没在获得道具页出现过，只能先复用结算奖励页的模板，跨页匹配会弱一些，拿到实机素材后应换成原生裁图。
+
+大世界掉落页固定展示部件 T4、舰炮/鱼雷/防空炮/舰载机研发图纸 SSR/UR 型，以及特种钢材、军工级电子元件、HBX炸药、氟橡胶、超导铜、钛合金、机密/绝密实验计划和特装型突破部件。范围在 `opsi_drop_stats.py`，名称和稀有度在 `assets/stats/opsi_item_names.json`；这些物品进入收益、明细、记录和总计，仍受实例、时间与任务筛选。已入库的物品直接纳入查询，不重写数据库；尚未识别的数字编号不会自动改名。
+
+实验计划模板统一按图标稀有度命名：紫色 T3、金色 T4、彩色 T5，与英文物品名称中的 T1/T2/T3 不同。获得道具页原来的 `OrdnanceTestingReportT1/T2` 模板改为 `T3/T4`，历史金计划 `OrdnanceTestingReportT2` 在展示时归入 T4，避免分成两行。两类奖励页都按底色排除错误等级的图纸、实验计划和突破部件；获得道具页保留 0.92 的严格匹配阈值，并接收第三种 Boss 奖励布局。
+
+新增模板来源记录在 `assets/stats/opsi_template_sources.json`。机密计划与突破部件的弹窗模板来自 `screenshots/opsi_abyssal/1790326881455.png` 和 `screenshots/opsi_month_boss/1790872111832.png` 的原始 1280×720 帧。绝密计划未在本地掉落截图及归档中找到，暂复用已有 1280×720 仓库原图中的模板并归一为 96×96；它的真实结算识别仍待获得样本后验证，不能把仓库参考图验证当作实机掉落验证。
 
 **数量区按物品换**（`ItemGrid.amount_area_rules`，前缀匹配）：获得道具页的数字右对齐，位数多时左侧会超出默认区 `(60, 71, 91, 92)`（作战补给凭证 1638 被读成 638）；而图纸/实验计划的数字压在右下角灰色齿轮上，默认区会把齿轮的齿读成「7」（1 读成 71）。两者不能用同一个区——整体左扩会让材料把底衬读成数字（氟橡胶 2 读成 12）。
 
@@ -218,7 +224,7 @@ flowchart TD
       ├─ save → {DropRecord_SaveFolder}/{genre}/{ts}.png（后台线程）
       └─ local → SceneOperationSiren.parse_scene() → DataOpsiItems
               → opsi_items 表（azurstats_local.db）→ 重算 farming CSV
-              └─ 统计页「大世界掉落」= opsi_drop_stats.collect()（金菜/彩图纸口径）
+              └─ 统计页「大世界掉落」= opsi_drop_stats.collect()（指定部件、图纸、材料、计划及突破部件）
               └─ 有未识别物品 → unknown_items/ 红框标注图
 
 任务事件（alas.py 打点）          → daily_summary_task_runs
@@ -328,7 +334,7 @@ CL1 库的兼容性迁移是自动的：启动时把旧位置 `log/cl1/cl1_data.
 3. 在 `module/api/statistics_service.py` 的对应 category 里把指标加进 `report()` 输出；API 模型变更后运行 `uv run python -m dev_tools.export_api_schema`。
 4. 需要进日报时，在 `DailySummaryService.build_facts()` 的 facts 里补字段并在 prompt 术语表加映射。
 
-新增掉落识别模板：把结算截图交给 `DropStatistics.extract_template()` 提取，人工重命名后放回模板目录；白纸类物品（设计图/测试报告）的稀有度由 `AutoSearchItemGrid.match_candidates` 按底色限定，新等级需要同时补 `TIER_BY_COLOR` 可识别的底色。
+新增掉落识别模板：把结算截图交给 `DropStatistics.extract_template()` 提取，人工重命名后放回对应场景的模板目录；图纸、实验计划和突破部件的稀有度由 `AutoSearchItemGrid.match_candidates` 按底色限定，新等级需要同时补 `TIER_BY_COLOR` 可识别的底色。新增物品同时检查 `opsi_drop_stats.py`、名称表、静态图标及五种语言的 `stats.lootHint`；回归入口为 `tests.test_opsi_drop_stats`、`tests.test_opsi_item_recognition` 和前端「大世界掉落展示新增」模拟服务测试。
 
 ## 16. 修改注意事项
 

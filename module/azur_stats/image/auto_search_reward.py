@@ -61,8 +61,8 @@ class AutoSearchItemGrid(ItemGrid):
 
     # 图标底色 -> 等级后缀
     TIER_BY_COLOR = {'purple': 'T3', 'gold': 'T4', 'rainbow': 'T5'}
-    # 需要按底色限定等级的物品种类（白纸类，底色即稀有度）
-    TIER_ITEM_PREFIXES = ('GearDesignPlan', 'OrdnanceTestingReport')
+    # 这些物品的中央图案相近，需要按底色限定稀有度。
+    TIER_ITEM_PREFIXES = ('GearDesignPlan', 'OrdnanceTestingReport', 'PrototypeGearParts')
     # 同等级候选之间只比图案，底纸缩放会拉低相似度，故放宽阈值
     TIER_SIMILARITY = 0.6
 

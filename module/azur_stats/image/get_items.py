@@ -115,6 +115,7 @@ class GetItems(ImageBase):
     """
 
     ITEM_TEMPLATE_FOLDER = f'./assets/stats_basic'
+    ITEM_GRID_CLASS = ItemGrid
     # 提取新场景模板时为 True，常规运行时为 False
     ALLOW_TOO_MANY_NEW_TEMPLATE = False
 
@@ -138,7 +139,7 @@ class GetItems(ImageBase):
         Returns:
             ItemGrid: 初始化的物品网格对象。
         """
-        grid = ItemGrid(None, {}, template_area=(40, 21, 89, 70), amount_area=self.ITEM_AMOUNT_AREA)
+        grid = self.ITEM_GRID_CLASS(None, {}, template_area=(40, 21, 89, 70), amount_area=self.ITEM_AMOUNT_AREA)
         grid.item_class = Item
         grid.similarity = 0.92
         grid.amount_area = self.ITEM_AMOUNT_AREA
@@ -156,7 +157,9 @@ class GetItems(ImageBase):
         Returns:
             bool: 是否为获得物品弹窗。
         """
-        return bool(self.classify_server(GET_ITEMS_1, image)) or bool(self.classify_server(GET_ITEMS_2, image))
+        return (bool(self.classify_server(GET_ITEMS_1, image))
+                or bool(self.classify_server(GET_ITEMS_2, image))
+                or bool(self.classify_server(GET_ITEMS_3, image)))
 
     def parse_get_items(self, image, name=True, amount=True, tag=True) -> t.Iterator[Item]:
         """解析单张获得物品截图中的所有掉落道具。
