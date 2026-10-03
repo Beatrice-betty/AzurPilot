@@ -13,6 +13,8 @@ export interface Parameters {
   "config.patch": { instance: string; revision?: string | null; changes: Array<{ path: string; value: unknown }> }
   "shop_strategy.validate": { instance: string; task: "EventShop" | "ShopFrequent" | "ShopOnce" | "PrivateQuarters" | "OpsiShop" | "OpsiVoucher"; script: string }
   "overview.get": { instance: string }
+  "stock.status": { instance: string }
+  "stock.request": { instance: string; path: string; method?: "GET" | "POST" | "DELETE"; body?: Record<string, unknown> | null; etag?: string }
   "scheduler.start": { instance: string }
   "scheduler.stop": { instance: string }
   "scheduler.program.catalog": { instance: string }

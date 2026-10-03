@@ -3,7 +3,8 @@
  */
 
 import { useState, useSyncExternalStore } from 'react'
-import { Settings2 } from 'lucide-react'
+import { ChartNoAxesCombined, Settings2 } from 'lucide-react'
+import { Link, useParams } from 'react-router-dom'
 import type { Resource } from '../api/types'
 import { useApp } from '../app/context'
 import { readDashboardPrefs, setDashboardPref, subscribeDashboardPrefs, type DashboardPrefs } from '../app/dashboardPrefs'
@@ -24,8 +25,9 @@ const DASHBOARD_OPTIONS: {key: keyof DashboardPrefs; label: UiKey; help: UiKey}[
 export function InstanceActions({resources, selectedResources, onResourcesChange, showLabel = false}: {resources: Resource[]; selectedResources: string[]; onResourcesChange: (keys: string[]) => void; showLabel?: boolean}) {
   const [open, setOpen] = useState(false)
   const {ui} = useApp()
+  const {instance = ''} = useParams()
   // 无障碍名称用「仪表盘设置」，可见文字在紧凑下换成「资源卡片设置」。
-  return <><button className="button" aria-label={ui('instance.settings')} title={ui('instance.settings')} onClick={() => setOpen(true)}><Settings2 size={16}/>{showLabel && <span>{ui('resource.settings')}</span>}</button>{open && <InstanceSettings resources={resources} selectedResources={selectedResources} onResourcesChange={onResourcesChange} onClose={() => setOpen(false)}/>}</>
+  return <><Link className="button" to={`/i/${encodeURIComponent(instance)}/stock-exchange`} aria-label={ui('stock.enter')} title={ui('stock.enter')}><ChartNoAxesCombined size={16}/>{showLabel && <span>{ui('stock.name')}</span>}</Link><button className="button" aria-label={ui('instance.settings')} title={ui('instance.settings')} onClick={() => setOpen(true)}><Settings2 size={16}/>{showLabel && <span>{ui('resource.settings')}</span>}</button>{open && <InstanceSettings resources={resources} selectedResources={selectedResources} onResourcesChange={onResourcesChange} onClose={() => setOpen(false)}/>}</>
 }
 
 function InstanceSettings({resources, selectedResources, onResourcesChange, onClose}: {resources: Resource[]; selectedResources: string[]; onResourcesChange: (keys: string[]) => void; onClose: () => void}) {

@@ -85,6 +85,14 @@ class InstanceParams(Params):
     instance: StrictStr = Field(min_length=1, max_length=64)
 
 
+class StockRequestParams(InstanceParams):
+    """实例专属交易请求；实例身份和远端凭据由后端补充。"""
+    path: StrictStr = Field(min_length=1, max_length=100)
+    method: Literal['GET', 'POST', 'DELETE'] = 'GET'
+    body: dict[str, Any] | None = None
+    etag: StrictStr = Field(default='', max_length=128)
+
+
 class CreateParams(Params):
     """新建实例请求参数模型。"""
     name: StrictStr = Field(min_length=1, max_length=64)
