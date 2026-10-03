@@ -810,7 +810,7 @@ export function createMockState({ empty = false } = {}) {
           }]
         } else if (params.category === 'loot') {
           // 素材与服务端 module/api/statistics_service.py 的 loot 分支对齐：
-          // 上面收益卡片（金菜/彩图纸 + 今日/本月/选定月份总计）、中间收获明细、
+          // 上面收益卡片（指定掉落物品 + 今日/本月/选定月份总计）、中间收获明细、
           // 下面掉落记录，最后是原有的短猫按侵蚀等级的收益汇总。
           const items = [
             ['PlateGeneralT4', '通用部件T4', '金', 8, 5],
@@ -822,7 +822,20 @@ export function createMockState({ empty = false } = {}) {
             ['GearDesignPlanTorpedoT5', '鱼雷研发图纸UR型', '彩', 0, 0],
             ['GearDesignPlanAntiAirT5', '防空炮研发图纸UR型', '彩', 0, 0],
             ['GearDesignPlanPlaneT5', '舰载机研发图纸UR型', '彩', 1, 1],
-            ['GearDesignPlanT5', '装备研发图纸UR型', '彩', 1, 1]
+            ['GearDesignPlanT5', '装备研发图纸UR型', '彩', 1, 1],
+            ['GearDesignPlanGunT4', '舰炮研发图纸SSR型', '金', 7, 4],
+            ['GearDesignPlanTorpedoT4', '鱼雷研发图纸SSR型', '金', 5, 3],
+            ['GearDesignPlanAntiAirT4', '防空炮研发图纸SSR型', '金', 6, 4],
+            ['GearDesignPlanPlaneT4', '舰载机研发图纸SSR型', '金', 4, 2],
+            ['Ultra_High_Purity_Metals', '特种钢材', '金', 14, 8],
+            ['Military_Grade_Electronic_Components', '军工级电子元件', '金', 12, 7],
+            ['HBX_Blend_Gunpowder', 'HBX炸药', '金', 11, 6],
+            ['High_Durability_Elastomers', '氟橡胶', '金', 10, 5],
+            ['Superconductive_Metals', '超导铜', '金', 13, 7],
+            ['Corrosion_Resistant_Alloys', '钛合金', '金', 9, 5],
+            ['OrdnanceTestingReportT4', '机密实验计划', '金', 3, 3],
+            ['OrdnanceTestingReportT5', '绝密实验计划', '彩', 1, 1],
+            ['PrototypeGearPartsT5', '特装型突破部件', '彩', 2, 2]
           ]
           const empty = name === 'demo-alt'
           result.taskOptions = [
@@ -836,28 +849,28 @@ export function createMockState({ empty = false } = {}) {
           const detail = {
             title: '大世界掉落明细',
             columns: ['图标', '物品', '稀有度', '总收益', '掉落记录数', '平均每次掉落'],
-            note: '暂时只统计金菜（通用/主炮/鱼雷/防空炮/舰载机 部件T4）与彩图纸（舰炮/鱼雷/防空炮/舰载机 研发图纸UR型）；其他物品照常入库，只是不在这里展示。',
+            note: '统计金菜（部件T4）、装备研发图纸SSR/UR型、六种金色研发材料、机密/绝密实验计划及特装型突破部件；其他物品照常入库，只是不在这里展示。',
             defaultSort: { index: 3, descending: true },
             rows: empty ? [] : items.map(([key, zh, rarity, amount, count]) => [
-              `opsi:${key}`, zh, rarity, amount || null, count || null, count ? 1.6 : null
+              `opsi:${key}`, zh, rarity, amount || null, count || null, count ? Math.round(amount / count * 10) / 10 : null
             ])
           }
           result.metrics = empty ? [] : [
             { label: '掉落记录', value: 21, unit: '次' },
             ...items.map(([key, zh, , amount]) => ({ label: zh, value: amount || null, unit: '', icon: `opsi:${key}` })),
             { label: '今日总计', value: 7, unit: '' },
-            { label: '本月总计', value: 33, unit: '' },
-            { label: '选定月份总计', value: 33, unit: '' }
+            { label: '本月总计', value: items.reduce((total, item) => total + item[3], 0), unit: '' },
+            { label: '选定月份总计', value: items.reduce((total, item) => total + item[3], 0), unit: '' }
           ]
           result.tables = empty ? [detail] : [
             detail,
             {
               title: '掉落记录',
               columns: ['时间', '任务', '海域', '掉落物'],
-              note: '按时间倒序；只列掉了金菜或彩图纸的记录，其余掉落不入这张表。',
+              note: '按时间倒序；只列含上述统计物品的掉落记录，其余掉落不入这张表。',
               defaultSort: { index: 0, descending: true },
               rows: [
-                ['2026-09-25 08:00:00', '月度Boss', '月度Boss海域', '装备研发图纸UR型 x1'],
+                ['2026-09-25 08:00:00', '月度Boss', '月度Boss海域', '机密实验计划 x1、绝密实验计划 x1、特装型突破部件 x1、特种钢材 x2、装备研发图纸UR型 x1'],
                 ['2026-09-25 07:58:28', '耄耋相接', '危险海域 Mediterranee A（侵蚀5）', '鱼雷部件T4 x1'],
                 ['2026-09-25 07:30:33', '耄耋相接', '危险海域 Mediterranee A（侵蚀5）', '舰载机研发图纸UR型 x1、通用部件T4 x1、主炮部件T4 x1'],
                 ['2026-09-23 12:04:51', '塞壬要塞', '要塞海域 East Continental Shelf E（侵蚀3）', '通用部件T4 x4、主炮部件T4 x1、鱼雷部件T4 x1、防空炮部件T4 x1、舰载机部件T4 x1']
