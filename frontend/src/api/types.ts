@@ -132,6 +132,8 @@ export interface BackgroundGalleryEntry {
 }
 
 export interface Results {
+  'stock.status': StockExchangeStatus
+  'stock.request': {status:number;data:unknown;etag:string;serverTime:number}
   'opsi.simulator.status': OpsiSimulatorStatus
   'opsi.simulator.start': OpsiSimulatorStatus
   'opsi.simulator.stop': OpsiSimulatorStatus
@@ -187,6 +189,8 @@ export interface Results {
   'startup.get': {enabled: boolean; remember: boolean}
   'startup.set': {enabled: boolean; remember: boolean}
 }
+
+export interface StockExchangeStatus {url: string; instance:string; instanceId:string; bindingKey:string; bound: boolean; boundUsername:string; authenticated:boolean; message: string; lastObservedAt: number; snapshot: {instance: string; actionPoints: number; observedAt: number} | null}
 
 export interface AccountStatus {
   destroyed?: boolean
