@@ -1311,25 +1311,30 @@ class Cl1Database:
 
             self._save_stats_in_connection(conn, instance, month, data)
 
-    def increment_meow_akashi_encounter(self, instance: str, hazard_level: int):
-        """记录一次耄耋相接明石事件（按侵蚀等级拆分）。
+    def increment_meow_akashi_encounter(
+        self, instance: str, hazard_level: int, month: Optional[str] = None,
+    ) -> Optional[int]:
+        """提交一次耄耋相接明石事件，返回该侵蚀等级的实际累计次数。
 
         Args:
             instance: 实例名称
             hazard_level: 侵蚀等级（2-6）
+            month: 事件发生月份；不传时使用当前月份。
         """
         if hazard_level not in {2, 3, 4, 5, 6}:
             logger.debug(f"Invalid hazard_level {hazard_level}, ignoring")
             return
 
-        month = datetime.now().strftime("%Y-%m")
+        month = month or datetime.now().strftime("%Y-%m")
         with self._stats_transaction() as conn:
             data = self._get_stats_in_connection(conn, instance, month)
             hazard_stats = self._normalize_meow_hazard_stats(data)
             bucket = self._ensure_meow_hazard_bucket(hazard_stats, hazard_level)
             bucket["akashi_encounters"] = bucket.get("akashi_encounters", 0) + 1
+            count = bucket["akashi_encounters"]
             data["meow_hazard_stats"] = hazard_stats
             self._save_stats_in_connection(conn, instance, month, data)
+        return count
 
     def add_meow_akashi_ap(self, instance: str, hazard_level: int, amount: int):
         """记录耄耋相接明石商店购买的体力（按侵蚀等级拆分）。
@@ -1650,12 +1655,14 @@ class Cl1Database:
             self.add_siren_research_device, instance, source, hazard_level
         )
 
-    def async_increment_meow_akashi_encounter(self, instance: str, hazard_level: int):
+    def async_increment_meow_akashi_encounter(
+        self, instance: str, hazard_level: int, month: Optional[str] = None,
+    ):
         """异步增加短猫相接明石遭遇计数。"""
         from module.base.async_executor import async_executor
 
         return async_executor.submit(
-            self.increment_meow_akashi_encounter, instance, hazard_level
+            self.increment_meow_akashi_encounter, instance, hazard_level, month
         )
 
     def async_add_meow_akashi_ap(self, instance: str, hazard_level: int, amount: int):

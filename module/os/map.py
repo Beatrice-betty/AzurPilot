@@ -1009,7 +1009,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
         unlock_check_timer = Timer(5, count=10).start()
         self.ash_popup_canceled = False
         self._os_auto_search_started = False
-        confirm_cl1_start = self.config.task.command == "OpsiHazard1Leveling"
+        confirm_search_start = self.config.task.command in ("OpsiHazard1Leveling", "OpsiMeowfficerFarming")
 
         def false_func(*args, **kwargs):
             return False
@@ -1057,7 +1057,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
                 elif self.appear(AUTO_SEARCH_OS_MAP_OPTION_ON, offset=(5, 120)):
                     unlock_checked = True
 
-            if confirm_cl1_start and not self._os_auto_search_started and self.match_template_color(
+            if confirm_search_start and not self._os_auto_search_started and self.match_template_color(
                 AUTO_SEARCH_OS_MAP_OPTION_ON, offset=(5, 120)
             ):
                 # 只把本次守护循环已确认开启后的奖励当作正常收尾。

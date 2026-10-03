@@ -189,6 +189,10 @@ class OpsiHazard1Leveling(CoinTaskMixin, OSMap):
             "OS_ACTION_POINT_PRESERVE", self.config.OS_ACTION_POINT_PRESERVE
         )
 
+        fresh_ap = self._prepare_scheduling_action_point(
+            fresh_ap, cost=120, avoid_ap_overflow=True,
+        )
+
         # 获取当前区域
         try:
             self.get_current_zone()
@@ -273,6 +277,8 @@ class OpsiHazard1Leveling(CoinTaskMixin, OSMap):
             logger.info("[大世界-侵蚀1练级] 目标等级为 0，跳过")
             return
 
+        # 到期的练度检查需要进入舰队界面，不能带着决策面板导航。
+        self._close_scheduling_action_point()
         logger.attr("[大世界-侵蚀1练级] 待检查舰队", self.config.OpsiFleet_Fleet)
         
         enable_custom_check = self.config.OpsiCheckLeveling_EnableCustomCheck

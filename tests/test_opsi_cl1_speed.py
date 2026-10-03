@@ -1,4 +1,4 @@
-"""使用虚拟时钟和画面状态验证侵蚀1提速，不连接真实游戏。"""
+"""使用虚拟时钟验证大世界剧情及侵蚀1、短猫交互提速，不连接真实游戏。"""
 
 import unittest
 from types import SimpleNamespace
@@ -8,6 +8,7 @@ from module.base.base import ModuleBase
 from module.base.timer import Timer
 from module.exception import CampaignEnd, GameTooManyClickError
 from module.handler.assets import STORY_SKIP_3
+from module.handler.info_handler import InfoHandler
 from module.os.fleet import OSFleet
 from module.os.map import OSMap
 from module.os_handler.assets import (
@@ -40,7 +41,7 @@ class FastStoryStub(StoryHandlerStub, MapEventHandler):
         self.story_popup_timeout = Timer(10)
 
 
-class TestFastCl1Story(unittest.TestCase):
+class TestFastWorldStory(unittest.TestCase):
     def setUp(self):
         self.clock = VirtualClock()
         self.time_patch = patch('module.base.timer.time', self.clock)
@@ -106,20 +107,19 @@ class TestFastCl1Story(unittest.TestCase):
         self.assertEqual(handler.device.count_of('STORY_SKIP'), 1)
         self.assertEqual(handler.device.count_of('POPUP_CONFIRM_STORY_SKIP'), 1)
 
-    def test_other_task_restores_configured_blank_click_after_cl1_skip(self):
+    def test_switching_world_tasks_keeps_skip_and_fast_cadence(self):
         handler = FastStoryStub(options=[])
         with patch.object(STORY_SKIP_3, 'match', return_value=True):
             handler.story_skip()
             self.clock.now += 0.35
             self.assertTrue(handler.story_skip())
             handler.config.task.command = 'OpsiMeowfficerFarming'
-            self.assertFalse(handler.story_skip())
             self.clock.now += 0.35
             self.assertFalse(handler.story_skip())
             self.clock.now += 0.35
             self.assertTrue(handler.story_skip())
-        self.assertEqual(handler.device.count_of('STORY_SKIP'), 1)
-        self.assertEqual(handler.device.count_of('CLICK_SAFE_AREA'), 1)
+        self.assertEqual(handler.device.count_of('STORY_SKIP'), 2)
+        self.assertEqual(handler.device.count_of('CLICK_SAFE_AREA'), 0)
         self.assertFalse(handler.config.STORY_ALLOW_SKIP)
 
     def test_enabled_skip_uses_skip_button_with_fast_cadence(self):
@@ -136,15 +136,42 @@ class TestFastCl1Story(unittest.TestCase):
         self.assertEqual(handler.device.count_of('STORY_SKIP'), 2)
         self.assertEqual(handler.device.count_of('CLICK_SAFE_AREA'), 0)
 
-    def test_other_task_restores_original_cadence(self):
-        handler = FastStoryStub(options=[])
+    def test_all_world_tasks_use_skip_without_mutating_global_config(self):
+        for command in ('OpsiExplore', 'OpsiObscure', 'OpsiAbyssal', 'OpsiStronghold', 'OpsiMeowfficerFarming'):
+            with self.subTest(command=command):
+                handler = FastStoryStub(options=[])
+                handler.config.task.command = command
+                with patch.object(STORY_SKIP_3, 'match', return_value=True):
+                    self.assertFalse(handler.story_skip())
+                    self.clock.now += 0.35
+                    self.assertTrue(handler.story_skip())
+                self.assertEqual(handler.device.history, ['STORY_SKIP'])
+                self.assertFalse(handler.config.STORY_ALLOW_SKIP)
+
+    def test_explicit_abyssal_choice_keeps_first_option(self):
+        handler = FastStoryStub(options=make_options())
+        handler.config.task.command = 'OpsiAbyssal'
+        handler.config.STORY_OPTION = 0
         with patch.object(STORY_SKIP_3, 'match', return_value=True):
-            handler.story_skip()
-            self.assertEqual(handler._story_option_timer.limit, 0.5)
-            handler.config.task.command = 'OpsiAbyssal'
-            handler.story_skip()
-        self.assertEqual(handler._story_option_timer.limit, 2)
-        self.assertEqual(handler._story_confirm.limit, 0.5)
+            self.assertFalse(handler.story_skip())
+            self.clock.now += 0.35
+            self.assertTrue(handler.story_skip())
+        self.assertEqual(handler.device.history, ['STORY_OPTION_1_OF_3'])
+
+    def test_generic_story_handler_keeps_original_config_and_interval(self):
+        handler = FastStoryStub(options=[])
+        handler._story_confirm = Timer(0.5, count=1).start()
+        with patch.object(STORY_SKIP_3, 'match', return_value=True):
+            self.assertFalse(InfoHandler.story_skip(handler))
+            self.clock.now += 0.35
+            self.assertFalse(InfoHandler.story_skip(handler))
+            self.clock.now += 0.35
+            self.assertTrue(InfoHandler.story_skip(handler))
+            self.clock.now += 0.6
+            self.assertFalse(InfoHandler.story_skip(handler))
+        self.assertEqual(handler.device.count_of('STORY_SKIP'), 0)
+        self.assertEqual(handler.device.count_of('CLICK_SAFE_AREA'), 1)
+        self.assertEqual(handler.interval_timer['STORY_SKIP_3'].limit, 2)
 
     def test_pending_option_record_does_not_skip_fresh_confirmation(self):
         handler = FastStoryStub(options=make_options())
@@ -163,10 +190,11 @@ class TestFastCl1Story(unittest.TestCase):
 
 
 class TestCl1RewardCompletion(unittest.TestCase):
-    @staticmethod
-    def make_handler(command='OpsiHazard1Leveling'):
+    command = 'OpsiHazard1Leveling'
+
+    def make_handler(self, command=None):
         handler = MapEventHandler.__new__(MapEventHandler)
-        handler.config = SimpleNamespace(task=SimpleNamespace(command=command))
+        handler.config = SimpleNamespace(task=SimpleNamespace(command=command or self.command))
         handler.device = Mock()
         handler.match_template_color = Mock(return_value=False)
         handler.appear = Mock(return_value=True)
@@ -191,7 +219,7 @@ class TestCl1RewardCompletion(unittest.TestCase):
         handler = OSMap.__new__(OSMap)
         handler.config = SimpleNamespace(
             OpsiGeneral_AutoSearchTimeLimit=1,
-            task=SimpleNamespace(command='OpsiHazard1Leveling'),
+            task=SimpleNamespace(command=self.command),
         )
         handler.device = Mock()
         handler.on_auto_search_battle_count_reset = Mock()
@@ -224,7 +252,7 @@ class TestCl1RewardCompletion(unittest.TestCase):
                 self.assertTrue(handler.handle_os_auto_search_map_option(enable=enable))
 
     def test_other_tasks_keep_original_path(self):
-        handler = self.make_handler('OpsiMeowfficerFarming')
+        handler = self.make_handler('OpsiExplore')
         self.assertTrue(handler.handle_os_auto_search_map_option())
 
     def test_meta_interruption_still_resumes_from_outer_search_loop(self):
@@ -244,6 +272,10 @@ class TestCl1RewardCompletion(unittest.TestCase):
         handler.os_auto_search_daemon = daemon
         handler.os_auto_search_run()
         self.assertEqual(len(calls), 2)
+
+
+class TestMeowRewardCompletion(TestCl1RewardCompletion):
+    command = 'OpsiMeowfficerFarming'
 
 
 class AutoSearchStateStub(MapEventHandler):
@@ -266,9 +298,12 @@ class AutoSearchStateStub(MapEventHandler):
 
 
 class TestCl1AutoSearchRetry(unittest.TestCase):
+    command = 'OpsiHazard1Leveling'
+
     def setUp(self):
         self.clock = VirtualClock()
         self.handler = AutoSearchStateStub()
+        self.handler.config.task.command = self.command
         time_patch = patch('module.base.timer.time', self.clock)
         time_patch.start()
         self.addCleanup(time_patch.stop)
@@ -335,6 +370,7 @@ class TestCl1AutoSearchRetry(unittest.TestCase):
         ):
             with self.subTest(first=first.name):
                 self.handler = AutoSearchStateStub()
+                self.handler.config.task.command = self.command
                 self.handler.state = first
                 self.handler.get_interval_timer(second, interval=3).reset()
                 self.assertTrue(self.handler.handle_os_auto_search_map_option())
@@ -349,7 +385,7 @@ class TestCl1AutoSearchRetry(unittest.TestCase):
                 )
 
     def test_other_task_keeps_three_second_retry(self):
-        self.handler.config.task.command = 'OpsiMeowfficerFarming'
+        self.handler.config.task.command = 'OpsiExplore'
         self.assertTrue(self.handler.handle_os_auto_search_map_option())
         self.clock.now += 0.6
         self.assertFalse(self.handler.handle_os_auto_search_map_option())
@@ -367,6 +403,10 @@ class TestCl1AutoSearchRetry(unittest.TestCase):
     def test_uncertain_search_does_not_restart(self):
         self.assertFalse(self.handler.handle_os_auto_search_map_option(enable=None))
         self.handler.device.click.assert_not_called()
+
+
+class TestMeowAutoSearchRetry(TestCl1AutoSearchRetry):
+    command = 'OpsiMeowfficerFarming'
 
 
 class WalkStateStub(OSFleet):
@@ -416,6 +456,8 @@ class WalkStateStub(OSFleet):
 
 
 class TestCl1EventWalkConfirmation(unittest.TestCase):
+    command = 'OpsiHazard1Leveling'
+
     def setUp(self):
         self.clock = VirtualClock()
         self.time_patch = patch('module.base.timer.time', self.clock)
@@ -425,29 +467,33 @@ class TestCl1EventWalkConfirmation(unittest.TestCase):
     def run_wait(self, handler, duration=3.9):
         return handler.wait_until_walk_stable(confirm_timer=Timer(duration, count=4))
 
+    def make_handler(self, **kwargs):
+        kwargs.setdefault('command', self.command)
+        return WalkStateStub(self.clock, **kwargs)
+
     def test_shop_return_uses_short_stability_confirmation(self):
-        handler = WalkStateStub(self.clock, shop=True)
+        handler = self.make_handler(shop=True)
         self.assertIn('akashi', self.run_wait(handler))
         self.assertLess(self.clock.now, 101.5)
         handler.handle_akashi_supply_buy.assert_called_once()
 
     def test_initial_travel_without_event_keeps_original_wait(self):
-        handler = WalkStateStub(self.clock)
+        handler = self.make_handler()
         self.run_wait(handler)
         self.assertGreater(self.clock.now, 103.9)
 
     def test_other_task_shop_return_keeps_original_wait(self):
-        handler = WalkStateStub(self.clock, shop=True, command='OpsiMeowfficerFarming')
+        handler = self.make_handler(shop=True, command='OpsiExplore')
         self.run_wait(handler)
         self.assertGreater(self.clock.now, 103.9)
 
     def test_resource_selection_can_return_to_auto_search_promptly(self):
-        handler = WalkStateStub(self.clock, events={0: 'story_skip'}, resource=True)
+        handler = self.make_handler(events={0: 'story_skip'}, resource=True)
         self.run_wait(handler, duration=3)
         self.assertLess(self.clock.now, 101.5)
 
     def test_enemy_device_selection_keeps_original_walk_confirmation(self):
-        handler = WalkStateStub(self.clock)
+        handler = self.make_handler()
 
         def enemy_event(**kwargs):
             if handler.frame == 0:
@@ -461,17 +507,21 @@ class TestCl1EventWalkConfirmation(unittest.TestCase):
         self.assertGreater(self.clock.now, 103.9)
 
     def test_old_resource_flag_does_not_shorten_unrelated_story_wait(self):
-        handler = WalkStateStub(self.clock, events={0: 'story_skip'})
+        handler = self.make_handler(events={0: 'story_skip'})
         handler.is_siren_device_confirmed = True
         handler.siren_device_mode = 'resource'
         self.run_wait(handler)
         self.assertGreater(self.clock.now, 103.9)
 
     def test_information_device_waits_for_second_dialogue_and_reward(self):
-        handler = WalkStateStub(self.clock, events={0: 'story_skip', 3: 'story_skip', 9: 'map_get_items'})
+        handler = self.make_handler(events={0: 'story_skip', 3: 'story_skip', 9: 'map_get_items'})
         self.run_wait(handler, duration=3)
         self.assertGreaterEqual(handler.frame, 9)
         self.assertLess(self.clock.now, 104.7)
+
+
+class TestMeowEventWalkConfirmation(TestCl1EventWalkConfirmation):
+    command = 'OpsiMeowfficerFarming'
 
 
 if __name__ == '__main__':

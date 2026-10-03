@@ -273,6 +273,8 @@ class OpsiMeowfficerFarming(MeowfficerTargetZoneMixin, CoinTaskMixin, OSMap):
         self.get_current_zone()
         if self.zone.zone_id != zone.zone_id or not self.is_zone_name_hidden:
             self.globe_goto(zone, types='SAFE', refresh=True)
+            # 换海域会消耗行动力，开工检查必须重新读取。
+            fresh_ap = None
 
         # 智能调度+ 代跑时决策读刚读过行动力：达到开工线时弹窗只会
         # 读数再关掉，复用它跳过；不足 120 时仍需弹窗开箱/购买。
@@ -454,6 +456,7 @@ class OpsiMeowfficerFarming(MeowfficerTargetZoneMixin, CoinTaskMixin, OSMap):
             self._meow_target_checked = True
             if self.config.SERVER in ['cn', 'jp']:
                 if hasattr(self, '_os_target'):
+                    self._close_scheduling_action_point()
                     self._os_target()
             else:
                 logger.info(f'服务器 {self.config.SERVER} 暂不支持海域成就，请联系开发者')
@@ -512,7 +515,20 @@ class OpsiMeowfficerFarming(MeowfficerTargetZoneMixin, CoinTaskMixin, OSMap):
             if preserve is None:
                 return ap_checked
 
+        if not ap_checked:
+            self._close_scheduling_action_point()
         ap_checked = self._meow_ap_check(preserve, ap_checked)
+
+        if getattr(self, '_scheduling_ap_panel_open', False):
+            target_zones = getattr(self, '_meow_target_zone_list', [])
+            if self.config.OpsiMeowfficerFarming_StayInZone and len(target_zones) == 1 \
+                    and getattr(getattr(self, 'zone', None), 'zone_id', None) == target_zones[0].zone_id \
+                    and self.is_zone_name_hidden:
+                # 已在单个指定安全海域时，首读面板可直接完成本轮开工补充。
+                fresh_ap = self._prepare_scheduling_action_point(fresh_ap, cost=120)
+            else:
+                # 换图、多海域或传统模式先关闭面板，沿各自的进入海域流程补充。
+                self._close_scheduling_action_point()
 
         # ===== 传统目标海域模式 =====
         traditional_zone = getattr(self, '_meow_traditional_zone', None)

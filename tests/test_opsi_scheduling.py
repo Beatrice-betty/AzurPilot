@@ -1087,7 +1087,8 @@ class TestMeowStayInZoneFreshActionPoint(unittest.TestCase):
             OpsiFleet_Submarine=False,
             check_task_switch=Mock(),
         )
-        runner.zone = SimpleNamespace(zone_id=999)
+        runner.zone = SimpleNamespace(zone_id=1)
+        runner.is_zone_name_hidden = True
         return runner
 
     def run_zone(self, runner, fresh_ap):
@@ -1124,3 +1125,8 @@ class TestMeowStayInZoneFreshActionPoint(unittest.TestCase):
     def test_keeps_popup_without_fresh_read(self):
         runner = self.make_runner()
         self.run_zone(runner, fresh_ap=None).assert_called_once()
+
+    def test_zone_change_invalidates_fresh_action_point(self):
+        runner = self.make_runner()
+        runner.zone = SimpleNamespace(zone_id=999)
+        self.run_zone(runner, fresh_ap=(2381, 131)).assert_called_once()

@@ -83,6 +83,7 @@ class SmartExploreMixin:
         # 实际导航或购买异常仍由上层统一恢复；只在正常退出港口后记为完成。
         state = dict(reset=reset, phase='buying')
         self._set_smart_scheduling_state_value('ActionPointPurchase', state)
+        self._close_scheduling_action_point()
         logger.hr('智能调度：本月一次性购买港口全部行动力', level=1)
         self.handle_first_auto_search(run=False)
         self._run_with_opsi_task_context(
@@ -109,6 +110,7 @@ class SmartExploreMixin:
             raise RequestHumanTakeover(f'智能开荒海域 {zone} 连续三次未完成，请检查解锁条件和事件')
         state = dict(state, attempts=state['attempts'] + 1)
         self._save_smart_explore_state(state)
+        self._close_scheduling_action_point()
         self.handle_first_auto_search(run=False)
         try:
             with self.config.temporary(OS_ACTION_POINT_PRESERVE=0):
