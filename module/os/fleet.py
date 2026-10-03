@@ -456,7 +456,9 @@ class OSFleet(OSCamera, Combat, Fleet, OSAsh):
         # 记录剧情历史以清除点击记录
         clicked_story = False
         clicked_story_count = 0
-        fast_cl1 = getattr(getattr(self.config, 'task', None), 'command', None) == 'OpsiHazard1Leveling'
+        fast_farming = getattr(getattr(self.config, 'task', None), 'command', None) in (
+            'OpsiHazard1Leveling', 'OpsiMeowfficerFarming',
+        )
         siren_confirmed = bool(getattr(self, 'is_siren_device_confirmed', False))
 
         confirm_timer.reset()
@@ -477,7 +479,7 @@ class OSFleet(OSCamera, Combat, Fleet, OSAsh):
                     clicked_story = True
                     clicked_story_count += 1
                     confirmed = bool(getattr(self, 'is_siren_device_confirmed', False))
-                    if fast_cl1 and confirmed and not siren_confirmed \
+                    if fast_farming and confirmed and not siren_confirmed \
                             and getattr(self, 'siren_device_mode', None) == 'resource':
                         # 探测资源选项已经提交，返回地图后只确认镜头稳定，随即交给自律拾取。
                         confirm_timer = Timer(0.8, count=2).start()
@@ -498,7 +500,7 @@ class OSFleet(OSCamera, Combat, Fleet, OSAsh):
                         logger.info('[大世界-剧情] 从剧情获得物品')
                         self.device.click_record_clear()
                         clicked_story = False
-                        if fast_cl1:
+                        if fast_farming:
                             # 信息装置先等后续选项和奖励出现，领奖后才缩短收尾确认。
                             confirm_timer = Timer(0.8, count=2).start()
                             record = None
@@ -557,7 +559,7 @@ class OSFleet(OSCamera, Combat, Fleet, OSAsh):
             if self.appear(PORT_SUPPLY_CHECK, offset=(20, 20)):
                 self.interval_clear(PORT_SUPPLY_CHECK)
                 self.handle_akashi_supply_buy(CLICK_SAFE_AREA)
-                if fast_cl1:
+                if fast_farming:
                     # 商店退出已确认返回地图，原先按路程计算的到达时间不再适用。
                     confirm_timer = Timer(0.8, count=2).start()
                     record = None

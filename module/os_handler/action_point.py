@@ -500,7 +500,8 @@ class ActionPointHandler(UI, MapEventHandler):
         # 已正向确认弹窗关闭；下一次有意打开无需继承上一次的3秒重试冷却。
         self.interval_clear(OS_CHECK)
 
-    def handle_action_point(self, zone, pinned, cost=None, keep_current_ap=True, check_rest_ap=False, avoid_ap_overflow=False):
+    def handle_action_point(self, zone, pinned, cost=None, keep_current_ap=True, check_rest_ap=False,
+                            avoid_ap_overflow=False, *, skip_first_read=False):
         """
         处理行动力，包括购买和使用药剂。
 
@@ -514,6 +515,8 @@ class ActionPointHandler(UI, MapEventHandler):
                 当前行动力达到 100 即直接开工、不开启行动力箱（100-119 区间
                 不再等待自然恢复，也不开 100 箱造成溢出）；低于 100 时开箱后
                 达到或超过 200 满值的箱子不开启。
+            skip_first_read (bool): 已在同一面板安全读取过行动力时复用首读。
+                只省略操作前的重复读取，购买或开箱后的实际读数仍须刷新。
 
         Returns:
             bool: 是否处理成功。
@@ -528,7 +531,8 @@ class ActionPointHandler(UI, MapEventHandler):
             return False
 
         # 行动力药剂有显示动画
-        self.action_point_safe_get()
+        if not skip_first_read:
+            self.action_point_safe_get()
         if cost is None:
             cost = self.action_point_get_cost(zone, pinned)
         buy_checked = False

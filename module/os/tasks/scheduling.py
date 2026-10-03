@@ -39,6 +39,7 @@ from module.config.utils import (
     get_os_reset_remain_days,
 )
 
+from module.exception import GameStuckError, GameTooManyClickError, RequestHumanTakeover
 from module.logger import logger
 from module.os.map import OSMap
 from module.os.tasks.task_context import TaskDelayRequest, current_opsi_context, opsi_task_context
@@ -118,6 +119,55 @@ class CoinTaskMixin:
         TASK_NAME_OBSCURE: STATE_KEY_OBSCURE_CLEARED_AT,
         TASK_NAME_ABYSSAL: STATE_KEY_ABYSSAL_CLEARED_AT,
     }
+
+    def _close_scheduling_action_point(self):
+        """结束本轮决策暂留的行动力面板，不影响普通任务自己的弹窗。
+
+        Pages:
+            in: ACTION_POINT_USE（本轮决策暂留时）
+            out: page_os
+        """
+        if getattr(self, '_scheduling_ap_panel_open', False):
+            self._scheduling_ap_panel_open = False
+            self.action_point_quit()
+
+    def _prepare_scheduling_action_point(self, fresh_ap, *, cost, avoid_ap_overflow=False):
+        """确定子任务后，在决策首读的同一面板补充行动力并返回新读数。
+
+        调用前须绑定子任务配置并设置其行动力保留值，期间不能有地图操作。
+        面板未保留时直接沿用传入读数，供子任务走原来的开工检查。
+
+        Args:
+            fresh_ap (tuple[int, int] | None): 本轮首读的总行动力和当前行动力。
+            cost (int): 子任务开工检查所需行动力。
+            avoid_ap_overflow (bool): 是否按侵蚀1的 100 开工线处理。
+
+        Returns:
+            tuple[int, int] | None: 补充后的实际读数或未保留面板时的传入读数。
+
+        Pages:
+            in: ACTION_POINT_USE（本轮决策暂留时）
+            out: page_os
+        """
+        if not getattr(self, '_scheduling_ap_panel_open', False):
+            return fresh_ap
+        self._scheduling_ap_panel_open = False
+        if not self._is_in_action_point():
+            return None
+        same_box_use = self._scheduling_ap_box_use == self.config.OS_ACTION_POINT_BOX_USE
+        if same_box_use and self.action_point_reusable(fresh_ap, cost, avoid_ap_overflow):
+            self.action_point_quit()
+            return fresh_ap
+
+        logger.info('[大世界-智能调度+] 在首次读取的行动力面板内完成开工补充')
+        if not self.handle_action_point(
+            zone=None, pinned=None, cost=cost, keep_current_ap=True,
+            check_rest_ap=True, avoid_ap_overflow=avoid_ap_overflow,
+            skip_first_read=same_box_use,
+        ):
+            self.action_point_quit()
+            return None
+        return (int(self._action_point_total), int(self._action_point_current))
 
     def _config_enabled(self, keys, default=False):
         """严格读取布尔配置，兼容 WebUI checkbox 历史值 [] / [True]。
@@ -950,6 +1000,8 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
         Returns:
             Any: func 的调用返回值。
         """
+        if task_name not in (self.TASK_NAME_HAZARD1_LEVELING, self.TASK_NAME_MEOWFFICER_FARMING):
+            self._close_scheduling_action_point()
         task = self._make_opsi_task_function(task_name)
         disable_task_switch = task_name not in (
             self.TASK_NAME_HAZARD1_LEVELING,
@@ -960,15 +1012,27 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
         ):
             return func(*args, **kwargs)
 
-    def _get_scheduling_action_point(self):
+    def _get_scheduling_action_point(self, *, keep_open=False):
         """读取智能调度+决策所需的行动力。
+
+        Args:
+            keep_open (bool): 决策期间保留面板，确定子任务后合并开工补充。
 
         Returns:
             tuple[int, int]: (总行动力, 当前真实行动力)。
+
+        Pages:
+            in: page_os
+            out: keep_open=True 时为 ACTION_POINT_USE，否则为 page_os。
         """
+        self._close_scheduling_action_point()
         self.action_point_enter()
         self.action_point_safe_get()
-        self.action_point_quit()
+        if keep_open:
+            self._scheduling_ap_panel_open = True
+            self._scheduling_ap_box_use = self.config.OS_ACTION_POINT_BOX_USE
+        else:
+            self.action_point_quit()
         self.check_and_notify_action_point_threshold()
         return (
             int(getattr(self, '_action_point_total', 0) or 0),
@@ -1029,6 +1093,7 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
             logger.info("智能调度+跳过初始化自律寻敌")
             return
 
+        self._close_scheduling_action_point()
         self.run_first_auto_search()
 
     def _handle_smart_scheduling_no_task(self, yellow_coins, total_ap, current_ap, coin_target, meow_ap_preserve):
@@ -1182,7 +1247,18 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
             return
 
         yellow_coins = self.get_yellow_coins()
-        total_ap, current_ap = self._get_scheduling_action_point()
+        try:
+            total_ap, current_ap = self._get_scheduling_action_point(keep_open=True)
+            return self._run_smart_scheduling_decision(yellow_coins, total_ap, current_ap)
+        except (GameStuckError, GameTooManyClickError, RequestHumanTakeover):
+            # 已进入设备恢复流程，不再追加界面操作干扰原异常。
+            self._scheduling_ap_panel_open = False
+            raise
+        finally:
+            self._close_scheduling_action_point()
+
+    def _run_smart_scheduling_decision(self, yellow_coins, total_ap, current_ap):
+        """使用首读行动力作决策，面板在实际地图操作前关闭或合并补充。"""
         coin_target_scheduling = self._is_coin_target_scheduling_enabled()
         self._sync_smart_scheduling_mode_state(coin_target_scheduling)
 
@@ -1697,6 +1773,7 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
             total_ap (int): 当前总行动力。
             current_ap (int): 当前真实行动力。
         """
+        self._close_scheduling_action_point()
         logger.hr('大世界-月末清理行动力', level=2)
         logger.info(
             f'[大世界-月末清理] 开始清理: 黄币={yellow_coins}, '
