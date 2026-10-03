@@ -276,7 +276,7 @@ class OpsiMeowfficerFarming(MeowfficerTargetZoneMixin, CoinTaskMixin, OSMap):
             # 换海域会消耗行动力，开工检查必须重新读取。
             fresh_ap = None
 
-        # 智能调度+ 代跑时决策读刚读过行动力：达到开工线时弹窗只会
+        # 智能调度代跑时决策读刚读过行动力：达到开工线时弹窗只会
         # 读数再关掉，复用它跳过；不足 120 时仍需弹窗开箱/购买。
         if self.action_point_reusable(fresh_ap, cost=120):
             _fresh_total, _fresh_current = fresh_ap
@@ -448,7 +448,7 @@ class OpsiMeowfficerFarming(MeowfficerTargetZoneMixin, CoinTaskMixin, OSMap):
                 self.config.task_stop()
 
         if self.is_in_opsi_explore():
-            logger.warning(f'[大世界-耄耋相接] 每月开荒+正在运行，无法执行 {self.config.task.command}')
+            logger.warning(f'[大世界-耄耋相接] 每月开荒正在运行，无法执行 {self.config.task.command}')
             self.delay_opsi_active_task(server_update=True)
             self.config.task_stop()
 
@@ -497,7 +497,7 @@ class OpsiMeowfficerFarming(MeowfficerTargetZoneMixin, CoinTaskMixin, OSMap):
             prepared (bool): 是否已完成运行环境准备。
             fresh_ap (tuple[int, int] | None): 调用方刚读到的
                 (总行动力, 当前行动力)；仅在读数与本次调用之间没有任何
-                行动力消耗时传入（智能调度+ 决策读），供开工检查复用。
+                行动力消耗时传入（智能调度决策读），供开工检查复用。
 
         Returns:
             bool: 最新的行动力检查状态标志。

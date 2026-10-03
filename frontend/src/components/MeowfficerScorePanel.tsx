@@ -158,7 +158,7 @@ export function MeowfficerScoreList({report}: {report: MeowfficerScoreReport}) {
 }
 
 /**
- * 「工具Plus → 指挥喵评分」的结果面板。
+ * 「工具 → 指挥喵评分」的结果面板。
  *
  * 报告按机器共享一份，未跑过任务时后端返回 NOT_FOUND，这里显示空状态而不是错误。
  */

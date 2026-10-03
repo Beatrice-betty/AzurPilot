@@ -53,7 +53,7 @@ class OpsiShop(OSMap):
     def perform_port_shop_purchase(self, action_point_only=False):
         """执行一次港口商店购买流程，不包含任务延迟和停止逻辑。
 
-        供 os_shop 和智能调度+月末清理共用。前往最近友方港口，
+        供 os_shop 和智能调度月末清理共用。前往最近友方港口，
         进入商店购买所有补给，购买完成后退出港口。
 
         Args:

@@ -1,4 +1,4 @@
-# 大世界智能调度+流程图
+# 大世界智能调度流程图
 
 本图依据当前 `module/os/tasks/scheduling.py`、`smart_explore.py`、`prevent_action_point_overflow.py` 和 `task_context.py` 的实际实现。用于核对现有行为与预期；数值示例是演示值，不读取真实账号配置。
 
