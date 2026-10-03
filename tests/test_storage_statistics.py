@@ -15,8 +15,8 @@ import numpy as np
 from module.base.utils import load_image
 from module.exception import StorageStatisticsError
 from module.statistics.storage_snapshot import get_storage_timeline, latest_snapshot, save_snapshot
-from module.storage.statistics_recognition import (StorageCatalog, StorageRecognitionError,
-    StorageTraversal, detect_rows, recognize_rows, same_row)
+from module.storage.statistics_recognition import (StorageCard, StorageCatalog, StorageRecognitionError,
+    StorageTraversal, detect_rows, recognize_rows, same_card, same_row)
 
 FIXTURES = Path(__file__).parent / 'fixtures/storage_statistics'
 
@@ -59,6 +59,59 @@ class RecognitionTests(unittest.TestCase):
         self.assertEqual([(card.identifier, card.amount) for row in rows for card in row if card.identifier],
                          [('CognitiveChips', 32791), ('CognitiveChipsII', 1204)])
         self.assertTrue(all(65 <= card.area[1] and card.area[3] < 637 for row in rows for card in row))
+
+    def test_live_scroll_and_rainbow_animation_preserve_unique_overlap(self):
+        before, after = [recognize_rows(load_image(str(FIXTURES / name)), self.catalog)
+                         for name in ['live_scroll_start.png', 'live_scroll_overlap.png']]
+        self.assertTrue(same_row(before[-1], after[0]))
+        self.assertFalse(same_row(before[1], after[0]))
+        scan = StorageTraversal()
+        scan.append(before)
+        scan.append(after)
+        self.assertEqual(len(scan.rows), 5)
+        self.assertEqual(scan.rows[3][1].amount, 153)
+
+    def test_live_glowing_item_remains_the_same_card(self):
+        first, second = [StorageCard((0, 0, 128, 128), load_image(str(FIXTURES / f'live_glow_{n}.png')))
+                         for n in [1, 2]]
+        self.assertTrue(same_card(first, second))
+        other = detect_rows(self.images[0])[0][0]
+        self.assertFalse(same_card(first, other))
+
+    def test_unknown_blueprints_match_across_subpixel_scroll_but_remain_distinct(self):
+        samples = load_image(str(FIXTURES / 'live_subpixel_rows.png'))
+        rows = [[StorageCard((column * 128, row * 128, (column + 1) * 128, (row + 1) * 128),
+                             samples[row * 128:(row + 1) * 128, column * 128:(column + 1) * 128])
+                 for column in range(7)] for row in range(2)]
+        self.assertTrue(same_row(*rows))
+        self.assertFalse(same_row(rows[0], list(reversed(rows[1]))))
+        for first, a in enumerate(rows[0]):
+            for second, b in enumerate(rows[1]):
+                with self.subTest(first=first, second=second):
+                    self.assertEqual(same_card(a, b), first == second)
+
+    def test_live_antialiased_amount_and_erased_digit(self):
+        icon = load_image(str(FIXTURES / 'live_amount_46.png'))
+        self.assertEqual(self.catalog.read_amount(icon), 46)
+        icon[103:115, 96:108] = (32, 36, 50)
+        with self.assertRaises(StorageRecognitionError):
+            self.catalog.read_amount(icon)
+
+    def test_live_five_digit_quantity_and_additional_glyph_phases(self):
+        for amount in [10598, 9657]:
+            with self.subTest(amount=amount):
+                icon = load_image(str(FIXTURES / f'live_amount_{amount}.png'))
+                self.assertEqual(self.catalog.read_amount(icon), amount)
+
+    def test_native_scrolled_digit_samples_keep_every_digit(self):
+        samples = load_image(str(FIXTURES / 'live_digits.png'))
+        cases = json.loads((FIXTURES / 'live_digits.json').read_text(encoding='utf-8'))
+        for case in cases:
+            with self.subTest(row=case['row'], item=case['id']):
+                icon = np.zeros((128, 128, 3), dtype=np.uint8)
+                start = case['row'] * 27
+                icon[99:126, 25:127] = samples[start:start + 27]
+                self.assertEqual(self.catalog.read_amount(icon), case['amount'])
 
     def test_vertical_scroll_offset_and_clipped_rows(self):
         image = self.images[3].copy()
@@ -252,6 +305,7 @@ class InventoryDevice:
         self.position = .37
         self.length = round(572 / len(self.content) * 472)
         self.swipes = []
+        self.click_record_clear = Mock()
         self.screenshot()
 
     def screenshot(self):
@@ -270,6 +324,9 @@ class InventoryDevice:
             self.position = min(1., max(0., self.position + (start[1] - end[1]) / (len(self.content) - 572)))
         else:
             self.position = min(1., max(0., (end[1] - 104 - self.length / 2) / (472 - self.length)))
+
+    def drag(self, start, end, **kwargs):
+        self.swipe(start, end, **kwargs)
 
 
 class ObstructedInventoryDevice(InventoryDevice):
@@ -324,7 +381,7 @@ class TaskTests(unittest.TestCase):
         from module.storage.statistics import StorageStatistics
         self.module = __import__('module.storage.statistics', fromlist=['StorageStatistics'])
         self.task = StorageStatistics.__new__(StorageStatistics)
-        self.task.config = SimpleNamespace(config_name='test', task_delay=Mock())
+        self.task.config = SimpleNamespace(config_name='test', task_delay=Mock(), Emulator_ControlMethod='MaaTouch')
         self.task.device = InventoryDevice()
         self.task.ui_goto_storage = Mock()
         self.task._storage_enter_material = Mock()
@@ -351,6 +408,7 @@ class TaskTests(unittest.TestCase):
                          {item['id']: item['amount'] for item in expected})
         self.assertGreater(snapshot['pages'], 4)
         self.assertGreater(len(self.task.device.swipes), 4)
+        self.assertEqual(self.task.device.click_record_clear.call_count, snapshot['pages'])
         self.task.config.task_delay.assert_called_once_with(success=True)
 
     def test_failed_second_pass_does_not_write_a_snapshot(self):
@@ -367,6 +425,16 @@ class TaskTests(unittest.TestCase):
             self.task.run()
         self.assertFalse(self.path.exists())
         self.task.config.task_delay.assert_called_once_with(success=False)
+
+    def test_adb_scan_avoids_drag_fallback_clicks_and_preserves_all_items(self):
+        self.task.config.Emulator_ControlMethod = 'ADB'
+        self.task.device.drag = Mock(side_effect=AssertionError('不支持拖拽的后端不能触发点击回退'))
+        self.task.run()
+        self.task.device.drag.assert_not_called()
+        snapshot = latest_snapshot('test', database=self.path)
+        expected = json.loads((FIXTURES / 'expected.json').read_text(encoding='utf-8'))
+        self.assertEqual({item['id']: item['amount'] for item in snapshot['items']},
+                         {item['id']: item['amount'] for item in expected})
 
     def test_obstructed_rows_recover_in_both_directions_without_missing_items(self):
         self.task.device = ObstructedInventoryDevice()
@@ -388,6 +456,7 @@ class TaskTests(unittest.TestCase):
                 self.task.run()
         nudges = [start for start, _ in self.task.device.swipes if start[0] < 1235]
         self.assertEqual(len(nudges), 4)
+        self.task.device.click_record_clear.assert_not_called()
         self.assertEqual(before, self.path.read_bytes())
 
     def test_changing_scrollbar_and_transient_material_marker_do_not_stall(self):
