@@ -159,7 +159,7 @@ class GetItems(ImageBase):
         Returns:
             bool: 是否为获得物品弹窗。
         """
-        return bool(self.classify_server(GET_ITEMS_1, image)) or bool(self.classify_server(GET_ITEMS_2, image))
+        return any(self.classify_server(button, image) for button in (GET_ITEMS_1, GET_ITEMS_2, GET_ITEMS_3))
 
     def parse_get_items(self, image, name=True, amount=True, tag=True) -> t.Iterator[Item]:
         """解析单张获得物品截图中的所有掉落道具。

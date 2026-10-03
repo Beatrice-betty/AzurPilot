@@ -1,5 +1,25 @@
 import { expect, test } from '@playwright/test'
 
+test('大世界掉落缺图回退领奖模板并显示月度Boss筛选', async ({page}) => {
+  await page.emulateMedia({reducedMotion: 'reduce'})
+  await page.addInitScript(() => {
+    localStorage.setItem('azurpilot.theme', 'light')
+    localStorage.setItem('azurpilot.statistics', JSON.stringify({category: 'loot'}))
+  })
+  await page.goto('/#/i/demo-main/statistics')
+  const detail = page.locator('.statistics-table').filter({has: page.getByRole('heading', {name: '大世界掉落明细', exact: true})})
+  await expect(detail).toBeVisible()
+  const plan = detail.getByRole('row').filter({hasText: '装备研发图纸UR型'})
+  await expect(plan).toContainText('1')
+  const icons = page.locator('img[src$="opsi-items/GearDesignPlanT5.png"]')
+  await expect(icons).toHaveCount(2)
+  await expect.poll(() => icons.evaluateAll(images => images.every(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0))).toBe(true)
+  await page.getByRole('combobox', {name: '任务', exact: true}).click()
+  await expect(page.getByRole('option', {name: '月度Boss（1）', exact: true})).toBeVisible()
+  await page.keyboard.press('Escape')
+  await page.screenshot({path: 'test-results/opsi-drop-template-fallback.png', fullPage: true, animations: 'disabled'})
+})
+
 test('任务分组目录重复点击保持在同一栏目', async ({page}) => {
   await page.emulateMedia({reducedMotion: 'reduce'})
   await page.addInitScript(() => localStorage.setItem('azurpilot.theme', 'light'))

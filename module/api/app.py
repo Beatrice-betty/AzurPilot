@@ -19,7 +19,7 @@ from module.api.config_service import ConfigService, ROOT
 from module.api.router import Router
 from module.api.runtime_service import RuntimeService
 from module.api.socket import Gateway
-from module.api.static import FrontendFiles
+from module.api.static import FrontendFiles, ItemTemplateFiles
 from module.logger import logger
 from module.runtime.password_utils import ensure_password_for_host, is_demo_mode
 from module.runtime.setting import State
@@ -167,13 +167,15 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
     # 科研掉落的物品图标直接用仓库里的模板图，不走前端构建，
     # 这样补了新模板立刻生效，不用重新 npm build。
     research_items = root / 'assets' / 'stats' / 'research_items'
-    if research_items.is_dir():
-        routes.append(Mount('/research-items', StaticFiles(directory=research_items)))
-    # 大世界掉落的物品图标同理。opsi_reward_items 是模板库的超集
-    # （opsi_items 的每个模板名这里都有），挂一个目录就够。
+    research_templates = [research_items, root / 'assets' / 'stats_basic']
+    if any(directory.is_dir() for directory in research_templates):
+        routes.append(Mount('/research-items', ItemTemplateFiles(research_templates)))
+    # 自律结算与领奖弹窗的模板并不互相包含（如通用装备研发图纸只在弹窗库里）。
+    # 优先使用结算图标，缺失时按同名模板回退。
     opsi_items = root / 'assets' / 'stats' / 'opsi_reward_items'
-    if opsi_items.is_dir():
-        routes.append(Mount('/opsi-items', StaticFiles(directory=opsi_items)))
+    opsi_templates = [opsi_items, root / 'assets' / 'stats' / 'opsi_items']
+    if any(directory.is_dir() for directory in opsi_templates):
+        routes.append(Mount('/opsi-items', ItemTemplateFiles(opsi_templates)))
     if mount_mcp:
         from mcp_server_sse import configure_auth
         from mcp_server_sse import create_app as create_mcp_app

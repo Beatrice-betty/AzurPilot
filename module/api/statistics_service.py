@@ -499,10 +499,10 @@ def report(configs, instance: str, category: str, month: str, days: int, period:
         record_columns = ['时间', '任务', '海域', '掉落物']
         title = '大世界掉落明细'
         note = ('暂时只统计金菜（通用/主炮/鱼雷/防空炮/舰载机 部件T4）与彩图纸'
-                '（舰炮/鱼雷/防空炮/舰载机 研发图纸UR型）；其他物品照常入库，只是不在这里展示。'
+                '（舰炮/鱼雷/防空炮/舰载机及通用装备研发图纸UR型）；其他物品照常入库，只是不在这里展示。'
                 '统计在任务跑完解析掉落时完成：把该任务的「掉落截图」设为保存或上传均可'
                 '（两者都统计，区别只是要不要把截图落盘）。')
-        # 任务筛选下拉的数据源：有掉落开关的任务固定列出，其余任务掉了东西才出现
+        # 独立或共用掉落开关的任务始终可选，次数不受当前任务筛选影响。
         result['taskOptions'] = summary['tasks']
         if not summary['record_count']:
             result['tables'].append(table(title, detail_columns, [], note=(

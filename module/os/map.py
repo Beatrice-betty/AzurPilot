@@ -1075,7 +1075,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
                 self.on_auto_search_battle_count_add()
                 stop_event = self.config.stop_event
                 if strategic and stop_event is not None and stop_event.is_set():
-                    self.interrupt_auto_search()
+                    self.interrupt_auto_search(drop=drop)
                 elif (
                     strategic
                     and not getattr(self.config, '_disable_task_switch', False)
@@ -1084,9 +1084,9 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
                     if self.config.task.command == "OpsiMeowfficerFarming":
                         logger.info("[大世界-搜索] 短时指挥喵搜索运行中，延迟任务切换直到搜索完成")
                     else:
-                        self.interrupt_auto_search()
+                        self.interrupt_auto_search(drop=drop)
                 if interrupt_confirm:
-                    self.interrupt_auto_search(goto_main=False)
+                    self.interrupt_auto_search(goto_main=False, drop=drop)
                 result = self.auto_search_combat(drop=drop)
                 if result:
                     finished_combat += 1
@@ -1101,7 +1101,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
                         auto_search_time_limit_timer.reset()
                         continue
                 auto_search_time_limit_timer.reset()
-            if self.handle_map_event():
+            if self.handle_map_event(drop=drop):
                 # 自动搜索无法处理塞壬搜索装置。
                 auto_search_time_limit_timer.reset()
                 continue
@@ -1111,13 +1111,14 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
         return finished_combat
 
     def interrupt_auto_search(
-        self, goto_main=True, end_task=True, skip_first_screenshot=True
+        self, goto_main=True, end_task=True, skip_first_screenshot=True, drop=None
     ):
         """
         中断自动搜索。
 
         Args:
             goto_main (bool): 是否跳转到主页面。
+            drop (DropImage, optional): 保留中断自律时结算的奖励。
 
         Raises:
             TaskEnd: 自动搜索中断时抛出。
@@ -1147,7 +1148,10 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
                     self.config.task_stop()
                 return
 
-            if self.appear_then_click(AUTO_SEARCH_REWARD, offset=(50, 50), interval=3):
+            if self.appear(AUTO_SEARCH_REWARD, offset=(50, 50), interval=3):
+                if drop:
+                    drop.add(self.device.image)
+                self.device.click(AUTO_SEARCH_REWARD)
                 self.interval_clear(GOTO_MAIN)
                 in_main_timer.reset()
                 in_map_timer.reset()
@@ -1180,7 +1184,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
                 continue
             if self.ui_additional():
                 continue
-            if self.handle_map_event():
+            if self.handle_map_event(drop=drop):
                 continue
             # 仅在检测到时打印一次
             if not is_loading:
@@ -1515,7 +1519,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
         return False
 
     def run_auto_search(
-        self, question=True, rescan=None, after_auto_search=True, interrupt=None
+        self, question=True, rescan=None, after_auto_search=True, interrupt=None, exit_map=False
     ):
         """
         通过运行自律寻敌清理当前海域。需要先完成大世界剧情模式才能解锁自律寻敌。
@@ -1529,9 +1533,14 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
                 在 OpsiObscure、OpsiAbyssal、OpsiStronghold 等特殊任务中应禁用此选项。
             after_auto_search (bool): 自动搜索后是否调用 handle_after_auto_search()。
             interrupt (callable): 中断回调函数。
+            exit_map (bool): 清理后在同一掉落记录内退出特殊海域，包含退出时的奖励。
 
         Returns:
             int: 完成的战斗次数。
+
+        Pages:
+            in: IN_MAP, 当前海域。
+            out: IN_MAP, exit_map=True 时返回来源海域，否则留在当前海域。
         """
         if rescan is None:
             rescan = self.config.OpsiGeneral_DoRandomMapEvent
@@ -1575,6 +1584,9 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
             if rescan:
                 self.map_rescan(rescan_mode=rescan, drop=drop)
 
+            if exit_map:
+                self.map_exit(drop=drop)
+
             if drop.count <= 1:
                 drop.clear()
 
@@ -1608,7 +1620,8 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
             try:
                 combat = self.os_auto_search_run(drop, strategic=True)
                 drop.set_combat_count(combat)
-                drop.add(self.device.image)
+                if drop.count:
+                    drop.add(self.device.image)
                 self.hp_reset()
                 self.hp_get()
                 return True
@@ -1624,9 +1637,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
                 logger.warning(f"[大世界-搜索] 策略搜索中断: {e}")
                 return False
             finally:
-                if drop.count <= 1:
-                    drop.clear()
-
+                # 中断时可能只来得及记录一张奖励，没有地图帧仍应交给解析器保留。
                 drop.set_combat_count(self._auto_search_battle_count)
 
     def map_rescan_current(self, drop=None, clicked_grids=None):

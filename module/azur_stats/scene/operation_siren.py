@@ -15,6 +15,7 @@ from module.azur_stats.image.opsi_zone import OpsiZone, DataOpsiZone
 from module.azur_stats.scene.base import SceneBase
 from module.logger import logger
 from module.base.decorator import cached_property
+from module.statistics.utils import ImageError
 
 # 上限限制的是单格掉落；多格、多帧的同类材料仍按实数累加。
 OPSI_AMOUNT_MAX = {
@@ -124,24 +125,19 @@ class SceneOperationSiren(SceneBase, OpsiReward, GetItems, OpsiZone):
         for index, image in enumerate(self.images):
             if index == cleared:
                 continue
-            elif index < cleared:
+            try:
+                # 领奖前后的标签口径保持一致；单张奖励帧不可解析时仍保留同包其他奖励。
+                after_cleared = index > cleared
                 if self.is_get_items(image):
                     items = self.parse_get_items(image)
-                    for item in self._operation_siren_product(zone, items):
+                    for item in self._operation_siren_product(zone, items, tag='log' if after_cleared else None):
                         yield item
                 if self.is_opsi_reward(image):
                     items = self.parse_auto_search_reward(image)
-                    for item in self._operation_siren_product(zone, items):
+                    for item in self._operation_siren_product(zone, items, tag='scan' if after_cleared else None):
                         yield item
-            elif index > cleared:
-                if self.is_get_items(image):
-                    items = self.parse_get_items(image)
-                    for item in self._operation_siren_product(zone, items, tag='log'):
-                        yield item
-                if self.is_opsi_reward(image):
-                    items = self.parse_auto_search_reward(image)
-                    for item in self._operation_siren_product(zone, items, tag='scan'):
-                        yield item
+            except ImageError as error:
+                logger.warning(f'[统计-大世界] 奖励截图第 {index + 1} 帧无法解析，保留其他帧: {error}')
 
     def _operation_siren_product(self, zone: DataOpsiZone, items: t.Iterable[AutoSearchItem], tag: str = None) \
             -> t.Iterable[DataOpsiItems]:

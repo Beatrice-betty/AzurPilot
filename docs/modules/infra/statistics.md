@@ -125,6 +125,10 @@ module/log_res/
 | `AzurStats` | `is_opsi_drop_genre()` | 判定某个 genre 是否要解析入库：大世界任务都算，唯侵蚀1练级除外（它的收益在「大世界总结」页看） |
 | `AzurStats` | `load_opsi_drop_rows()` | 按实例/时间窗口/任务读明细，供 `opsi_drop_stats.collect()` 汇总；任务范围直接由上面那套常量生成 |
 
+大世界采集必须把同一个 `DropImage` 传入自律守护的地图事件、`interrupt_auto_search(drop=...)` 和 `map_exit(drop=...)`。隐秘海域使用 `run_auto_search(exit_map=True)`，将退出时的奖励一起提交；深渊与月度 Boss 在 `boss_clear()` 内退出。`SceneOperationSiren` 接收三种获得道具布局；单帧出现信息栏遮挡等 `ImageError` 时只跳过该帧，保留同包其他奖励。海域 OCR 失败不丢物品，展示可根据独立任务确定来源类型，但不猜海域编号或侵蚀等级。
+
+统计页仍按金菜（部件 T4）与彩图纸（研发图纸 T5，包括通用装备研发图纸）展示。独立或共用掉落开关的任务始终可筛选；任务次数取完整时间窗口，筛选仅影响收获明细。窗口内没有这两类物品的奖励不显示在掉落记录表。`/opsi-items/` 先查 `opsi_reward_items`，缺图时回退到 `opsi_items` 同名模板；`/research-items/` 先查 `research_items`，再查 `stats_basic`。图标回退只影响展示，不改变识别模板选择。
+
 ### CL1 月度库（cl1_database.py）
 
 `cl1_data` 表以 `(instance, month)` 为主键，`data_json` 存整月快照。快照内的关键字段：
@@ -279,7 +283,7 @@ stateDiagram-v2
 | `Alas.Error.LlmApiKey/LlmApiBase/LlmModel` | str | "" | 日报 LLM 配置（与错误上报共用） |
 | `Alas.Error.OnePushConfig` | str | "" | 推送通道配置 |
 
-关联关系：日报的 LLM 与推送配置刻意复用 `Error` 组，避免两套密钥；掉落记录各场景开关决定 `DropImage.save/local`，而 `LOCAL_GENRES` 判定让大世界记录里耄耋相接（`OpsiMeowfficerFarming`）的 `upload` 档位对接本地解析，其余大世界任务选 `upload` 不落盘也不解析。日报线程不持有完整配置对象——`alas.py` 只传 `SimpleNamespace` 快照并按配置文件 mtime 热读，避免与任务线程争用配置对象。
+关联关系：日报的 LLM 与推送配置刻意复用 `Error` 组，避免两套密钥；掉落记录各场景开关决定 `DropImage.save/local`。除侵蚀1练级外，大世界任务的 `save` / `upload` / `save_and_upload` 均本地解析，`do_not` 不统计。日报线程不持有完整配置对象——`alas.py` 只传 `SimpleNamespace` 快照并按配置文件 mtime 热读，避免与任务线程争用配置对象。
 
 ## 11. 异常与错误处理
 
@@ -357,7 +361,7 @@ CL1 库的兼容性迁移是自动的：启动时把旧位置 `log/cl1/cl1_data.
 
 ## 17. 已知限制
 
-- `AzurStats` 的远程上传路径已废弃（类 docstring 自述），`upload` 语义名不副实，仅对 `opsi_meowfficer_farming` 表示本地解析。
+- `AzurStats` 的远程上传路径已废弃；大世界 `upload` 表示本地解析、不保存截图，侵蚀1练级除外。
 - `AzurStats.get_meow_loot_monthly_totals` / `get_meow_loot_available_months` 目前在仓库内没有调用方，属于预留接口。
 - 委托收益条目没有「已检查但零结算」的心跳记录，日报侧只能把空列表标为 `available=False` 而非零收益（`commission_income_stats` 有注释说明）。
 - 遥测域名 `ApiClient.PRIMARY_DOMAIN` 与 `FALLBACK_DOMAIN` 当前相同，故障转移实际未生效。

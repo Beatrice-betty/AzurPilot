@@ -134,8 +134,7 @@ class OpsiCrossMonth(MeowfficerTargetZoneMixin, OSMap):
                 self.os_order_execute(
                     recon_scan=True,
                     submarine_call=False)
-                self.run_auto_search(rescan='current')
-                self.map_exit()
+                self.run_auto_search(rescan='current', exit_map=True)
                 self.handle_after_auto_search()
             else:
                 break

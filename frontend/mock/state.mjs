@@ -804,7 +804,8 @@ export function createMockState({ empty = false } = {}) {
             ['GearDesignPlanGunT5', '舰炮研发图纸UR型', '彩', 0, 0],
             ['GearDesignPlanTorpedoT5', '鱼雷研发图纸UR型', '彩', 0, 0],
             ['GearDesignPlanAntiAirT5', '防空炮研发图纸UR型', '彩', 0, 0],
-            ['GearDesignPlanPlaneT5', '舰载机研发图纸UR型', '彩', 1, 1]
+            ['GearDesignPlanPlaneT5', '舰载机研发图纸UR型', '彩', 1, 1],
+            ['GearDesignPlanT5', '装备研发图纸UR型', '彩', 1, 1]
           ]
           const empty = name === 'demo-alt'
           result.taskOptions = [
@@ -812,6 +813,7 @@ export function createMockState({ empty = false } = {}) {
             { key: 'opsi_obscure', label: '隐秘海域', count: 0 },
             { key: 'opsi_abyssal', label: '深渊坐标', count: 0 },
             { key: 'opsi_stronghold', label: '塞壬要塞', count: empty ? 0 : 1 },
+            { key: 'opsi_month_boss', label: '月度Boss', count: empty ? 0 : 1 },
             { key: 'opsi_meowfficer_farming', label: '耄耋相接', count: empty ? 0 : 19 }
           ]
           const detail = {
@@ -824,11 +826,11 @@ export function createMockState({ empty = false } = {}) {
             ])
           }
           result.metrics = empty ? [] : [
-            { label: '掉落记录', value: 20, unit: '次' },
+            { label: '掉落记录', value: 21, unit: '次' },
             ...items.map(([key, zh, , amount]) => ({ label: zh, value: amount || null, unit: '', icon: `opsi:${key}` })),
             { label: '今日总计', value: 7, unit: '' },
-            { label: '本月总计', value: 32, unit: '' },
-            { label: '选定月份总计', value: 32, unit: '' }
+            { label: '本月总计', value: 33, unit: '' },
+            { label: '选定月份总计', value: 33, unit: '' }
           ]
           result.tables = empty ? [detail] : [
             detail,
@@ -838,6 +840,7 @@ export function createMockState({ empty = false } = {}) {
               note: '按时间倒序；只列掉了金菜或彩图纸的记录，其余掉落不入这张表。',
               defaultSort: { index: 0, descending: true },
               rows: [
+                ['2026-09-25 08:00:00', '月度Boss', '月度Boss海域', '装备研发图纸UR型 x1'],
                 ['2026-09-25 07:58:28', '耄耋相接', '危险海域 Mediterranee A（侵蚀5）', '鱼雷部件T4 x1'],
                 ['2026-09-25 07:30:33', '耄耋相接', '危险海域 Mediterranee A（侵蚀5）', '舰载机研发图纸UR型 x1、通用部件T4 x1、主炮部件T4 x1'],
                 ['2026-09-23 12:04:51', '塞壬要塞', '要塞海域 East Continental Shelf E（侵蚀3）', '通用部件T4 x4、主炮部件T4 x1、鱼雷部件T4 x1、防空炮部件T4 x1、舰载机部件T4 x1']
