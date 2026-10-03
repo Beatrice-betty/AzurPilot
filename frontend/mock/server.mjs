@@ -11,6 +11,7 @@ import { createMockState, fail } from './state.mjs'
 const ICON_DIRS = {
   '/research-items/': ['../../assets/stats/research_items/', '../../assets/stats_basic/'].map(relative => fileURLToPath(new URL(relative, import.meta.url))),
   '/opsi-items/': ['../../assets/stats/opsi_reward_items/', '../../assets/stats/opsi_items/'].map(relative => fileURLToPath(new URL(relative, import.meta.url))),
+  '/storage-items/': [fileURLToPath(new URL('../../assets/stats/', import.meta.url))],
 }
 
 async function readIcon(directories, name) {
@@ -29,8 +30,9 @@ export function createMockServer({password = '', empty = false} = {}) {
   const server = createServer((request, response) => {
     const iconPrefix = Object.keys(ICON_DIRS).find(prefix => request.url?.startsWith(prefix))
     if (iconPrefix) {
-      // basename 挡住 ../ 之类的越权路径，只认目录里的单层文件名
-      const name = path.basename(decodeURIComponent(request.url))
+      // 仓库图标允许模板子目录，由 readIcon 检查目录边界。
+      const relative = decodeURIComponent(request.url).slice(iconPrefix.length)
+      const name = iconPrefix === '/storage-items/' ? relative : path.basename(relative)
       if (name.endsWith('.png')) {
         readIcon(ICON_DIRS[iconPrefix], name).then(buffer => {
           response.setHeader('Content-Type', 'image/png')

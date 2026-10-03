@@ -9,6 +9,7 @@ const read = path => JSON.parse(readFileSync(new URL(path, import.meta.url), 'ut
 const args = read('../../module/config/argument/args.json')
 const menu = read('../../module/config/argument/menu.json')
 const template = read('../../config/template.json')
+const storageCatalog = read('../../assets/stats/storage_items/catalog.json')
 const contract = read('../src/api/contract.json')
 const locales = Object.fromEntries(['zh-CN', 'zh-TW', 'en-US', 'ja-JP', 'zh-MIAO'].map(lang => [lang, read(`../../module/config/i18n/${lang}.json`)]))
 const ajv = new Ajv({ strict: false, useDefaults: true })
@@ -617,7 +618,7 @@ export function createMockState({ empty = false } = {}) {
       case 'overview.get': return overview(name)
       case 'scheduler.start': case 'tasks.run':
         if (get(name).status === 'running') fail('INSTANCE_RUNNING', '实例已在运行')
-        if (method === 'tasks.run' && params.task !== 'FleetScan' && !Object.values(menu).some(group => group.page === 'tool' && group.tasks.includes(params.task))) fail('INVALID_PARAMS', '该任务不支持单独运行')
+        if (method === 'tasks.run' && !['FleetScan', 'StorageStatistics'].includes(params.task) && !Object.values(menu).some(group => group.page === 'tool' && group.tasks.includes(params.task))) fail('INVALID_PARAMS', '该任务不支持单独运行')
         get(name).status = 'running'; log(name, '模拟调度器已启动。')
         return overview(name)
       case 'scheduler.stop':
@@ -716,7 +717,15 @@ export function createMockState({ empty = false } = {}) {
           key, label, points: makePoints(res, params.days)
         }))
         const result = { instance: name, category: params.category, month: params.month, metrics: [], series: [], tables: [], notes: [] }
-        if (params.category === 'resources') {
+        if (params.category === 'storage') {
+          result.notes = [name === 'demo-alt' ? '尚未运行仓库统计任务。' : '最近完整扫描：2026-10-03 00:00:00；复核 12 页。', '刷新只读取已有快照，运行仓库统计任务后才更新数量。']
+          const quantities = [153, 46, 20, 46, 58, 1, 13393, 9873, 881, 497, 1659, 1266, 1628, 745, 5015, 3584, 3785, 5634, 4230, 5297, 699, 859, 884, 753, 767]
+          result.tables = [{title: '仓库物品', note: result.notes.join(' '), columns: ['图标', '物品', '分类', '数量', '状态'],
+            rows: storageCatalog.items.map((item, index) => [
+              'storage:' + item.templates[0].replace('assets/stats/', '').replace('.png', ''),
+              item.name, item.group, name === 'demo-alt' ? null : quantities[index], name === 'demo-alt' ? '未扫描' : '已复核',
+            ])}]
+        } else if (params.category === 'resources') {
           result.series = reportSeries([
             ['oil', '石油', 'Oil'], ['coin', '物资', 'Coin'], ['gem', '钻石', 'Gem'], ['cube', '心智魔方', 'Cube'],
             ['pt', '活动 PT', 'Pt'], ['core', '核心数据', 'Core'], ['medal', '荣誉勋章', 'Medal'],

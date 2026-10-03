@@ -55,6 +55,11 @@ def get_statistics_fingerprint(instance: str) -> str:
     except OSError:
         parts.append("ship:none")
 
+    try:
+        stat = os.stat('./config/storage_statistics.db')
+        parts.append(f'storage:{stat.st_mtime_ns}:{stat.st_size}')
+    except OSError:
+        parts.append('storage:none')
     return ';'.join(parts)
 
 
@@ -223,7 +228,7 @@ def report(configs, instance: str, category: str, month: str, days: int, period:
     Args:
         configs: 配置管理服务实例。
         instance: 实例名称。
-        category: 统计分类（resources, opsi, action, commission, ships, research, loot）。
+        category: 统计分类（resources, opsi, action, commission, ships, research, loot, storage）。
         month: 目标月份，格式为 ``YYYY-MM``。
         days: 趋势查询天数。
         period: 汇总周期（day, week, month）。
@@ -255,6 +260,30 @@ def report(configs, instance: str, category: str, month: str, days: int, period:
             # 前端按 icon 找图标，找不到就用 label 查内置表；科研物品写 'research:<模板名>'
             entry['icon'] = icon
         result['metrics'].append(entry)
+
+    if category == 'storage':
+        from pathlib import Path
+        from module.statistics.storage_snapshot import latest_snapshot
+        from module.storage.statistics_recognition import StorageCatalog
+        catalog = StorageCatalog()
+        snapshot = latest_snapshot(instance, database=Path(configs.path(instance)).parent / 'storage_statistics.db')
+        icons = {item['id']: 'storage:' + item['templates'][0].removeprefix('assets/stats/').removesuffix('.png')
+                 for item in catalog.items}
+        if snapshot is None:
+            result['notes'].append('尚未运行仓库统计任务。运行并完成完整扫描后才会更新物品数量。')
+            items = [dict(item, amount=None) for item in catalog.items]
+        else:
+            items = snapshot['items']
+            result['notes'].append(f"最近完整扫描：{snapshot['finished_at']}；服务器：{snapshot['server']}；复核 {snapshot['pages']} 页。")
+            if snapshot['catalog_version'] != catalog.version:
+                result['notes'].append('模板目录已更新，当前显示上次扫描结果，请重新运行仓库统计任务。')
+        result['notes'].append('刷新只读取已有快照；未发现的物品显示“未发现”，不把无法确认的数量当成 0。')
+        result['tables'] = [table('仓库物品', ['图标', '物品', '分类', '数量', '状态'],
+            [[icons.get(item['id'], ''), item['name'], item['group'], item['amount'],
+              '未扫描' if snapshot is None else '已复核' if item['amount'] is not None else '未发现']
+             for item in items])]
+        result['tables'][0]['note'] = ' '.join(result['notes'])
+        return result
 
     if category == 'resources':
         from module.statistics.resource_stats import RESOURCE_COLUMNS, get_resource_timeline

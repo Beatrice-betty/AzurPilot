@@ -176,6 +176,9 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
     opsi_templates = [opsi_items, root / 'assets' / 'stats' / 'opsi_items']
     if any(directory.is_dir() for directory in opsi_templates):
         routes.append(Mount('/opsi-items', ItemTemplateFiles(opsi_templates)))
+    storage_items = root / 'assets' / 'stats'
+    if storage_items.is_dir():
+        routes.append(Mount('/storage-items', StaticFiles(directory=storage_items)))
     if mount_mcp:
         from mcp_server_sse import configure_auth
         from mcp_server_sse import create_app as create_mcp_app

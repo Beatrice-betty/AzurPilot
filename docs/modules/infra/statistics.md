@@ -6,17 +6,28 @@
 
 AzurPilot 在执行任务时天然经过大量战斗结算与资源画面。这些画面里藏着用户关心的数字：打到了什么掉落、练级效率多少、行动力循环是否为正、委托攒了多少钻石。`module/statistics` 及其两个伴生目录就是把这些瞬时画面沉淀为可查数据的统计层。
 
-这一层由三条相对独立的链路组成：
+这一层由四条相对独立的链路组成：
 
 - **掉落统计链路**：战斗结算截图经 `AzurStats` 保存或解析入库。实时侧（`azurstats.py`）在战斗结束的上下文里收集截图；离线侧（`drop_statistics.py`）对历史截图文件夹做批量模板匹配与 OCR，导出 CSV。大世界掉落（除侵蚀1练级外）在「保存」与「上传」两个档位都会解析入库，`opsi_drop_stats.py` 把它们按窗口聚合成「大世界掉落」页的金菜与彩图纸收益。
 - **CL1 统计链路**：`Cl1Database` 按「实例 × 月份」记录大世界侵蚀 1（CL1）与耄耋相接的战斗、明石、行动力等指标；`Cl1DataSubmitter` 把当月汇总匿名化后提交到官方遥测端点。
 - **日报链路**：`DailySummaryStore` 持续采集任务运行与侵蚀 1 战斗事件，`DailySummaryService` 在触发窗口聚合事实、调用 LLM 生成文案并经 OnePush 推送。
+- **仓库快照链路**：独立 `StorageStatistics` 任务进入普通仓库材料页，两次完整扫描一致后，把指定物品数量原子保存到 `config/storage_statistics.db`。统计页面只读最近快照，刷新不启动游戏扫描。
 
 `module/azur_stats/` 是掉落解析的场景层（原远程 AzurStats 上传的遗留名），复用 `module/statistics` 的物品识别原语；`module/log_res/` 则是资源变动的写入口，游戏代码通过属性赋值声明「资源变了」，由它决定写配置还是写快照库。
 
-统计层与调度器共享一个设计前提：**统计永远不能影响游戏调度**。所有落库调用要么被吞异常、要么走异步执行器，写入失败的周期在日报中被标为「数据不完整」而不是让任务中断。
+被动采集的统计不得影响游戏调度：落库失败不应中断正在进行的游戏业务。独立仓库统计则把完整性作为任务成功条件，识别或写入失败时保留旧快照、设置失败间隔并返回任务失败，不为此重启游戏。
 
 ## 2. 模块职责
+
+### 仓库统计任务
+
+入口为 `alas.py::storage_statistics()` → `module/storage/statistics.py`，默认关闭；可从统计页「仓库」分类手动运行，也可启用原生定时任务。任务复用 `StorageUI` 导航到材料页，不打开物品或消耗材料。
+
+`statistics_recognition.py` 从完整方框动态定位物品，结合模板相似度、次优差距和稀有度底色确认身份，原生数量字形逐位读取，并核对末位位置、字高、基线与间距；残缺首位不能被当成噪声删除。每一页稳定复读后，用唯一重叠行拼接，未知物品也参与重叠核对；首末端额外拖过边界并确认滚动条端点，半格留给下一页。到达底部才结束，再从顶部扫描一次。两次物品行和数量全部一致后，`storage_snapshot.save_snapshot()` 在单个 SQLite 事务中提交。
+
+未运行显示「未扫描」，完整扫描未发现的目标显示未知数量，均不能推断为零。扫描或落库失败不会覆盖旧快照；数据库按实例隔离并纳入备份。目录版本包括清单、图标和数量字形，资源变化后旧快照会提示重新运行。
+
+当前模板仅经过国服 1280×720 截图验证。离线验证入口为 `tests/test_storage_statistics.py`；真实模拟器验证需指定实例与任务范围。
 
 ### 负责
 
@@ -52,6 +63,7 @@ module/statistics/
 ├── research_drop.py          # 科研掉落解析（队列页角标读期数 + 收获帧识别）
 ├── research_stats.py         # 科研掉落聚合（按期 / 心智物资两种口径）
 ├── resource_stats.py         # resource_snapshots 快照与区间摘要
+├── storage_snapshot.py       # 独立仓库扫描的完整快照与只读查询
 ├── ship_exp_stats.py         # ShipExpStats：战斗计时与经验效率
 ├── opsi_month.py             # OpsiMonthStats：月度大世界汇总与时间线
 ├── opsi_runtime.py           # 大世界运行期事件 → 落库的集中入口
@@ -322,6 +334,7 @@ stateDiagram-v2
 | --- | --- | --- | --- |
 | `config/azurstats_local.db` | `opsi_items` 掉落明细 + `resource_snapshots` 资源快照 | 每次 commit / LogRes 资源变化 | 不自动清理明细 |
 | `config/cl1_data.db` | CL1 月度统计（instance×month） | 各 `async_*` 方法即时写 | 快照列表内部截断（500/5000 条） |
+| `config/storage_statistics.db` | 按实例保存完整仓库物品快照 | `StorageStatistics` 两次完整扫描一致后原子提交 | 保留已完成扫描 |
 | `config/daily_summary.db` | 日报任务事件、周期状态、采集缺口 | 任务前后、战斗结束、日报流程 | `cleanup()` 保留 35 天 |
 | `log/azurstat_meowofficer_farming.csv` | farming 汇总（可被 dev_tools 直接读取） | 每次本地解析成功后重算 | 覆写 |
 | `log/cl1/<instance>/ship_exp_data.json` | 战斗耗时样本、每日经验、升级进度 | 每场战斗结束 | 样本 100 条 / 日统计 30 天 |

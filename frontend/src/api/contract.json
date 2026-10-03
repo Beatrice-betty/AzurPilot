@@ -1704,7 +1704,8 @@
               "commission",
               "ships",
               "loot",
-              "research"
+              "research",
+              "storage"
             ],
             "title": "Category",
             "type": "string"
