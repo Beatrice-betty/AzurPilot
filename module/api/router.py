@@ -7,6 +7,7 @@ from typing import Callable
 
 from module.api import background_service as background
 from module.api import protocol as p
+from module.api import search_service as search
 from module.runtime.process_manager import ProcessManager
 
 
@@ -47,6 +48,7 @@ class Router:
         self.methods = {
             'system.ping': Method(p.Params, lambda _: {'pong': True}),
             'schema.get': Method(p.SchemaParams, lambda x: configs.schema(x.language)),
+            'search.content': Method(p.SearchContentParams, lambda x: search.search_content(x.query)),
             'instances.list': Method(p.Params, lambda _: runtime.instances()),
             'instances.create': Method(p.CreateParams, lambda x: configs.create(x.name, x.source, x.import_file), True),
             'instances.importable': Method(p.Params, lambda _: configs.importable()),

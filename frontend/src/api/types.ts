@@ -19,6 +19,20 @@ export interface UpdateStatus {
 interface Commit { sha: string; author: string; date: string; message: string }
 export interface CommitHistory { entries: Commit[]; total: number; hasMore: boolean; localHead: string | null; upstreamHead: string | null }
 export interface Field { type: string; value: Value; mode?: string; display?: string; option?: Value[]; validate?: string | number[]; preserve_empty?: boolean }
+/** 侧栏内容检索的一条命中：要么是任务名，要么是某个配置项。 */
+export interface SearchContentHit {
+  task: string
+  key: string
+  label: string
+  help: string
+  values: string
+}
+
+export interface SearchContentResult {
+  tasks: SearchContentHit[]
+  options: SearchContentHit[]
+}
+
 export interface Schema {
   menu: Record<string, { menu: string; page: string; tasks: string[] }>
   args: Record<string, Record<string, Record<string, Field>>>
@@ -148,6 +162,7 @@ export interface Results {
   'auth.login': {authenticated: boolean}
   'events.subscribe': {topics: string[]; instance: string | null}
   'schema.get': Schema
+  'search.content': SearchContentResult
   'instances.list': Instance[]
   'instances.create': Config
   'instances.importable': Array<{name: string; modified: number}>

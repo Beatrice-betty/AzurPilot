@@ -2,6 +2,7 @@
 export interface Parameters {
   "system.ping": Record<string, never>
   "schema.get": { language?: "zh-CN" | "zh-MIAO" | "en-US" | "ja-JP" | "zh-TW" }
+  "search.content": { query: string }
   "instances.list": Record<string, never>
   "instances.create": { name: string; source?: string | null; import_file?: string | null }
   "instances.importable": Record<string, never>
