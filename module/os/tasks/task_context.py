@@ -52,7 +52,7 @@ class OpsiTaskContext:
     """共享配置上的单一代理上下文，嵌套任务沿用防溢出延迟容器。
 
     Attributes:
-        smart_scheduling (bool): 是否处于智能调度+上下文中。
+        smart_scheduling (bool): 是否处于智能调度上下文中。
         overflow (OverflowDelay | None): 防溢出延迟容器。
         parent_task (str | None): 当前代理任务的直接来源，用于区分直接防溢出与嵌套智能调度。
     """

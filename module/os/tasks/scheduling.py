@@ -1,27 +1,27 @@
 """
-OpsiScheduling - 智能调度+模块
+OpsiScheduling - 智能调度模块
 
-智能调度+功能，用于在侵蚀1练级和耄耋相接/其他黄币补充任务之间按代理模式调度。
+智能调度功能，用于在侵蚀1练级和耄耋相接/其他黄币补充任务之间按代理模式调度。
 
 功能说明:
     1. 黄币检查与任务代理 - 当黄币低于保留值时，代理执行黄币补充任务
     2. 行动力阈值推送通知 - 当行动力跨越阈值时发送推送通知
     3. 最低行动力保留检查 - 检查行动力是否低于最低保留值
-    4. 任务智能调度+ - 由 OpsiScheduling 统一代理执行子任务
+    4. 任务智能调度- 由 OpsiScheduling 统一代理执行子任务
 
 任务层级:
     - OpsiScheduling 是和 OpsiHazard1Leveling、OpsiMeowfficerFarming 相同层级的调度器
     - 它负责协调这些任务的执行顺序，并以子任务上下文代理执行
 
 配置项:
-    - Scheduler.Enable: 任务启用开关（启用此任务即启用智能调度+功能）
-    - OperationCoinsPreserve: 智能调度+两种模式共用的黄币保留值
+    - Scheduler.Enable: 任务启用开关（启用此任务即启用智能调度功能）
+    - OperationCoinsPreserve: 智能调度两种模式共用的黄币保留值
     - UseSmartSchedulingOperationCoinsPreserve: 开启时使用黄币目标调度，关闭时使用体力调度
     - OperationCoinsReturnThreshold: 黄币目标调度回到侵蚀1前需要高于保留值的缓冲数量
-    - ActionPointPreserve: 智能调度+补黄币任务的行动力保留值
+    - ActionPointPreserve: 智能调度补黄币任务的行动力保留值
     - ActionPointNotifyLevels: 行动力阈值列表，用于推送通知
 此模块包含:
-    - OpsiScheduling: 智能调度+任务主类
+    - OpsiScheduling: 智能调度任务主类
     - CoinTaskMixin: 黄币补充任务的通用 Mixin 类（供其他任务继承使用）
 """
 import re
@@ -39,6 +39,7 @@ from module.config.utils import (
     get_os_reset_remain_days,
 )
 
+from module.exception import GameStuckError, GameTooManyClickError, RequestHumanTakeover
 from module.logger import logger
 from module.os.map import OSMap
 from module.os.tasks.task_context import TaskDelayRequest, current_opsi_context, opsi_task_context
@@ -73,7 +74,7 @@ class CoinTaskMixin:
     CONFIG_PATH_ENABLE_OBSCURE = 'OpsiScheduling.OpsiScheduling.EnableObscure'
     CONFIG_PATH_ENABLE_ABYSSAL = 'OpsiScheduling.OpsiScheduling.EnableAbyssal'
     CONFIG_PATH_ENABLE_STRONGHOLD = 'OpsiScheduling.OpsiScheduling.EnableStronghold'
-    # 智能调度+新增配置路径
+    # 智能调度新增配置路径
     CONFIG_PATH_USE_SMART_CL1_PRESERVE = 'OpsiScheduling.OpsiScheduling.UseSmartSchedulingOperationCoinsPreserve'
     CONFIG_PATH_SMART_CL1_PRESERVE = 'OpsiScheduling.OpsiScheduling.OperationCoinsPreserve'
     CONFIG_PATH_SMART_AP_PRESERVE = 'OpsiScheduling.OpsiScheduling.ActionPointPreserve'
@@ -119,6 +120,55 @@ class CoinTaskMixin:
         TASK_NAME_ABYSSAL: STATE_KEY_ABYSSAL_CLEARED_AT,
     }
 
+    def _close_scheduling_action_point(self):
+        """结束本轮决策暂留的行动力面板，不影响普通任务自己的弹窗。
+
+        Pages:
+            in: ACTION_POINT_USE（本轮决策暂留时）
+            out: page_os
+        """
+        if getattr(self, '_scheduling_ap_panel_open', False):
+            self._scheduling_ap_panel_open = False
+            self.action_point_quit()
+
+    def _prepare_scheduling_action_point(self, fresh_ap, *, cost, avoid_ap_overflow=False):
+        """确定子任务后，在决策首读的同一面板补充行动力并返回新读数。
+
+        调用前须绑定子任务配置并设置其行动力保留值，期间不能有地图操作。
+        面板未保留时直接沿用传入读数，供子任务走原来的开工检查。
+
+        Args:
+            fresh_ap (tuple[int, int] | None): 本轮首读的总行动力和当前行动力。
+            cost (int): 子任务开工检查所需行动力。
+            avoid_ap_overflow (bool): 是否按侵蚀1的 100 开工线处理。
+
+        Returns:
+            tuple[int, int] | None: 补充后的实际读数或未保留面板时的传入读数。
+
+        Pages:
+            in: ACTION_POINT_USE（本轮决策暂留时）
+            out: page_os
+        """
+        if not getattr(self, '_scheduling_ap_panel_open', False):
+            return fresh_ap
+        self._scheduling_ap_panel_open = False
+        if not self._is_in_action_point():
+            return None
+        same_box_use = self._scheduling_ap_box_use == self.config.OS_ACTION_POINT_BOX_USE
+        if same_box_use and self.action_point_reusable(fresh_ap, cost, avoid_ap_overflow):
+            self.action_point_quit()
+            return fresh_ap
+
+        logger.info('[大世界-智能调度] 在首次读取的行动力面板内完成开工补充')
+        if not self.handle_action_point(
+            zone=None, pinned=None, cost=cost, keep_current_ap=True,
+            check_rest_ap=True, avoid_ap_overflow=avoid_ap_overflow,
+            skip_first_read=same_box_use,
+        ):
+            self.action_point_quit()
+            return None
+        return (int(self._action_point_total), int(self._action_point_current))
+
     def _config_enabled(self, keys, default=False):
         """严格读取布尔配置，兼容 WebUI checkbox 历史值 [] / [True]。
 
@@ -138,7 +188,7 @@ class CoinTaskMixin:
         """判断当前是否由 OpsiScheduling 代执行子任务。
 
         Returns:
-            bool: 若处于智能调度+代理执行中返回 True，否则返回 False。
+            bool: 若处于智能调度代理执行中返回 True，否则返回 False。
         """
         return current_opsi_context(self.config).smart_scheduling
 
@@ -168,7 +218,7 @@ class CoinTaskMixin:
             overflow = current_opsi_context(self.config).overflow
             if overflow is not None:
                 overflow.request = replace(request, task=None)
-                logger.info('[大世界-智能调度+] 已将子任务延迟请求交给防止行动力溢出任务')
+                logger.info('[大世界-智能调度] 已将子任务延迟请求交给防止行动力溢出任务')
                 return
 
             if request.server_update is True:
@@ -176,7 +226,7 @@ class CoinTaskMixin:
                     keys=f'{self.TASK_NAME_SCHEDULING}.Scheduler.ServerUpdate',
                     default='00:00',
                 ))
-            logger.info('[大世界-智能调度+] 将子任务延迟映射到智能调度+任务')
+            logger.info('[大世界-智能调度] 将子任务延迟映射到智能调度任务')
             replace(request, task=self.TASK_NAME_SCHEDULING).apply(self.config)
             return
 
@@ -200,7 +250,7 @@ class CoinTaskMixin:
                 delattr(self.config, key)
 
     def _delay_smart_scheduling_to_server_update(self, reason):
-        """将实际运行智能调度+的任务延迟到服务器刷新。
+        """将实际运行智能调度的任务延迟到服务器刷新。
 
         Args:
             reason (str): 延迟原因描述。
@@ -208,10 +258,10 @@ class CoinTaskMixin:
         self._clear_coin_task_notification_state()
         if self.is_running_prevent_action_point_overflow_task():
             current_opsi_context(self.config).overflow.request = TaskDelayRequest(server_update=True)
-            logger.info(f'[大世界-智能调度+] {reason}，防止行动力溢出任务延迟到服务器刷新')
+            logger.info(f'[大世界-智能调度] {reason}，防止行动力溢出任务延迟到服务器刷新')
             return
 
-        logger.info(f'[大世界-智能调度+] {reason}，智能调度+延迟到服务器刷新')
+        logger.info(f'[大世界-智能调度] {reason}，智能调度延迟到服务器刷新')
         TaskDelayRequest(
             server_update=self.config.cross_get(
                 keys=f'{self.TASK_NAME_SCHEDULING}.Scheduler.ServerUpdate',
@@ -221,7 +271,7 @@ class CoinTaskMixin:
         ).apply(self.config)
 
     def _delay_smart_scheduling_with_minutes(self, reason, minutes):
-        """将实际运行智能调度+的任务延迟指定分钟数。
+        """将实际运行智能调度的任务延迟指定分钟数。
 
         Args:
             reason (str): 延迟原因（用于日志）。
@@ -231,11 +281,11 @@ class CoinTaskMixin:
         if self.is_running_prevent_action_point_overflow_task():
             current_opsi_context(self.config).overflow.request = TaskDelayRequest(minute=minutes)
             logger.info(
-                f'[大世界-智能调度+] {reason}，防止行动力溢出任务延迟 {minutes} 分钟'
+                f'[大世界-智能调度] {reason}，防止行动力溢出任务延迟 {minutes} 分钟'
             )
             return
 
-        logger.info(f'[大世界-智能调度+] {reason}，智能调度+延迟 {minutes} 分钟')
+        logger.info(f'[大世界-智能调度] {reason}，智能调度延迟 {minutes} 分钟')
         TaskDelayRequest(
             minute=minutes,
             task=self.TASK_NAME_SCHEDULING,
@@ -245,21 +295,21 @@ class CoinTaskMixin:
     
     def notify_push(self, title, content):
         """
-        发送推送通知（智能调度+功能）
+        发送推送通知（智能调度功能）
         
         Args:
             title (str): 通知标题（会自动添加实例名称前缀）
             content (str): 通知内容
             
         Notes:
-            - 仅在启用智能调度+时生效
+            - 仅在启用智能调度时生效
             - 启动器推送和 OnePush 推送分别由各自配置控制
             - 标题会自动格式化为 "[AzurPilot <实例名>] 原标题" 的形式
 
         Returns:
             bool: True 表示推送成功发送，False 表示未发送或发送失败
         """
-        # 检查是否启用智能调度+
+        # 检查是否启用智能调度
         if not self.is_smart_scheduling_enabled():
             return False
 
@@ -296,9 +346,9 @@ class CoinTaskMixin:
                     content=launcher_content
                 )
                 if webui_success:
-                    logger.info(f"[大世界-智能调度+] 启动器推送通知成功: {launcher_title}")
+                    logger.info(f"[大世界-智能调度] 启动器推送通知成功: {launcher_title}")
             except Exception as e:
-                logger.error(f"[大世界-智能调度+] 启动器推送通知异常: {e}")
+                logger.error(f"[大世界-智能调度] 启动器推送通知异常: {e}")
 
         if not onepush_enabled:
             return webui_success
@@ -310,7 +360,7 @@ class CoinTaskMixin:
             else self.config.Error_OnePushConfig
         )
         if not self._is_push_config_valid(push_config):
-            logger.warning("[大世界-智能调度+] 推送配置未设置或 provider 为 null，跳过 OnePush 推送。请在 AzurPilot 设置 -> 错误处理 -> OnePush 配置中设置有效的推送渠道。")
+            logger.warning("[大世界-智能调度] 推送配置未设置或 provider 为 null，跳过 OnePush 推送。请在 AzurPilot 设置 -> 错误处理 -> OnePush 配置中设置有效的推送渠道。")
             return webui_success
 
         try:
@@ -321,12 +371,12 @@ class CoinTaskMixin:
                 content=content
             )
             if success:
-                logger.info(f"[大世界-智能调度+] 推送通知成功: {formatted_title}")
+                logger.info(f"[大世界-智能调度] 推送通知成功: {formatted_title}")
             else:
-                logger.warning(f"[大世界-智能调度+] 推送通知失败: {formatted_title}")
+                logger.warning(f"[大世界-智能调度] 推送通知失败: {formatted_title}")
             return bool(success or webui_success)
         except Exception as e:
-            logger.error(f"[大世界-智能调度+] 推送通知异常: {e}")
+            logger.error(f"[大世界-智能调度] 推送通知异常: {e}")
             return webui_success
 
     def _format_launcher_notification(self, instance_name, title, content):
@@ -450,7 +500,7 @@ class CoinTaskMixin:
         if previous_ap is not None:
             ap_delta = total_ap - previous_ap
             if ap_delta == 0:
-                logger.info('[大世界-智能调度+] 行动力未发生变化，跳过推送通知')
+                logger.info('[大世界-智能调度] 行动力未发生变化，跳过推送通知')
                 return
             if ap_delta > 0:
                 content = f"总行动力: {total_ap} 上涨{ap_delta}行动力"
@@ -474,7 +524,7 @@ class CoinTaskMixin:
 
     
     def _get_smart_scheduling_operation_coins_preserve(self):
-        """获取智能调度+自己的黄币保留值，两种调度模式共用。
+        """获取智能调度自己的黄币保留值，两种调度模式共用。
 
         Returns:
             int: 保留的黄币数量。
@@ -485,18 +535,18 @@ class CoinTaskMixin:
         )
         if preserve is None:
             preserve = 0
-        logger.info(f'[大世界-智能调度+] 黄币保留使用智能调度+配置: {preserve}')
+        logger.info(f'[大世界-智能调度] 黄币保留使用智能调度配置: {preserve}')
         return preserve
 
     def _get_smart_scheduling_action_point_preserve(self):
-        """获取智能调度+模式下的行动力保留覆盖值。
+        """获取智能调度模式下的行动力保留覆盖值。
 
         注意：此处不做回退。
-        - 返回值 > 0：表示启用智能调度+覆盖值（由调用方决定覆盖哪个任务的阀值）
+        - 返回值 > 0：表示启用智能调度覆盖值（由调用方决定覆盖哪个任务的阀值）
         - 返回值 == 0：表示不覆盖，调用方应回退到各自任务的原配置
 
         Returns:
-            int: 智能调度+行动力保留覆盖值（0 表示不覆盖）。
+            int: 智能调度行动力保留覆盖值（0 表示不覆盖）。
         """
         preserve = self.config.cross_get(
             keys=self.CONFIG_PATH_SMART_AP_PRESERVE
@@ -510,7 +560,7 @@ class CoinTaskMixin:
         )
 
     def _get_coin_task_action_point_preserve(self):
-        """获取智能调度+用于启动黄币补充任务的行动力阈值。"""
+        """获取智能调度用于启动黄币补充任务的行动力阈值。"""
         smart_ap_preserve = self._get_smart_scheduling_action_point_preserve()
         if smart_ap_preserve > 0:
             return smart_ap_preserve
@@ -521,7 +571,7 @@ class CoinTaskMixin:
         return 1000 if preserve is None else preserve
 
     def _get_smart_scheduling_operation_coins_return_threshold(self):
-        """获取智能调度+补黄币阶段的回补增量。
+        """获取智能调度补黄币阶段的回补增量。
 
         进入补黄币阶段后，黄币需要达到“侵蚀 1 保留值 + 此阈值”，才允许回到侵蚀 1。
 
@@ -535,12 +585,12 @@ class CoinTaskMixin:
         try:
             threshold = int(threshold or 0)
         except (TypeError, ValueError):
-            logger.warning(f'[大世界-智能调度+] 智能调度+黄币回补阈值无效: {threshold}，使用 0')
+            logger.warning(f'[大世界-智能调度] 智能调度黄币回补阈值无效: {threshold}，使用 0')
             threshold = 0
         return max(threshold, 0)
 
     def _get_smart_scheduling_state(self):
-        """读取智能调度+持久化运行状态。"""
+        """读取智能调度持久化运行状态。"""
         state = self.config.cross_get(
             keys=self.CONFIG_PATH_SMART_STATE,
             default={},
@@ -550,11 +600,11 @@ class CoinTaskMixin:
         return dict(state)
 
     def _get_smart_scheduling_state_value(self, key, default=None):
-        """读取单个智能调度+运行状态。"""
+        """读取单个智能调度运行状态。"""
         return self._get_smart_scheduling_state().get(key, default)
 
     def _set_smart_scheduling_state_value(self, key, value):
-        """写入单个智能调度+运行状态并立即持久化。"""
+        """写入单个智能调度运行状态并立即持久化。"""
         state = self._get_smart_scheduling_state()
         if state.get(key) == value:
             return
@@ -563,7 +613,7 @@ class CoinTaskMixin:
         self.config.save()
 
     def _clear_smart_scheduling_state_value(self, key):
-        """清理单个智能调度+运行状态并立即持久化。"""
+        """清理单个智能调度运行状态并立即持久化。"""
         state = self._get_smart_scheduling_state()
         if key not in state:
             return
@@ -653,7 +703,7 @@ class CoinTaskMixin:
             state.pop(self.STATE_KEY_AP_REPLENISH_ACTIVE, None)
             self._clear_coin_task_notification_state()
             logger.info(
-                f'[大世界-智能调度+] 调度模式由 {previous_mode} 切换为 {current_mode}，'
+                f'[大世界-智能调度] 调度模式由 {previous_mode} 切换为 {current_mode}，'
                 '已清理旧模式运行状态'
             )
 
@@ -662,7 +712,7 @@ class CoinTaskMixin:
         self.config.save()
 
     def _get_effective_cl1_ap_preserve(self):
-        """获取智能调度+下侵蚀 1 使用的行动力保留值。
+        """获取智能调度下侵蚀 1 使用的行动力保留值。
 
         Returns:
             int: 行动力保留值。
@@ -684,7 +734,7 @@ class CoinTaskMixin:
         return self.__class__.__name__
 
     def _get_enabled_coin_tasks(self):
-        """获取智能调度+中启用的黄币补充任务列表，并按 TaskPriority 排序。
+        """获取智能调度中启用的黄币补充任务列表，并按 TaskPriority 排序。
 
         Returns:
             list[str]: 启用的任务名称列表。
@@ -715,7 +765,7 @@ class CoinTaskMixin:
                         return len(priorities)
                 enabled_tasks = sorted(enabled_tasks, key=sort_key)
         except Exception as e:
-            logger.warning(f'[大世界-智能调度+] 按优先级排序大世界黄币补充任务失败: {e}，使用默认顺序')
+            logger.warning(f'[大世界-智能调度] 按优先级排序大世界黄币补充任务失败: {e}，使用默认顺序')
         
         return enabled_tasks
 
@@ -748,7 +798,7 @@ class CoinTaskMixin:
             self.STATE_KEY_STRONGHOLD_NEXT_CHECK,
             next_check.isoformat(),
         )
-        logger.info(f'[大世界-智能调度+] {reason}，塞壬要塞检查推迟到 {next_check}')
+        logger.info(f'[大世界-智能调度] {reason}，塞壬要塞检查推迟到 {next_check}')
 
     def _get_stronghold_check_postpone_time(self):
         """
@@ -767,7 +817,7 @@ class CoinTaskMixin:
         try:
             next_check = datetime.fromisoformat(value)
         except (TypeError, ValueError):
-            logger.warning(f'[大世界-智能调度+] 塞壬要塞下次检查时间无效: {value}，重新搜索要塞')
+            logger.warning(f'[大世界-智能调度] 塞壬要塞下次检查时间无效: {value}，重新搜索要塞')
             self._clear_smart_scheduling_state_value(
                 self.STATE_KEY_STRONGHOLD_NEXT_CHECK
             )
@@ -794,7 +844,7 @@ class CoinTaskMixin:
                 default=0,
             ) or 0)
         except (TypeError, ValueError):
-            logger.warning('[大世界-智能调度+] 隐秘/深渊延迟检查天数无效，按 0 处理')
+            logger.warning('[大世界-智能调度] 隐秘/深渊延迟检查天数无效，按 0 处理')
             return 0
         return max(days, 0)
 
@@ -818,7 +868,7 @@ class CoinTaskMixin:
         self._set_smart_scheduling_state_value(state_key, current_time().isoformat())
         task_display = self.TASK_NAMES.get(task_name, task_name)
         logger.info(
-            f'[大世界-智能调度+] {reason}，{task_display}最多 {days} 天后重新检查'
+            f'[大世界-智能调度] {reason}，{task_display}最多 {days} 天后重新检查'
             f'（不跨大世界重置）'
         )
 
@@ -847,7 +897,7 @@ class CoinTaskMixin:
         try:
             cleared_at = datetime.fromisoformat(value)
         except (TypeError, ValueError):
-            logger.warning(f'[大世界-智能调度+] {task_name} 打完时间无效: {value}，重新检查')
+            logger.warning(f'[大世界-智能调度] {task_name} 打完时间无效: {value}，重新检查')
             self._clear_smart_scheduling_state_value(state_key)
             return None
 
@@ -874,23 +924,23 @@ class CoinTaskMixin:
         Returns:
             bool: 始终返回 True 表示已完成无内容处理。
         """
-        logger.info(f'[大世界-智能调度+] {log_message}，准备结束当前任务')
+        logger.info(f'[大世界-智能调度] {log_message}，准备结束当前任务')
         task_name = self._get_current_coin_task_name()
-        logger.info(f'[大世界-智能调度+] 处理任务: {task_name}')
+        logger.info(f'[大世界-智能调度] 处理任务: {task_name}')
         # 仓库取空即「已打完」，按配置延迟 X 天内不再检查
         self._postpone_coin_task_check(task_name, log_message)
 
         if self.is_running_smart_scheduling_task():
             if '没有更多' not in log_message:
                 self._smart_scheduling_no_content_task = task_name
-            logger.info(f'[大世界-智能调度+] 智能调度+代理执行中，{task_display_name}无可执行内容')
+            logger.info(f'[大世界-智能调度] 智能调度代理执行中，{task_display_name}无可执行内容')
             if self._is_direct_prevent_overflow_coin_task():
                 self.delay_opsi_active_task(server_update=True)
                 self.config.task_stop()
             return True
 
         if self.is_smart_scheduling_enabled():
-            logger.info(f'[大世界-智能调度+] 智能调度+已启用，{task_display_name}无可执行内容')
+            logger.info(f'[大世界-智能调度] 智能调度已启用，{task_display_name}无可执行内容')
             self.config.task_delay(server_update=True)
             self.config.task_stop()
 
@@ -903,13 +953,13 @@ class CoinTaskMixin:
             if task_name in ('OpsiObscure', 'OpsiAbyssal') and get_os_reset_remain is not None:
                 remain = get_os_reset_remain()
                 if remain == 0:
-                    logger.info(f'[大世界-智能调度+] {task_name} 没有更多可执行内容，距离大世界重置不足1天，延迟2.5小时后再运行')
+                    logger.info(f'[大世界-智能调度] {task_name} 没有更多可执行内容，距离大世界重置不足1天，延迟2.5小时后再运行')
                     self.config.task_delay(minute=150, server_update=True)
                 else:
-                    logger.info(f'[大世界-智能调度+] {task_name} 没有更多可执行内容，延迟到下次服务器刷新后再运行')
+                    logger.info(f'[大世界-智能调度] {task_name} 没有更多可执行内容，延迟到下次服务器刷新后再运行')
                     self.config.task_delay(server_update=True)
             else:
-                logger.info(f'[大世界-智能调度+] {task_name} 没有更多可执行内容，延迟到下次服务器刷新后再运行')
+                logger.info(f'[大世界-智能调度] {task_name} 没有更多可执行内容，延迟到下次服务器刷新后再运行')
                 self.config.task_delay(server_update=True)
         
         self.config.task_stop()
@@ -918,7 +968,7 @@ class CoinTaskMixin:
 
 class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
     """
-    智能调度+任务主类
+    智能调度任务主类
     
     负责协调大世界（Operation Siren）中的各项任务调度，
     包括侵蚀1练级、耄耋相接、隐秘海域、深渊坐标、塞壬要塞等。
@@ -950,6 +1000,8 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
         Returns:
             Any: func 的调用返回值。
         """
+        if task_name not in (self.TASK_NAME_HAZARD1_LEVELING, self.TASK_NAME_MEOWFFICER_FARMING):
+            self._close_scheduling_action_point()
         task = self._make_opsi_task_function(task_name)
         disable_task_switch = task_name not in (
             self.TASK_NAME_HAZARD1_LEVELING,
@@ -960,15 +1012,27 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
         ):
             return func(*args, **kwargs)
 
-    def _get_scheduling_action_point(self):
-        """读取智能调度+决策所需的行动力。
+    def _get_scheduling_action_point(self, *, keep_open=False):
+        """读取智能调度决策所需的行动力。
+
+        Args:
+            keep_open (bool): 决策期间保留面板，确定子任务后合并开工补充。
 
         Returns:
             tuple[int, int]: (总行动力, 当前真实行动力)。
+
+        Pages:
+            in: page_os
+            out: keep_open=True 时为 ACTION_POINT_USE，否则为 page_os。
         """
+        self._close_scheduling_action_point()
         self.action_point_enter()
         self.action_point_safe_get()
-        self.action_point_quit()
+        if keep_open:
+            self._scheduling_ap_panel_open = True
+            self._scheduling_ap_box_use = self.config.OS_ACTION_POINT_BOX_USE
+        else:
+            self.action_point_quit()
         self.check_and_notify_action_point_threshold()
         return (
             int(getattr(self, '_action_point_total', 0) or 0),
@@ -976,18 +1040,18 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
         )
 
     def _run_scheduled_meowfficer_farming(self, ap_preserve, fresh_ap=None):
-        """由智能调度+代理执行一轮耄耋相接。
+        """由智能调度代理执行一轮耄耋相接。
 
         Args:
             ap_preserve (int): 行动力保留阈值。
-            fresh_ap (tuple[int, int] | None): 本轮智能调度+决策刚读到的
+            fresh_ap (tuple[int, int] | None): 本轮智能调度决策刚读到的
                 (总行动力, 当前行动力)，供短猫开工检查复用。
         """
         if not hasattr(self, 'run_meowfficer_farming_once'):
-            logger.error('[大世界-智能调度+] 当前实例不支持执行耄耋相接')
+            logger.error('[大世界-智能调度] 当前实例不支持执行耄耋相接')
             self.config.task_stop()
 
-        logger.info('[大世界-智能调度+] 执行一轮耄耋相接')
+        logger.info('[大世界-智能调度] 执行一轮耄耋相接')
         # 耄耋相接会通过共享的手动配置项控制本轮行动力下限。
         # 代跑结束后必须恢复，否则其保留值会泄漏到后续侵蚀 1 调度。
         with self.config.temporary(
@@ -1009,14 +1073,14 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
             except ActionPointLimit as e:
                 if ap_preserve > 0 and getattr(e, 'preserve', None) == ap_preserve:
                     logger.info(
-                        f'[大世界-智能调度+] 耄耋相接已达到行动力保留值 '
-                        f'({e.total} <= {ap_preserve})，返回智能调度+'
+                        f'[大世界-智能调度] 耄耋相接已达到行动力保留值 '
+                        f'({e.total} <= {ap_preserve})，返回智能调度'
                     )
                     return
                 raise
 
     def handle_first_auto_search(self, run):
-        """由智能调度+决策是否执行 os_init 阶段跳过的首次自律寻敌。
+        """由智能调度决策是否执行 os_init 阶段跳过的首次自律寻敌。
 
         Args:
             run (bool): 是否执行首次自律寻敌。
@@ -1026,16 +1090,17 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
         self._smart_scheduling_first_auto_search_pending = False
 
         if not run:
-            logger.info("智能调度+跳过初始化自律寻敌")
+            logger.info("智能调度跳过初始化自律寻敌")
             return
 
+        self._close_scheduling_action_point()
         self.run_first_auto_search()
 
     def _handle_smart_scheduling_no_task(self, yellow_coins, total_ap, current_ap, coin_target, meow_ap_preserve):
         """处理黄币和行动力不足导致没有可运行任务的情况。
 
-        防止行动力溢出任务代跑智能调度+时，需要清理当前真实行动力，因此直接跑一轮耄耋相接。
-        普通智能调度+保持延后，不按行动力恢复时间唤起。
+        防止行动力溢出任务代跑智能调度时，需要清理当前真实行动力，因此直接跑一轮耄耋相接。
+        普通智能调度保持延后，不按行动力恢复时间唤起。
 
         Args:
             yellow_coins (int): 当前黄币数量。
@@ -1074,18 +1139,18 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
         self._delay_smart_scheduling_for_ap_limit(total_ap, meow_ap_preserve)
 
     def _run_scheduled_hazard1_leveling(self, ap_preserve, fresh_ap=None):
-        """由智能调度+执行一轮侵蚀 1 练级。
+        """由智能调度执行一轮侵蚀 1 练级。
 
         Args:
             ap_preserve (int): 行动力保留阈值。
-            fresh_ap (tuple[int, int] | None): 本轮智能调度+决策刚读到的
+            fresh_ap (tuple[int, int] | None): 本轮智能调度决策刚读到的
                 (总行动力, 当前行动力)，供侵蚀 1 开工检查复用。
         """
         if not hasattr(self, 'run_hazard1_leveling_once'):
-            logger.error('[大世界-智能调度+] 当前实例不支持执行侵蚀 1 练级')
+            logger.error('[大世界-智能调度] 当前实例不支持执行侵蚀 1 练级')
             self.config.task_stop()
 
-        logger.info('[大世界-智能调度+] 执行一轮侵蚀 1 练级')
+        logger.info('[大世界-智能调度] 执行一轮侵蚀 1 练级')
         self.handle_first_auto_search(run=False)
         # 开荒跳过安全海域后停在总览；练度检查和练级都必须从海域地图开始。
         if self.is_in_globe():
@@ -1105,12 +1170,12 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
         )
 
     def _run_scheduled_coin_task_once(self, task_name, ap_preserve, fresh_ap=None):
-        """由智能调度+代理执行一轮黄币补充任务。
+        """由智能调度代理执行一轮黄币补充任务。
 
         Args:
             task_name (str): 目标任务名称。
             ap_preserve (int): 行动力保留阈值。
-            fresh_ap (tuple[int, int] | None): 本轮智能调度+决策刚读到的
+            fresh_ap (tuple[int, int] | None): 本轮智能调度决策刚读到的
                 (总行动力, 当前行动力)；仅耄耋相接消费该读数。
         """
         if not hasattr(self, '_smart_scheduling_no_content_task'):
@@ -1118,62 +1183,62 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
         self._smart_scheduling_no_content_task = None
 
         task_display = self.TASK_NAMES.get(task_name, task_name)
-        logger.info(f'[大世界-智能调度+] 代理执行一轮{task_display}')
+        logger.info(f'[大世界-智能调度] 代理执行一轮{task_display}')
         if task_name == self.TASK_NAME_MEOWFFICER_FARMING:
             self._run_scheduled_meowfficer_farming(ap_preserve, fresh_ap=fresh_ap)
         elif task_name == self.TASK_NAME_OBSCURE:
             if not hasattr(self, 'clear_obscure'):
-                logger.error('[大世界-智能调度+] 当前实例不支持执行隐秘海域')
+                logger.error('[大世界-智能调度] 当前实例不支持执行隐秘海域')
                 self.config.task_stop()
             # 这三个任务不会自行设置保留值，代跑期间统一使用本轮调度阈值。
             with self.config.temporary(OS_ACTION_POINT_PRESERVE=int(ap_preserve)):
                 self._run_with_opsi_task_context(task_name, self.clear_obscure)
         elif task_name == self.TASK_NAME_ABYSSAL:
             if not hasattr(self, 'clear_abyssal'):
-                logger.error('[大世界-智能调度+] 当前实例不支持执行深渊坐标')
+                logger.error('[大世界-智能调度] 当前实例不支持执行深渊坐标')
                 self.config.task_stop()
             with self.config.temporary(OS_ACTION_POINT_PRESERVE=int(ap_preserve)):
                 self._run_with_opsi_task_context(task_name, self.clear_abyssal)
         elif task_name == self.TASK_NAME_STRONGHOLD:
             if not hasattr(self, 'clear_stronghold'):
-                logger.error('[大世界-智能调度+] 当前实例不支持执行塞壬要塞')
+                logger.error('[大世界-智能调度] 当前实例不支持执行塞壬要塞')
                 self.config.task_stop()
             with self.config.temporary(OS_ACTION_POINT_PRESERVE=int(ap_preserve)):
                 self._run_with_opsi_task_context(task_name, self.clear_stronghold)
         else:
-            logger.error(f'[大世界-智能调度+] 不支持代理执行黄币补充任务: {task_name}')
+            logger.error(f'[大世界-智能调度] 不支持代理执行黄币补充任务: {task_name}')
             self.config.task_stop()
 
         no_content_task = getattr(self, '_smart_scheduling_no_content_task', None)
         self._smart_scheduling_no_content_task = None
         if no_content_task == task_name:
-            logger.info(f'[大世界-智能调度+] {task_display}没有可执行内容')
+            logger.info(f'[大世界-智能调度] {task_display}没有可执行内容')
             return False
         return True
 
     def _delay_smart_scheduling_for_ap_limit(self, total_ap, min_ap_reserve):
-        """因行动力不足推迟智能调度+。
+        """因行动力不足推迟智能调度。
 
         Args:
             total_ap (int): 当前总行动力。
             min_ap_reserve (int): 最低保留行动力阈值。
         """
-        logger.warning(f'[大世界-智能调度+] 行动力达到最低保留 ({total_ap} <= {min_ap_reserve})')
+        logger.warning(f'[大世界-智能调度] 行动力达到最低保留 ({total_ap} <= {min_ap_reserve})')
         self._notify_ap_insufficient(total_ap, min_ap_reserve)
         self._delay_smart_scheduling_to_server_update('行动力不足')
         self.config.task_stop()
 
     def _delay_smart_scheduling_for_opsi_explore(self):
-        """开荒未完成时延迟智能调度+并结束本轮。"""
+        """开荒未完成时延迟智能调度并结束本轮。"""
         if not self.is_in_opsi_explore():
             return False
 
-        self._delay_smart_scheduling_to_server_update('每月开荒+正在运行')
+        self._delay_smart_scheduling_to_server_update('每月开荒正在运行')
         self.config.task_stop()
         return True
 
     def run_smart_scheduling_once(self):
-        """执行一轮智能调度+决策。"""
+        """执行一轮智能调度决策。"""
         # 防溢出任务直接调用本方法，需要在此处补齐开荒拦截。
         if (
             self.is_running_prevent_action_point_overflow_task()
@@ -1182,7 +1247,18 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
             return
 
         yellow_coins = self.get_yellow_coins()
-        total_ap, current_ap = self._get_scheduling_action_point()
+        try:
+            total_ap, current_ap = self._get_scheduling_action_point(keep_open=True)
+            return self._run_smart_scheduling_decision(yellow_coins, total_ap, current_ap)
+        except (GameStuckError, GameTooManyClickError, RequestHumanTakeover):
+            # 已进入设备恢复流程，不再追加界面操作干扰原异常。
+            self._scheduling_ap_panel_open = False
+            raise
+        finally:
+            self._close_scheduling_action_point()
+
+    def _run_smart_scheduling_decision(self, yellow_coins, total_ap, current_ap):
+        """使用首读行动力作决策，面板在实际地图操作前关闭或合并补充。"""
         coin_target_scheduling = self._is_coin_target_scheduling_enabled()
         self._sync_smart_scheduling_mode_state(coin_target_scheduling)
 
@@ -1201,7 +1277,7 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
             month_end_preserve = self._get_month_end_action_point_preserve()
             if total_ap > month_end_preserve:
                 logger.info(
-                    f'[大世界-智能调度+] 进入月末清理行动力模式: '
+                    f'[大世界-智能调度] 进入月末清理行动力模式: '
                     f'总行动力={total_ap}, 保留值={month_end_preserve}'
                 )
                 self._run_month_end_cleanup(
@@ -1210,7 +1286,7 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
                 return
             else:
                 logger.info(
-                    f'[大世界-智能调度+] 月末清理已启用但行动力 {total_ap} '
+                    f'[大世界-智能调度] 月末清理已启用但行动力 {total_ap} '
                     f'<= 保留值 {month_end_preserve}，跳过清理'
                 )
                 # 月底最后一天（重置日当天）行动力不足时，每隔 2 小时再次检查
@@ -1247,15 +1323,15 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
         coin_replenish_active = self._is_coin_replenish_active()
         ap_replenish_active = self._is_ap_replenish_active()
 
-        logger.info(f'[大世界-智能调度+] 黄币: {yellow_coins}, 保留值: {cl1_preserve}')
+        logger.info(f'[大世界-智能调度] 黄币: {yellow_coins}, 保留值: {cl1_preserve}')
         if self.is_running_prevent_action_point_overflow_task():
             logger.info(
-                f'[大世界-智能调度+] 行动力: 当前={current_ap}, 总计={total_ap}, '
+                f'[大世界-智能调度] 行动力: 当前={current_ap}, 总计={total_ap}, '
                 f'CL1保留: {cl1_ap_preserve}, 补黄币保留: {meow_ap_preserve}'
             )
         else:
             logger.info(
-                f'[大世界-智能调度+] 总行动力: {total_ap}, '
+                f'[大世界-智能调度] 总行动力: {total_ap}, '
                 f'CL1保留: {cl1_ap_preserve}, 补黄币保留: {meow_ap_preserve}'
             )
 
@@ -1266,16 +1342,16 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
                     cl1_preserve,
                 )
                 logger.info(
-                    f'[大世界-智能调度+] 补黄币目标: 当前={yellow_coins}, 起始={start_coins}, '
+                    f'[大世界-智能调度] 补黄币目标: 当前={yellow_coins}, 起始={start_coins}, '
                     f'回补阈值={return_threshold}, 目标={coin_target}'
                 )
                 if yellow_coins >= coin_target:
-                    logger.info(f'[大世界-智能调度+] 黄币已补足 ({yellow_coins} >= {coin_target})，恢复侵蚀1练级')
+                    logger.info(f'[大世界-智能调度] 黄币已补足 ({yellow_coins} >= {coin_target})，恢复侵蚀1练级')
                     self._clear_coin_replenish_target()
                 else:
-                    logger.info(f'[大世界-智能调度+] 黄币未补足 ({yellow_coins} < {coin_target})，需要执行黄币补充任务')
+                    logger.info(f'[大世界-智能调度] 黄币未补足 ({yellow_coins} < {coin_target})，需要执行黄币补充任务')
                     if total_ap <= meow_ap_preserve:
-                        logger.warning(f'[大世界-智能调度+] 行动力不足以执行黄币补充任务 ({total_ap} <= {meow_ap_preserve})')
+                        logger.warning(f'[大世界-智能调度] 行动力不足以执行黄币补充任务 ({total_ap} <= {meow_ap_preserve})')
                         self._handle_smart_scheduling_no_task(
                             yellow_coins,
                             total_ap,
@@ -1298,11 +1374,11 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
                 if not ap_replenish_active:
                     self._set_ap_replenish_active()
                 logger.info(
-                    f'[大世界-智能调度+] 体力调度补黄币中: 黄币={yellow_coins}, '
+                    f'[大世界-智能调度] 体力调度补黄币中: 黄币={yellow_coins}, '
                     f'黄币阈值={cl1_preserve}, 总行动力={total_ap}, 行动力阈值={meow_ap_preserve}'
                 )
                 if total_ap <= meow_ap_preserve:
-                    logger.info(f'[大世界-智能调度+] 行动力已达到体力调度阈值 ({total_ap} <= {meow_ap_preserve})，停止补黄币')
+                    logger.info(f'[大世界-智能调度] 行动力已达到体力调度阈值 ({total_ap} <= {meow_ap_preserve})，停止补黄币')
                     self._clear_ap_replenish_active()
                     overflow_cleanup = (
                         self.is_running_prevent_action_point_overflow_task()
@@ -1318,7 +1394,7 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
                         )
                         return
                     logger.info(
-                        f'[大世界-智能调度+] 黄币已补足 ({yellow_coins} >= {cl1_preserve})，'
+                        f'[大世界-智能调度] 黄币已补足 ({yellow_coins} >= {cl1_preserve})，'
                         '恢复侵蚀1练级'
                     )
                 else:
@@ -1334,10 +1410,10 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
             if total_ap <= cl1_ap_preserve:
                 self._delay_smart_scheduling_for_ap_limit(total_ap, cl1_ap_preserve)
 
-            logger.info(f'[大世界-智能调度+] 黄币充足 ({yellow_coins} >= {cl1_preserve})，执行侵蚀1练级')
+            logger.info(f'[大世界-智能调度] 黄币充足 ({yellow_coins} >= {cl1_preserve})，执行侵蚀1练级')
             self._execute_hazard1_leveling(yellow_coins, total_ap, current_ap)
         except ActionPointLimit as e:
-            logger.warning(f'[大世界-智能调度+] 智能调度+执行子任务时行动力不足: {e}')
+            logger.warning(f'[大世界-智能调度] 智能调度执行子任务时行动力不足: {e}')
             if self._try_scheduling_action_point_purchase():
                 return
             preserve = getattr(e, 'preserve', None) or cl1_ap_preserve
@@ -1346,22 +1422,22 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
 
     def run_smart_scheduling(self):
         """
-        执行智能调度+主逻辑
+        执行智能调度主逻辑
 
-        此方法是智能调度+任务的入口点，负责：
-        1. 检查是否启用智能调度+
+        此方法是智能调度任务的入口点，负责：
+        1. 检查是否启用智能调度
         2. 根据黄币和行动力状态决定当前应该执行的任务
         3. 按代理模式协调子任务执行
         """
-        logger.hr('大世界-智能调度+', level=1)
+        logger.hr('大世界-智能调度', level=1)
 
         # 直接调用入口仍保留保护，覆盖未经过 OSCampaignRun 的调用方。
         if self._delay_smart_scheduling_for_opsi_explore():
             return
 
-        # 检查是否启用智能调度+
+        # 检查是否启用智能调度
         if not self.is_smart_scheduling_enabled():
-            logger.info('[大世界-智能调度+] 智能调度+未启用，跳过执行')
+            logger.info('[大世界-智能调度] 智能调度未启用，跳过执行')
             return
 
         while True:
@@ -1384,7 +1460,7 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
             return
 
         pushed = self.notify_push(
-            title="[AzurPilot] 智能调度+ - 黄币与行动力双重不足",
+            title="[AzurPilot] 智能调度- 黄币与行动力双重不足",
             content=(
                 f"黄币: {yellow_coins}，补黄币阈值: {coin_target}\n"
                 f"总行动力 {total_ap} 不足 (需要 {meow_ap_preserve})\n推迟任务"
@@ -1407,7 +1483,7 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
             return
 
         pushed = self.notify_push(
-            title="[AzurPilot] 智能调度+ - 行动力不足",
+            title="[AzurPilot] 智能调度- 行动力不足",
             content=f"总行动力 {total_ap} 低于最低保留 {min_reserve}，推迟任务"
         )
         if pushed:
@@ -1428,9 +1504,9 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
         """
         all_coin_tasks = self._get_enabled_coin_tasks()
         if not all_coin_tasks:
-            logger.error('[大世界-智能调度+] 没有启用任何黄币补充任务，停止智能调度+')
+            logger.error('[大世界-智能调度] 没有启用任何黄币补充任务，停止智能调度')
             self.notify_push(
-                title='[AzurPilot] 智能调度+ - 未启用黄币补充任务',
+                title='[AzurPilot] 智能调度- 未启用黄币补充任务',
                 content='请至少启用耄耋相接、隐秘海域、深渊坐标或塞壬要塞中的一项',
             )
             self._delay_smart_scheduling_to_server_update('未启用黄币补充任务')
@@ -1440,7 +1516,7 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
         # 跳过初始化自律寻敌可避免对刚清理过的海域重复全图重扫。
         self.handle_first_auto_search(run=False)
         task_names = '、'.join([self.TASK_NAMES.get(task, task) for task in all_coin_tasks])
-        logger.info(f'[大世界-智能调度+] 启用的黄币补充任务: {task_names}')
+        logger.info(f'[大世界-智能调度] 启用的黄币补充任务: {task_names}')
 
         skipped_tasks = []
         for task_name in all_coin_tasks:
@@ -1451,7 +1527,7 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
             if postpone_until is not None:
                 task_display = self.TASK_NAMES.get(task_name, task_name)
                 logger.info(
-                    f'[大世界-智能调度+] {task_display}已全部清除，跳过本轮检查，'
+                    f'[大世界-智能调度] {task_display}已全部清除，跳过本轮检查，'
                     f'下次检查 {postpone_until}'
                 )
                 skipped_tasks.append(task_display)
@@ -1471,10 +1547,10 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
                 )
                 return
 
-        message = '智能调度+启用的黄币补充任务均无可执行内容'
+        message = '智能调度启用的黄币补充任务均无可执行内容'
         if skipped_tasks:
             message += f'（本轮跳过: {"、".join(skipped_tasks)}）'
-        logger.warning(f'[大世界-智能调度+] {message}，结束本轮智能调度+')
+        logger.warning(f'[大世界-智能调度] {message}，结束本轮智能调度')
         self._delay_smart_scheduling_to_server_update('黄币补充任务均无可执行内容')
         self.config.task_stop()
 
@@ -1510,7 +1586,7 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
 
         task_display = self.TASK_NAMES.get(task_name, task_name)
         pushed = self.notify_push(
-            title="[AzurPilot] 智能调度+ - 已代理执行黄币补充任务",
+            title="[AzurPilot] 智能调度- 已代理执行黄币补充任务",
             content=(f"黄币: {yellow_coins}，补黄币阈值: {coin_target}\n"
                      f"总行动力: {total_ap} (需要 {meow_ap_preserve})\n"
                      f"已代理执行一轮{task_display}获取黄币")
@@ -1528,7 +1604,7 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
                 供侵蚀 1 开工检查复用。
         """
         self._clear_coin_task_notification_state()
-        logger.info('[大世界-智能调度+] 执行侵蚀1练级任务')
+        logger.info('[大世界-智能调度] 执行侵蚀1练级任务')
         self._run_scheduled_hazard1_leveling(
             self._get_effective_cl1_ap_preserve(),
             fresh_ap=(total_ap, current_ap) if current_ap is not None else None,
@@ -1697,6 +1773,7 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
             total_ap (int): 当前总行动力。
             current_ap (int): 当前真实行动力。
         """
+        self._close_scheduling_action_point()
         logger.hr('大世界-月末清理行动力', level=2)
         logger.info(
             f'[大世界-月末清理] 开始清理: 黄币={yellow_coins}, '
@@ -1780,7 +1857,7 @@ class OpsiScheduling(SmartExploreMixin, CoinTaskMixin, OSMap):
             f'当前行动力={current_ap}, 保留值={month_end_preserve}'
         )
         self.notify_push(
-            title='[AzurPilot] 智能调度+ - 月末清理行动力完成',
+            title='[AzurPilot] 智能调度- 月末清理行动力完成',
             content=(
                 f'月末清理行动力已完成\n'
                 f'总行动力: {total_ap} (保留值 {month_end_preserve})\n'

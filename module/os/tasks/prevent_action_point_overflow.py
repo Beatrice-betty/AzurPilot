@@ -93,7 +93,7 @@ class OpsiPreventActionPointOverflow(OpsiScheduling):
             self.TASK_NAME_HAZARD1_LEVELING,
             self.TASK_NAME_MEOWFFICER_FARMING,
         ):
-            logger.warning(f'[大世界-防止行动力溢出] 防止行动力溢出的执行任务无效: {task}，回退到智能调度+')
+            logger.warning(f'[大世界-防止行动力溢出] 防止行动力溢出的执行任务无效: {task}，回退到智能调度')
             task = self.TASK_NAME_SCHEDULING
         return task
 
@@ -168,7 +168,7 @@ class OpsiPreventActionPointOverflow(OpsiScheduling):
         Args:
             task_name (str): 代币任务名称。
             ap_preserve (int): 行动力保留阈值。
-            fresh_ap (tuple[int, int] | None): 智能调度+ 决策读的复用读数，
+            fresh_ap (tuple[int, int] | None): 智能调度决策读的复用读数，
                 原样透传。
 
         Returns:

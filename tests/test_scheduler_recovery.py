@@ -16,6 +16,7 @@ from module.exception import (
     GameTooManyClickError,
     RequestHumanTakeover,
     ScriptError,
+    StorageStatisticsError,
 )
 
 
@@ -79,6 +80,16 @@ class TestSchedulerRecovery(unittest.TestCase):
         script._stop_daily_summary_scheduler.assert_called_once_with()
         script._try_restart_emulator.assert_not_called()
         script.config.task_call.assert_not_called()
+
+    def test_repeated_storage_recognition_failures_do_not_restart_or_stop_scheduler(self):
+        script = self.make_script()
+        script.config.Error_HandleError = False
+        script.storage_statistics = Mock(side_effect=StorageStatisticsError('数量无法确认，已延后'))
+        self.run_tasks(script, ['StorageStatistics'] * 3)
+        self.assertEqual(script.storage_statistics.call_count, 3)
+        script._try_restart_emulator.assert_not_called()
+        script.config.task_call.assert_not_called()
+        self.assertNotIn('StorageStatistics', script.failure_record)
 
     def test_initial_device_offline_is_recovered_by_scheduler(self):
         script = self.make_script()

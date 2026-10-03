@@ -163,7 +163,7 @@ class OpsiHazard1Leveling(CoinTaskMixin, OSMap):
             ap_preserve (int | None): 行动力最低保留阈值。为 None 时从配置中读取。
             fresh_ap (tuple[int, int] | None): 调用方刚读到的
                 (总行动力, 当前行动力)。仅在读数与本次调用之间没有任何
-                行动力消耗时传入（智能调度+ 决策读）；行动力足够开工时
+                行动力消耗时传入（智能调度决策读）；行动力足够开工时
                 复用它跳过行动点弹窗。
         """
         # 启用随机事件以获得收益。调度器直接调用单轮时也需要保持该行为。
@@ -189,6 +189,10 @@ class OpsiHazard1Leveling(CoinTaskMixin, OSMap):
             "OS_ACTION_POINT_PRESERVE", self.config.OS_ACTION_POINT_PRESERVE
         )
 
+        fresh_ap = self._prepare_scheduling_action_point(
+            fresh_ap, cost=120, avoid_ap_overflow=True,
+        )
+
         # 获取当前区域
         try:
             self.get_current_zone()
@@ -200,7 +204,7 @@ class OpsiHazard1Leveling(CoinTaskMixin, OSMap):
         # 侵蚀 1 练级时，行动力优先用于此任务，而非耄耋相接。
         # 防溢出：当前行动力 100-119 时直接开工不开启行动力箱；
         # 低于 100 时开箱后达到或超过 200 满值的箱子不开启。
-        # 智能调度+ 代跑时决策读刚读过行动力：达到开工线时弹窗只会
+        # 智能调度代跑时决策读刚读过行动力：达到开工线时弹窗只会
         # 读数再关掉，复用它跳过；不足 100 时仍需弹窗开箱/购买。
         if self.action_point_reusable(fresh_ap, cost=120, avoid_ap_overflow=True):
             _fresh_total, _fresh_current = fresh_ap
@@ -214,8 +218,8 @@ class OpsiHazard1Leveling(CoinTaskMixin, OSMap):
                 avoid_ap_overflow=True,
             )
 
-        yellow_coins = self.get_yellow_coins()
         if not self.is_running_smart_scheduling_task():
+            yellow_coins = self.get_yellow_coins()
             self._cl1_resource_check(yellow_coins)
             self.check_and_notify_action_point_threshold()
             self._cl1_ap_check()
@@ -273,6 +277,8 @@ class OpsiHazard1Leveling(CoinTaskMixin, OSMap):
             logger.info("[大世界-侵蚀1练级] 目标等级为 0，跳过")
             return
 
+        # 到期的练度检查需要进入舰队界面，不能带着决策面板导航。
+        self._close_scheduling_action_point()
         logger.attr("[大世界-侵蚀1练级] 待检查舰队", self.config.OpsiFleet_Fleet)
         
         enable_custom_check = self.config.OpsiCheckLeveling_EnableCustomCheck

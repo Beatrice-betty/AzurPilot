@@ -492,13 +492,16 @@ class ActionPointHandler(UI, MapEventHandler):
                 continue
 
         # 「打开弹窗读行动力 → 取消关闭」是设计内的成对操作，一轮里会被连续调用多次
-        # （智能调度+ 决策、短猫前置检查、统计快照），点击记录（最近 15 次）会攒出
+        # （智能调度决策、短猫前置检查、统计快照），点击记录（最近 15 次）会攒出
         # 两个按钮各 ≥6 次，被「两个按钮交替点击次数过多」规则误判成卡死。
         # 只在弹窗确实关闭后清理：真卡死时上面的循环不会跳出，仍由单按钮 ≥12 次兜底。
         self.device.click_record_remove(ACTION_POINT_REMAIN_OS)
         self.device.click_record_remove(ACTION_POINT_CANCEL)
+        # 已正向确认弹窗关闭；下一次有意打开无需继承上一次的3秒重试冷却。
+        self.interval_clear(OS_CHECK)
 
-    def handle_action_point(self, zone, pinned, cost=None, keep_current_ap=True, check_rest_ap=False, avoid_ap_overflow=False):
+    def handle_action_point(self, zone, pinned, cost=None, keep_current_ap=True, check_rest_ap=False,
+                            avoid_ap_overflow=False, *, skip_first_read=False):
         """
         处理行动力，包括购买和使用药剂。
 
@@ -512,6 +515,8 @@ class ActionPointHandler(UI, MapEventHandler):
                 当前行动力达到 100 即直接开工、不开启行动力箱（100-119 区间
                 不再等待自然恢复，也不开 100 箱造成溢出）；低于 100 时开箱后
                 达到或超过 200 满值的箱子不开启。
+            skip_first_read (bool): 已在同一面板安全读取过行动力时复用首读。
+                只省略操作前的重复读取，购买或开箱后的实际读数仍须刷新。
 
         Returns:
             bool: 是否处理成功。
@@ -526,7 +531,8 @@ class ActionPointHandler(UI, MapEventHandler):
             return False
 
         # 行动力药剂有显示动画
-        self.action_point_safe_get()
+        if not skip_first_read:
+            self.action_point_safe_get()
         if cost is None:
             cost = self.action_point_get_cost(zone, pinned)
         buy_checked = False

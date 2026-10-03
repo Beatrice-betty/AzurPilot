@@ -26,7 +26,7 @@ class OpsiExplore(OSMap):
         state = self.config.OpsiExplore_MeowfficerCleanupState
         if isinstance(state, dict) and state.get('reset') != reset:
             raise GameStuckError('开荒期间跨月，停止本轮收尾，下次重新开荒')
-        logger.info('每月开荒+已完成，延迟到下次重置')
+        logger.info('每月开荒已完成，延迟到下次重置')
         with self.config.multi_set():
             self.config.OpsiExplore_LastZone = 0
             self.config.OpsiExplore_MeowfficerCleanupState = {'reset': reset, 'phase': 'done'}
@@ -40,7 +40,7 @@ class OpsiExplore(OSMap):
 
     def _os_explore_task_delay(self):
         """在大世界探索期间延迟其他大世界任务。"""
-        logger.info('每月开荒+运行中，延迟其他大世界任务')
+        logger.info('每月开荒运行中，延迟其他大世界任务')
         with self.config.multi_set():
             next_run = self.config.Scheduler_NextRun
             delay_tasks = ['OpsiObscure', 'OpsiAbyssal', 'OpsiArchive', 'OpsiStronghold', 'OpsiMeowfficerFarming',
@@ -69,7 +69,7 @@ class OpsiExplore(OSMap):
             out: page_os, 大世界地图
         """
 
-        logger.hr('大世界-每月开荒+', level=1)
+        logger.hr('大世界-每月开荒', level=1)
         full_order = [int(f.strip(' \t\r\n')) for f in self.config.OS_EXPLORE_FILTER.split('>')]
         total_zones = len(full_order)
         # 转换用户输入
@@ -112,7 +112,7 @@ class OpsiExplore(OSMap):
                 continue
 
             # 运行区域
-            logger.hr(f'大世界-每月开荒+ {zone}', level=1)
+            logger.hr(f'大世界-每月开荒{zone}', level=1)
             if not self.config.OpsiExplore_SpecialRadar:
                 # 特殊雷达提供 90 个调谐样本，没有特殊雷达时使用仓库中的调谐样本强化舰队
                 self.tuning_sample_use()
@@ -164,11 +164,11 @@ class OpsiExplore(OSMap):
             try:
                 self._os_explore()
             except OSExploreError:
-                logger.info('返回 NY，重新执行每月开荒+')
+                logger.info('返回 NY，重新执行每月开荒')
                 self.config.OpsiExplore_LastZone = 0
                 self.globe_goto(0)
 
         failed_zone = [self.name_to_zone(zone) for zone in self._os_explore_failed_zone]
-        logger.error(f'[大世界-每月开荒+] 以下区域开荒失败，请检查游戏设置和区域内未完成事件: {failed_zone}')
-        logger.critical('[大世界-每月开荒+] 无法解锁该区域')
+        logger.error(f'[大世界-每月开荒] 以下区域开荒失败，请检查游戏设置和区域内未完成事件: {failed_zone}')
+        logger.critical('[大世界-每月开荒] 无法解锁该区域')
         raise GameStuckError

@@ -393,7 +393,7 @@ YukikazeTaskManager:
       > Commission > Tactical > Research
       > Exercise
       > Dorm > Meowfficer > Guild > Gacha
-      > Reward
+      > Reward > StorageStatistics
       > ShopFrequent > ShopOnce > Shipyard > Freebies
       > PrivateQuarters
       > OpsiExplore > OpsiExploreCleanup
@@ -2280,9 +2280,7 @@ OpsiSimulatorParameters:
   InitialCoin: 0
   MeowHazardLevel:
     value: level5
-    option:
-      level3: 3
-      level5: 5
+    option: [level3, level5]
   CrossWeek: true
   BuyAp: true
   Cl1Coin: 170

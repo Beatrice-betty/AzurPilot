@@ -64,7 +64,7 @@ class SmartExploreMixin:
                 and state['next'][0] >= len(SMART_EXPLORE_ROUTES[0]))
 
     def _try_scheduling_action_point_purchase(self):
-        """本月仅购买一轮港口行动力；中断后只续购尚未售罄的库存。
+        """本月仅执行一轮港口行动力购买；流程正常返回即标记完成，中断后可续购。
 
         普通月度开荒 100% 或智能开荒第一轮完成后才允许购买。
         这里购买港口行动力箱，不调用耗油的每日行动力购买。
@@ -77,23 +77,20 @@ class SmartExploreMixin:
             return False
         reset = get_os_next_reset().isoformat()
         state = self._get_smart_scheduling_state_value('ActionPointPurchase')
-        if not isinstance(state, dict) or state.get('reset') != reset:
-            state = dict(reset=reset, phase='buying', attempts=0)
-        if state['phase'] == 'done':
+        if isinstance(state, dict) and state.get('reset') == reset and state.get('phase') == 'done':
             return False
-        if state['attempts'] >= 3:
-            raise RequestHumanTakeover('港口行动力购买连续三次未完成，请检查货币余额和商店识别')
-        state = dict(state, attempts=state['attempts'] + 1)
+        # 旧版的全商店复扫误报会留下 attempts >= 3，不能继续用它阻止本月续购。
+        # 实际导航或购买异常仍由上层统一恢复；只在正常退出港口后记为完成。
+        state = dict(reset=reset, phase='buying')
         self._set_smart_scheduling_state_value('ActionPointPurchase', state)
+        self._close_scheduling_action_point()
         logger.hr('智能调度：本月一次性购买港口全部行动力', level=1)
         self.handle_first_auto_search(run=False)
-        completed = self._run_with_opsi_task_context(
+        self._run_with_opsi_task_context(
             'OpsiShop', self.perform_port_shop_purchase, action_point_only=True,
         )
         if reset != get_os_next_reset().isoformat():
             raise GameStuckError('购买行动力期间跨月，停止旧月份流程')
-        if not completed:
-            raise GameStuckError('港口行动力尚未全部购买，保留断点等待重试')
         self._set_smart_scheduling_state_value('ActionPointPurchase', dict(state, phase='done'))
         return True
 
@@ -113,6 +110,7 @@ class SmartExploreMixin:
             raise RequestHumanTakeover(f'智能开荒海域 {zone} 连续三次未完成，请检查解锁条件和事件')
         state = dict(state, attempts=state['attempts'] + 1)
         self._save_smart_explore_state(state)
+        self._close_scheduling_action_point()
         self.handle_first_auto_search(run=False)
         try:
             with self.config.temporary(OS_ACTION_POINT_PRESERVE=0):

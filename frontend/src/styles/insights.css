@@ -280,12 +280,16 @@
 .statistics-note {padding:13px 17px;background:var(--surface);border-left:3px solid #159b88;border-radius:5px;font-size:12px;line-height:1.8;color:var(--muted);margin:0}
 /* 指标格下面已经有那张二级贴片，所以自己读三级面。 */
 .stat-metrics {display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:12px;padding:14px 22px}
-.stat-metrics > div {padding:10px 12px;border-radius:var(--theme-inset-radius);background:var(--theme-inset-bg);-webkit-backdrop-filter:var(--theme-inset-filter);backdrop-filter:var(--theme-inset-filter)}.stat-metrics span {display:block;color:var(--muted);font-size:11px;margin-bottom:10px}.stat-metrics strong {display:block;font-size:23px;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.stat-metrics small {font-size:11px;font-weight:400;margin-left:6px;color:var(--muted)}.summary-metrics-panel .summary-metrics {padding:0;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:16px 20px}.summary-metrics {padding:0;grid-template-columns:repeat(auto-fill,minmax(165px,1fr))}.summary-metric-card, .summary-metrics section {padding:12px 14px;background:transparent;border:1px solid transparent;border-radius:12px;display:flex;flex-direction:column;justify-content:space-between;min-height:72px;transition:background .15s ease,border-color .15s ease,transform .15s ease}
+/* 三级面只服务图表指标卡。 */
+.stat-metrics > div:not(.summary-metric-card) {padding:10px 12px;border-radius:var(--theme-inset-radius);background:var(--theme-inset-bg);-webkit-backdrop-filter:var(--theme-inset-filter);backdrop-filter:var(--theme-inset-filter)}.stat-metrics span {display:block;color:var(--muted);font-size:11px;margin-bottom:10px}.stat-metrics strong {display:block;font-size:23px;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.stat-metrics small {font-size:11px;font-weight:400;margin-left:6px;color:var(--muted)}.summary-metrics-panel .summary-metrics {padding:0;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:16px 20px}.summary-metrics {padding:0;grid-template-columns:repeat(auto-fill,minmax(165px,1fr))}.summary-metric-card, .summary-metrics section {padding:12px 14px;background:transparent;border:1px solid transparent;border-radius:12px;display:flex;flex-direction:column;justify-content:space-between;min-height:72px;transition:background .15s ease,border-color .15s ease,transform .15s ease}
 /* 「收获」的卡片形态与趋势图、样式控制台同一套：面板是一级底，内容再垫一层二级层。
    卡片自己不拿三级层 —— 里面的指标格直接画在二级层上。 */
 .panel.summary-metrics-panel {position: relative; isolation: isolate; padding: 8px}
 .panel.summary-metrics-panel::before {content: ''; position: absolute; inset: 8px; border-radius: calc(var(--theme-radius-panel, 26px) - 8px); background: var(--theme-plate-bg); -webkit-backdrop-filter: var(--theme-plate-filter); backdrop-filter: var(--theme-plate-filter)}
 .panel.summary-metrics-panel > * {position: relative}
+/* 收获卡容器恒为透明，悬停时才浮二级面。 */
+.summary-metrics-panel .summary-metric-card,
+.summary-metrics-panel .summary-metrics section {background: transparent; border: 1px solid transparent}
 .summary-metrics-panel .summary-metrics {padding:42px 48px}
 .summary-metric-card:hover, .summary-metrics section:hover {background:var(--theme-plate-bg);border-color:var(--theme-plate-edge)}
 .summary-metric-head {display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}

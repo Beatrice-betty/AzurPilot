@@ -19,7 +19,7 @@ from module.api.config_service import ConfigService, ROOT
 from module.api.router import Router
 from module.api.runtime_service import RuntimeService
 from module.api.socket import Gateway
-from module.api.static import FrontendFiles
+from module.api.static import FrontendFiles, ItemTemplateFiles
 from module.logger import logger
 from module.runtime.password_utils import ensure_password_for_host, is_demo_mode
 from module.runtime.setting import State
@@ -62,10 +62,10 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
                 from module.api.lifecycle import startup
                 from module.runtime.deploy_settings import parse_run_config
                 from module.runtime.startup_memory import consume_update_restart, startup_runs
-                update_restart = consume_update_restart()
                 runs = args.run or parse_run_config(State.deploy_config.Run)
                 if not args.run:
-                    # --run 是显式清单，不叠加记忆。
+                    # 只在决定启动清单这一支消费更新标记。
+                    update_restart = consume_update_restart()
                     runs = startup_runs(runs, update_restart=update_restart)
                 await asyncio.to_thread(startup, runs)
                 if State.deploy_config.DiscordRichPresence:
@@ -81,15 +81,18 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
                 if mcp_app is not None:
                     await mcp_app.state.tools.close()
             finally:
-                if manage_runtime:
-                    try:
-                        from module.runtime.discord_presence import async_close_discord_rpc
-                        await async_close_discord_rpc()
-                    except Exception:
-                        logger.exception('Discord RPC 清理失败，继续回收共享运行时')
-                    finally:
-                        from module.api.lifecycle import clearup
-                        await asyncio.to_thread(clearup)
+                try:
+                    await asyncio.to_thread(gateway.router.close)
+                finally:
+                    if manage_runtime:
+                        try:
+                            from module.runtime.discord_presence import async_close_discord_rpc
+                            await async_close_discord_rpc()
+                        except Exception:
+                            logger.exception('Discord RPC 清理失败，继续回收共享运行时')
+                        finally:
+                            from module.api.lifecycle import clearup
+                            await asyncio.to_thread(clearup)
 
     dist = root / 'frontend/dist'
 
@@ -164,13 +167,18 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
     # 科研掉落的物品图标直接用仓库里的模板图，不走前端构建，
     # 这样补了新模板立刻生效，不用重新 npm build。
     research_items = root / 'assets' / 'stats' / 'research_items'
-    if research_items.is_dir():
-        routes.append(Mount('/research-items', StaticFiles(directory=research_items)))
-    # 大世界掉落的物品图标同理。opsi_reward_items 是模板库的超集
-    # （opsi_items 的每个模板名这里都有），挂一个目录就够。
+    research_templates = [research_items, root / 'assets' / 'stats_basic']
+    if any(directory.is_dir() for directory in research_templates):
+        routes.append(Mount('/research-items', ItemTemplateFiles(research_templates)))
+    # 自律结算与领奖弹窗的模板并不互相包含（如通用装备研发图纸只在弹窗库里）。
+    # 优先使用结算图标，缺失时按同名模板回退。
     opsi_items = root / 'assets' / 'stats' / 'opsi_reward_items'
-    if opsi_items.is_dir():
-        routes.append(Mount('/opsi-items', StaticFiles(directory=opsi_items)))
+    opsi_templates = [opsi_items, root / 'assets' / 'stats' / 'opsi_items']
+    if any(directory.is_dir() for directory in opsi_templates):
+        routes.append(Mount('/opsi-items', ItemTemplateFiles(opsi_templates)))
+    storage_items = root / 'assets' / 'stats'
+    if storage_items.is_dir():
+        routes.append(Mount('/storage-items', StaticFiles(directory=storage_items)))
     if mount_mcp:
         from mcp_server_sse import configure_auth
         from mcp_server_sse import create_app as create_mcp_app

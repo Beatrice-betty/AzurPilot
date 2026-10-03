@@ -171,7 +171,7 @@ class StatisticsParams(InstanceParams):
 
 class StatisticsReportParams(InstanceParams):
     """综合统计报表请求参数模型。"""
-    category: Literal['resources', 'action', 'opsi', 'commission', 'ships', 'loot', 'research'] = 'resources'
+    category: Literal['resources', 'action', 'opsi', 'commission', 'ships', 'loot', 'research', 'storage'] = 'resources'
     month: StrictStr | None = Field(default=None, pattern=r'^\d{4}-(0[1-9]|1[0-2])$')
     days: StrictInt = Field(default=7, ge=1, le=365)
     period: Literal['day', 'week', 'month'] = 'month'
