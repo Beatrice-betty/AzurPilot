@@ -3628,6 +3628,10 @@
       "name": "Sea zones to be cleaned at month end",
       "help": "This value is automatically recorded and generally does not need to be modified."
     },
+    "DeferredMissions": {
+      "name": "Deferred mission records",
+      "help": "Stores unavailable mission zones and retry times. Other daily missions continue normally."
+    },
     "CollectTargetReward": {
       "name": "Collect achievement rewards",
       "help": ""

@@ -1325,6 +1325,10 @@ OpsiDaily:
     type: stored
     value: null
     display: hide
+  DeferredMissions:
+    type: stored
+    value: null
+    display: hide
   CollectTargetReward: false
 OpsiObscure:
   SkipHazard2Obscure: false
