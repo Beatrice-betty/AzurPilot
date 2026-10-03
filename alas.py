@@ -1091,6 +1091,7 @@ class AzurLaneAutoScript:
         """
         from module.runtime.preview import set_task
         command = inflection.underscore(command)
+        self._storage_statistics_failed = False
         set_task(inflection.camelize(command))
         try:
             # Restart 的职责就是把游戏从“未运行/未出首帧”恢复起来。
@@ -1107,6 +1108,10 @@ class AzurLaneAutoScript:
                 self.handle_channel_float()
             self.__getattribute__(command)()
             return True
+        except StorageStatisticsError as e:
+            logger.error(str(e))
+            self._storage_statistics_failed = True
+            return False
         except TaskEnd:
             return True
         except GameNotRunningError as e:
@@ -1919,6 +1924,10 @@ class AzurLaneAutoScript:
         from module.storage.box_disassemble import StorageBox
         StorageBox(config=self.config, device=self.device, task="BoxDisassemble").run()
 
+    def storage_statistics(self):
+        from module.storage.statistics import StorageStatistics
+        StorageStatistics(config=self.config, device=self.device, task='StorageStatistics').run()
+
     def auto_equip(self):
         from module.auto_equip.auto_equip import AutoEquip
         AutoEquip(config=self.config, device=self.device, task="AutoEquip").run()
@@ -2497,6 +2506,12 @@ class AzurLaneAutoScript:
                             )
                     except Exception:
                         logger.warning('[Alas] 每任务推送通知异常，已跳过')
+
+                # 仓库识别不确定已由任务设置失败间隔；重启无法修复模板或数字。
+                if success is False and getattr(self, '_storage_statistics_failed', False):
+                    logger.info('[Alas] 仓库统计已延后，继续其他任务，保留上次完整快照')
+                    del_cached_property(self, 'config')
+                    continue
 
                 # 检查失败
                 # 任务失败次数统计：可恢复错误 (success == 'recoverable') 不计入失败次数。

@@ -69,7 +69,7 @@
 | `opsi.simulator.figure` | instance | 最近生成的 PNG 图表，image 为 data URL；无图时为 null |
 | `preview.capture` | instance | 读取最近一张缓存 JPEG；不主动截图，无缓存时 image/capturedAt 为 null |
 | `statistics.resources` | instance、days、resource | 兼容资源时间线，支持全部 12 种资源，最多 5,000 点 |
-| `statistics.report` | instance、category、month、days、period | 六类统计，返回 metrics、series、tables 和 notes |
+| `statistics.report` | instance、category、month、days、period | 分类统计，含只读仓库快照，返回 metrics、series、tables 和 notes |
 | `statistics.refreshLoot` | instance | 重新聚合本设备已有本地短猫掉落记录，不访问游戏 |
 | `settings.get` | 无 | 部署设置定义及值，密码只写不读 |
 | `settings.patch` | values | 校验并保存部署设置，重启生效 |
@@ -81,6 +81,8 @@
 | `updater.apply` | 无 | 后台复用原更新器，等待任务退出、更新代码、同步依赖并重启 |
 | `updater.cancel` | 无 | 仅在等待任务结束阶段取消更新 |
 | `events.subscribe` | topics、可选 instance | 原子替换当前连接的订阅集合 |
+
+仓库统计使用 `category: 'storage'` 查询最近完整扫描。`tasks.run` 的 `task: 'StorageStatistics'` 主动进入材料仓库扫描，沿用实例运行互斥；刷新报告不启动扫描。未扫描或未发现的数量为 `null`，不可当作零。图标值形如 `storage:opsi_items/PrototypeGearPartsT5`，从 `/storage-items/opsi_items/PrototypeGearPartsT5.png` 加载。
 
 `instance` 必须指向 config 目录内已存在的实例，禁止路径分隔符、符号链接和系统保留名称。创建实例名称以字母或汉字开头，可包含字母、数字、汉字、短横线和下划线，总长不超过 64。运行实例禁止删除，已有运行实例禁止重复启动。
 

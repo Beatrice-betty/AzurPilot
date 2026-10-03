@@ -1,5 +1,58 @@
 import { expect, test } from '@playwright/test'
 
+test('大世界掉落缺图回退领奖模板并显示月度Boss筛选', async ({page}) => {
+  await page.emulateMedia({reducedMotion: 'reduce'})
+  await page.addInitScript(() => {
+    localStorage.setItem('azurpilot.theme', 'light')
+    localStorage.setItem('azurpilot.statistics', JSON.stringify({category: 'loot'}))
+  })
+  await page.goto('/#/i/demo-main/statistics')
+  const detail = page.locator('.statistics-table').filter({has: page.getByRole('heading', {name: '大世界掉落明细', exact: true})})
+  await expect(detail).toBeVisible()
+  const plan = detail.getByRole('row').filter({hasText: '装备研发图纸UR型'})
+  await expect(plan).toContainText('1')
+  const icons = page.locator('img[src$="opsi-items/GearDesignPlanT5.png"]')
+  await expect(icons).toHaveCount(2)
+  await expect.poll(() => icons.evaluateAll(images => images.every(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0))).toBe(true)
+  await page.getByRole('combobox', {name: '任务', exact: true}).click()
+  await expect(page.getByRole('option', {name: '月度Boss（1）', exact: true})).toBeVisible()
+  await page.keyboard.press('Escape')
+  await page.screenshot({path: 'test-results/opsi-drop-template-fallback.png', fullPage: true, animations: 'disabled'})
+})
+
+test('仓库统计显示快照且刷新不会启动游戏扫描', async ({page}) => {
+  const requests: string[] = []
+  page.on('websocket', socket => socket.on('framesent', event => {
+    const payload = JSON.parse(String(event.payload))
+    if (payload.method) requests.push(payload.method)
+  }))
+  await page.emulateMedia({reducedMotion: 'reduce'})
+  await page.addInitScript(() => {
+    localStorage.setItem('azurpilot.theme', 'light')
+    localStorage.setItem('azurpilot.statistics', JSON.stringify({category: 'storage'}))
+  })
+  await page.goto('/#/i/demo-main/statistics')
+  const table = page.locator('.statistics-table').filter({has: page.getByRole('heading', {name: '仓库物品', exact: true})})
+  await expect(table).toBeVisible()
+  await expect(table.locator('tbody tr')).toHaveCount(25)
+  await expect(table.getByRole('row').filter({hasText: '特装型突破部件'})).toContainText('153')
+  await expect(table.getByRole('row').filter({hasText: '心智单元II'})).toContainText('9,873')
+  await expect.poll(() => table.locator('img').evaluateAll(images => images.length > 0 && images.every(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0))).toBe(true)
+  await page.getByRole('button', {name: '刷新统计', exact: true}).first().click()
+  expect(requests.filter(method => method === 'tasks.run')).toHaveLength(0)
+  await page.screenshot({path: test.info().outputPath('storage-statistics.png'), fullPage: true})
+  await page.getByRole('button', {name: '运行仓库统计', exact: true}).first().click()
+  await expect.poll(() => requests.filter(method => method === 'tasks.run').length).toBe(1)
+  await page.getByRole('button', {name: '运行仓库统计', exact: true}).first().click()
+  await expect(page.getByRole('alert')).toContainText('实例已在运行')
+  await page.reload()
+  await expect(table).toBeVisible()
+  await page.goto('/#/i/demo-alt/statistics')
+  await expect(table).toBeVisible()
+  await expect(table.getByRole('cell', {name: '未扫描', exact: true})).toHaveCount(25)
+  await expect(table.getByRole('cell', {name: '—', exact: true})).toHaveCount(25)
+})
+
 test('任务分组目录重复点击保持在同一栏目', async ({page}) => {
   await page.emulateMedia({reducedMotion: 'reduce'})
   await page.addInitScript(() => localStorage.setItem('azurpilot.theme', 'light'))

@@ -8,7 +8,7 @@
  * 与其它界面偏好一致：关掉再打开接着上次的样子，直到用户自己调整。
  * 只存本浏览器，不区分实例。
  */
-export type StatisticsCategory = 'resources' | 'action' | 'opsi' | 'commission' | 'ships' | 'loot' | 'research'
+export type StatisticsCategory = 'resources' | 'action' | 'opsi' | 'commission' | 'ships' | 'loot' | 'research' | 'storage'
 export type ChartMode = 'line' | 'candlestick'
 export type ChartAxisMode = 'separate' | 'unified'
 export type CommissionPeriod = 'day' | 'week' | 'month'
@@ -34,7 +34,7 @@ export interface StatisticsPrefs {
 
 export const PREFS_KEY = 'azurpilot.statistics'
 
-export const VALID_CATEGORIES: readonly StatisticsCategory[] = ['resources', 'action', 'opsi', 'commission', 'ships', 'loot', 'research']
+export const VALID_CATEGORIES: readonly StatisticsCategory[] = ['resources', 'action', 'opsi', 'commission', 'ships', 'loot', 'research', 'storage']
 export const VALID_DAYS: readonly number[] = [1, 7, 30, 90, 365]
 export const VALID_PERIODS: readonly CommissionPeriod[] = ['day', 'week', 'month']
 export const VALID_BUCKETS: readonly number[] = [0, 5, 60, 1440]

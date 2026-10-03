@@ -1077,7 +1077,7 @@ class OSFleet(OSCamera, Combat, Fleet, OSAsh):
                     logger.info('[大世界-战斗] Boss已清除')
                     if drop.count:
                         drop.add(self.device.image)
-                    self.map_exit()
+                    self.map_exit(drop=drop)
                     return True
 
                 # 待命

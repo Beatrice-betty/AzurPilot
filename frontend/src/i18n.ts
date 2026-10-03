@@ -16,6 +16,9 @@ export const languages: Record<Language, string> = {
 }
 
 const zhCN = {
+  'stats.category.storage': '仓库物品',
+  'stats.runStorage': '运行仓库统计',
+  'stats.storageStarted': '仓库统计已启动，完整扫描完成后更新数量。',
   'simulator.start': '开始模拟',
   'simulator.stop': '中断模拟',
   'simulator.idle': '等待模拟',
@@ -590,6 +593,9 @@ export type UiKey = keyof typeof zhCN
 export type UiTranslator = (key: UiKey, params?: TranslationParams) => string
 
 const enUS: Record<UiKey, string> = {
+  'stats.category.storage': 'Inventory',
+  'stats.runStorage': 'Scan inventory',
+  'stats.storageStarted': 'Inventory scan started. Counts update after a complete scan.',
   'simulator.start': 'Start simulation',
   'simulator.stop': 'Interrupt simulation',
   'simulator.idle': 'Ready to simulate',
@@ -727,6 +733,9 @@ const enUS: Record<UiKey, string> = {
 }
 
 const jaJP: Record<UiKey, string> = {
+  'stats.category.storage': '倉庫アイテム',
+  'stats.runStorage': '倉庫を集計',
+  'stats.storageStarted': '倉庫の集計を開始しました。全体の確認が終わると数量が更新されます。',
   'simulator.start': 'シミュレーション開始',
   'simulator.stop': 'シミュレーション中断',
   'simulator.idle': '開始待ち',
@@ -925,6 +934,9 @@ const jaJP: Record<UiKey, string> = {
 }
 
 const zhTW: Record<UiKey, string> = {
+  'stats.category.storage': '倉庫物品',
+  'stats.runStorage': '執行倉庫統計',
+  'stats.storageStarted': '倉庫統計已啟動，完整掃描完成後更新數量。',
   'simulator.start': '開始模擬',
   'simulator.stop': '中斷模擬',
   'simulator.idle': '等待模擬',
@@ -1172,6 +1184,9 @@ const zhTW: Record<UiKey, string> = {
 
 const zhMiao: Record<UiKey, string> = {
   ...zhCN,
+  'stats.category.storage': '仓库物品喵',
+  'stats.runStorage': '运行仓库统计喵',
+  'stats.storageStarted': '仓库统计已启动喵，完整扫描完成后更新数量。',
   'simulator.start': '开始模拟喵',
   'simulator.stop': '中断模拟喵',
   'simulator.idle': '等待模拟喵',

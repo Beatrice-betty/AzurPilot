@@ -166,6 +166,10 @@
       "name": "Research Lab Plus",
       "help": ""
     },
+    "StorageStatistics": {
+      "name": "Inventory statistics",
+      "help": "Scan and verify the material inventory twice before updating Statistics. Disabled by default; can be run manually. Does not consume items. Currently verified for CN only."
+    },
     "Dorm": {
       "name": "Dorm Plus",
       "help": ""

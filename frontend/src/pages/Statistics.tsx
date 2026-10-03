@@ -28,6 +28,7 @@ import {
   Plus,
   Hourglass,
   Package,
+  Play,
   Paintbrush,
   Percent,
   RefreshCw,
@@ -41,6 +42,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { api } from '../api/client'
+import { editor } from '../config/editors'
 import type { StatTable, StatisticsReport } from '../api/types'
 import type { Parameters } from '../api/generated'
 import { useApp, useConnection } from '../app/context'
@@ -112,7 +114,7 @@ function getMetricIcon(label: string): LucideIcon | undefined {
 }
 
 const StatisticsChart = lazy(() => import('../components/StatisticsChart').then(module => ({default: module.StatisticsChart})))
-const categories: Record<Category, UiKey> = {resources: 'stats.category.resources', action: 'stats.category.action', opsi: 'stats.category.opsi', commission: 'stats.category.commission', ships: 'stats.category.ships', loot: 'stats.category.loot', research: 'stats.category.research'}
+const categories: Record<Category, UiKey> = {resources: 'stats.category.resources', action: 'stats.category.action', opsi: 'stats.category.opsi', commission: 'stats.category.commission', ships: 'stats.category.ships', loot: 'stats.category.loot', research: 'stats.category.research', storage: 'stats.category.storage'}
 type Category = NonNullable<Parameters['statistics.report']['category']>
 
 /* 页面显示开关按固定顺序排列，与排序后的页面顺序无关。 */
@@ -183,6 +185,8 @@ export function Statistics() {
   const [revision, setRevision] = useState(0)
   const [data, setData] = useState<StatisticsReport>()
   const [refreshing, setRefreshing] = useState(false)
+  const [startingStorage, setStartingStorage] = useState(false)
+  const [storageError, setStorageError] = useState('')
   const [editMode, setEditMode] = useState(readStatisticsEditMode)
   const [customized, setCustomized] = useState(hasStatisticsLayout)
   const [layout, setLayout] = useState(readStatisticsLayout)
@@ -263,6 +267,17 @@ export function Statistics() {
       /* 刷新失败时保持当前视图：各分节自身的取数错误会呈现。 */
     } finally {setRefreshing(false)}
   }
+  async function runStorageStatistics() {
+    setStartingStorage(true)
+    setStorageError('')
+    try {
+      await editor(`config:${instance}`).settled()
+      await api.request('tasks.run', {instance, task: 'StorageStatistics'})
+      notify(ui('stats.storageStarted'))
+    } catch (error) {
+      setStorageError((error as Error).message)
+    } finally {setStartingStorage(false)}
+  }
   function download() {
     if (!data) return
     downloadCsv(`${instance}-${ui(categories[category!])}-${data.month}`, [
@@ -272,7 +287,7 @@ export function Statistics() {
       ...(data.notes.length ? [[ui('stats.notes')], ...data.notes.map(note => [note])] : []),
     ])
   }
-  const actions = <><button className="button secondary" disabled={connection !== 'ready' || refreshing} onClick={refresh}><RefreshCw size={15}/>{refreshing ? ui('stats.refreshing') : ui('stats.refresh')}</button><button className="button secondary" disabled={!data} onClick={download}><Download size={15}/>{ui('stats.exportCategory')}</button><button className="button secondary statistics-edit-toggle" aria-pressed={editMode} onClick={toggleEditMode}><Paintbrush size={15}/>{ui('stats.editMode')}</button></>
+  const actions = <>{category === 'storage' && <button className="button secondary" disabled={connection !== 'ready' || startingStorage} onClick={runStorageStatistics}><Play size={15}/>{ui('stats.runStorage')}</button>}<button className="button secondary" disabled={connection !== 'ready' || refreshing} onClick={refresh}><RefreshCw size={15}/>{refreshing ? ui('stats.refreshing') : ui('stats.refresh')}</button><button className="button secondary" disabled={!data} onClick={download}><Download size={15}/>{ui('stats.exportCategory')}</button><button className="button secondary statistics-edit-toggle" aria-pressed={editMode} onClick={toggleEditMode}><Paintbrush size={15}/>{ui('stats.editMode')}</button></>
   // 只有紧凑主题把分类、时间范围与操作并成一行并置顶，其余主题维持原来的两行结构。
   const condensed = theme === 'extreme'
   /* 没有图表的分类（只有汇总卡片与明细表）不放「放大查看」。 */
@@ -589,6 +604,7 @@ export function Statistics() {
       <PageChainSlots rows={layout.slots} labels={pageLabels} options={freePages} onPlace={placeInSlot} onRemove={removeFromSlot}/>
     </StatisticsEditConsole>}
     {/* 分节：每个卡片空间一段内容，链与顺序都在空间全量上算，跨页的链落进同一个容器。 */}
+    {storageError && <ErrorBox message={storageError}/>}
     <div className="statistics-page-sections">
       {(singleView ? [spaceOf(category!)] : isPageEnabled(layout, category) ? [chainOf(category)] : []).map(space => {
         const head = space[0]
