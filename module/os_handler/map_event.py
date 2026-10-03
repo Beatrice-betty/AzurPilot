@@ -8,7 +8,7 @@ from typing import Optional
 
 from module.base.timer import Timer
 from module.combat.assets import *
-from module.exception import CampaignEnd
+from module.exception import CampaignEnd, GameTooManyClickError
 from module.handler.assets import POPUP_CANCEL, POPUP_CONFIRM, STORY_SKIP_3
 from module.logger import logger
 from module.os.assets import GLOBE_GOTO_MAP
@@ -338,6 +338,38 @@ class MapEventHandler(EnemySearchingHandler):
 
         return cleared
 
+    _os_auto_search_enable_timeout = 45
+
+    def _os_auto_search_enable_click(self, button):
+        """开启自律寻敌的带预算重试点击。
+
+        装置探测演出、剧情收尾期间游戏可能持续数秒不响应该按钮，
+        连续重试是有意行为：与剧情选项处理同法，点击后清空共用点击
+        记录，避免被「15 次内同一按钮 ≥12 次」的防连点阈值在快刷
+        间隔下约 7 秒就判死；改由 _os_auto_search_enable_timeout 秒
+        预算兜底，超时仍未生效才按点击无效上报。
+
+        Args:
+            button: AUTO_SEARCH_OS_MAP_OPTION_OFF 或 _OFF_DISABLED。
+        """
+        if '_os_auto_search_enable_timer' not in self.__dict__:
+            self._os_auto_search_enable_timer = Timer(self._os_auto_search_enable_timeout)
+        if not self._os_auto_search_enable_timer.started():
+            self._os_auto_search_enable_timer.start()
+        elif self._os_auto_search_enable_timer.reached():
+            self._os_auto_search_enable_timer.clear()
+            raise GameTooManyClickError(
+                f'[大世界-搜索] 自律寻敌连续点击 {self._os_auto_search_enable_timeout} 秒仍未生效')
+        self.device.click(button)
+        # 连续重试会累积共用点击记录，点击后清空；卡死检测由上方预算兜底
+        self.device.click_record_clear()
+
+    def _os_auto_search_enable_budget_clear(self):
+        """关闭外观消失或界面被剧情挡住时，清零开启自律的重试预算。"""
+        timer = self.__dict__.get('_os_auto_search_enable_timer')
+        if timer is not None:
+            timer.clear()
+
     def handle_os_auto_search_map_option(self, drop=None, enable: Optional[bool] = True):
         """
         处理大世界自动搜索地图选项。
@@ -386,12 +418,14 @@ class MapEventHandler(EnemySearchingHandler):
             if click_interval < 3:
                 # 剧情可能透出地图按钮，先处理剧情；回到地图后才重试开启自律。
                 if self.appear(STORY_SKIP_3, offset=(20, 20)):
+                    self._os_auto_search_enable_budget_clear()
                     return False
                 if not self.is_in_map():
+                    self._os_auto_search_enable_budget_clear()
                     return False
             if self.match_template_color(AUTO_SEARCH_OS_MAP_OPTION_OFF,
                                          offset=(5, 120), interval=click_interval):
-                self.device.click(AUTO_SEARCH_OS_MAP_OPTION_OFF)
+                self._os_auto_search_enable_click(AUTO_SEARCH_OS_MAP_OPTION_OFF)
                 # 两种关闭外观共用重试间隔，避免按钮变灰后在下一帧重复点击。
                 self.get_interval_timer(AUTO_SEARCH_OS_MAP_OPTION_OFF_DISABLED,
                                         interval=click_interval, renew=True).reset()
@@ -399,10 +433,12 @@ class MapEventHandler(EnemySearchingHandler):
             # 游戏客户端有时会 bug，AUTO_SEARCH_OS_MAP_OPTION_OFF 灰显但仍可点击
             if self.match_template_color(AUTO_SEARCH_OS_MAP_OPTION_OFF_DISABLED,
                                          offset=(5, 120), interval=click_interval):
-                self.device.click(AUTO_SEARCH_OS_MAP_OPTION_OFF_DISABLED)
+                self._os_auto_search_enable_click(AUTO_SEARCH_OS_MAP_OPTION_OFF_DISABLED)
                 self.get_interval_timer(AUTO_SEARCH_OS_MAP_OPTION_OFF,
                                         interval=click_interval, renew=True).reset()
                 return True
+            # 关闭外观消失：自律已开启或界面已切换，重试预算清零
+            self._os_auto_search_enable_budget_clear()
         else:
             if self.match_template_color(AUTO_SEARCH_OS_MAP_OPTION_ON, offset=(5, 120), interval=3):
                 self.device.click(AUTO_SEARCH_OS_MAP_OPTION_ON)

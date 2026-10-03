@@ -18,7 +18,7 @@ from module.os_handler.assets import (
 )
 from module.os_handler.map_event import MapEventHandler
 from module.os_shop.assets import PORT_SUPPLY_CHECK
-from tests.test_story_option_click import StoryHandlerStub, make_options
+from tests.test_story_option_click import FakeDevice, StoryHandlerStub, make_options
 
 
 class VirtualClock:
@@ -297,6 +297,17 @@ class AutoSearchStateStub(MapEventHandler):
         return self.in_map
 
 
+class GuardedAutoSearchDevice(FakeDevice):
+    """复刻真实防连点规则，并补上 match_template_color 需要的最小接口。"""
+
+    def __init__(self):
+        super().__init__()
+        self.image = None
+
+    def stuck_record_add(self, button):
+        pass
+
+
 class TestCl1AutoSearchRetry(unittest.TestCase):
     command = 'OpsiHazard1Leveling'
 
@@ -403,6 +414,81 @@ class TestCl1AutoSearchRetry(unittest.TestCase):
     def test_uncertain_search_does_not_restart(self):
         self.assertFalse(self.handler.handle_os_auto_search_map_option(enable=None))
         self.handler.device.click.assert_not_called()
+
+    def use_fake_device(self):
+        """换用复刻真实防连点规则的假设备，验证重试不会触发全局阈值。"""
+        device = GuardedAutoSearchDevice()
+        self.handler.device = device
+        return device
+
+    def test_long_enable_storm_does_not_trip_click_guard(self):
+        """装置探测演出后持续重试约 24 秒（40 次），不应触发共用防连点阈值。"""
+        device = self.use_fake_device()
+        for _ in range(40):
+            self.assertTrue(self.handler.handle_os_auto_search_map_option())
+            self.clock.now += 0.6
+        self.assertEqual(len(device.history), 40)
+        self.assertEqual(device.count_of('AUTO_SEARCH_OS_MAP_OPTION_OFF_DISABLED'), 0)
+        # 每次点击后都清空点击记录，防连点阈值不会被重试累积触发
+        self.assertGreaterEqual(device.clears, 40)
+
+    def test_alternating_off_states_do_not_trip_curve_guard(self):
+        """两种关闭外观交替重试也不触发「两个按钮各 ≥6 次」的防连点规则。"""
+        device = self.use_fake_device()
+        for n in range(40):
+            self.handler.state = (
+                AUTO_SEARCH_OS_MAP_OPTION_OFF if n % 2 == 0
+                else AUTO_SEARCH_OS_MAP_OPTION_OFF_DISABLED
+            )
+            self.assertTrue(self.handler.handle_os_auto_search_map_option())
+            self.clock.now += 0.6
+        self.assertEqual(len(device.history), 40)
+
+    def test_stuck_enable_storm_reports_after_budget(self):
+        """界面持续停在关闭外观超过预算后，按点击无效上报而不是无限重试。"""
+        self.use_fake_device()
+        with self.assertRaisesRegex(GameTooManyClickError, '自律寻敌'):
+            for _ in range(100):
+                self.handler.handle_os_auto_search_map_option()
+                self.clock.now += 0.6
+
+    def test_retry_budget_resets_between_battles(self):
+        """自律开启后预算清零，下一场战斗的重试重新计时，不跨轮累积。"""
+        self.use_fake_device()
+        for _ in range(60):
+            self.assertTrue(self.handler.handle_os_auto_search_map_option())
+            self.clock.now += 0.6
+        self.handler.state = AUTO_SEARCH_OS_MAP_OPTION_ON
+        self.clock.now += 0.6
+        self.assertFalse(self.handler.handle_os_auto_search_map_option())
+        self.handler.state = AUTO_SEARCH_OS_MAP_OPTION_OFF
+        self.clock.now += 0.6
+        for _ in range(20):
+            self.assertTrue(self.handler.handle_os_auto_search_map_option())
+            self.clock.now += 0.6
+
+    def test_retry_budget_resets_when_frame_is_interrupted(self):
+        """剧情或非地图画面打断重试时预算清零，恢复点击后重新计时。"""
+        for interrupt in ('story', 'not_map'):
+            with self.subTest(interrupt=interrupt):
+                self.handler = AutoSearchStateStub()
+                self.handler.config.task.command = self.command
+                self.use_fake_device()
+                for _ in range(60):
+                    self.assertTrue(self.handler.handle_os_auto_search_map_option())
+                    self.clock.now += 0.6
+                if interrupt == 'story':
+                    self.handler.story_present = True
+                else:
+                    self.handler.in_map = False
+                self.clock.now += 0.6
+                self.assertFalse(self.handler.handle_os_auto_search_map_option())
+                self.handler.story_present = False
+                self.handler.in_map = True
+                self.clock.now += 0.6
+                for _ in range(20):
+                    self.assertTrue(self.handler.handle_os_auto_search_map_option())
+                    self.clock.now += 0.6
 
 
 class TestMeowAutoSearchRetry(TestCl1AutoSearchRetry):
