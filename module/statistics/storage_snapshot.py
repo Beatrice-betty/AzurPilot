@@ -63,3 +63,29 @@ def latest_snapshot(instance, *, database=None):
             name, item_group AS "group", amount FROM storage_items WHERE scan_id=? ORDER BY rowid''',
             (scan['id'],))]
         return result
+
+
+def get_storage_timeline(instance, *, since=None, through_id=None, limit=50001, database=None):
+    """只读成功扫描的历史，按完成时间排序；未发现的数量继续保留 None。"""
+    path = Path(database) if database is not None else DATABASE
+    if not path.is_file():
+        return []
+    with closing(sqlite3.connect(path.resolve().as_uri() + '?mode=ro', uri=True, timeout=10)) as connection:
+        connection.row_factory = sqlite3.Row
+        if connection.execute("SELECT 1 FROM sqlite_master WHERE name='storage_scans'").fetchone() is None:
+            return []
+        # 一条查询取得扫描和物品，避免并发提交时两次查询读到不同的扫描集合。
+        records = connection.execute('''SELECT scans.id, scans.finished_at, scans.server,
+                items.item_id, items.amount FROM (
+            SELECT id, finished_at, server FROM storage_scans
+                WHERE instance=? AND (? IS NULL OR finished_at>=?) AND (? IS NULL OR id<=?)
+                ORDER BY finished_at DESC, id DESC LIMIT ?
+            ) AS scans LEFT JOIN storage_items AS items ON items.scan_id=scans.id
+            ORDER BY scans.finished_at, scans.id''', (instance, since, since, through_id, through_id, limit))
+        rows = {}
+        for record in records:
+            row = rows.setdefault(record['id'], {'ts': record['finished_at'],
+                                  'source': f"仓库统计（{record['server']}）"})
+            if record['item_id'] is not None:
+                row[record['item_id']] = record['amount']
+        return list(rows.values())

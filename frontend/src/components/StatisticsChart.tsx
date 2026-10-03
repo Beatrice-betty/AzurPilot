@@ -12,6 +12,7 @@ import { GridComponent, TooltipComponent, DataZoomComponent, ToolboxComponent, L
 import { CanvasRenderer } from 'echarts/renderers'
 import type {StatSeries} from '../api/types'
 import { Empty } from './ui'
+import {resolveIcon} from './StatisticsTable'
 import {buildSeriesView, isActionPointSeries, riseFallSegments} from './statisticsData'
 import { useApp } from '../app/context'
 import { usesMaterial } from '../app/theme'
@@ -58,7 +59,9 @@ const chartResourceIcons: Record<string, string> = {
   '完成委托': `${iconBase}honor_medal.webp`,
 }
 
-function getChartIcon(label: string): string | undefined {
+function getChartIcon(series: StatSeries): string | undefined {
+  if (series.icon) return resolveIcon(series.icon)?.src
+  const {label} = series
   if (chartResourceIcons[label]) return chartResourceIcons[label]
   for (const [key, icon] of Object.entries(chartResourceIcons)) {
     if (label.includes(key) || key.includes(label)) return icon
@@ -259,7 +262,7 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
       const padRange = Number.isFinite(axisStart) && axisEnd > axisStart
       /* 只补绘制用的点，不改数据、指标与记录。 */
       const padPairs = (pairs: Array<[number, number]>): Array<[number, number]> => {
-        if (!padRange || pairs.length === 0) return pairs
+        if (category === 'storage' || !padRange || pairs.length === 0) return pairs
         const padded: Array<[number, number]> = [...pairs]
         if (padded[0][0] > axisStart) padded.unshift([axisStart, 0])
         const last = padded[padded.length - 1]
@@ -405,7 +408,7 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
       observer.disconnect()
       themeObserver.disconnect()
     }
-  }, [shownData, hasPoints, isCandlestick, axisMode, isSingle, categoryTimes, language, ui, theme, stackedRise, zeroBase])
+  }, [shownData, hasPoints, isCandlestick, axisMode, isSingle, categoryTimes, category, language, ui, theme, stackedRise, zeroBase])
 
 
   /* 图表设置（类型、坐标轴、采样粒度、时间范围）排在图表下方：先看数据，再决定怎么画。 */
@@ -501,8 +504,8 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
                 title={empty ? ui('stats.noSeriesRecord') : `${item.label} (${active ? '已启用' : '未启用'}，双击仅看此项)`}
                 disabled={empty}
               >
-                {getChartIcon(item.label) ? (
-                  <img className="stat-chip-icon" src={getChartIcon(item.label)} alt="" width={20} height={20} draggable={false}/>
+                {getChartIcon(item) ? (
+                  <img className="stat-chip-icon" src={getChartIcon(item)} alt="" width={20} height={20} draggable={false}/>
                 ) : (
                   <span className="stat-chip-dot" style={{backgroundColor: active ? color : undefined}}/>
                 )}
@@ -553,8 +556,8 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
                   <div key={item.series.key} className={`stat-metric-row${muted ? ' is-filtered' : ''}${canFilter ? ' is-filterable' : ''}`} {...filterProps}>
                     <span className="stat-metric-name">
                       <span className="stat-metric-icon">
-                        {getChartIcon(item.series.label) ? (
-                          <img className="stat-chip-icon" src={getChartIcon(item.series.label)} alt="" width={20} height={20} draggable={false}/>
+                        {getChartIcon(item.series) ? (
+                          <img className="stat-chip-icon" src={getChartIcon(item.series)} alt="" width={20} height={20} draggable={false}/>
                         ) : (
                           <span className="stat-chip-dot" style={{backgroundColor: item.color}}/>
                         )}
@@ -569,8 +572,8 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
                 ) : (
                   <div key={item.series.key} className={`stat-metric-card${muted ? ' is-filtered' : ''}${canFilter ? ' is-filterable' : ''}`} {...filterProps}>
                     <div className="stat-metric-header">
-                      {getChartIcon(item.series.label) ? (
-                        <img className="stat-chip-icon" src={getChartIcon(item.series.label)} alt="" width={20} height={20} draggable={false}/>
+                      {getChartIcon(item.series) ? (
+                        <img className="stat-chip-icon" src={getChartIcon(item.series)} alt="" width={20} height={20} draggable={false}/>
                       ) : (
                         <span className="stat-chip-dot" style={{backgroundColor: item.color}}/>
                       )}

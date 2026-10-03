@@ -719,7 +719,15 @@ export function createMockState({ empty = false } = {}) {
         const result = { instance: name, category: params.category, month: params.month, metrics: [], series: [], tables: [], notes: [] }
         if (params.category === 'storage') {
           result.notes = [name === 'demo-alt' ? '尚未运行仓库统计任务。' : '最近完整扫描：2026-10-03 00:00:00；复核 12 页。', '刷新只读取已有快照，运行仓库统计任务后才更新数量。']
-          const quantities = [153, 46, 20, 46, 58, 1, 13393, 9873, 881, 497, 1659, 1266, 1628, 745, 5015, 3584, 3785, 5634, 4230, 5297, 699, 859, 884, 753, 767]
+          const quantities = [153, 46, 20, 46, 58, 1, 32791, 1204, 881, 497, 1659, 1266, 1628, 745, 5015, 3584, 3785, 5634, 4230, 5297, 699, 859, 884, 753, 767]
+          result.series = storageCatalog.items.map((item, index) => ({
+            key: item.id, label: item.name,
+            icon: 'storage:' + item.templates[0].replace('assets/stats/', '').replace('.png', ''),
+            points: name === 'demo-alt' ? [] : [8, 3, 1, 0]
+              .filter(days => days < (params.days ?? 7))
+              .map(days => ({t: Math.floor((Date.now() - days * 86400000) / 1000) * 1000000,
+                v: Math.max(1, quantities[index] - days * 3), s: '仓库统计（cn）'})),
+          }))
           result.tables = [{title: '仓库物品', note: result.notes.join(' '), columns: ['图标', '物品', '分类', '数量', '状态'],
             rows: storageCatalog.items.map((item, index) => [
               'storage:' + item.templates[0].replace('assets/stats/', '').replace('.png', ''),

@@ -11,7 +11,7 @@ from module.exception import StorageStatisticsError
 from module.logger import logger
 from module.statistics.storage_snapshot import save_snapshot
 from module.storage.assets import MATERIAL_STATISTICS_SCROLL
-from module.storage.statistics_recognition import (StorageCatalog, StorageRecognitionError,
+from module.storage.statistics_recognition import (StorageCatalog, StorageNoProgressError, StorageRecognitionError,
     StorageTraversal, recognize_rows, same_row)
 from module.storage.ui import StorageUI
 from module.ui.scroll import Scroll
@@ -32,9 +32,11 @@ class StorageStatistics(StorageUI):
         traversal = StorageTraversal()
         target = 0.
         moving = True
-        edge_dragged = False
+        dragged = False
         previous = None
         previous_position = None
+        recovery_origin = None
+        recovery_count = 0
         stable = Timer(.4, count=1)
         action = Timer(2, count=2)
         timeout = Timer(20, count=40).start()
@@ -46,7 +48,9 @@ class StorageStatistics(StorageUI):
                 previous = None
                 continue
             if not self._storage_in_material():
-                raise StorageRecognitionError('扫描期间离开材料仓库')
+                # 页签的动画或短暂遮挡不能覆盖此前真实的识别错误，也不能盲目滑动。
+                previous = None
+                continue
             mask = scroll.match_color(self)
             if not mask.any():
                 raise StorageRecognitionError('无法确认仓库滚动条位置')
@@ -62,24 +66,33 @@ class StorageStatistics(StorageUI):
             at_bottom = pixels[-1] >= scroll.total - 2
             if moving:
                 edge_ready = (scroll.length == scroll.total
-                              or (target == 0. and at_top or target == 1. and at_bottom) and edge_dragged)
-                if edge_ready or 0. < target < 1. and abs(position - target) <= .006:
+                              or (target == 0. and at_top or target == 1. and at_bottom) and dragged)
+                target_ready = (dragged and 0. < target < 1.
+                                and abs(position - target) * (scroll.total - scroll.length) <= 8)
+                if edge_ready or target_ready:
                     moving = False
                     previous = None
-                    timeout.reset()
+                    if not recovery_count:
+                        timeout.reset()
                     continue
                 if action.reached():
                     start = random_rectangle_point(scroll.position_to_screen(position, (0, 0)), n=1)
                     # 顶/底额外拖过边界，再用当前滚动条端点确认，避免百分比取整漏首末行。
                     destination = -.1 if target == 0. else 1.1 if target == 1. else target
                     end = random_rectangle_point(scroll.position_to_screen(destination, (0, 0)), n=1)
-                    self.device.swipe(start, end, name='StorageStatistics', distance_check=False)
-                    edge_dragged = target in (0., 1.)
+                    if 0. < target < 1. and abs(end[1] - start[1]) < 12:
+                        # 长列表的滑块很短；改在列表内翻半页，避免几像素手势不生效。
+                        self.device.swipe((1180, 500), (1180, 245),
+                                          name='StorageStatistics', distance_check=False)
+                        moving = False
+                    else:
+                        self.device.swipe(start, end, name='StorageStatistics', distance_check=False)
+                    dragged = True
                     action.reset()
                 continue
             if at_bottom and target < 1. and scroll.length < scroll.total:
                 # 中途位置被取整到端点附近时，先实际拖到底，再读取末行。
-                target, moving, edge_dragged = 1., True, False
+                target, moving, dragged = 1., True, False
                 previous = None
                 action.clear()
                 timeout.reset()
@@ -89,27 +102,51 @@ class StorageStatistics(StorageUI):
                 partial = [i for i, row in enumerate(rows) if any(not card.present for card in row)]
                 if partial and (partial != [len(rows) - 1] or not at_bottom):
                     raise StorageRecognitionError('只有确认到底后的末行才允许空格')
+                equal = (previous is not None and len(previous) == len(rows)
+                         and abs(position - previous_position) <= .002
+                         and all(same_row(a, b) and abs(a[0].area[1] - b[0].area[1]) <= 1
+                                 for a, b in zip(previous, rows)))
+                if not equal:
+                    previous, previous_position = rows, position
+                    stable.reset()
+                    continue
+                if not stable.reached():
+                    continue
+                traversal.append(rows, at_bottom=at_bottom)
             except StorageRecognitionError as error:
+                if last_error != str(error):
+                    logger.warning(f'仓库当前页待重读：{error}')
                 last_error = str(error)
                 previous = None
+                if action.reached():
+                    if recovery_count >= 4 or scroll.length == scroll.total:
+                        raise
+                    if recovery_origin is None:
+                        recovery_origin = position
+                    if not traversal.rows or at_bottom:
+                        # 首末行必须在端点读取。先移开遮挡再回到同一端点，禁止漏首尾行。
+                        delta = 64 if at_top else -64
+                        target, moving, dragged = (0. if not traversal.rows else 1.), True, False
+                    else:
+                        # 围绕失败位置上下微调；拼接仍须唯一重叠，不能把跳页当成成功。
+                        offsets = (64, -64, 96, -96) if isinstance(error, StorageNoProgressError) else (-64, 64, -96, 96)
+                        shift = (position - recovery_origin) * (scroll.total - scroll.length) / scroll.length * 572
+                        delta = int(np.clip(offsets[recovery_count] - shift, -256, 256))
+                        if abs(delta) < 24:
+                            delta = 64 if delta >= 0 else -64
+                    self.device.swipe((1180, 365), (1180, 365 - delta),
+                                      name='StorageStatistics', distance_check=False)
+                    recovery_count += 1
+                    logger.attr('仓库重读', f'第 {recovery_count} 次微调，向{"下" if delta > 0 else "上"}滚动 {abs(delta)}px')
+                    action.reset()
                 continue
-            equal = (previous is not None and len(previous) == len(rows)
-                     and abs(position - previous_position) <= .002
-                     and all(same_row(a, b) and abs(a[0].area[1] - b[0].area[1]) <= 1
-                             for a, b in zip(previous, rows)))
-            if not equal:
-                previous, previous_position = rows, position
-                stable.reset()
-                continue
-            if not stable.reached():
-                continue
-            traversal.append(rows, at_bottom=at_bottom)
+            recovery_origin, recovery_count = None, 0
             logger.attr('仓库扫描', f'第 {traversal.pages} 页，累计 {len(traversal.rows)} 行')
             if at_bottom:
                 return traversal
             target = min(1., position + .45 * scroll.length / (scroll.total - scroll.length))
             moving = True
-            edge_dragged = False
+            dragged = False
             previous = None
             action.clear()
             timeout.reset()

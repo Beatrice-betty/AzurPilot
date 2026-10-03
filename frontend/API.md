@@ -82,7 +82,7 @@
 | `updater.cancel` | 无 | 仅在等待任务结束阶段取消更新 |
 | `events.subscribe` | topics、可选 instance | 原子替换当前连接的订阅集合 |
 
-仓库统计使用 `category: 'storage'` 查询最近完整扫描。`tasks.run` 的 `task: 'StorageStatistics'` 主动进入材料仓库扫描，沿用实例运行互斥；刷新报告不启动扫描。未扫描或未发现的数量为 `null`，不可当作零。图标值形如 `storage:opsi_items/PrototypeGearPartsT5`，从 `/storage-items/opsi_items/PrototypeGearPartsT5.png` 加载。
+仓库统计使用 `category: 'storage'` 查询最近完整扫描，`days` 限定成功扫描历史的时间窗口。`series` 提供各物品已确认数量的趋势与原始记录，复用资源趋势控件；未扫描或未发现的数量在最新清单中为 `null`，历史序列不补零。序列可选 `icon` 在逐点和共用时间轴格式中均保留，例如 `storage:opsi_items/PrototypeGearPartsT5`，从 `/storage-items/opsi_items/PrototypeGearPartsT5.png` 加载。`tasks.run` 的 `task: 'StorageStatistics'` 主动进入材料仓库扫描，沿用实例运行互斥；刷新报告不启动扫描。
 
 `instance` 必须指向 config 目录内已存在的实例，禁止路径分隔符、符号链接和系统保留名称。创建实例名称以字母或汉字开头，可包含字母、数字、汉字、短横线和下划线，总长不超过 64。运行实例禁止删除，已有运行实例禁止重复启动。
 
