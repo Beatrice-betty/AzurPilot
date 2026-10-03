@@ -14,9 +14,9 @@ import numpy as np
 
 from module.base.utils import load_image
 from module.exception import StorageStatisticsError
-from module.statistics.storage_snapshot import latest_snapshot, save_snapshot
+from module.statistics.storage_snapshot import get_storage_timeline, latest_snapshot, save_snapshot
 from module.storage.statistics_recognition import (StorageCatalog, StorageRecognitionError,
-    StorageTraversal, detect_rows, recognize_rows)
+    StorageTraversal, detect_rows, recognize_rows, same_row)
 
 FIXTURES = Path(__file__).parent / 'fixtures/storage_statistics'
 
@@ -51,6 +51,14 @@ class RecognitionTests(unittest.TestCase):
         result = recognize_rows(image, self.catalog)
         self.assertIsNone(result[0][0].identifier)
         self.assertEqual((result[1][6].identifier, result[1][6].amount), ('GearDesignPlanGunT4', 699))
+
+    def test_live_clipped_viewport_keeps_only_complete_rows_and_reads_new_glyphs(self):
+        image = load_image(str(FIXTURES / 'partial_rows.png'))
+        rows = recognize_rows(image, self.catalog)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual([(card.identifier, card.amount) for row in rows for card in row if card.identifier],
+                         [('CognitiveChips', 32791), ('CognitiveChipsII', 1204)])
+        self.assertTrue(all(65 <= card.area[1] and card.area[3] < 637 for row in rows for card in row))
 
     def test_vertical_scroll_offset_and_clipped_rows(self):
         image = self.images[3].copy()
@@ -140,6 +148,7 @@ class SnapshotTests(unittest.TestCase):
 
     def test_read_before_run_does_not_create_any_file(self):
         self.assertIsNone(latest_snapshot('alpha', database=self.path))
+        self.assertEqual(get_storage_timeline('alpha', database=self.path), [])
         self.assertFalse(self.path.parent.exists())
 
     def test_latest_snapshot_isolated_by_instance_and_read_only(self):
@@ -151,6 +160,42 @@ class SnapshotTests(unittest.TestCase):
         self.assertIsNone(result['items'][1]['amount'])
         self.assertEqual(before, self.path.read_bytes())
         self.assertIsNone(latest_snapshot('gamma', database=self.path))
+
+    def test_history_filters_window_instance_and_limit_without_filling_unknowns(self):
+        identifiers = [self.save(), self.save(items=[dict(self.items[0], amount=14), self.items[1]]), self.save()]
+        self.save('beta')
+        with closing(sqlite3.connect(self.path)) as connection, connection:
+            for identifier, timestamp in zip(identifiers, ['2026-09-01 00:00:00', '2026-10-01 00:00:00', '2026-10-03 00:00:00']):
+                connection.execute('UPDATE storage_scans SET finished_at=? WHERE id=?', (timestamp, identifier))
+        before = self.path.read_bytes()
+        rows = get_storage_timeline('alpha', since='2026-10-01 00:00:00', database=self.path)
+        self.assertEqual([row['chips'] for row in rows], [14, 13393])
+        self.assertTrue(all(row['absent'] is None for row in rows))
+        bounded = get_storage_timeline('alpha', through_id=identifiers[1], database=self.path)
+        self.assertEqual([row['chips'] for row in bounded], [13393, 14])
+        self.assertEqual(get_storage_timeline('alpha', limit=1, database=self.path)[0]['chips'], 13393)
+        self.assertEqual(get_storage_timeline('gamma', database=self.path), [])
+        self.assertEqual(before, self.path.read_bytes())
+
+    def test_storage_trends_only_use_completed_known_counts_and_preserve_icons(self):
+        from module.api.statistics_service import compact_axis, report
+        catalog = StorageCatalog()
+        items = [dict(id=item['id'], name=item['name'], group=item['group'], amount=1) for item in catalog.items]
+        self.save(items=items)
+        items[6]['amount'] = 32791
+        items[7]['amount'] = None
+        self.save(items=items)
+        before = self.path.read_bytes()
+        configs = SimpleNamespace(path=Mock(return_value=self.path.parent / 'alpha.json'))
+        result = report(configs, 'alpha', 'storage', None, 7, 'month')
+        chips = next(item for item in result['series'] if item['key'] == 'CognitiveChips')
+        absent = next(item for item in result['series'] if item['key'] == 'CognitiveChipsII')
+        self.assertEqual([point['v'] for point in chips['points']], [1, 32791])
+        self.assertEqual([point['v'] for point in absent['points']], [1])
+        self.assertTrue(chips['icon'].startswith('storage:'))
+        compressed = compact_axis([chips])
+        self.assertEqual(compressed['series'][0]['icon'], chips['icon'])
+        self.assertEqual(before, self.path.read_bytes())
 
     def test_invalid_counts_and_partial_transaction_keep_old_snapshot(self):
         scan_id = self.save()
@@ -221,7 +266,57 @@ class InventoryDevice:
 
     def swipe(self, start, end, **kwargs):
         self.swipes.append((start, end))
-        self.position = min(1., max(0., (end[1] - 104 - self.length / 2) / (472 - self.length)))
+        if start[0] < 1235:
+            self.position = min(1., max(0., self.position + (start[1] - end[1]) / (len(self.content) - 572)))
+        else:
+            self.position = min(1., max(0., (end[1] - 104 - self.length / 2) / (472 - self.length)))
+
+
+class ObstructedInventoryDevice(InventoryDevice):
+    """特定滚动位置的第一格被遮挡，上下微调后才出现完整边框。"""
+    def screenshot(self):
+        image = super().screenshot()
+        if .10 < self.position < .19:
+            card = detect_rows(image)[0][0]
+            x1, y1, x2, _ = card.area
+            image[y1 - 3:y1 + 12, x1 - 4:x2 + 4] = (32, 36, 50)
+        return image
+
+
+class ChangingScrollbarDevice(InventoryDevice):
+    """模拟日志中的滑块长度变化，并拒绝不足 12px 的滑块手势。"""
+    def swipe(self, start, end, **kwargs):
+        if start[0] >= 1235 and abs(start[1] - end[1]) < 12:
+            raise AssertionError('短手势会停在原处')
+        previous = self.position
+        super().swipe(start, end, **kwargs)
+        if previous == 0. and 0. < self.position < .3 and not getattr(self, 'changed', False):
+            self.length += 12
+            self.changed = True
+
+
+class EndpointObstructedDevice(InventoryDevice):
+    """首末端首次出现遮挡，只有移开再回到端点才能可靠读取。"""
+    def __init__(self):
+        self.obstruct_top = self.obstruct_bottom = True
+        super().__init__()
+
+    def screenshot(self):
+        image = super().screenshot()
+        if self.position <= .001 and self.obstruct_top or self.position >= .999 and self.obstruct_bottom:
+            rows = detect_rows(image)
+            card = rows[0 if self.position <= .001 else -1][0]
+            x1, y1, x2, _ = card.area
+            image[y1 - 3:y1 + 12, x1 - 4:x2 + 4] = (32, 36, 50)
+        return image
+
+    def swipe(self, start, end, **kwargs):
+        if start[0] < 1235:
+            if self.position <= .001:
+                self.obstruct_top = False
+            if self.position >= .999:
+                self.obstruct_bottom = False
+        super().swipe(start, end, **kwargs)
 
 
 class TaskTests(unittest.TestCase):
@@ -240,6 +335,7 @@ class TaskTests(unittest.TestCase):
                 yield self.task.device.screenshot()
         self.task.loop = frames
         self.enterContext(patch.object(self.module, 'Timer', FrameTimer))
+        self.enterContext(patch.object(self.module.logger, 'attr'))
         self.temp = self.enterContext(tempfile.TemporaryDirectory())
         self.path = Path(self.temp) / 'warehouse.db'
         self.enterContext(patch.object(self.module, 'save_snapshot',
@@ -271,6 +367,46 @@ class TaskTests(unittest.TestCase):
             self.task.run()
         self.assertFalse(self.path.exists())
         self.task.config.task_delay.assert_called_once_with(success=False)
+
+    def test_obstructed_rows_recover_in_both_directions_without_missing_items(self):
+        self.task.device = ObstructedInventoryDevice()
+        self.task.run()
+        snapshot = latest_snapshot('test', database=self.path)
+        expected = json.loads((FIXTURES / 'expected.json').read_text(encoding='utf-8'))
+        self.assertEqual({item['id']: item['amount'] for item in snapshot['items']},
+                         {item['id']: item['amount'] for item in expected})
+        gestures = [(start, end) for start, end in self.task.device.swipes if start[0] < 1235]
+        self.assertTrue(any(start[1] < end[1] for start, end in gestures))
+        self.assertTrue(any(start[1] > end[1] for start, end in gestures))
+
+    def test_persistent_recognition_failure_keeps_old_snapshot_and_bounds_nudges(self):
+        save_snapshot('test', 'cn', [dict(id='old', name='旧记录', group='材料', amount=99)],
+                      started_at='2026-10-01', pages=2, catalog_version='old', database=self.path)
+        before = self.path.read_bytes()
+        with patch.object(self.module, 'recognize_rows', side_effect=StorageRecognitionError('残缺数量')):
+            with self.assertRaisesRegex(StorageStatisticsError, '残缺数量'):
+                self.task.run()
+        nudges = [start for start, _ in self.task.device.swipes if start[0] < 1235]
+        self.assertEqual(len(nudges), 4)
+        self.assertEqual(before, self.path.read_bytes())
+
+    def test_changing_scrollbar_and_transient_material_marker_do_not_stall(self):
+        self.task.device = ChangingScrollbarDevice()
+        self.task._storage_in_material = Mock(side_effect=[False] + [True] * 249)
+        result = self.task._scan_pass(StorageCatalog())
+        expected = json.loads((FIXTURES / 'expected.json').read_text(encoding='utf-8'))
+        self.assertEqual({item['id']: item['amount'] for item in StorageCatalog().snapshot_items(result.rows)},
+                         {item['id']: item['amount'] for item in expected})
+        self.assertTrue(self.task.device.changed)
+
+    def test_nudging_endpoints_never_skips_first_or_last_row(self):
+        self.task.device = EndpointObstructedDevice()
+        result = self.task._scan_pass(StorageCatalog())
+        self.assertEqual(len(result.rows), 12)
+        self.assertEqual(result.rows[0][1].amount, 153)
+        last_row = recognize_rows(load_image(str(FIXTURES / 'page_4.png')), StorageCatalog())[-1]
+        self.assertTrue(same_row(result.rows[-1], last_row))
+        self.assertEqual(self.task.device.position, 1.)
 
     def test_single_page_with_full_scroll_handle_is_complete(self):
         device = self.task.device
@@ -311,8 +447,21 @@ class ApiIntegrationTests(unittest.TestCase):
             rows = response['result']['tables'][0]['rows']
             self.assertEqual(len(rows), 25)
             self.assertTrue(all(row[3] is None and row[4] == '未扫描' for row in rows))
+            self.assertFalse((root / 'config/storage_statistics.db').exists())
+            catalog = StorageCatalog()
+            items = [dict(id=item['id'], name=item['name'], group=item['group'], amount=index + 1)
+                     for index, item in enumerate(catalog.items)]
+            save_snapshot('testpilot', 'cn', items, started_at='2026-10-03', pages=12,
+                          catalog_version=catalog.version, database=root / 'config/storage_statistics.db')
+            ws.send_json({'v': 1, 'type': 'request', 'id': 'history', 'method': 'statistics.report',
+                          'params': {'instance': 'testpilot', 'category': 'storage', 'days': 30}})
+            response = ws.receive_json()
+            self.assertTrue(response['ok'], response)
+            series = response['result']['series']
+            self.assertEqual(len(response['result']['axis']), 1)
+            self.assertEqual(series[6]['values'], [7])
+            self.assertEqual(series[7]['icon'], 'storage:storage_items/CognitiveChipsII')
         self.assertEqual(before, (root / 'config/testpilot.json').read_bytes())
-        self.assertFalse((root / 'config/storage_statistics.db').exists())
         icon = client.get('/storage-items/opsi_items/PrototypeGearPartsT5.png')
         self.assertEqual(icon.status_code, 200)
         self.assertEqual(icon.content, destination.read_bytes())

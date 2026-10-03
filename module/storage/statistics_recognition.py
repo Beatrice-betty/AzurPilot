@@ -21,6 +21,10 @@ class StorageRecognitionError(ValueError):
     """画面、物品或数量无法可靠确认，禁止提交本次快照。"""
 
 
+class StorageNoProgressError(StorageRecognitionError):
+    """页面只含已读行，需要再向下浏览以露出新行。"""
+
+
 @dataclass
 class StorageCard:
     """完整材料格；未知物品仍保留图像供重叠行核对。"""
@@ -230,7 +234,7 @@ class StorageTraversal:
         count = overlaps[0]
         if count == len(rows):
             if not at_bottom:
-                raise StorageRecognitionError('滚动后未出现新行')
+                raise StorageNoProgressError('滚动后未出现新行')
             # 最后一次短距离拖到底可能只移动空白，不产生新完整行。
             # 已确认到底且整页唯一重叠时，只记复读，不再次累计数量。
             self.pages += 1

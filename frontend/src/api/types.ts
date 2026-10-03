@@ -46,11 +46,11 @@ export interface Logs { instance: string; cursor: number; reset: boolean; entrie
 export interface Preview { instance: string; image: string | null; capturedAt: string | null }
 export interface Statistics { instance: string; resource: string; points: {time: string; value: number}[]; truncated: boolean }
 export interface StatPoint {time: string; value: number; source?: string}
-export interface StatSeries {key: string; label: string; points: StatPoint[]}
+export interface StatSeries {key: string; label: string; icon?: string; points: StatPoint[]}
 export interface StatPointCompact {t: number; v: number; s?: string}
-export interface StatSeriesCompact {key: string; label: string; points: StatPointCompact[]}
+export interface StatSeriesCompact {key: string; label: string; icon?: string; points: StatPointCompact[]}
 /** 数值按顺序对应报表的共用时间轴。 */
-export interface StatSeriesColumn {key: string; label: string; values: number[]; sources?: string[]}
+export interface StatSeriesColumn {key: string; label: string; icon?: string; values: number[]; sources?: string[]}
 export type StatSeriesWire = StatSeriesCompact | StatSeriesColumn
 export interface StatTable {title: string; columns: string[]; rows: Scalar[][]; note?: string; defaultSort?: TableSort}
 export interface TableSort {index: number; descending: boolean}

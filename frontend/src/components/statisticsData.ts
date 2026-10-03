@@ -159,10 +159,10 @@ export function normalizeReport(report: StatisticsReportWire): StatisticsReport 
   return {
     ...rest,
     series: series.map(item => 'values' in item
-      ? {key: item.key, label: item.label, points: item.values.map((value, index) => ({
+      ? {key: item.key, label: item.label, icon: item.icon, points: item.values.map((value, index) => ({
         time: wallClock(axis![index]), value, source: item.sources?.[index] ?? '',
       }))}
-      : {key: item.key, label: item.label, points: item.points.map(point => ({
+      : {key: item.key, label: item.label, icon: item.icon, points: item.points.map(point => ({
         time: wallClock(point.t), value: point.v, source: point.s ?? '',
       }))}),
   }

@@ -132,6 +132,8 @@ def compact_axis(series_list: list) -> dict:
     for item in series_list:
         column = {'key': item['key'], 'label': item['label'],
                   'values': [point['v'] for point in item['points']]}
+        if item.get('icon'):
+            column['icon'] = item['icon']
         sources = [point.get('s', '') for point in item['points']]
         if any(sources):
             column['sources'] = sources
@@ -263,10 +265,11 @@ def report(configs, instance: str, category: str, month: str, days: int, period:
 
     if category == 'storage':
         from pathlib import Path
-        from module.statistics.storage_snapshot import latest_snapshot
+        from module.statistics.storage_snapshot import get_storage_timeline, latest_snapshot
         from module.storage.statistics_recognition import StorageCatalog
         catalog = StorageCatalog()
-        snapshot = latest_snapshot(instance, database=Path(configs.path(instance)).parent / 'storage_statistics.db')
+        database = Path(configs.path(instance)).parent / 'storage_statistics.db'
+        snapshot = latest_snapshot(instance, database=database)
         icons = {item['id']: 'storage:' + item['templates'][0].removeprefix('assets/stats/').removesuffix('.png')
                  for item in catalog.items}
         if snapshot is None:
@@ -283,6 +286,14 @@ def report(configs, instance: str, category: str, month: str, days: int, period:
               '未扫描' if snapshot is None else '已复核' if item['amount'] is not None else '未发现']
              for item in items])]
         result['tables'][0]['note'] = ' '.join(result['notes'])
+        rows = (get_storage_timeline(instance, since=(now - timedelta(days=days)).isoformat(sep=' '),
+                                     through_id=snapshot['id'], database=database) if snapshot else [])
+        if len(rows) > 50000:
+            rows = rows[-50000:]
+            result['notes'].append('记录超过 50,000 条，当前展示最近 50,000 条，请缩短时间范围查看细节。')
+        result['series'] = [dict(series(rows, item['id'], item['name']), icon=icons[item['id']])
+                            for item in catalog.items]
+        result['notes'].append('趋势与原始记录只包含成功扫描中已确认的数量；未发现的物品不补为零。')
         return result
 
     if category == 'resources':

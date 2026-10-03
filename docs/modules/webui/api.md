@@ -57,7 +57,7 @@ module/api/
 
 配套生成产物与契约：`dev_tools/export_api_schema.py` 从 `protocol.py` + `router.py` 生成 `frontend/src/api/generated.ts`（参数类型）与 `frontend/src/api/contract.json`（机器可审契约）。
 
-仓库报告使用 `statistics.report(category='storage')` 只读查询完整快照，物品图标由 `/storage-items/` 静态挂载提供。主动扫描沿用 `tasks.run(task='StorageStatistics')` 与实例运行互斥；页面刷新不启动扫描。
+仓库报告使用 `statistics.report(category='storage', days=7)` 只读查询最近完整快照及时间窗口内成功扫描的历史序列。序列的可选 `icon` 在逐点与共用时间轴两种格式中保留，物品图标由 `/storage-items/` 静态挂载提供。主动扫描沿用 `tasks.run(task='StorageStatistics')` 与实例运行互斥；页面刷新不启动扫描。
 
 ## 4. 核心入口
 
