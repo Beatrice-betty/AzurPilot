@@ -2116,6 +2116,11 @@ class AzurLaneAutoScript:
 
     def _record_task_restart(self, task, success):
         """重复恢复达到上限时，延后故障任务并发送错误推送。"""
+        if task == 'Restart':
+            # 恢复入口不能进入故障冷却，否则游戏未运行时会拖累整个任务队列。
+            self.task_restart_record.pop(task, None)
+            self.task_restart_delays.pop(task, None)
+            return False
         if success is True:
             self.task_restart_record.pop(task, None)
             return False
@@ -2436,6 +2441,9 @@ class AzurLaneAutoScript:
 
                 # 获取任务
                 task = self.get_next_task()
+                if task == 'Restart':
+                    # 即使存在旧的冷却记录，也必须放行重启；敏感任务检查仍由恢复入口执行。
+                    self.task_restart_delays.pop(task, None)
                 deadline = self.task_restart_delays.get(task)
                 if deadline is not None:
                     if deadline > current_time():
@@ -2617,6 +2625,10 @@ class AzurLaneAutoScript:
                     action='关注下方堆栈；若连续发生，请检查设备连接、配置和最近更新的资源。',
                 )
 
+                if task is not None:
+                    # 任务初始化和收尾异常也须遵守敏感任务保护，先检查再执行恢复。
+                    self._check_sensitive_exit(task, e)
+
                 # 即使没有达到重启或失败上限，也第一时间自动请求分析崩溃原因
                 try:
                     if hasattr(self, 'config') and getattr(self.config, 'Error_LlmAnalysis', False):
@@ -2644,11 +2656,6 @@ class AzurLaneAutoScript:
                     except Exception as report_e:
                         logger.warning(f'[Alas] 错误日志上报失败: {report_e}')
 
-                # 已选出任务的全局异常也计入恢复上限；配置/选任务异常没有任务归属。
-                if task is not None and self._record_task_restart(task, False):
-                    del_cached_property(self, 'config')
-                    continue
-
                 # 尝试重启模拟器
                 logger.warning("[Alas] 尝试通过重启模拟器 + 强制执行 RESTART 任务来恢复...")
                 try:
@@ -2669,6 +2676,11 @@ class AzurLaneAutoScript:
                         impact='调度器将继续重试，但本轮循环可能再次失败。',
                         action='检查配置是否可读、Restart 任务是否启用，以及设备是否仍在线。',
                     )
+
+                # 故障任务可以冷却，但必须先安排系统恢复，不能因达到上限跳过重启。
+                if task is not None and self._record_task_restart(task, False):
+                    del_cached_property(self, 'config')
+                    continue
 
                 # 指数退避：失败次数越多，等待时间越长，但上限 300 秒
                 wait_seconds = min(LONG_WAIT, RESTART_DELAY * (2 ** min(consecutive_global_failures - 1, 4)))

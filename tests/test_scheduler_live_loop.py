@@ -217,6 +217,29 @@ class LiveLoopTests(unittest.TestCase):
         self.assertEqual('recoverable', self.runtime.engine.records['results']['Main']['status'])
         self.assertEqual({}, self.runtime.overlay)
 
+    def test_business_task_limit_does_not_block_requested_restart(self):
+        self.script.config.Error_TaskRestartLimit = 1
+        self.apply(self.program())
+        deadline = datetime(2026, 9, 29)
+        self.script.task_restart_delays['Restart'] = deadline
+        self.script.task_restart_record['Restart'] = 3
+
+        def main():
+            self.calls.append('Main')
+            raise GameNotRunningError
+
+        self.script.main = main
+        self.script.restart = lambda: self.calls.append('Restart')
+        self.script.research = self.finish_research
+        with (patch('alas.get_server_next_update', return_value=deadline),
+              patch('alas.handle_notify'), patch('alas.notify_webui')):
+            self.script.loop()
+        self.assertEqual(['Main', 'Restart', 'Research'], self.calls)
+        self.assertEqual({'Main': deadline}, self.script.task_restart_delays)
+        self.assertNotIn('Restart', self.script.task_restart_record)
+        saved = json.loads(self.path.read_text(encoding='utf-8'))
+        self.assertEqual('2026-09-29 00:00:00', saved['Main']['Scheduler']['NextRun'])
+
     def test_apply_at_checkpoint_restarts_from_new_entry(self):
         self.apply(self.program())
         def main():
