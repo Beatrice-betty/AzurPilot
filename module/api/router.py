@@ -1,11 +1,13 @@
 """显式方法注册表；所有阻塞业务操作在工作线程执行。"""
 import os
 import secrets
+import threading
 from dataclasses import dataclass
 from typing import Callable
 
 from module.api import background_service as background
 from module.api import protocol as p
+from module.api import search_service as search
 from module.runtime.process_manager import ProcessManager
 
 
@@ -39,11 +41,14 @@ class Router:
         self.configs, self.runtime = configs, runtime
         self._accounts = None
         self._scheduler_programs = None
+        self._opsi_simulator = None
+        self._opsi_simulator_lock = threading.Lock()
         self.access_password = ''
         self.background_token = secrets.token_urlsafe(32)
         self.methods = {
             'system.ping': Method(p.Params, lambda _: {'pong': True}),
             'schema.get': Method(p.SchemaParams, lambda x: configs.schema(x.language)),
+            'search.content': Method(p.SearchContentParams, lambda x: search.search_content(x.query)),
             'instances.list': Method(p.Params, lambda _: runtime.instances()),
             'instances.create': Method(p.CreateParams, lambda x: configs.create(x.name, x.source, x.import_file), True),
             'instances.importable': Method(p.Params, lambda _: configs.importable()),
@@ -65,6 +70,10 @@ class Router:
             'scheduler.program.state': Method(p.InstanceParams, lambda x: self.programs.state(x.instance)),
             'tasks.run': Method(p.TaskParams, lambda x: runtime.start(x.instance, x.task), True),
             'logs.get': Method(p.LogsParams, lambda x: runtime.logs(x.instance, x.after)),
+            'opsi.simulator.status': Method(p.LogsParams, lambda x: self.opsi_simulator.status(x.instance, x.after)),
+            'opsi.simulator.start': Method(p.InstanceParams, lambda x: self.opsi_simulator.start(x.instance), True),
+            'opsi.simulator.stop': Method(p.InstanceParams, lambda x: self.opsi_simulator.stop(x.instance), True),
+            'opsi.simulator.figure': Method(p.InstanceParams, lambda x: self.opsi_simulator.figure(x.instance)),
             'preview.capture': Method(p.InstanceParams, lambda x: runtime.capture(x.instance)),
             'statistics.refreshLoot': Method(p.InstanceParams, self.refresh_loot, True),
             'statistics.report': Method(p.StatisticsReportParams, self.statistics_report),
@@ -95,11 +104,18 @@ class Router:
         }
 
     @property
-    def programs(self):
-        if self._scheduler_programs is None:
-            from module.api.scheduler_service import SchedulerService
-            self._scheduler_programs = SchedulerService(self.configs, self.runtime)
-        return self._scheduler_programs
+    def opsi_simulator(self):
+        """获取独立于游戏调度器的大世界模拟服务。"""
+        with self._opsi_simulator_lock:
+            if self._opsi_simulator is None:
+                from module.api.opsi_simulator_service import OpsiSimulatorService
+                self._opsi_simulator = OpsiSimulatorService(self.configs)
+            return self._opsi_simulator
+
+    def close(self):
+        """回收离线模拟线程，不触发游戏任务。"""
+        if self._opsi_simulator is not None:
+            self._opsi_simulator.manager.close()
 
     @property
     def accounts(self):
@@ -112,6 +128,18 @@ class Router:
             from module.api.account_service import AccountService
             self._accounts = AccountService(self.configs)
         return self._accounts
+
+    @property
+    def programs(self):
+        """获取调度程序服务单例。
+
+        Returns:
+            SchedulerService: 调度程序草稿、校验与模拟服务实例。
+        """
+        if self._scheduler_programs is None:
+            from module.api.scheduler_service import SchedulerService
+            self._scheduler_programs = SchedulerService(self.configs, self.runtime)
+        return self._scheduler_programs
 
     @property
     def announcements(self):
@@ -174,10 +202,11 @@ class Router:
         Returns:
             dict: 统计报表数据。
         """
-        from module.api.statistics_service import report
-        return report(self.configs, params.instance, params.category, params.month,
-                      params.days, params.period, research_series=params.series,
-                      research_scope=params.scope, loot_task=params.task)
+        from module.api.statistics_service import compact_axis, report
+        result = report(self.configs, params.instance, params.category, params.month,
+                        params.days, params.period, research_series=params.series,
+                        research_scope=params.scope, loot_task=params.task)
+        return {**result, **compact_axis(result.get('series') or [])}
 
     def meowfficer_score_report(self, params: p.MeowfficerScoreReportParams):
         """获取指挥喵评分报告。
@@ -241,7 +270,11 @@ class Router:
             manager = self.runtime.manager(params.instance)
             if manager.alive:
                 raise p.ApiError('INSTANCE_RUNNING', '请先停止实例再删除')
+            if self._opsi_simulator is not None and self._opsi_simulator.manager.status(params.instance)['running']:
+                raise p.ApiError('SIMULATOR_RUNNING', '请先中断大世界模拟器再删除实例')
             result = self.configs.delete(params.instance, params.revision)
+            if self._opsi_simulator is not None:
+                self._opsi_simulator.manager.discard(params.instance)
             from module.runtime.account_vault import OPERATIONS
             with OPERATIONS:
                 account_vault = self.accounts.vault

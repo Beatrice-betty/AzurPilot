@@ -44,6 +44,14 @@ class TestRequestedItemRecognition(unittest.TestCase):
         parts = [row for row in rows if row.item == 'PrototypeGearPartsT5']
         self.assertEqual([(row.zone_type, row.amount) for row in parts], [('UNKNOWN', 1)])
 
+    def test_upgrade_parts_keep_strict_similarity(self):
+        """按底色筛选突破部件时，不沿用纸类动画模板的宽松阈值。"""
+        grid = SceneOperationSiren().item_grid
+        grid._matching_tier = 'T5'
+        self.assertEqual(grid.template_similarity_for('PrototypeGearPartsT5', 0.92), 0.92)
+        self.assertEqual(grid.template_similarity_for('GearDesignPlanPlaneT5', 0.92), 0.6)
+        self.assertEqual(grid.template_similarity_for('OrdnanceTestingReportT5', 0.92), 0.6)
+
 
 if __name__ == '__main__':
     unittest.main()
