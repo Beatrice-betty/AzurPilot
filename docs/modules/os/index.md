@@ -156,6 +156,15 @@ flowchart BT
 - `GlobeCamera.globe_update()` 保证进入球面视图并加载 `GlobeDetection`（模板匹配 + 单应性定位相机在全球地图上的位置），`globe_focus_to(zone)` 拖动球面对准目标区，`zone_type_select` 按类型顺序择优进入。
 - `OSCamera._view_init()` 直接注入固定标定参数 `load_homography(storage=...)`——大世界 45° 恒定俯视使标定可硬编码，普通地图则需现场标定。
 
+### 每日任务的未开荒海域处理
+
+- `OpsiDaily` 在委托进图或刷新当前委托海域时，若抛出 `OSExploreError`，取消选中海域并返回原海域，仅延期该目标海域的委托，继续执行其余每日委托。隐藏配置 `OpsiDaily.OpsiDaily.DeferredMissions` 保存海域编号和下次服务器日更时间；当天重跑跳过这些目标海域，次日刷新后重新尝试，仍无法进入就再延期。游戏内委托保持未完成，不修改整个每日任务的调度时间。
+- 延期委托仍留在游戏列表中，选择器跳过本轮已处理的延期行；领取完成奖励后重置行号，避免列表前移误跳过其他委托。延期行占满一页时滚动查找后续任务，以截图确认滚动位置；只剩延期委托且接取队列已满时结束接取循环。其余委托执行后，每日任务仍按原有逻辑收尾并 `task_delay(server_update=True)`。保留任务海域清理遇到同类进图失败时保留该海域记录并继续清理其他海域。
+- 只捕获进图锁定/无法进入异常；行动力不足、识别异常和恢复导航失败仍走原有上层处理。档案、月度 Boss、跨月与开荒任务复用每日委托处理方法时，不获得这个延期分支。
+- 当前任务为 `OpsiDaily`、海域不是港口/安全海域/特殊海域，且两种开荒都未完成时，在初始化首次自律和任务海域自律前检查空域侦察。复用 `os_order_execute(recon_scan=True)` → `order_execute(ORDER_SCAN)` 的截图状态循环，可用按钮才点击，灰显时退出指令面板；已开荒普通海域不额外执行侦察。
+- 完成状态不依赖任务开关：每月开荒复用 `monthly_explore_complete()` 的本月 100% 判定；智能开荒读取 `OpsiScheduling.Storage.Storage.SmartExplore`，本月 `cleanup` / `done` 表示路线已完成。旧月份或缺少月份的进度不能跳过侦察检查，不改写开荒断点。
+- 离线回归见 `tests/test_opsi_daily.py`，覆盖逐条延期后继续其他委托、次日重试、任务列表前移与滚动、亮/灰按钮、初始化与任务进图顺序，以及其他任务和异常的隔离。
+
 ### `OSMap` 关键方法
 
 | 方法 | 说明 |
@@ -263,7 +272,7 @@ OCR：行动力面板 / 黄币 / 紫币 ──▶ 决策（智能调度状态机
 | --- | --- | --- |
 | `ActionPointLimit`（os_handler） | 行动力不足以进入目标海域/开箱会溢出 | 任务入口捕获 → `delay_opsi_tasks_after_ap_limit` 按恢复分钟数批量延迟全部 AP 任务；CL1/跨月有专门分支 |
 | `TaskEnd` | 子任务在代理上下文中主动结束 | 防溢出任务截获延迟请求改写归属后重抛；智能调度用它实现一轮一决策 |
-| `OSExploreError` | 海域被锁定（探索未完成） | `os_explore` 回 NY 重试，两次失败升格 `GameStuckError` |
+| `OSExploreError` | 海域被锁定（探索未完成）或无法进入 | `OpsiDaily` 仅延期对应海域的委托并继续其余委托，次日日更后重试；`os_explore` 回 NY 重试，两次失败升格 `GameStuckError` |
 | `RewardUncollectedError` | 海域内有未领奖励无法离开 | `os_map_goto_globe` 包装先补自律寻敌再重试（3 次上限） |
 | `MapWalkError` | 走格超步/被挡 | `port_goto` 包装换港口绕行重试 |
 | `GameTooManyClickError` / `GameStuckError` | 底层死循环保护 | 上抛调度器恢复；敏感任务（Sensitive: true）直接停机等待人工 |
