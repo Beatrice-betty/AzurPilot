@@ -20,6 +20,14 @@ from module.ui.scroll import Scroll
 class StorageStatistics(StorageUI):
     """进入材料仓库，从顶到底扫描两遍；识别或复核失败保留旧快照。"""
 
+    def _scroll_materials(self, start, end):
+        """精确拖动列表；不支持拖拽的后端只滑动，避免设备层回退点击物品。"""
+        if self.config.Emulator_ControlMethod in ('minitouch', 'MaaTouch', 'uiautomator2', 'scrcpy', 'nemu_ipc'):
+            self.device.drag(start, end, point_random=(0, 0, 0, 0), shake=(0, 0),
+                             shake_random=(0, 0, 0, 0), hold_duration=.3, name='StorageStatistics')
+        else:
+            self.device.swipe(start, end, duration=.3, name='StorageStatistics', distance_check=False)
+
     def _scan_pass(self, catalog):
         """同一截图状态循环完成回顶、滚动、稳定复读与到底确认。
 
@@ -67,25 +75,23 @@ class StorageStatistics(StorageUI):
             if moving:
                 edge_ready = (scroll.length == scroll.total
                               or (target == 0. and at_top or target == 1. and at_bottom) and dragged)
-                target_ready = (dragged and 0. < target < 1.
-                                and abs(position - target) * (scroll.total - scroll.length) <= 8)
-                if edge_ready or target_ready:
+                if edge_ready:
                     moving = False
                     previous = None
                     if not recovery_count:
                         timeout.reset()
                     continue
                 if action.reached():
-                    start = random_rectangle_point(scroll.position_to_screen(position, (0, 0)), n=1)
-                    # 顶/底额外拖过边界，再用当前滚动条端点确认，避免百分比取整漏首末行。
-                    destination = -.1 if target == 0. else 1.1 if target == 1. else target
-                    end = random_rectangle_point(scroll.position_to_screen(destination, (0, 0)), n=1)
-                    if 0. < target < 1. and abs(end[1] - start[1]) < 12:
-                        # 长列表的滑块很短；改在列表内翻半页，避免几像素手势不生效。
-                        self.device.swipe((1180, 500), (1180, 245),
-                                          name='StorageStatistics', distance_check=False)
+                    if 0. < target < 1. or target == 1. and not at_bottom:
+                        # 滑块的长度和响应会变化，不能用百分比保证重叠。
+                        # 拖动一行并在松手前停住，避免快速滑动的惯性跨过未读行。
+                        self._scroll_materials((1180, 540), (1180, 362))
                         moving = False
                     else:
+                        start = random_rectangle_point(scroll.position_to_screen(position, (0, 0)), n=1)
+                        # 顶/底额外拖过边界，再用当前滚动条端点确认，避免漏首末行。
+                        destination = -.1 if target == 0. else 1.1
+                        end = random_rectangle_point(scroll.position_to_screen(destination, (0, 0)), n=1)
                         self.device.swipe(start, end, name='StorageStatistics', distance_check=False)
                     dragged = True
                     action.reset()
@@ -127,24 +133,29 @@ class StorageStatistics(StorageUI):
                         # 首末行必须在端点读取。先移开遮挡再回到同一端点，禁止漏首尾行。
                         delta = 64 if at_top else -64
                         target, moving, dragged = (0. if not traversal.rows else 1.), True, False
+                    elif isinstance(error, StorageNoProgressError):
+                        # 已读页面无需来回找字形；继续精确前进一行，重叠校验仍然生效。
+                        delta = 178
                     else:
                         # 围绕失败位置上下微调；拼接仍须唯一重叠，不能把跳页当成成功。
-                        offsets = (64, -64, 96, -96) if isinstance(error, StorageNoProgressError) else (-64, 64, -96, 96)
+                        offsets = (-64, 64, -96, 96)
                         shift = (position - recovery_origin) * (scroll.total - scroll.length) / scroll.length * 572
                         delta = int(np.clip(offsets[recovery_count] - shift, -256, 256))
                         if abs(delta) < 24:
                             delta = 64 if delta >= 0 else -64
-                    self.device.swipe((1180, 365), (1180, 365 - delta),
-                                      name='StorageStatistics', distance_check=False)
+                    self._scroll_materials((1180, 365), (1180, 365 - delta))
                     recovery_count += 1
                     logger.attr('仓库重读', f'第 {recovery_count} 次微调，向{"下" if delta > 0 else "上"}滚动 {abs(delta)}px')
                     action.reset()
                 continue
             recovery_origin, recovery_count = None, 0
+            # 只有完整页面经稳定复读和拼接确认后才重置防连点记录。
+            self.device.click_record_clear()
             logger.attr('仓库扫描', f'第 {traversal.pages} 页，累计 {len(traversal.rows)} 行')
             if at_bottom:
                 return traversal
-            target = min(1., position + .45 * scroll.length / (scroll.total - scroll.length))
+            # 中途按行翻页；百分比只用于确认端点，不再用滑块长度推算翻页距离。
+            target = .5
             moving = True
             dragged = False
             previous = None

@@ -25,6 +25,10 @@ class StorageNoProgressError(StorageRecognitionError):
     """页面只含已读行，需要再向下浏览以露出新行。"""
 
 
+class StorageAmountGlyphError(StorageRecognitionError):
+    """数量完整，但抗锯齿字形尚未达到匹配置信度。"""
+
+
 @dataclass
 class StorageCard:
     """完整材料格；未知物品仍保留图像供重叠行核对。"""
@@ -93,8 +97,25 @@ class StorageCatalog:
 
     def read_amount(self, icon):
         """只读取右下角原始像素；失败不回退为零，不截断猜数。"""
-        image = icon[99:126, 25:127]
-        binary = (extract_white_letters(image, threshold=96) < 100).astype(np.uint8)
+        image = extract_white_letters(icon[99:126, 25:127], threshold=96)
+        try:
+            return self._read_amount_mask(image < 100)
+        except StorageAmountGlyphError:
+            # 滚动停在亚像素位置时，抗锯齿灰边会改变二值字形。
+            # 只接受至少两种有限阈值一致的完整读数，字形置信度与截断检查不变。
+            candidates = []
+            for threshold in (85, 90, 95, 110, 120, 125):
+                try:
+                    candidates.append(self._read_amount_mask(image < threshold))
+                except StorageRecognitionError:
+                    continue
+            if len(candidates) >= 2 and len(set(candidates)) == 1:
+                return candidates[0]
+            raise
+
+    def _read_amount_mask(self, binary):
+        """核对完整字形、基线和间距后逐位读取。"""
+        binary = binary.astype(np.uint8)
         _, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
         parts = [(label, int(x), int(y), int(width), int(height))
                  for label, (x, y, width, height, area) in enumerate(stats[1:], 1)
@@ -104,7 +125,7 @@ class StorageCatalog:
             raise StorageRecognitionError('仓库数量字形无法确认')
         last = parts[-1]
         baseline = last[2] + last[4]
-        if not 3 <= image.shape[1] - last[1] - last[3] <= 10 or not 21 <= baseline <= 26:
+        if not 3 <= binary.shape[1] - last[1] - last[3] <= 10 or not 21 <= baseline <= 26:
             raise StorageRecognitionError('仓库数量末位或基线不完整')
         selected = [last]
         for part in reversed(parts[:-1]):
@@ -119,7 +140,7 @@ class StorageCatalog:
         result = ''
         for label, x, y, width, height in reversed(selected):
             # 仓库数量字高为 18–19px；破损首位不能被当成图标残影删掉。
-            if not 17 <= height <= 21 or x == 0 or x + width >= image.shape[1]:
+            if not 17 <= height <= 21 or x == 0 or x + width >= binary.shape[1]:
                 raise StorageRecognitionError('仓库数量存在截断或残缺字形')
             mask = (labels[y:y + height, x:x + width] == label).astype(np.uint8)
             digit, error, margin = self.digits.classify(mask)
@@ -129,7 +150,7 @@ class StorageCatalog:
             else:
                 text, scores = self.digits.split(mask)
             if not text or not self.digits.confident(scores):
-                raise StorageRecognitionError('仓库数量字形无法确认')
+                raise StorageAmountGlyphError('仓库数量字形无法确认')
             result += text
         if not result or result.startswith('0'):
             raise StorageRecognitionError('仓库数量格式无效')
@@ -205,6 +226,23 @@ def same_card(left, right):
         return False
     # 方框轮廓可能因动画亮点相差 1–2px，允许有界对齐，避免同一物品被当成新行。
     score = cv2.minMaxLoc(cv2.matchTemplate(left.image, right.image[3:125, 3:125],
+                                          cv2.TM_CCOEFF_NORMED))[1]
+    if score >= .985:
+        return True
+    # 虹彩动画改变颜色，滚动亚像素位置改变抗锯齿；平滑后仍须高置信度结构一致。
+    # 另查稀有度底色，避免灰度相近的不同等级物品被当成同一格。
+    if np.max(np.abs(left.image[7:17, 7:17].mean(axis=(0, 1))
+                     - right.image[7:17, 7:17].mean(axis=(0, 1)))) > 45:
+        return False
+    left_gray = cv2.cvtColor(left.image, cv2.COLOR_RGB2GRAY)
+    right_gray = cv2.cvtColor(right.image, cv2.COLOR_RGB2GRAY)
+    score = cv2.minMaxLoc(cv2.matchTemplate(left_gray, right_gray[3:125, 3:125],
+                                          cv2.TM_CCOEFF_NORMED))[1]
+    if score >= .985:
+        return True
+    left_gray = cv2.GaussianBlur(left_gray, (7, 7), 0)
+    right_gray = cv2.GaussianBlur(right_gray, (7, 7), 0)
+    score = cv2.minMaxLoc(cv2.matchTemplate(left_gray, right_gray[3:125, 3:125],
                                           cv2.TM_CCOEFF_NORMED))[1]
     return score >= .985
 
