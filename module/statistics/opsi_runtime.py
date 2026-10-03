@@ -208,7 +208,7 @@ def start_meow_search_timer(main: Any) -> tuple[float, int | None]:
     """记录耄耋相接开始搜索当前海域时的时间与行动力。
 
     行动力取当前缓存值，不为了统计再开一次弹窗：搜索开始时 ALAS 刚读过行动力
-    （智能调度+ 决策、短猫前置检查），多开一次弹窗就多一组 REMAIN_OS + CANCEL
+    （智能调度决策、短猫前置检查），多开一次弹窗就多一组 REMAIN_OS + CANCEL
     点击，会加速触发「两个按钮交替点击次数过多」。
     """
     start_ap = int(getattr(main, "_action_point_total", 0) or 0) or None

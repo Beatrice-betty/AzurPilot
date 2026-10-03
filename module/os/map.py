@@ -23,7 +23,7 @@
     余烬 (Ash/Ember): 大世界中的特殊系统。
     塞壬要塞 (Siren Stronghold): 特殊海域类型。
     侵蚀1练级 (Hazard 1 Leveling): 在低难度海域反复刷经验的策略。
-    智能调度+ (Smart Scheduling+): 跨任务的自动化调度功能。
+    智能调度(Smart Scheduling): 跨任务的自动化调度功能。
 """
 import time
 from contextlib import suppress
@@ -100,12 +100,12 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
         _solved_fleet_mechanism (bool): 是否已解锁双舰队机关。
     """
     def is_smart_scheduling_enabled(self) -> bool:
-        """统一判断是否启用了智能调度+（侵蚀1与补黄币任务共享的开关逻辑）。
+        """统一判断是否启用了智能调度（侵蚀1与补黄币任务共享的开关逻辑）。
 
         Returns:
             bool: 处于智能调度启用状态且不在开荒中时返回 True，否则返回 False。
         """
-        # 检测是否在开荒中，如果是，则停止智能调度+
+        # 检测是否在开荒中，如果是，则停止智能调度
         if self.is_in_opsi_explore():
             return False
 
@@ -203,7 +203,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
             )
             or overflow_target_task == "OpsiScheduling"
         ):
-            logger.info("智能调度+将决定初始化自律寻敌是否执行")
+            logger.info("智能调度将决定初始化自律寻敌是否执行")
             self._smart_scheduling_first_auto_search_pending = True
         elif (
             self.zone.zone_id == leveling_zone
@@ -822,7 +822,7 @@ class OSMap(OSFleet, Map, GlobeCamera, StorageHandler, StrategicSearchHandler):
 
     def cl1_ap_preserve(self):
         """检查并保留运行侵蚀1所需的初始行动力。"""
-        # 检查智能调度+是否启用，如果启用则由智能调度+模块统一管理任务切换
+        # 检查智能调度是否启用，如果启用则由智能调度模块统一管理任务切换
         # 这里不应该直接切换到 CL1
         if self.is_smart_scheduling_enabled():
             return

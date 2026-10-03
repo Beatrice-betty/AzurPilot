@@ -968,7 +968,7 @@ class TestActionPointPopupClickRecord(unittest.TestCase):
             stub.device.click_record_add(name)
             stub.device.click_record_check()
 
-        # 智能调度+ 代理一轮短猫会连续读 4 次行动力，清完图时几秒就是一轮
+        # 智能调度代理一轮短猫会连续读 4 次行动力，清完图时几秒就是一轮
         for _ in range(10):
             stub.open()
             ActionPointHandler.action_point_quit(stub)
@@ -1013,7 +1013,7 @@ class TestActionPointReuse(unittest.TestCase):
 
 
 class TestHazard1FreshActionPoint(unittest.TestCase):
-    """智能调度+ 代跑侵蚀 1 时复用决策读数，跳过重复的行动点弹窗。"""
+    """智能调度代跑侵蚀 1 时复用决策读数，跳过重复的行动点弹窗。"""
 
     @staticmethod
     def make_runner(preserve=200):
@@ -1076,7 +1076,7 @@ class TestHazard1FreshActionPoint(unittest.TestCase):
 
 
 class TestMeowStayInZoneFreshActionPoint(unittest.TestCase):
-    """智能调度+ 代跑短猫时复用决策读数，跳过指定海域循环的行动点弹窗。"""
+    """智能调度代跑短猫时复用决策读数，跳过指定海域循环的行动点弹窗。"""
 
     @staticmethod
     def make_runner(preserve=0):

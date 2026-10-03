@@ -657,7 +657,7 @@ export function createMockState({ empty = false } = {}) {
       case 'statistics.refreshLoot': return { refreshed: true }
       case 'meowfficer.scoreReport': {
         // demo-alt 用来验证「还没跑过评分任务」的空状态，其余实例都给一份示例报告。
-        if (name === 'demo-alt') fail('NOT_FOUND', '评分报告尚未生成，请先在「工具Plus → 指挥喵评分」运行一次任务')
+        if (name === 'demo-alt') fail('NOT_FOUND', '评分报告尚未生成，请先在「工具 → 指挥喵评分」运行一次任务')
         const cats = [{
           source: 'shot_0.png', cat: '克雷喵', tags: ['SSR', '铁血', '潜艇', '司令'], fixed: false,
           note: '指定潜艇司令，狩猎范围+1；初始池小、最好毕业', maxed: true, pointsSpent: 6, primary: 'submarine',
@@ -826,7 +826,7 @@ export function createMockState({ empty = false } = {}) {
           ]
           const empty = name === 'demo-alt'
           result.taskOptions = [
-            { key: 'opsi_daily', label: '大世界每日Plus', count: 0 },
+            { key: 'opsi_daily', label: '大世界每日', count: 0 },
             { key: 'opsi_obscure', label: '隐秘海域', count: 0 },
             { key: 'opsi_abyssal', label: '深渊坐标', count: 0 },
             { key: 'opsi_stronghold', label: '塞壬要塞', count: empty ? 0 : 1 },
