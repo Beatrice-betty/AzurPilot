@@ -83,4 +83,4 @@ export function FinancialChart({detail,period,month,day,onPeriod,onMonth,onDay,l
   return full?createPortal(<div className="stock-terminal financial-fullscreen" data-stock-theme={theme} role="dialog" aria-modal="true" aria-label={`${detail?.stock.username??'证券'}全屏走势图`}>{content}</div>,document.body):content
 }
 
-export function Sparkline({value,previous}:{value:number;previous:number}){const up=value>=previous;return <svg className="sparkline" viewBox="0 0 76 22" aria-label="前次报价至最新报价"><path d={value===previous?'M0 11 L76 11':up?'M0 19 L76 2':'M0 2 L76 19'} fill="none" stroke={up?'var(--mmex-sparkline-rise, #df817f)':'var(--mmex-sparkline-fall, #6bbbaa)'} strokeWidth="1.4"/></svg>}
+export function Sparkline({value,open}:{value:number;open:number}){const up=value>=open;return <svg className="sparkline" viewBox="0 0 76 22" aria-label="今日开盘至最新报价"><path d={open<=0||value===open?'M0 11 L76 11':up?'M0 19 L76 2':'M0 2 L76 19'} fill="none" stroke={up?'var(--mmex-sparkline-rise, #df817f)':'var(--mmex-sparkline-fall, #6bbbaa)'} strokeWidth="1.4"/></svg>}
