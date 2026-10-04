@@ -18,7 +18,8 @@
 
 密钥生命周期：首次写入大世界数据时自动生成随机根密钥，用 DPAPI 封装后保存到
 config/opsi_secure/keyring.json（随每日备份一起走，恢复后仍可在本机解开），并
-在后台把已有明文数据迁移为密文。各数据集的子密钥由 HKDF 从根密钥分离。
+在后台把已有明文数据迁移为密文；迁移事务开启 secure_delete，覆盖写即清零旧
+明文单元，不需要 VACUUM 重建整库。各数据集的子密钥由 HKDF 从根密钥分离。
 
 防篡改：受保护清单里的文件（加密核心自身）校验到变化、或 keyring 内容被改动时，
 清空全部受保护数据并删除密钥（2026-10-04 用户定：修改代码就把数据全部清空）。
@@ -180,6 +181,7 @@ class Vault:
         self._background_migration = bool(background_migration)
         self._lock = threading.RLock()
         self._dek: bytes | None = None
+        self._subkeys: dict[str, bytes] = {}
         self._integrity_checked = False
         self._init_failed = False
         self._migration_kicked = False
@@ -215,7 +217,13 @@ class Vault:
         return self.keyring_path.exists()
 
     def is_configured(self) -> bool:
-        """是否已启用文件加密（keyring 可解析）。"""
+        """是否已启用文件加密（keyring 可解析）。
+
+        根密钥已在手时直接成立：批量解密路径每行都会问一次，这里避免重复
+        触碰磁盘（keyring 被删会经 _wipe / 下次进程启动体现）。
+        """
+        if self._dek is not None:
+            return True
         self.ensure_integrity()
         return self._keyring() is not None
 
@@ -280,6 +288,7 @@ class Vault:
             return False
         self._keyring_cache = None
         self._dek = dek
+        self._subkeys.clear()
         logger.info('[统计-加密] 已启用大世界统计数据文件加密（密钥绑定当前 Windows 用户）')
         return True
 
@@ -298,6 +307,7 @@ class Vault:
             self._wipe('密钥文件校验失败')
             return False
         self._dek = dek
+        self._subkeys.clear()
         return True
 
     @staticmethod
@@ -353,10 +363,15 @@ class Vault:
     # ---- 密文读写 ----
 
     def _subkey(self, kind: str) -> bytes:
+        """取数据集的子密钥；派生结果按进程缓存（批量解密的热路径）。"""
         if kind not in KINDS:
             raise VaultError(f'未知的数据种类: {kind}')
-        return HKDF(algorithm=hashes.SHA256(), length=32, salt=None,
-                    info=f'opsi-stats/v1/{kind}'.encode('utf-8')).derive(self._dek)
+        cached = self._subkeys.get(kind)
+        if cached is None:
+            cached = HKDF(algorithm=hashes.SHA256(), length=32, salt=None,
+                          info=f'opsi-stats/v1/{kind}'.encode('utf-8')).derive(self._dek)
+            self._subkeys[kind] = cached
+        return cached
 
     def _keyring_mac(self, keyring: dict, dek: bytes) -> str:
         payload = {key: value for key, value in keyring.items() if key != 'mac'}
@@ -419,6 +434,7 @@ class Vault:
             except Exception:
                 logger.exception('[统计-加密] 清空受保护数据时出错（继续删除密钥）')
             self._dek = None
+            self._subkeys.clear()
             self._keyring_cache = None
             _secure_unlink(self.keyring_path)
             try:
@@ -477,12 +493,18 @@ class Vault:
         self._migration_kicked = True
 
         def run():
-            try:
-                counts = self.ensure_migrated()
+            for attempt in range(5):
+                try:
+                    counts = self.ensure_migrated()
+                except Exception:
+                    # 与正在运行的游戏抢 SQLite 写锁时可能失败，稍后整体重试。
+                    logger.warning(f'[统计-加密] 后台加密迁移失败（第 {attempt + 1}/5 次），稍后重试')
+                    time.sleep(60)
+                    continue
                 if any(counts.get(key) for key in ('cl1', 'loot', 'res', 'ships', 'files')):
                     logger.info(f'[统计-加密] 旧数据加密迁移完成: {counts}')
-            except Exception:
-                logger.exception('[统计-加密] 后台加密迁移失败（下次启动重试）')
+                return
+            logger.error('[统计-加密] 后台加密迁移多次失败，下次启动再试')
 
         threading.Thread(target=run, name='opsi-secure-migrate', daemon=True).start()
 
@@ -500,18 +522,43 @@ class Vault:
         counts['files'] = self._migrate_farming_csvs()
         return counts
 
+    @staticmethod
+    def _execute_begin_immediate(conn, attempts: int = 5) -> None:
+        """取 SQLite 写锁；与正在运行的游戏写入抢锁时退避重试。"""
+        for attempt in range(attempts):
+            try:
+                conn.execute('BEGIN IMMEDIATE')
+                return
+            except sqlite3.OperationalError as exc:
+                if 'locked' not in str(exc).lower() or attempt == attempts - 1:
+                    raise
+                time.sleep(0.5 * (2 ** attempt))
+
+    @staticmethod
+    def _ensure_column(conn, table: str, column: str, column_type: str) -> None:
+        """补列；两个进程同时迁移时重复列名可安全忽略。"""
+        columns = {row[1] for row in conn.execute(f'PRAGMA table_info({table})')}
+        if column in columns:
+            return
+        try:
+            conn.execute(f'ALTER TABLE {table} ADD COLUMN {column} {column_type}')
+        except sqlite3.OperationalError as exc:
+            if 'duplicate column' not in str(exc).lower():
+                raise
+
     def _migrate_cl1(self) -> int:
         if not self.cl1_db.exists():
             return 0
         migrated = 0
         with closing(sqlite3.connect(self.cl1_db, timeout=30)) as conn:
+            # 覆盖写就把旧明文单元清零，迁移完成后无需 VACUUM 重建整库。
+            conn.execute('PRAGMA secure_delete = ON')
             try:
-                conn.execute('BEGIN IMMEDIATE')
                 columns = {row[1] for row in conn.execute('PRAGMA table_info(cl1_data)')}
                 if not columns:
                     return 0
-                if 'secure_json' not in columns:
-                    conn.execute('ALTER TABLE cl1_data ADD COLUMN secure_json TEXT')
+                self._ensure_column(conn, 'cl1_data', 'secure_json', 'TEXT')
+                self._execute_begin_immediate(conn)
                 rows = conn.execute(
                     'SELECT instance, month, data_json FROM cl1_data '
                     'WHERE secure_json IS NULL AND data_json IS NOT NULL'
@@ -536,8 +583,6 @@ class Vault:
             except BaseException:
                 conn.rollback()
                 raise
-        if migrated:
-            self._vacuum(self.cl1_db)
         return migrated
 
     def _migrate_azurstats(self) -> tuple[int, int]:
@@ -545,14 +590,13 @@ class Vault:
             return 0, 0
         loot = res = 0
         with closing(sqlite3.connect(self.azurstats_db, timeout=30)) as conn:
+            # 覆盖写就把旧明文单元清零，迁移完成后无需 VACUUM 重建整库。
+            conn.execute('PRAGMA secure_delete = ON')
             tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             if 'opsi_items' in tables:
-                columns = {row[1] for row in conn.execute('PRAGMA table_info(opsi_items)')}
-                if 'secure_payload' not in columns:
-                    conn.execute('ALTER TABLE opsi_items ADD COLUMN secure_payload TEXT')
-                    conn.commit()
+                self._ensure_column(conn, 'opsi_items', 'secure_payload', 'TEXT')
                 try:
-                    conn.execute('BEGIN IMMEDIATE')
+                    self._execute_begin_immediate(conn)
                     rows = conn.execute(
                         'SELECT id, server, zone, zone_type, zone_id, item, amount, tag FROM opsi_items '
                         'WHERE secure_payload IS NULL AND (item IS NOT NULL OR amount IS NOT NULL '
@@ -576,14 +620,11 @@ class Vault:
                     conn.rollback()
                     raise
             if 'resource_snapshots' in tables:
-                columns = {row[1] for row in conn.execute('PRAGMA table_info(resource_snapshots)')}
-                if 'opsi_payload' not in columns:
-                    conn.execute('ALTER TABLE resource_snapshots ADD COLUMN opsi_payload TEXT')
-                    conn.commit()
+                self._ensure_column(conn, 'resource_snapshots', 'opsi_payload', 'TEXT')
                 # 资源快照可能很多，分片提交，避免长时间持锁影响快照写入。
                 while True:
                     try:
-                        conn.execute('BEGIN IMMEDIATE')
+                        self._execute_begin_immediate(conn)
                         rows = conn.execute(
                             'SELECT id, action_point, yellow_coin, purple_coin FROM resource_snapshots '
                             'WHERE opsi_payload IS NULL AND (action_point IS NOT NULL '
@@ -608,8 +649,6 @@ class Vault:
                         raise
                     if len(rows) < MIGRATION_CHUNK:
                         break
-        if loot or res:
-            self._vacuum(self.azurstats_db)
         return loot, res
 
     def _migrate_ship_files(self) -> int:
@@ -645,15 +684,6 @@ class Vault:
             atomic_write(str(path), blob)
             migrated += 1
         return migrated
-
-    @staticmethod
-    def _vacuum(path: Path) -> None:
-        """迁移后重建数据库文件，清掉仍带明文数据的历史页。"""
-        try:
-            with closing(sqlite3.connect(path, timeout=30)) as conn:
-                conn.execute('VACUUM')
-        except sqlite3.Error as exc:
-            logger.warning(f'[统计-加密] VACUUM 未完成（旧页面可能残留）: {exc}')
 
 
 # —— 进程单例与便捷入口 ——

@@ -23,7 +23,8 @@ from module.statistics.ship_exp_stats import ShipExpStats
 
 class VaultCase(unittest.TestCase):
     def setUp(self):
-        self.directory = tempfile.TemporaryDirectory()
+        # Windows 上杀软/索引器会短暂占用刚写入的文件，清理失败不应让用例报错。
+        self.directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.directory.name)
         (self.root / 'config').mkdir()
         (self.root / 'log' / 'cl1' / 'inst').mkdir(parents=True)
@@ -269,6 +270,17 @@ class ResourceStatsIntegration(VaultCase):
         self.assertIsNone(row[1])
         self.assertIsNone(row[2])
         self.assertGreaterEqual(opsi_secure.get_vault().status()['dropped'].get('res', 0), 1)
+
+    def test_timeline_can_skip_opsi_decryption(self):
+        # 不需要大世界货币的调用方（资源趋势页）跳过解密，其余列照常读出。
+        self.configure()
+        resource_stats.record_resource_snapshot('inst', dict(self.SNAPSHOT))
+        rows = resource_stats.get_resource_timeline('inst', include_opsi=False)
+        self.assertIsNone(rows[0]['action_point'])
+        self.assertNotIn('opsi_payload', rows[0])
+        self.assertEqual(rows[0]['oil'], 14000)
+        rows = resource_stats.get_resource_timeline('inst')
+        self.assertEqual(rows[0]['action_point'], 131)
 
     def test_migration_of_existing_snapshots(self):
         resource_stats.record_resource_snapshot('inst', dict(self.SNAPSHOT))

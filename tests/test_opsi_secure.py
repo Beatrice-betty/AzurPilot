@@ -95,7 +95,8 @@ def make_loot_db(path):
 
 class OpsiSecureTestCase(unittest.TestCase):
     def setUp(self):
-        self.directory = tempfile.TemporaryDirectory()
+        # Windows 上杀软/索引器会短暂占用刚写入的文件，清理失败不应让用例报错。
+        self.directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.directory.name)
         (self.root / 'config').mkdir()
         (self.root / 'log' / 'cl1' / 'inst').mkdir(parents=True)
@@ -220,6 +221,28 @@ class OpsiSecureTestCase(unittest.TestCase):
         conn.close()
         # 与加密无关的数据保留。
         self.assertTrue((self.root / 'config' / 'cl1_data.db').exists())
+
+    def test_reseal_updates_manifest_without_wipe(self):
+        # 有意修改受保护文件后用重封工具更新清单：完整性校验恢复，不触发清空。
+        from dev_tools.opsi_secure_reseal import reseal
+        vault = self.ready_vault()
+        vault.seal('cl1', {'battle_count': 1})
+        self.protected.write_text('VERSION = 2\n', encoding='utf-8')
+        code = reseal(self.root, confirm=True, protected_files=[self.protected])
+        self.assertEqual(code, 0)
+        fresh = self.make_vault()
+        self.assertTrue(fresh.writer_ready())
+        self.assertIsNone(self.make_vault().status()['lastWipe'])
+
+    def test_reseal_rejects_preview_without_confirm(self):
+        from dev_tools.opsi_secure_reseal import reseal
+        self.ready_vault()
+        self.protected.write_text('VERSION = 3\n', encoding='utf-8')
+        self.assertEqual(reseal(self.root, confirm=False, protected_files=[self.protected]), 0)
+        # 未确认时不写入：明文校验仍会发现差异。
+        fresh = self.make_vault()
+        self.assertFalse(fresh.is_configured())
+        self.assertIsNotNone(fresh.status()['lastWipe'])
 
     def test_keyring_edit_wipes_data(self):
         # 攻击者改 keyring 内容但保留其余结构：解封时 MAC 校验失败，数据清空。

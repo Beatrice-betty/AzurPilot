@@ -173,6 +173,7 @@ def get_resource_timeline(
     instance: str = 'default',
     limit: int = 500,
     since: str = None,
+    include_opsi: bool = True,
 ) -> List[Dict[str, Any]]:
     """获取资源快照时间序列数据，用于绘制资源变化曲线。
 
@@ -180,6 +181,8 @@ def get_resource_timeline(
         instance: 实例名称
         limit: 最大返回条数
         since: 起始时间（ISO 文本，含）。为空表示不限
+        include_opsi: 是否解密大世界三列（行动力/黄币/紫币）。不需要这些列
+            的调用方（如资源趋势页）传 False，避免对大量行做无谓解密。
 
     Returns:
         list[dict]: 按时间排序的快照列表，每个包含:
@@ -200,7 +203,12 @@ def get_resource_timeline(
                 ''',
                 (instance, since, since, limit),
             ).fetchall()
-            result = [_overlay_opsi_snapshot(dict(row)) for row in rows]
+            if include_opsi:
+                result = [_overlay_opsi_snapshot(dict(row)) for row in rows]
+            else:
+                result = [dict(row) for row in rows]
+                for item in result:
+                    item.pop('opsi_payload', None)
             result.reverse()
             return result
     except Exception as e:

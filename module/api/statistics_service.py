@@ -308,7 +308,8 @@ def report(configs, instance: str, category: str, month: str, days: int, period:
         from module.statistics.resource_stats import RESOURCE_COLUMNS, get_resource_timeline
         cutoff = (now - timedelta(days=days)).isoformat(sep=' ')
         # 窗口过滤下推到 SQL，只读窗口内的行。
-        rows = get_resource_timeline(instance, limit=50001, since=cutoff.replace(' ', 'T'))
+        # 该分类展示的序列不含大世界货币，跳过密文解密（它们是资源快照里解密开销最大的一批）。
+        rows = get_resource_timeline(instance, limit=50001, since=cutoff.replace(' ', 'T'), include_opsi=False)
         if len(rows) > 50000:
             result['notes'].append('记录超过 50,000 条，当前展示最近 50,000 条，请缩短时间范围查看细节。')
             rows = rows[-50000:]
