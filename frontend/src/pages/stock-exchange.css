@@ -4,11 +4,18 @@
 .stock-exchange-loading{position:relative;display:flex;justify-content:center;align-items:center;min-height:100dvh}
 .stock-exchange-loading>.overview-link{position:absolute;top:24px;right:29px}
 .stock-terminal .overview-link,.stock-exchange-loading>.overview-link{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid #283340;border-radius:6px;background:#151e29;color:#c5d3bd;font-size:11px;line-height:1.4;text-decoration:none;white-space:nowrap}
-.stock-terminal .overview-link{position:relative;z-index:101}
 .stock-terminal .overview-link:hover,.stock-exchange-loading>.overview-link:hover{background:#29362e;border-color:#71886b}
 .stock-terminal .overview-link:focus-visible,.stock-exchange-loading>.overview-link:focus-visible{outline:2px solid #bdcead;outline-offset:3px}
 .stock-terminal .startup{position:relative;min-height:100dvh}
 .stock-terminal .startup-actions{position:absolute;top:24px;right:29px}
+.stock-terminal{--mmex-sidebar-width:218px;--mmex-topbar-height:70px}
+.stock-terminal .mmex-workspace{padding-top:var(--mmex-topbar-height)}
+.stock-terminal .mmex-topbar{position:fixed;top:0;left:var(--mmex-sidebar-width);right:0;z-index:20;height:var(--mmex-topbar-height);justify-content:flex-start}
+.stock-terminal .auth-actions{display:flex;justify-content:flex-end;margin-bottom:18px}
+@media(max-width:1280px){.stock-terminal{--mmex-sidebar-width:190px}}
+@media(max-width:980px){.stock-terminal{--mmex-sidebar-width:76px}}
+@media(max-width:800px){.stock-terminal{--mmex-sidebar-width:0px}.stock-terminal .exchange{padding-top:var(--mmex-topbar-height)}.stock-terminal .mmex-workspace{padding-top:0}}
+@media(max-width:740px){.stock-terminal{--mmex-topbar-height:56px}}
 .stock-terminal .quote-status{display:flex;align-items:center;gap:6px;color:#89a393;font-size:10px}
 .stock-terminal .leverage-hint{color:#80958a;font-size:10px;line-height:1.6}
 .stock-terminal .leverage-warning{display:flex;align-items:flex-start;gap:7px;padding:10px;border:1px solid #6e5739;border-radius:6px;background:#352b203d;color:#c6b592;font-size:10px;line-height:1.8}

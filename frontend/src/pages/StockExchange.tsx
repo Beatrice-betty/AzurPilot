@@ -20,5 +20,5 @@ export function StockExchange(){
     void load();const timer=setInterval(()=>{if(document.visibilityState==='visible')void load()},5000)
     return ()=>{active=false;clearInterval(timer)}
   },[instance,connection])
-  return <section className="stock-exchange-page">{!status?<div className="stock-exchange-loading"><Link className="overview-link" to={`/i/${encodeURIComponent(instance)}/overview`}>返回总览</Link>{error?<ErrorBox message={error}/>:<Loading/>}</div>:<div className="stock-terminal"><ExchangeProvider key={instance} instance={instance} status={status} onSessionChanged={sessionChanged}><TradingTerminal/></ExchangeProvider></div>}</section>
+  return <section className="stock-exchange-page">{!status?<div className="stock-exchange-loading">{error?<><Link className="overview-link" to={`/i/${encodeURIComponent(instance)}/overview`}>返回总览</Link><ErrorBox message={error}/></>:<Loading/>}</div>:<div className="stock-terminal"><ExchangeProvider key={instance} instance={instance} status={status} onSessionChanged={sessionChanged}><TradingTerminal/></ExchangeProvider></div>}</section>
 }
