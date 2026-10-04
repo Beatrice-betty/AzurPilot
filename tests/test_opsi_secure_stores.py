@@ -19,17 +19,18 @@ from module.statistics import opsi_secure, resource_stats
 from module.statistics.azurstats import AzurStats
 from module.statistics.cl1_database import Cl1Database
 from module.statistics.ship_exp_stats import ShipExpStats
+from tests.test_opsi_secure import MemoryProvider
 
 
 class VaultCase(unittest.TestCase):
     def setUp(self):
-        # Windows 上杀软/索引器会短暂占用刚写入的文件，清理失败不应让用例报错。
         self.directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.directory.name)
         (self.root / 'config').mkdir()
         (self.root / 'log' / 'cl1' / 'inst').mkdir(parents=True)
         self.previous = opsi_secure._VAULT
-        opsi_secure.set_vault(None)
+        self.provider = MemoryProvider()
+        opsi_secure.set_vault(opsi_secure.Vault(root=self.root, provider=self.provider, background_migration=False))
         self.dpapi_patch = None
 
     def tearDown(self):
@@ -46,18 +47,16 @@ class VaultCase(unittest.TestCase):
     def configure(self):
         """启用加密（测试里关闭后台迁移，迁移由需要的用例显式调用）。"""
         self._release_dpapi()
-        vault = opsi_secure.Vault(root=self.root, protected_files=[], background_migration=False)
+        self.provider.offline = False
+        vault = opsi_secure.Vault(root=self.root, protected_files=[], background_migration=False, provider=self.provider)
         opsi_secure.set_vault(vault)
         self.assertTrue(vault.ensure_ready())
         return vault
 
     def lock(self):
-        """模拟密钥不可用的环境（换机器 / DPAPI 失效），keyring 仍存在。"""
-        self._release_dpapi()
-        self.dpapi_patch = patch('module.runtime.account_local.dpapi',
-                                 side_effect=OSError('dpapi unavailable'))
-        self.dpapi_patch.start()
-        vault = opsi_secure.Vault(root=self.root, protected_files=[], background_migration=False)
+        """模拟凭据服务暂时离线。"""
+        self.provider.offline = True
+        vault = opsi_secure.Vault(root=self.root, provider=self.provider, background_migration=False)
         opsi_secure.set_vault(vault)
         return vault
 
@@ -103,7 +102,7 @@ class Cl1StoreIntegration(VaultCase):
         vault = self.configure()
         # 测试里关掉了后台迁移，显式执行并确认幂等。
         summary = vault.ensure_migrated()
-        self.assertGreaterEqual(summary['cl1'], 1)
+        self.assertFalse(summary['skipped'])
         data = db.get_stats('inst', self.month())
         self.assertEqual(data['battle_count'], 7)
         self.assertEqual(len(data['commission_income_entries']), 1)
@@ -115,9 +114,8 @@ class Cl1StoreIntegration(VaultCase):
         self.configure()
         db.increment_battle_count('inst', 5)
         self.lock()
-        db.increment_battle_count('inst', 99)
-        vault = opsi_secure.get_vault()
-        self.assertGreaterEqual(vault.status()['dropped'].get('cl1', 0), 1)
+        with self.assertRaises(opsi_secure.VaultLocked):
+            db.increment_battle_count('inst', 99)
         data = db.get_stats('inst', self.month())
         self.assertEqual(data['battle_count'], 0)  # 密钥不可用时读取降级为默认值
         # 恢复密钥后旧密文仍能读回，且没有被 99 覆盖。
@@ -129,8 +127,8 @@ class Cl1StoreIntegration(VaultCase):
         db = self.make_db()
         db.increment_battle_count('inst', 4)
         raw_json, raw_secure = self.raw('SELECT data_json, secure_json FROM cl1_data')[0]
-        self.assertIn('battle_count', raw_json)
-        self.assertIsNone(raw_secure)
+        self.assertNotIn('battle_count', raw_json)
+        self.assertTrue(raw_secure.startswith(opsi_secure.BLOB_PREFIX))
 
 
 class AzurstatsIntegration(VaultCase):
@@ -170,7 +168,7 @@ class AzurstatsIntegration(VaultCase):
         rows = self.raw('SELECT item, amount, zone_id, secure_payload, hazard_level FROM opsi_items ORDER BY id')
         self.assertIsNone(rows[0][0])          # 旧行已迁移
         self.assertIsNone(rows[1][0])
-        self.assertEqual(rows[1][4], 6)        # 筛选维度保持明文
+        self.assertIsNone(rows[1][4])
         loaded = AzurStats.load_opsi_drop_rows(instance='inst', device_id='dev-1')
         self.assertEqual([row['item'] for row in loaded], ['PlateGeneralT4', 'PlateGeneralT4'])
         self.assertEqual([row['amount'] for row in loaded], [3, 7])
@@ -243,14 +241,19 @@ class ResourceStatsIntegration(VaultCase):
         self.configure()
         resource_stats.record_resource_snapshot('inst', dict(self.SNAPSHOT, ActionPoint=160))
         rows = self.raw('SELECT oil, action_point, opsi_payload FROM resource_snapshots ORDER BY id')
-        self.assertEqual(rows[0][1], 131)          # 旧行保持明文，直到迁移
-        self.assertIsNone(rows[0][2])
+        self.assertIsNone(rows[0][1])
+        self.assertTrue(rows[0][2].startswith(opsi_secure.BLOB_PREFIX))
         self.assertIsNone(rows[1][1])              # 启用后写入即加密
         self.assertTrue(rows[1][2].startswith(opsi_secure.BLOB_PREFIX))
         self.assertEqual(rows[1][0], 14000)        # 非大世界列保持明文
         timeline = resource_stats.get_resource_timeline('inst')
         self.assertEqual([row['action_point'] for row in timeline], [131, 160])
         self.assertEqual([row['oil'] for row in timeline], [14000, 14000])
+        vault = opsi_secure.get_vault()
+        with patch.object(resource_stats, '_overlay_opsi_snapshot', side_effect=AssertionError('不得解封载荷')):
+            public = resource_stats.get_resource_timeline('inst', include_opsi=False)
+        self.assertEqual([row['oil'] for row in public], [14000, 14000])
+        self.assertTrue(all('opsi_payload' not in row and row['action_point'] is None for row in public))
 
     def test_interval_summary_covers_opsi_currencies(self):
         self.configure()
@@ -265,22 +268,8 @@ class ResourceStatsIntegration(VaultCase):
         self.configure()
         self.lock()
         resource_stats.record_resource_snapshot('inst', dict(self.SNAPSHOT))
-        row = self.raw('SELECT oil, action_point, opsi_payload FROM resource_snapshots')[0]
-        self.assertEqual(row[0], 14000)
-        self.assertIsNone(row[1])
-        self.assertIsNone(row[2])
+        self.assertEqual(self.raw('SELECT count(*) FROM resource_snapshots')[0][0], 0)
         self.assertGreaterEqual(opsi_secure.get_vault().status()['dropped'].get('res', 0), 1)
-
-    def test_timeline_can_skip_opsi_decryption(self):
-        # 不需要大世界货币的调用方（资源趋势页）跳过解密，其余列照常读出。
-        self.configure()
-        resource_stats.record_resource_snapshot('inst', dict(self.SNAPSHOT))
-        rows = resource_stats.get_resource_timeline('inst', include_opsi=False)
-        self.assertIsNone(rows[0]['action_point'])
-        self.assertNotIn('opsi_payload', rows[0])
-        self.assertEqual(rows[0]['oil'], 14000)
-        rows = resource_stats.get_resource_timeline('inst')
-        self.assertEqual(rows[0]['action_point'], 131)
 
     def test_migration_of_existing_snapshots(self):
         resource_stats.record_resource_snapshot('inst', dict(self.SNAPSHOT))
@@ -326,7 +315,36 @@ class ShipExpIntegration(VaultCase):
         stats = self.make_stats()
         stats.data = {'battle_times': {'samples': [52.0], 'average': 52.0}}
         stats._save()
-        self.assertIn('battle_times', stats._path.read_text(encoding='utf-8'))
+        self.assertNotIn('battle_times', stats._path.read_text(encoding='utf-8'))
+        self.assertEqual(self.make_stats().data['battle_times']['average'], 52.0)
+
+    def test_existing_object_does_not_reinsert_cache_after_environment_reset(self):
+        vault = self.configure()
+        stats = self.make_stats()
+        stats.data = {'battle_times': {'samples': [52.0], 'average': 52.0}}
+        stats._save()
+        old = vault._state['installation_id']
+        vault.wipe('测试复位')
+        self.assertTrue(vault.ensure_ready())
+        self.assertNotEqual(vault._state['installation_id'], old)
+        stats._save()
+        self.assertEqual(stats.data, {})
+        self.assertFalse(stats._path.exists())
+
+    def test_offline_plaintext_replacement_is_not_used_as_a_fallback(self):
+        vault = self.configure()
+        stats = self.make_stats()
+        stats.data = {'battle_times': {'average': 52.0}}
+        stats._save()
+        self.lock()
+        stats._path.write_text('{"battle_times":{"average":987654321}}')
+        self.assertEqual(self.make_stats().data, {})
+        self.assertFalse(vault.wipe_path.exists())
+        self.provider.offline = False
+        self.assertTrue(opsi_secure.get_vault().ensure_ready())
+        # 无全量根校验后不再有"文件被替换→清空"路径；明文替换仍然读不出。
+        self.assertFalse(vault.wipe_path.exists())
+        self.assertEqual(self.make_stats().data, {})
 
 
 if __name__ == '__main__':
