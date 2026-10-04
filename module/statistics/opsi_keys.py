@@ -47,6 +47,11 @@ class KeyProvider:
         from module.statistics.opsi_secure import _decrypt, _subkey
         return _decrypt(_subkey(self.key(state), info), token, aad)
 
+    def chain_key(self, slot, state):
+        """完整性链的独立子密钥；从根密钥派生，与记录加密子密钥分离。"""
+        from module.statistics.opsi_secure import _subkey
+        return _subkey(self.key(state), 'opsi-stats/v2/integrity-chain')
+
 
 class DeviceRootProvider(KeyProvider):
     device_class = ''

@@ -72,7 +72,7 @@ def process_operation(directory, started, finished, operation):
     """子进程持独立模块和 Python 锁，验证真正的 SQLite 进程间串行化。"""
     if not Path(directory).is_relative_to(Path(tempfile.gettempdir())):
         raise RuntimeError('测试目录未隔离')
-    opsi_secure.set_vault(opsi_secure.Vault(directory, provider=WindowsProvider()))
+    opsi_secure.set_vault(opsi_secure.Vault(directory, provider=WindowsProvider(), deep_check=False))
     module = load_statistics(directory)
     started.set()
     connect = sqlite3.connect
