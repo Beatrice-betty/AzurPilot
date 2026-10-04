@@ -56,15 +56,12 @@ def memory_governs(instance: str) -> bool:
 
 
 def enable_opsi_secure() -> None:
-    """启用大世界统计数据文件加密（工作进程启动时调用一次）。
-
-    首次运行会建立本机密钥并在后台把旧明文数据迁移为密文；失败不阻断启动。
-    """
+    """初始化统计运行环境；暂时不可用时由存储入口重试。"""
     try:
         from module.statistics.opsi_secure import get_vault
         get_vault().ensure_ready()
     except Exception:
-        logger.exception('[统计-加密] 启动时初始化未完成（稍后写入时重试）')
+        logger.exception('[统计-运行] 启动时初始化未完成（稍后写入时重试）')
 
 
 class ProcessManager:

@@ -68,6 +68,12 @@ def get_statistics_fingerprint(instance: str) -> str:
         parts.append(f'storage:{stat.st_mtime_ns}:{stat.st_size}')
     except OSError:
         parts.append('storage:none')
+    for database in ('azurstats_local.db', 'cl1_data.db', 'storage_statistics.db'):
+        try:
+            stat = os.stat('./config/' + database + '-wal')
+            parts.append(f'{database}-wal:{stat.st_mtime_ns}:{stat.st_size}')
+        except OSError:
+            parts.append(database + '-wal:none')
     return ';'.join(parts)
 
 
@@ -231,6 +237,18 @@ def _month_end(moment: datetime) -> datetime:
 
 def report(configs, instance: str, category: str, month: str, days: int, period: str,
            research_series: int = 0, research_scope: str = 'series', loot_task: str = None) -> dict:
+    """同一份受保护报表的读取共用一次校验及协调锁。"""
+    configs.path(instance)
+    reader = _report
+    if category in ('resources', 'action', 'opsi', 'ships', 'loot', 'commission', 'research'):
+        from module.statistics.opsi_secure import checked_read
+        reader = checked_read(reader)
+    return reader(configs, instance, category, month, days, period,
+                  research_series, research_scope, loot_task)
+
+
+def _report(configs, instance: str, category: str, month: str, days: int, period: str,
+            research_series: int = 0, research_scope: str = 'series', loot_task: str = None) -> dict:
     """生成并获取指定维度的统计报表。
 
     支持资源变动趋势、大世界运营、委托收益、舰船经验以及科研和大世界掉落明细。
@@ -252,7 +270,6 @@ def report(configs, instance: str, category: str, month: str, days: int, period:
     Raises:
         ApiError: 月份格式错误或超出有效年份范围 (INVALID_PARAMS)。
     """
-    configs.path(instance)
     now = datetime.now()
     try:
         selected = datetime.strptime(month, '%Y-%m') if month else now.replace(day=1)

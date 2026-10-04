@@ -23,7 +23,6 @@ from dataclasses import asdict
 import numpy as np
 import cv2
 
-from deploy.atomic import atomic_write
 from module.base.utils import area_pad, save_image
 from module.logger import logger
 from module.statistics import opsi_secure
@@ -224,6 +223,7 @@ class AzurStats:
         return f'{stem}.instance-{key}{suffix}'
 
     @staticmethod
+    @opsi_secure.checked_read
     def load_meowofficer_farming(instance=None):
         """读取指定实例的汇总，缺失时从明细重算，绝不借用全局 CSV。
 
@@ -233,10 +233,12 @@ class AzurStats:
         path = AzurStats._meowofficer_farming_path(instance)
         try:
             text = open(path, encoding='utf-8').read()
-            if text.startswith(opsi_secure.BLOB_PREFIX):
-                payload = opsi_secure.get_vault().open_('loot', text)
+            if text.startswith((opsi_secure.BLOB_PREFIX, opsi_secure.LEGACY_PREFIX)):
+                payload = opsi_secure.get_vault().open_('loot', text, opsi_secure.get_vault().file_context('loot', path))
                 data = np.array(payload['rows'], dtype=float)
             else:
+                if not opsi_secure.get_vault().legacy_plaintext_readable():
+                    raise opsi_secure.VaultLocked('统计缓存暂不可用')
                 data = np.loadtxt(io.StringIO(text), delimiter=',', dtype=float, skiprows=1)
             if data.shape != (6, len(AzurStats.meowofficer_farming_labels)):
                 raise ValueError('统计缓存形状不匹配')
@@ -285,6 +287,7 @@ class AzurStats:
 
     @staticmethod
     def _insert_local_opsi_items(rows):
+        opsi_secure.get_vault().check_database(AzurStats.LOCAL_DB)
         if not rows:
             return 0
 
@@ -292,35 +295,21 @@ class AzurStats:
         # 兼容旧版离线导入；缺少身份的记录仍属于历史共享。
         rows = [dict(row, instance=row.get("instance")) for row in rows]
         vault = opsi_secure.get_vault()
-        if vault.is_configured():
+        # writer_ready 与写入事务共用同一协调锁持有期：一次写入只做一次校验。
+        with vault.coordinator.lock():
             if not vault.writer_ready():
-                # 统计链路的降级绝不中断游戏流程：跳过本次入库并计数。
                 opsi_secure.record_dropped('loot')
-                logger.warning('[统计-加密] 掉落明细密钥不可用，跳过本次入库（恢复后自动继续）')
                 return 0
-            sealed = []
-            for row in rows:
-                payload = {key: row.get(key) for key in opsi_secure.LOOT_SECURE_FIELDS}
-                row = dict(row, secure_payload=vault.seal('loot', payload),
-                           **{key: None for key in opsi_secure.LOOT_SECURE_FIELDS})
-                sealed.append(row)
-            rows = sealed
-        else:
-            rows = [dict(row, secure_payload=row.get('secure_payload')) for row in rows]
-        with AzurStats._local_lock:
-            with closing(sqlite3.connect(AzurStats.LOCAL_DB, timeout=30)) as conn, conn:
-                conn.executemany('''
-                    INSERT INTO opsi_items (
-                        imgid, server, zone, zone_type, zone_id, hazard_level,
-                        item, amount, tag, device_id, instance, genre, combat_count, created_at,
-                        secure_payload
-                    ) VALUES (
-                        :imgid, :server, :zone, :zone_type, :zone_id, :hazard_level,
-                        :item, :amount, :tag, :device_id, :instance, :genre, :combat_count, :created_at,
-                        :secure_payload
-                    )
-                ''', rows)
-                conn.commit()
+            with AzurStats._local_lock:
+                with closing(sqlite3.connect(AzurStats.LOCAL_DB, timeout=30)) as conn:
+                    with vault.transaction(conn, AzurStats.LOCAL_DB):
+                        for row in rows:
+                            cursor = conn.execute('INSERT INTO opsi_items (imgid, device_id, instance, genre, created_at) '
+                                                  'VALUES (:imgid,:device_id,:instance,:genre,:created_at)', row)
+                            row = dict(row, id=cursor.lastrowid)
+                            payload = {key: row.get(key) for key in opsi_secure.LOOT_SECURE_FIELDS}
+                            blob = vault.seal('loot', payload, opsi_secure.row_context('loot', row))
+                            conn.execute('UPDATE opsi_items SET secure_payload=? WHERE id=?', (blob, row['id']))
         return len(rows)
 
     @staticmethod
@@ -331,12 +320,13 @@ class AzurStats:
             blob = row.pop('secure_payload', None)
             if not blob:
                 continue
-            payload = vault.open_or_none('loot', blob)
+            payload = vault.open_or_none('loot', blob, opsi_secure.row_context('loot', row))
             if payload:
                 row.update(payload)
         return rows
 
     @staticmethod
+    @opsi_secure.checked_read
     def _load_local_opsi_items(device_id=None, genre='opsi_meowfficer_farming', instance=None, connection=None):
         if connection is None:
             AzurStats._ensure_local_db()
@@ -358,6 +348,7 @@ class AzurStats:
         return AzurStats._unseal_rows([dict(row) for row in connection.execute(query, params).fetchall()])
 
     @staticmethod
+    @opsi_secure.checked_read
     def load_opsi_drop_rows(instance=None, start=None, end=None, task=None, device_id=None):
         """读取大世界掉落明细，供统计页按时间窗口汇总。
 
@@ -416,16 +407,12 @@ class AzurStats:
                    comments='', fmt='%f')
         text = stream.getvalue()
         vault = opsi_secure.get_vault()
-        if vault.is_configured():
-            try:
-                lines = [line for line in text.splitlines() if line.strip()]
-                payload = {'header': lines[0].split(','), 'rows': [line.split(',') for line in lines[1:]]}
-                text = vault.seal('loot', payload)
-            except opsi_secure.VaultError:
-                opsi_secure.record_dropped('loot')
-                logger.warning('[统计-加密] 掉落明细密钥不可用，跳过短猫收益缓存写入')
-                return
-        atomic_write(path, text)
+        try:
+            lines = [line for line in text.splitlines() if line.strip()]
+            payload = {'header': lines[0].split(','), 'rows': [line.split(',') for line in lines[1:]]}
+            vault.write_file('loot', path, payload)
+        except (opsi_secure.VaultError, OSError):
+            opsi_secure.record_dropped('loot')
 
     @staticmethod
     def get_meowofficer_farming(instance=None):
@@ -435,13 +422,14 @@ class AzurStats:
         新快照覆盖成旧快照。旧记录的 NULL 身份不会匹配任何实例。
         已设置密钥但当前环境拿不到密钥时不重算、不覆盖现有缓存（明细暂不可读）。
         """
+        opsi_secure.get_vault().check_database(AzurStats.LOCAL_DB)
         AzurStats._ensure_local_db()
         vault = opsi_secure.get_vault()
         if vault.is_configured() and not vault.writer_ready():
             opsi_secure.record_dropped('loot')
-            logger.warning('[统计-加密] 掉落明细密钥不可用，暂不重算短猫收益（保留现有缓存）')
+            logger.warning('[统计] 掉落明细密钥不可用，暂不重算短猫收益（保留现有缓存）')
             return np.zeros((6, len(AzurStats.meowofficer_farming_labels)))
-        with closing(sqlite3.connect(AzurStats.LOCAL_DB, timeout=30)) as conn, conn:
+        with vault.reading(), closing(sqlite3.connect(AzurStats.LOCAL_DB, timeout=30)) as conn, conn:
             conn.execute('BEGIN IMMEDIATE')
             all_data = AzurStats._load_local_opsi_items(
                 device_id=get_device_id(),
@@ -486,6 +474,7 @@ class AzurStats:
             return out_data
 
     @staticmethod
+    @opsi_secure.checked_read
     def get_meow_loot_monthly_totals(device_id=None, year=None, month=None, instance=None):
         """按侵蚀等级汇总指定月份（默认本月）的耄耋相接掉落总数。
 
@@ -557,7 +546,7 @@ class AzurStats:
             with closing(sqlite3.connect(AzurStats.LOCAL_DB, timeout=30)) as conn:
                 conn.row_factory = sqlite3.Row
                 rows = AzurStats._unseal_rows([dict(row) for row in conn.execute(
-                    "SELECT hazard_level, item, amount, secure_payload FROM opsi_items "
+                    "SELECT * FROM opsi_items "
                     "WHERE genre='opsi_meowfficer_farming' AND created_at >= ? AND created_at < ? "
                     f"AND device_id = ?{scope}",
                     params,
@@ -582,6 +571,7 @@ class AzurStats:
         return totals
 
     @staticmethod
+    @opsi_secure.checked_read
     def get_meow_loot_available_months(device_id=None, limit=24, instance=None):
         """返回掉落明细库中存在耄耋相接数据的月份列表（从新到旧）。
 
@@ -671,7 +661,7 @@ class AzurStats:
                 # 数量已在解析阶段识别过，这里只需要物品名
                 group.predict(image, name=True, amount=False, tag=False)
             except Exception as e:
-                logger.warning(f'未识别物品截图生成失败, {e}')
+                logger.warning(f'未识别物品截图生成失败, {type(e).__name__}')
                 continue
 
             items = [item for item in group.items if not item.is_known_item()]
@@ -694,7 +684,7 @@ class AzurStats:
                 save_image(marked, file)
                 saved.append(file)
             except Exception as e:
-                logger.warning(f'未识别物品截图保存失败, {e}')
+                logger.warning(f'未识别物品截图保存失败, {type(e).__name__}')
 
         if saved:
             logger.info(f'发现未识别物品，截图已保存: {", ".join(saved)}')
@@ -715,10 +705,10 @@ class AzurStats:
             # 免得每来一条要塞/每日记录都把整表重跑一遍。
             if genre == 'opsi_meowfficer_farming':
                 self.get_meowofficer_farming(instance=self.config.config_name)
-            logger.info(f'本地碧蓝统计解析成功，行数={inserted}')
+            logger.info(f'本地碧蓝统计解析成功，记录 {inserted} 条')
             return True
         except Exception as e:
-            logger.warning(f'本地碧蓝统计解析失败, {e}')
+            logger.warning(f'本地碧蓝统计解析失败, {type(e).__name__}')
             return False
 
     def _save(self, image, genre, filename):
@@ -792,7 +782,7 @@ class AzurStats:
                 from module.statistics.research_drop import record_research_drop
                 record_research_drop(images, instance=self.config.config_name, imgid=filename)
             except Exception as e:
-                logger.warning(f'[科研统计] 掉落解析失败，跳过本次记录: {e}')
+                logger.warning(f'[科研统计] 掉落解析失败，跳过本次记录: {type(e).__name__}')
 
         return True
 
