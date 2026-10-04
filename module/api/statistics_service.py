@@ -39,21 +39,29 @@ def get_statistics_fingerprint(instance: str) -> str:
     except OSError:
         parts.append("cfg:none")
 
-    # 3. 大世界与委托记录库 (cl1_record.db)
-    cl1_db = './config/cl1_record.db'
+    # 3. 大世界与委托记录库 (cl1_data.db)
+    cl1_db = './config/cl1_data.db'
     try:
         stat = os.stat(cl1_db)
         parts.append(f"cl1:{stat.st_mtime_ns}")
     except OSError:
         parts.append("cl1:none")
 
-    # 4. 舰船经验统计文件 (log/ship_exp_stats.json)
-    ship_file = './log/ship_exp_stats.json'
+    # 4. 舰船经验统计文件（按实例隔离）
+    ship_file = f'./log/cl1/{instance}/ship_exp_data.json'
     try:
         stat = os.stat(ship_file)
         parts.append(f"ship:{stat.st_mtime_ns}")
     except OSError:
         parts.append("ship:none")
+
+    # 5. 大世界统计加密状态（设置或清空后页面需要刷新）
+    keyring = './config/opsi_secure/keyring.json'
+    try:
+        stat = os.stat(keyring)
+        parts.append(f"secure:{stat.st_mtime_ns}")
+    except OSError:
+        parts.append("secure:none")
 
     try:
         stat = os.stat('./config/storage_statistics.db')

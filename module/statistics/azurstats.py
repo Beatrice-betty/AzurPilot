@@ -11,7 +11,7 @@
 
 import threading
 import hashlib
-import tempfile
+import io
 from contextlib import closing
 import os
 import sqlite3
@@ -23,9 +23,10 @@ from dataclasses import asdict
 import numpy as np
 import cv2
 
-from deploy.atomic import atomic_replace
+from deploy.atomic import atomic_write
 from module.base.utils import area_pad, save_image
 from module.logger import logger
+from module.statistics import opsi_secure
 from module.statistics.drop_cleanup import cleanup_drop_screenshots_if_due
 from module.statistics.utils import pack
 from module.base.device_id import get_device_id
@@ -227,13 +228,19 @@ class AzurStats:
         """读取指定实例的汇总，缺失时从明细重算，绝不借用全局 CSV。
 
         无实例参数仅用于兼容旧版全局汇总，不能用作实例页的数据源。
+        已设置密钥时文件内容为密文，由保险库解开后还原为数值表。
         """
         path = AzurStats._meowofficer_farming_path(instance)
         try:
-            data = np.loadtxt(path, delimiter=',', dtype=float, skiprows=1, encoding='utf-8')
+            text = open(path, encoding='utf-8').read()
+            if text.startswith(opsi_secure.BLOB_PREFIX):
+                payload = opsi_secure.get_vault().open_('loot', text)
+                data = np.array(payload['rows'], dtype=float)
+            else:
+                data = np.loadtxt(io.StringIO(text), delimiter=',', dtype=float, skiprows=1)
             if data.shape != (6, len(AzurStats.meowofficer_farming_labels)):
                 raise ValueError('统计缓存形状不匹配')
-        except (OSError, ValueError):
+        except (OSError, ValueError, KeyError, TypeError, opsi_secure.VaultError):
             return AzurStats.get_meowofficer_farming(instance=instance)
         return data
 
@@ -259,13 +266,17 @@ class AzurStats:
                     instance TEXT,
                     genre TEXT,
                     combat_count INTEGER,
-                    created_at INTEGER
+                    created_at INTEGER,
+                    secure_payload TEXT
                 )
             ''')
             columns = {row[1] for row in conn.execute('PRAGMA table_info(opsi_items)')}
             if 'instance' not in columns:
                 # 旧记录没有可靠的实例身份，NULL 明确表示历史共享，禁止推断归属。
                 conn.execute('ALTER TABLE opsi_items ADD COLUMN instance TEXT')
+            if 'secure_payload' not in columns:
+                # 设置密钥后物品与数量等列迁到这一列（opsi_secure 的密文）。
+                conn.execute('ALTER TABLE opsi_items ADD COLUMN secure_payload TEXT')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_opsi_items_instance_device_genre '
                          'ON opsi_items(instance, device_id, genre)')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_opsi_items_device_genre ON opsi_items(device_id, genre)')
@@ -280,19 +291,50 @@ class AzurStats:
         AzurStats._ensure_local_db()
         # 兼容旧版离线导入；缺少身份的记录仍属于历史共享。
         rows = [dict(row, instance=row.get("instance")) for row in rows]
+        vault = opsi_secure.get_vault()
+        if vault.is_configured():
+            if not vault.writer_ready():
+                # 统计链路的降级绝不中断游戏流程：跳过本次入库并计数。
+                opsi_secure.record_dropped('loot')
+                logger.warning('[统计-加密] 掉落明细密钥不可用，跳过本次入库（恢复后自动继续）')
+                return 0
+            sealed = []
+            for row in rows:
+                payload = {key: row.get(key) for key in opsi_secure.LOOT_SECURE_FIELDS}
+                row = dict(row, secure_payload=vault.seal('loot', payload),
+                           **{key: None for key in opsi_secure.LOOT_SECURE_FIELDS})
+                sealed.append(row)
+            rows = sealed
+        else:
+            rows = [dict(row, secure_payload=row.get('secure_payload')) for row in rows]
         with AzurStats._local_lock:
             with closing(sqlite3.connect(AzurStats.LOCAL_DB, timeout=30)) as conn, conn:
                 conn.executemany('''
                     INSERT INTO opsi_items (
                         imgid, server, zone, zone_type, zone_id, hazard_level,
-                        item, amount, tag, device_id, instance, genre, combat_count, created_at
+                        item, amount, tag, device_id, instance, genre, combat_count, created_at,
+                        secure_payload
                     ) VALUES (
                         :imgid, :server, :zone, :zone_type, :zone_id, :hazard_level,
-                        :item, :amount, :tag, :device_id, :instance, :genre, :combat_count, :created_at
+                        :item, :amount, :tag, :device_id, :instance, :genre, :combat_count, :created_at,
+                        :secure_payload
                     )
                 ''', rows)
                 conn.commit()
         return len(rows)
+
+    @staticmethod
+    def _unseal_rows(rows):
+        """把带密文载荷的明细行还原出物品列；锁定或损坏时保持这些字段为空。"""
+        vault = opsi_secure.get_vault()
+        for row in rows:
+            blob = row.pop('secure_payload', None)
+            if not blob:
+                continue
+            payload = vault.open_or_none('loot', blob)
+            if payload:
+                row.update(payload)
+        return rows
 
     @staticmethod
     def _load_local_opsi_items(device_id=None, genre='opsi_meowfficer_farming', instance=None, connection=None):
@@ -313,7 +355,7 @@ class AzurStats:
             params.append(instance)
         query += ' ORDER BY id ASC'
         connection.row_factory = sqlite3.Row
-        return [dict(row) for row in connection.execute(query, params).fetchall()]
+        return AzurStats._unseal_rows([dict(row) for row in connection.execute(query, params).fetchall()])
 
     @staticmethod
     def load_opsi_drop_rows(instance=None, start=None, end=None, task=None, device_id=None):
@@ -358,28 +400,32 @@ class AzurStats:
         try:
             with closing(sqlite3.connect(AzurStats.LOCAL_DB, timeout=30)) as conn:
                 conn.row_factory = sqlite3.Row
-                return [dict(row) for row in conn.execute(query, params).fetchall()]
+                return AzurStats._unseal_rows([dict(row) for row in conn.execute(query, params).fetchall()])
         except sqlite3.Error:
             logger.warning('[统计-大世界] 读取掉落明细失败', exc_info=True)
             return []
 
     @staticmethod
     def _write_meowofficer_farming(data, instance=None):
-        """原子替换汇总文件，读取者只会看到完整的新旧版本。"""
+        """原子替换汇总文件，读取者只会看到完整的新旧版本；已设置密钥时写密文。"""
         path = AzurStats._meowofficer_farming_path(instance)
         folder = os.path.dirname(path) or '.'
         os.makedirs(folder, exist_ok=True)
-        temporary = None
-        try:
-            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=folder,
-                                             prefix='.meow-', suffix='.tmp', delete=False) as stream:
-                temporary = stream.name
-                np.savetxt(stream, data, delimiter=',', header=','.join(AzurStats.meowofficer_farming_labels),
-                           comments='', fmt='%f')
-            atomic_replace(temporary, path)
-        finally:
-            if temporary and os.path.exists(temporary):
-                os.unlink(temporary)
+        stream = io.StringIO()
+        np.savetxt(stream, data, delimiter=',', header=','.join(AzurStats.meowofficer_farming_labels),
+                   comments='', fmt='%f')
+        text = stream.getvalue()
+        vault = opsi_secure.get_vault()
+        if vault.is_configured():
+            try:
+                lines = [line for line in text.splitlines() if line.strip()]
+                payload = {'header': lines[0].split(','), 'rows': [line.split(',') for line in lines[1:]]}
+                text = vault.seal('loot', payload)
+            except opsi_secure.VaultError:
+                opsi_secure.record_dropped('loot')
+                logger.warning('[统计-加密] 掉落明细密钥不可用，跳过短猫收益缓存写入')
+                return
+        atomic_write(path, text)
 
     @staticmethod
     def get_meowofficer_farming(instance=None):
@@ -387,8 +433,14 @@ class AzurStats:
 
         用 SQLite 写事务串行化明细读取和缓存替换，防止跨进程刷新将
         新快照覆盖成旧快照。旧记录的 NULL 身份不会匹配任何实例。
+        已设置密钥但当前环境拿不到密钥时不重算、不覆盖现有缓存（明细暂不可读）。
         """
         AzurStats._ensure_local_db()
+        vault = opsi_secure.get_vault()
+        if vault.is_configured() and not vault.writer_ready():
+            opsi_secure.record_dropped('loot')
+            logger.warning('[统计-加密] 掉落明细密钥不可用，暂不重算短猫收益（保留现有缓存）')
+            return np.zeros((6, len(AzurStats.meowofficer_farming_labels)))
         with closing(sqlite3.connect(AzurStats.LOCAL_DB, timeout=30)) as conn, conn:
             conn.execute('BEGIN IMMEDIATE')
             all_data = AzurStats._load_local_opsi_items(
@@ -503,24 +555,26 @@ class AzurStats:
         params = (month_start, month_end, device_id) + ((instance,) if instance is not None else ())
         try:
             with closing(sqlite3.connect(AzurStats.LOCAL_DB, timeout=30)) as conn:
-                rows = conn.execute(
-                    "SELECT hazard_level, item, SUM(amount) FROM opsi_items "
+                conn.row_factory = sqlite3.Row
+                rows = AzurStats._unseal_rows([dict(row) for row in conn.execute(
+                    "SELECT hazard_level, item, amount, secure_payload FROM opsi_items "
                     "WHERE genre='opsi_meowfficer_farming' AND created_at >= ? AND created_at < ? "
-                    f"AND device_id = ?{scope} GROUP BY hazard_level, item",
+                    f"AND device_id = ?{scope}",
                     params,
-                ).fetchall()
-            for h_raw, item, total in rows:
+                ).fetchall()])
+            # 物品与数量可能来自密文载荷，聚合在 Python 侧完成。
+            for row in rows:
                 try:
-                    h = int(h_raw)
+                    h = int(row.get('hazard_level'))
                 except (TypeError, ValueError):
                     continue
-                if h not in totals or not total:
+                if h not in totals:
                     continue
-                key = classify(str(item or ""))
+                key = classify(str(row.get('item') or ""))
                 if key is None:
                     continue
                 try:
-                    totals[h][key] += int(total)
+                    totals[h][key] += int(row.get('amount') or 0)
                 except (TypeError, ValueError):
                     pass
         except Exception:

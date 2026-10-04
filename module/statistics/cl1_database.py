@@ -1,7 +1,7 @@
 """CL1 数据库模块。
 
-使用 SQLite 本地存储战斗统计和掉落数据，支持 AES 加密传输。
-提供设备识别、数据序列化和与 AzurStats 云端同步的功能。
+使用 SQLite 本地存储战斗统计和掉落数据；大世界字段由 opsi_secure 加密到
+secure_json 列，旧版 encrypted_blob 仅用于自动解密迁移。
 """
 
 # -*- coding: utf-8 -*-
@@ -15,6 +15,7 @@ from collections import defaultdict
 from module.base.device_id import get_device_id, get_old_device_id
 from module.config.time_source import now as current_time
 from module.logger import logger
+from module.statistics import opsi_secure
 from module.statistics.cl1_legacy import derive_legacy_key, decrypt_legacy_payload
 
 
@@ -213,6 +214,9 @@ class Cl1Database:
                     cursor.execute("ALTER TABLE cl1_data ADD COLUMN data_json TEXT")
                 if "encrypted_blob" not in columns:
                     cursor.execute("ALTER TABLE cl1_data ADD COLUMN encrypted_blob BLOB")
+                if "secure_json" not in columns:
+                    # 设置密钥后大世界字段迁到这一列（opsi_secure 的密文）。
+                    cursor.execute("ALTER TABLE cl1_data ADD COLUMN secure_json TEXT")
                 conn.commit()
         except Exception as e:
             logger.exception(f"初始化 CL1 数据库失败: {e}")
@@ -362,15 +366,13 @@ class Cl1Database:
             with closing(sqlite3.connect(self.db_path)) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "SELECT data_json, encrypted_blob FROM cl1_data WHERE instance = ? AND month = ?",
+                    "SELECT data_json, encrypted_blob, secure_json FROM cl1_data WHERE instance = ? AND month = ?",
                     (instance, month),
                 )
                 row = cursor.fetchone()
                 if row:
                     data = self._deserialize_data(row[0])
-                    if data is not None:
-                        return data
-                    if row[1] and isinstance(data := self._decrypt(row[1]), dict):
+                    if data is None and row[1] and isinstance(data := self._decrypt(row[1]), dict):
                         try:
                             with self._stats_transaction() as write_conn:
                                 data = self._get_stats_in_connection(write_conn, instance, month)
@@ -378,6 +380,10 @@ class Cl1Database:
                         except Exception:
                             # 迁移只是读取时的可选维护，保存失败仍返回已经解密的数据。
                             logger.warning(f"[Statistics] 旧数据迁移未落盘: {instance} {month}")
+                    if isinstance(data, dict):
+                        data = self._merge_secure_part(data, row[2], month)
+                        # 展示路径不需要保留降级标记。
+                        data.pop(opsi_secure.MISSING_MARKER, None)
                         return data
         except Exception as e:
             logger.error(f"[Statistics] 查询统计数据失败 {instance} {month}: {e}")
@@ -709,7 +715,47 @@ class Cl1Database:
                 yield conn
 
     def _save_stats_in_connection(self, conn, instance, month, data):
-        """在调用方事务中写入单个月份，不自行提交。"""
+        """在调用方事务中写入单个月份，不自行提交。
+
+        已设置密钥时把大世界字段拆进 secure_json 密文列；当前进程没有密钥
+        （密钥不可用，如换机器）时只更新明文部分、保留原有密文，丢失的增量由
+        opsi_secure 计数（日志可见），不影响游戏流程。
+        """
+        vault = opsi_secure.get_vault()
+        if vault.is_configured():
+            missing = bool(data.pop(opsi_secure.MISSING_MARKER, False))
+            public, secure = opsi_secure.partition_cl1(data)
+            blob = None
+            if not missing and vault.writer_ready():
+                try:
+                    blob = vault.seal('cl1', secure)
+                except opsi_secure.VaultError:
+                    blob = None
+            if blob is not None:
+                conn.execute(
+                    """
+                    INSERT INTO cl1_data (instance, month, data_json, secure_json, encrypted_blob)
+                    VALUES (?, ?, ?, ?, NULL)
+                    ON CONFLICT(instance, month) DO UPDATE SET
+                        data_json = excluded.data_json,
+                        secure_json = excluded.secure_json,
+                        encrypted_blob = NULL
+                    """,
+                    (instance, month, self._serialize_data(public), blob),
+                )
+            else:
+                opsi_secure.record_dropped('cl1')
+                conn.execute(
+                    """
+                    INSERT INTO cl1_data (instance, month, data_json, secure_json, encrypted_blob)
+                    VALUES (?, ?, ?, NULL, NULL)
+                    ON CONFLICT(instance, month) DO UPDATE SET
+                        data_json = excluded.data_json,
+                        encrypted_blob = NULL
+                    """,
+                    (instance, month, self._serialize_data(public)),
+                )
+            return
         conn.execute(
             """
             INSERT INTO cl1_data (instance, month, data_json, encrypted_blob)
@@ -721,10 +767,31 @@ class Cl1Database:
             (instance, month, self._serialize_data(data)),
         )
 
+    def _merge_secure_part(self, data: dict, secure_json, month: str) -> dict:
+        """合并大世界密文；暂不可解密时补齐默认值并打上降级标记。
+
+        始终保持完整的数据形状（缺失字段用默认值），避免调用方在密钥不可用的
+        降级读取上遇到 KeyError；写回路径根据降级标记保留原密文。
+        """
+        if not secure_json:
+            return data
+        secure = opsi_secure.get_vault().open_or_none('cl1', secure_json)
+        if secure:
+            return {**data, **secure}
+        defaults = self._empty_data(month)
+        data = {**{key: defaults[key] for key in opsi_secure.CL1_SECURE_FIELDS if key in defaults}, **data}
+        data[opsi_secure.MISSING_MARKER] = True
+        return data
+
     def _get_stats_in_connection(self, conn, instance, month):
-        """事务中的读取不能把数据库错误或损坏行当成空数据覆盖。"""
+        """事务中的读取不能把数据库错误或损坏行当成空数据覆盖。
+
+        大世界字段存在 secure_json 密文列里；当前进程拿不到密钥时以空的
+        大世界部分降级返回，并打上 MISSING 标记，让随后的写回路径保留原
+        密文而不是用空值覆盖。
+        """
         row = conn.execute(
-            "SELECT data_json, encrypted_blob FROM cl1_data WHERE instance = ? AND month = ?",
+            "SELECT data_json, encrypted_blob, secure_json FROM cl1_data WHERE instance = ? AND month = ?",
             (instance, month),
         ).fetchone()
         if row is None:
@@ -734,7 +801,7 @@ class Cl1Database:
             data = self._decrypt(row[1])
         if not isinstance(data, dict):
             raise ValueError(f"统计数据无法解码: {instance} {month}")
-        return data
+        return self._merge_secure_part(data, row[2], month)
 
     def increment_battle_count(self, instance: str, delta: int = 1):
         """增加战斗次数"""
@@ -844,11 +911,11 @@ class Cl1Database:
         try:
             stored: Dict[str, Dict[str, Any]] = {}
             with closing(sqlite3.connect(self.db_path)) as reader:
-                for month, blob in reader.execute(
-                    'select month, data_json from cl1_data where instance = ? order by month', (instance,)
+                for (month,) in reader.execute(
+                    'select month from cl1_data where instance = ? order by month', (instance,)
                 ):
                     try:
-                        stored[month] = json.loads(blob)
+                        stored[month] = self._get_stats_in_connection(reader, instance, month)
                     except (TypeError, ValueError):
                         logger.warning(f'[统计] 月初紫币清理跳过 {instance} {month}：该月数据无法解析')
             if any(data.get('coins_cleanup_version') == COINS_CLEANUP_VERSION for data in stored.values()):
@@ -889,8 +956,9 @@ class Cl1Database:
         早期实现按 500 条上限丢弃最旧的凭证记录，历史因此只剩几天；资源快照同一读数并无此上限，
         故首次运行到这里时把缺口补回月度存储，之后凭版本号跳过。
 
-        读写都直接针对该月的原始 JSON：只改凭证与版本号两个键，其余键原样写回，
-        避免经过任何可能返回降级数据的读取路径而抹掉同月其它键。整段失败不影响快照写入本身。
+        读写都走合并视图（大世界字段自动解密）：只改凭证与版本号两个键，其余键原样写回；
+        密文暂不可解密时读取会带下降级标记，写回路径据此保留原密文、不会抹掉同月其它键。
+        整段失败不影响快照写入本身。
 
         Args:
             instance: 实例名称。
@@ -901,11 +969,11 @@ class Cl1Database:
         try:
             stored: Dict[str, Dict[str, Any]] = {}
             with closing(sqlite3.connect(self.db_path)) as reader:
-                for month, blob in reader.execute(
-                    'select month, data_json from cl1_data where instance = ?', (instance,)
+                for (month,) in reader.execute(
+                    'select month from cl1_data where instance = ?', (instance,)
                 ):
                     try:
-                        stored[month] = json.loads(blob)
+                        stored[month] = self._get_stats_in_connection(reader, instance, month)
                     except (TypeError, ValueError):
                         logger.warning(f'[统计] 凭证历史补齐跳过 {instance} {month}：该月数据无法解析')
             if any(data.get('coins_history_version') == COINS_HISTORY_VERSION for data in stored.values()):

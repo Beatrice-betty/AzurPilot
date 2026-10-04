@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 from module.logger import logger
+from module.statistics import opsi_secure
 
 
 _local_lock = threading.Lock()
@@ -72,13 +73,29 @@ def _ensure_table():
                 guild_coin INTEGER,
                 action_point INTEGER,
                 yellow_coin INTEGER,
-                purple_coin INTEGER
+                purple_coin INTEGER,
+                opsi_payload TEXT
             )
         ''')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_res_snap_instance ON resource_snapshots(instance)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_res_snap_ts ON resource_snapshots(instance, ts)')
+        columns = {row[1] for row in conn.execute('PRAGMA table_info(resource_snapshots)')}
+        if 'opsi_payload' not in columns:
+            # 设置密钥后三个大世界货币列迁到这一列（opsi_secure 的密文）。
+            conn.execute('ALTER TABLE resource_snapshots ADD COLUMN opsi_payload TEXT')
         conn.commit()
     _table_ensured = True
+
+
+def _overlay_opsi_snapshot(row: Dict[str, Any]) -> Dict[str, Any]:
+    """把快照行里的大世界三列从密文载荷还原；锁定或损坏时保持空值。"""
+    blob = row.pop('opsi_payload', None)
+    if not blob:
+        return row
+    payload = opsi_secure.get_vault().open_or_none('res', blob)
+    if payload:
+        row.update(payload)
+    return row
 
 
 def record_resource_snapshot(instance: str, resources: Dict[str, Any]) -> bool:
@@ -114,7 +131,19 @@ def record_resource_snapshot(instance: str, resources: Dict[str, Any]) -> bool:
             'action_point': resources.get('ActionPoint'),
             'yellow_coin': resources.get('YellowCoin'),
             'purple_coin': resources.get('PurpleCoin'),
+            'opsi_payload': None,
         }
+
+        vault = opsi_secure.get_vault()
+        if vault.is_configured():
+            # 大世界货币列只进密文载荷；其余资源列保持明文。
+            if vault.writer_ready():
+                row['opsi_payload'] = vault.seal(
+                    'res', {name: row[name] for name in opsi_secure.RES_SECURE_FIELDS})
+            else:
+                opsi_secure.record_dropped('res')
+            for name in opsi_secure.RES_SECURE_FIELDS:
+                row[name] = None
 
         with _local_lock:
             with _connect() as conn:
@@ -123,12 +152,14 @@ def record_resource_snapshot(instance: str, resources: Dict[str, Any]) -> bool:
                         instance, ts,
                         oil, coin, gem, pt, cube,
                         core, medal, merit, guild_coin,
-                        action_point, yellow_coin, purple_coin
+                        action_point, yellow_coin, purple_coin,
+                        opsi_payload
                     ) VALUES (
                         :instance, :ts,
                         :oil, :coin, :gem, :pt, :cube,
                         :core, :medal, :merit, :guild_coin,
-                        :action_point, :yellow_coin, :purple_coin
+                        :action_point, :yellow_coin, :purple_coin,
+                        :opsi_payload
                     )
                 ''', row)
                 conn.commit()
@@ -169,7 +200,7 @@ def get_resource_timeline(
                 ''',
                 (instance, since, since, limit),
             ).fetchall()
-            result = [dict(row) for row in rows]
+            result = [_overlay_opsi_snapshot(dict(row)) for row in rows]
             result.reverse()
             return result
     except Exception as e:
@@ -269,7 +300,7 @@ def get_resource_interval_summary(
                 ).fetchall()
 
         for row in rows:
-            row_data = dict(row)
+            row_data = _overlay_opsi_snapshot(dict(row))
             timestamp = _parse_snapshot_timestamp(row_data.get('ts'))
             if timestamp is None or timestamp >= end:
                 continue

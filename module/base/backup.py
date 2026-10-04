@@ -166,6 +166,23 @@ def backup_config(backup_dir):
         except Exception as e:
             logger.warning(f'用户配置备份失败：{file.name}，{e}')
 
+    # 大世界统计加密的密钥文件（没有它，恢复的统计数据库无法解密）。
+    secure_dir = CONFIG_DIR / 'opsi_secure'
+    if secure_dir.exists():
+        target_dir = backup_dir / 'opsi_secure'
+        target_dir.mkdir(parents=True, exist_ok=True)
+        for file in secure_dir.glob('*.json'):
+            try:
+                target = target_dir / file.name
+                shutil.copy2(file, target)
+                files.append({
+                    'name': f'opsi_secure/{file.name}',
+                    'size': target.stat().st_size,
+                })
+                logger.info(f'加密密钥文件备份成功：{file.name}')
+            except Exception as e:
+                logger.warning(f'加密密钥文件备份失败：{file.name}，{e}')
+
     return files
 
 def sqlite_backup(source, target):

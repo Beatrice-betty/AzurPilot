@@ -55,6 +55,18 @@ def memory_governs(instance: str) -> bool:
         return False
 
 
+def enable_opsi_secure() -> None:
+    """启用大世界统计数据文件加密（工作进程启动时调用一次）。
+
+    首次运行会建立本机密钥并在后台把旧明文数据迁移为密文；失败不阻断启动。
+    """
+    try:
+        from module.statistics.opsi_secure import get_vault
+        get_vault().ensure_ready()
+    except Exception:
+        logger.exception('[统计-加密] 启动时初始化未完成（稍后写入时重试）')
+
+
 class ProcessManager:
     """单个 Alas 配置实例的进程生命周期管理器。
 
@@ -842,6 +854,7 @@ class ProcessManager:
 
         # 初始化日志器
         set_file_logger(name=config_name)
+        enable_opsi_secure()
         if State.electron or os.environ.get("AZURPILOT_TUI") == "1":
             # 运行于 Electron 或 TUI 终端界面时，移除标准输出处理器避免污染终端渲染
             from module.logger import console_hdlr

@@ -27,6 +27,8 @@ from typing import Any
 from module.os.ship_exp_data import LIST_SHIP_EXP
 from module.logger import logger
 from module.config.time_source import now as current_time
+from module.statistics import opsi_secure
+from deploy.atomic import atomic_write
 
 
 class ShipExpStats:
@@ -66,16 +68,25 @@ class ShipExpStats:
         self._battle_start_time: float | None = None
 
     def _load(self) -> dict[str, Any]:
-        """加载数据文件。
+        """加载数据文件；已设置密钥的文件为密文，密钥不可用时降级为空并禁止覆盖。
 
         Returns:
             dict[str, Any]: 舰船经验统计数据字典。
         """
+        self._locked = False
         if not self._path.exists():
             return {}
         try:
             text = self._path.read_text(encoding='utf-8')
             data = json.loads(text)
+            if isinstance(data, dict) and data.get(opsi_secure.WRAPPER_KEY):
+                opened = opsi_secure.get_vault().open_or_none('ships', data.get('payload'))
+                if opened is None:
+                    self._locked = True
+                    opsi_secure.record_dropped('ships')
+                    logger.warning('[统计-经验] 舰船经验数据已加密但密钥不可用，暂不加载（恢复后继续）')
+                    return {}
+                return opened if isinstance(opened, dict) else {}
             if isinstance(data, dict):
                 return data
             return {}
@@ -84,13 +95,24 @@ class ShipExpStats:
             return {}
 
     def _save(self) -> None:
-        """保存数据文件到本地。"""
+        """保存数据文件到本地；已设置密钥时整文件加密。"""
+        if self._locked:
+            opsi_secure.record_dropped('ships')
+            logger.warning('[统计-经验] 舰船经验数据密钥不可用，跳过本次保存（保留原文件）')
+            return
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            self._path.write_text(
-                json.dumps(self.data, ensure_ascii=False, indent=2),
-                encoding='utf-8'
-            )
+            text = json.dumps(self.data, ensure_ascii=False, indent=2)
+            vault = opsi_secure.get_vault()
+            if vault.is_configured():
+                try:
+                    blob = vault.seal('ships', self.data)
+                except opsi_secure.VaultError:
+                    opsi_secure.record_dropped('ships')
+                    logger.warning('[统计-经验] 舰船经验数据密钥不可用，跳过本次保存（保留原文件）')
+                    return
+                text = json.dumps({opsi_secure.WRAPPER_KEY: True, 'payload': blob})
+            atomic_write(str(self._path), text)
         except Exception as e:
             logger.warning(f'[统计-经验] 保存舰船经验数据失败: {e}')
 

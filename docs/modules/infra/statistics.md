@@ -53,6 +53,7 @@ AzurPilot 在执行任务时天然经过大量战斗结算与资源画面。这�
 - 资源快照记录（`resource_stats`）与资源变动入口（`LogRes`）
 - 掉落截图按保留天数清理，过期后删除或备份到 `bak/`（`drop_cleanup`）
 - 大世界运行期统计事件的统一落库入口（`opsi_runtime`）
+- 大世界统计数据文件加密、旧明文迁移与防篡改清空（`opsi_secure`）
 - 离线批量掉落分析工具（`DropStatistics`，独立运行）
 
 ### 不负责
@@ -82,6 +83,7 @@ module/statistics/
 ├── opsi_month.py             # OpsiMonthStats：月度大世界汇总与时间线
 ├── opsi_runtime.py           # 大世界运行期事件 → 落库的集中入口
 ├── opsi_drop_stats.py        # 大世界掉落聚合（部件、图纸、材料、计划及突破部件）
+├── opsi_secure.py            # 大世界统计数据文件级加密（密钥、迁移、防篡改清空）
 ├── drop_statistics.py        # 离线批量掉落分析（可独立运行）
 ├── drop_cleanup.py           # 掉落截图保留天数清理与备份
 ├── get_items.py / item.py / battle_status.py / campaign_bonus.py
@@ -160,6 +162,18 @@ module/log_res/
 大世界采集必须把同一个 `DropImage` 传入自律守护的地图事件、`interrupt_auto_search(drop=...)` 和 `map_exit(drop=...)`。隐秘海域使用 `run_auto_search(exit_map=True)`，将退出时的奖励一起提交；深渊与月度 Boss 在 `boss_clear()` 内退出。`SceneOperationSiren` 接收三种获得道具布局；单帧出现信息栏遮挡等 `ImageError` 时只跳过该帧，保留同包其他奖励。海域 OCR 失败不丢物品，展示可根据独立任务确定来源类型，但不猜海域编号或侵蚀等级。
 
 统计页仍按金菜（部件 T4）与彩图纸（研发图纸 T5，包括通用装备研发图纸）展示。独立或共用掉落开关的任务始终可筛选；任务次数取完整时间窗口，筛选仅影响收获明细。窗口内没有这两类物品的奖励不显示在掉落记录表。`/opsi-items/` 先查 `opsi_reward_items`，缺图时回退到 `opsi_items` 同名模板；`/research-items/` 先查 `research_items`，再查 `stats_basic`。图标回退只影响展示，不改变识别模板选择。
+
+### 大世界统计数据文件加密（opsi_secure.py）
+
+大世界相关的统计在落盘时加密，ALAS / WebUI 读取时代码内部自动解密、照常展示，不需要任何口令或解锁操作（2026-10-04 用户定：只加密文件）。保护目标是文件本身：数据文件被拷走、被备份带到别处或被 sqlite、文本工具直接打开时只能看到密文。
+
+| 面 | 机制 |
+| --- | --- |
+| 密钥 | 首次写入大世界数据时自动生成随机根密钥，用 Windows DPAPI 封装后存到 `config/opsi_secure/keyring.json`（绑定当前用户与主机，随每日备份一起恢复）；DPAPI 不可用的平台保持不加密并记日志。启动钩子位于 `alas.py __main__`、`process_manager._run_process`（工作进程）与 `gui.py __main__`。 |
+| 范围 | cl1 月度快照的大世界字段（`secure_json` 列）、`opsi_items` 明细的物品与数量等列（`secure_payload`）、`resource_snapshots` 的三个大世界货币列（`opsi_payload`）、`ship_exp_data.json` 与 farming CSV（整文件密文）。委托、科研等非大世界数据保持明文。 |
+| 迁移 | 启用后后台线程把既有明文行改写成密文：逐条解密校验、任何失败整体回滚；`resource_snapshots` 分片提交避免长时间持锁；完成后 VACUUM 清掉带明文的历史页。迁移幂等，可在任一进程重复调用。 |
+| 完整性 | 每条密文带 AES-GCM 认证标签。文件被改动后该条解密失败，读取按降级处理（大世界部分为空值）并告警，不会静默采用被改数据；密钥不可用期间新的加密写入被跳过并计数，统计链路不中断游戏调度。 |
+| 防篡改清空 | 受保护清单（`opsi_secure.py` 自身）哈希不匹配或 keyring 的 MAC 校验失败时，清空全部受保护数据并删除密钥（含 `opsi_items` 整表、cl1 大世界字段、资源快照三大世界列、舰船经验文件与 farming 缓存），在 `config/opsi_secure/wipe.json` 记录原因，日志前缀 `[统计-加密]`。 |
 
 ### CL1 月度库（cl1_database.py）
 
@@ -355,6 +369,7 @@ stateDiagram-v2
 | 存储 | 内容 | 写入时机 | 清理 |
 | --- | --- | --- | --- |
 | `config/azurstats_local.db` | `opsi_items` 掉落明细 + `resource_snapshots` 资源快照 | 每次 commit / LogRes 资源变化 | 不自动清理明细 |
+| `config/opsi_secure/keyring.json` | 大世界统计的数据密钥（DPAPI 封装）与防篡改清单 | 首次写入大世界数据时自动创建 | 随密钥失效或防篡改清空删除；纳入每日备份 |
 | `config/cl1_data.db` | CL1 月度统计（instance×month） | 各 `async_*` 方法即时写 | 快照列表内部截断（500/5000 条） |
 | `config/storage_statistics.db` | 按实例保存完整仓库物品快照 | `StorageStatistics` 两次完整扫描一致后原子提交 | 保留已完成扫描 |
 | `config/daily_summary.db` | 日报任务事件、周期状态、采集缺口 | 任务前后、战斗结束、日报流程 | `cleanup()` 保留 35 天 |
@@ -382,6 +397,7 @@ CL1 库的兼容性迁移是自动的：启动时把旧位置 `log/cl1/cl1_data.
 ## 16. 修改注意事项
 
 - **不要在任务代码里直接写 `cl1_db`**。大世界事件的落库口径（侵蚀等级折算、轮次闭合、来源判定）集中在 `opsi_runtime.py`，绕过它会产生口径分裂的统计。
+- **改 `opsi_secure.py` 会按设计清空数据**：它在防篡改清单里，文件哈希一变，下一次统计访问就清空全部受保护的大世界统计数据（2026-10-04 用户定）。动这个文件前必须确认用户已导出或接受清空；新增的大世界字段要同步加进 `CL1_SECURE_FIELDS` 或对应列清单，否则会以明文落盘。
 - **`ItemGrid` 是被多处共享的单例状态**（`get_items.ITEM_GROUP` 是模块级实例）：`GetItemsStatistics`、`CampaignBonusStatistics`、`azur_stats.GetItems`、商店与仓库都改它的 `grids/item_class/similarity`。新增使用方时必须在使用前完整设置这些属性，如同 `_stats_get_items_load` 所做的那样，否则会带着上一场景的网格布局去匹配。数量侧同理：`amount_area` / `amount_area_rules` / `amount_ocr` / `amount_max` 都是按场景设置的，`azur_stats.GetItems` 会把前三个一起设好。
 - **删除是不可逆的**：`drop_cleanup` 只处理文件名匹配 `^\d{13}(_.+)?\.png$` 的文件，配置异常时按 0 处理（不清理）；`bak/` 内的备份不参与扫描（拷贝备份保留原修改时间，只看时间会被反复处理），压缩或拷贝失败时保留原文件。改清理逻辑时保持这些保守默认。
 - **日报的 `period_key` 含服务器与时区信息**，改动 `get_daily_summary_window` 的窗口语义会让已存在库里的 period_key 失配，导致重复推送。

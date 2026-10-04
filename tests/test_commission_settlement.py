@@ -220,7 +220,8 @@ class TestCommissionSettlement(unittest.TestCase):
 
     def test_failed_optional_legacy_migration_still_returns_decoded_data(self):
         with closing(sqlite3.connect(self.db.db_path)) as conn, conn:
-            conn.execute("INSERT INTO cl1_data VALUES (?, ?, NULL, ?)", ("test", "2025-12", b"legacy"))
+            conn.execute("INSERT INTO cl1_data (instance, month, data_json, encrypted_blob) "
+                         "VALUES (?, ?, NULL, ?)", ("test", "2025-12", b"legacy"))
         decoded = {"battle_count": 12}
         with patch.object(self.db, "_decrypt", return_value=decoded), \
                 patch.object(self.db, "save_stats", side_effect=sqlite3.OperationalError("readonly")):

@@ -1065,6 +1065,12 @@ def run_webui_supervisor() -> int:
 
 
 if __name__ == "__main__":
+    # 启用大世界统计数据文件加密（首次运行时建立密钥并后台迁移旧数据）。
+    try:
+        from module.statistics.opsi_secure import get_vault
+        get_vault().ensure_ready()
+    except Exception:
+        logger.exception('[统计-加密] 启动时初始化未完成（稍后写入时重试）')
     # 设置multiprocessing启动方式为spawn（macOS兼容性要求）
     try:
         set_start_method("spawn", force=True)
