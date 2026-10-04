@@ -63,7 +63,7 @@ def process_writer(path, started, finished):
     root = Path(path).parent.parent
     if not root.is_relative_to(Path(tempfile.gettempdir())):
         raise RuntimeError('测试目录未隔离')
-    opsi_secure.set_vault(opsi_secure.Vault(root, provider=WindowsProvider()))
+    opsi_secure.set_vault(opsi_secure.Vault(root, provider=WindowsProvider(), deep_check=False))
     started.set()
     connect = sqlite3.connect
 
