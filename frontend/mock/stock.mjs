@@ -34,8 +34,20 @@ export function createStockProxy(snapshot){
     if(token)headers.Authorization='Bearer '+token
     if(binding)headers['X-MMEX-Instance']=binding
     if(etag)headers['If-None-Match']=etag
-    const response=await fetch(url+'/api'+path,{method,headers,body:body===null?undefined:JSON.stringify(body),signal:AbortSignal.timeout(12000)})
-    return {status:response.status,data:response.status===304?null:await response.json(),etag:response.headers.get('ETag')??'',serverTime:Math.floor(new Date(response.headers.get('Date')??Date.now()).getTime()/1000)}
+    let response
+    try{
+      response=await fetch(url+'/api'+path,{method,headers,body:body===null?undefined:JSON.stringify(body),signal:AbortSignal.timeout(12000)})
+    }catch{
+      // 上游断网不是浏览器请求格式错误；保留交易代理的错误语义和联合 Mock 启动提示。
+      throw Object.assign(new Error(`无法连接本机交易所 Mock（${url}）。请先在 AzurPilot_StockExchange 启动 npm run dev:mock --prefix frontend，再重试连接。`),{code:'STOCK_UNAVAILABLE'})
+    }
+    try{
+      const data=response.status===304?null:await response.json(),serverTime=Math.floor(new Date(response.headers.get('Date')??Date.now()).getTime()/1000)
+      if(!Number.isSafeInteger(serverTime))throw new Error('响应时间无效')
+      return {status:response.status,data,etag:response.headers.get('ETag')??'',serverTime}
+    }catch{
+      throw Object.assign(new Error('交易所 Mock 响应格式无效，请检查 STOCK_EXCHANGE_URL 是否指向交易所 API'),{code:'STOCK_INVALID_RESPONSE'})
+    }
   }
   const monthOf=time=>new Date(time+8*3600000).toISOString().slice(0,7)
   function signedHistory(i,month,points,count=0,digest=''){

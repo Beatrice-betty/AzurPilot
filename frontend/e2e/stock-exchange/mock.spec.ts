@@ -7,6 +7,19 @@ test('金融图表、股票详情、全屏与平移、杠杆交易、验证码�
   let startCaptcha!:()=>void
   const captchaReady=new Promise<void>(resolve=>{startCaptcha=resolve})
   await page.route('https://challenges.cloudflare.com/turnstile/v0/api.js**',async route=>{await captchaReady;await route.continue()})
+  // 分别停在实例状态与行情加载阶段，确认返回入口只在页面就绪后出现。
+  let releaseStatus!:()=>void,releaseMarket!:()=>void
+  const statusReady=new Promise<void>(resolve=>{releaseStatus=resolve}),marketReady=new Promise<void>(resolve=>{releaseMarket=resolve})
+  await page.routeWebSocket('**/api/v1/ws',socket=>{
+    const server=socket.connectToServer(),requests=new Map<string,{method:string;params?:{path?:string}}>()
+    socket.onMessage(message=>{const request=JSON.parse(String(message));if(request.id)requests.set(request.id,request);server.send(message)})
+    server.onMessage(async message=>{
+      const response=JSON.parse(String(message)),request=requests.get(response.id)
+      if(request?.method==='stock.status')await statusReady
+      if(request?.method==='stock.request'&&request.params?.path==='/market')await marketReady
+      socket.send(message)
+    })
+  })
   page.on('pageerror',e=>errors.push(e.message))
   page.on('websocket',socket=>{
     socket.on('framesent',frame=>{const data=JSON.parse(String(frame.payload));if(data.method==='stock.request')stockIds.add(data.id)})
@@ -15,14 +28,25 @@ test('金融图表、股票详情、全屏与平移、杠杆交易、验证码�
   await page.emulateMedia({reducedMotion:'reduce'})
   await page.addInitScript(()=>localStorage.setItem('azurpilot.theme','light'))
   await page.goto('/#/i/demo-main/overview')
-  const enter=page.getByRole('link',{name:'进入茗喵证券交易所',exact:true}),settings=page.getByRole('button',{name:'仪表盘设置',exact:true})
-  await expect(enter).toBeVisible();const a=await enter.boundingBox(),b=await settings.boundingBox();expect(a!.x).toBeLessThan(b!.x)
+  const enter=page.locator('.primary-nav').getByRole('link',{name:'茗喵证券交易所',exact:true}),settings=page.getByRole('button',{name:'仪表盘设置',exact:true})
+  await expect(enter).toBeVisible();await expect(settings).toBeVisible();await expect(page.locator('.primary-nav a')).toHaveText(['运行总览','资源统计','茗喵证券交易所'])
+  await expect(page.getByRole('link',{name:'进入茗喵证券交易所',exact:true})).toHaveCount(0);await expect(page.locator('.overview-page a[href$="/stock-exchange"]')).toHaveCount(0)
+  await page.screenshot({path:'test-results/native-exchange-entry-desktop.png',fullPage:true})
+  await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'打开导航',exact:true}).click();await expect(enter).toBeVisible()
+  await page.screenshot({path:'test-results/native-exchange-entry-mobile.png',fullPage:true})
   await enter.click();const terminal=page.locator('.stock-terminal'),dialog=terminal.getByRole('dialog',{name:'开通交易账户'})
+  await expect(page.locator('.stock-exchange-loading')).toBeVisible();await expect(page.getByRole('link',{name:'返回总览',exact:true})).toHaveCount(0)
+  releaseStatus();await expect(terminal.getByText('正在连接交易终端…',{exact:true})).toBeVisible();await expect(terminal.getByRole('link',{name:'返回总览',exact:true})).toHaveCount(0)
+  releaseMarket()
   await expect(dialog).toBeVisible()
+  await page.setViewportSize({width:1600,height:1080})
   await expect(page.locator('.app-shell')).toHaveCount(0)
   await expect(terminal.getByRole('button',{name:'退出账户'})).toHaveCount(0)
-  const back=terminal.getByRole('link',{name:'返回总览',exact:true})
-  await back.click();await expect(page).toHaveURL(/#\/i\/demo-main\/overview$/);await expect(settings).toBeVisible()
+  const back=terminal.locator('.mmex-topbar').getByRole('link',{name:'返回总览',exact:true})
+  await dialog.getByRole('link',{name:'返回总览',exact:true}).click();await expect(page).toHaveURL(/#\/i\/demo-main\/overview$/);await expect(settings).toBeVisible();await expect(page.locator('.app-shell')).not.toHaveClass(/mobile-open/)
+  await enter.click();await expect(dialog).toBeVisible();await dialog.getByRole('button',{name:'已有账户登录'}).click()
+  const login=terminal.getByRole('dialog',{name:'登录交易账户'})
+  await login.getByRole('link',{name:'返回总览',exact:true}).click();await expect(page).toHaveURL(/#\/i\/demo-main\/overview$/)
   await enter.click();await expect(dialog).toBeVisible()
   await expect(dialog.getByLabel('总行动力 · 初始股票报价')).toHaveCount(0)
   const username=`原生玩家${Date.now()}`
@@ -30,6 +54,12 @@ test('金融图表、股票详情、全屏与平移、杠杆交易、验证码�
   await dialog.getByLabel('我已阅读注意事项').check();await expect(dialog.getByRole('button',{name:'验证并开通交易账户'})).toBeDisabled()
   startCaptcha();await expect(dialog.locator('input[name="cf-turnstile-response"]')).toHaveValue('XXXX.DUMMY.TOKEN.XXXX',{timeout:20000});await assertCaptchaCentered(page);await page.screenshot({path:'test-results/native-captcha-desktop.png',fullPage:true});await page.setViewportSize({width:390,height:844});await assertCaptchaCentered(page);await page.screenshot({path:'test-results/native-captcha-mobile.png',fullPage:true});await page.setViewportSize({width:1600,height:1080});await expect(dialog.getByRole('button',{name:'验证并开通交易账户'})).toBeEnabled();await dialog.getByRole('button',{name:'验证并开通交易账户'}).click();await expect(dialog).not.toBeVisible({timeout:20000})
   await expect(terminal.getByRole('heading',{name:'每一份行动力，都有价值。'})).toBeVisible()
+  await expect(terminal.locator('.mmex-breadcrumb,.mmex-topbar .connection')).toHaveCount(0)
+  await expect(terminal.getByRole('button',{name:'刷新行情'})).toHaveCount(0)
+  for(const width of [1600,1200,900,780,390]){
+    await page.setViewportSize({width,height:844});await assertTopbarPinned(page)
+  }
+  await page.setViewportSize({width:1600,height:1080})
   await terminal.getByRole('button',{name:'查看我的身份识别码'}).click();const identityCard=terminal.getByRole('dialog',{name:'我的身份识别码'})
   await expect(identityCard).toContainText('仅你本人和管理员可查看');const identityCode=await identityCard.locator('code').textContent();expect(identityCode).toMatch(/^MMEX-(?:[A-F0-9]{8}-){3}[A-F0-9]{8}$/)
   await page.screenshot({path:'test-results/native-identity-desktop.png',fullPage:true});await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBeTruthy();await page.screenshot({path:'test-results/native-identity-mobile.png',fullPage:true});await identityCard.getByRole('button',{name:'关闭身份信息'}).click();await page.setViewportSize({width:1600,height:1080})
@@ -98,12 +128,25 @@ test('金融图表、股票详情、全屏与平移、杠杆交易、验证码�
   const admin=await page.request.post('http://127.0.0.1:8088/api/console/login',{data:{password:'mock-admin-password',turnstileToken:'XXXX.DUMMY.TOKEN.XXXX'}});expect(admin.ok()).toBeTruthy();const adminToken=(await admin.json()).token
   const ownStock=(await (await page.request.get('http://127.0.0.1:8088/api/market')).json()).stocks.find((s:{username:string})=>s.username===username),renamed=`改名玩家${Date.now()}`
   const edit=await page.request.put(`http://127.0.0.1:8088/api/console/players/${ownStock.id}`,{headers:{Authorization:`Bearer ${adminToken}`},data:{username:renamed,password:'renamed-player-password'}});expect(edit.ok()).toBeTruthy();expect((await edit.json()).player.identityCode).toBe(identityCode)
-  await terminal.getByRole('button',{name:'刷新行情'}).click();const relogin=terminal.getByRole('dialog',{name:'登录交易账户'});await expect(relogin).toBeVisible({timeout:20000});await expect(relogin.getByLabel('唯一用户名')).toBeEditable()
+  await page.reload();const relogin=terminal.getByRole('dialog',{name:'登录交易账户'});await expect(relogin).toBeVisible({timeout:20000});await expect(relogin.getByLabel('唯一用户名')).toBeEditable()
   await relogin.getByLabel('唯一用户名').fill(renamed);await relogin.getByLabel('密码',{exact:true}).fill('renamed-player-password');await expect(relogin.locator('input[name="cf-turnstile-response"]')).toHaveValue('XXXX.DUMMY.TOKEN.XXXX',{timeout:20000});await relogin.getByRole('button',{name:'验证并登录',exact:true}).click();await expect(relogin).not.toBeVisible({timeout:20000})
   await expect(terminal.locator('.user-name')).toContainText(renamed);await terminal.getByRole('button',{name:'查看我的身份识别码'}).click();await expect(identityCard.locator('code')).toHaveText(identityCode!);await identityCard.getByRole('button',{name:'关闭身份信息'}).click()
   expect(responses.some(s=>s.includes('"uploadToken"')||s.includes('"privateKey"'))).toBeFalsy()
   expect(responses.some(s=>/"token":"(?!instance-session)/.test(s))).toBeFalsy();expect(errors).toEqual([])
 })
+
+async function assertTopbarPinned(page:import('@playwright/test').Page){
+  const topbar=page.locator('.mmex-topbar'),back=topbar.getByRole('link',{name:'返回总览',exact:true}),user=topbar.getByRole('button',{name:'查看我的身份识别码'})
+  await page.locator('#main-content').evaluate(el=>{el.scrollTop=0})
+  const before=(await topbar.boundingBox())!,actions=(await topbar.locator('.mmex-topbar-right').boundingBox())!,a=(await back.boundingBox())!,b=(await user.boundingBox())!
+  expect(before.y).toBe(0);expect(a.x+a.width).toBeLessThan(b.x);expect(actions.x-before.x).toBeLessThanOrEqual(30);expect(before.x+before.width-actions.x-actions.width).toBeGreaterThan(before.width*.15)
+  await page.locator('#main-content').evaluate(el=>{el.scrollTop=500})
+  expect(await page.locator('#main-content').evaluate(el=>el.scrollTop)).toBeGreaterThan(0)
+  expect((await topbar.boundingBox())!.y).toBe(0)
+  await expect(back).toBeVisible();await expect(user).toBeVisible()
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBeTruthy()
+  await page.locator('#main-content').evaluate(el=>{el.scrollTop=0})
+}
 
 async function assertCaptchaCentered(page:import('@playwright/test').Page){
   const container=page.locator('.captcha-widget'),widget=container.locator(':scope > div').first()

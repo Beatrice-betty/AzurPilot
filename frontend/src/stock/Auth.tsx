@@ -1,5 +1,6 @@
 import {useEffect,useRef,useState,type FormEvent} from 'react'
-import {ArrowRight,Cat,ShieldCheck,TriangleAlert} from 'lucide-react'
+import {Link} from 'react-router-dom'
+import {ArrowLeft,ArrowRight,Cat,ShieldCheck,TriangleAlert} from 'lucide-react'
 import {useAPI,useExchange,compact} from './api'
 import type {Meta,Player,Snapshot} from './types'
 
@@ -24,6 +25,7 @@ export function Auth({meta,snapshot,onSuccess}:{meta:Meta;snapshot?:Snapshot;onS
   useEffect(()=>{if(status.bound){setMode('login');setUsername(status.boundUsername)}},[status.bound,status.boundUsername])
   async function submit(event:FormEvent){event.preventDefault();if(!captcha){setError('请先完成人机验证');return}setBusy(true);setError('');try{const body={username,password,turnstileToken:captcha,...(mode==='register'?{acceptedNotice:accepted?meta.noticeVersion:''}:{})};const result=await api<{token:string;player:Player;uploadToken?:string}>(`/${mode}`,body);onSuccess(result.token,result.player,result.uploadToken)}catch(e){setError((e as Error).message);setReset(v=>v+1);setCaptcha('')}finally{setBusy(false)}}
   return <div className="modal-backdrop"><section className="auth-dialog" role="dialog" aria-modal="true" aria-label={mode==='register'?'开通交易账户':'登录交易账户'}>
+    <div className="auth-actions"><Link className="overview-link" to={`/i/${encodeURIComponent(status.instance)}/overview`} title="返回当前实例的运行总览"><ArrowLeft size={15}/><span>返回总览</span></Link></div>
     <div className="auth-brand"><span className="brand-icon"><Cat size={26}/></span><div><h1>茗喵证券交易所</h1><span>MEOWMING STOCK EXCHANGE</span></div></div>
     <div className="auth-tabs">{!status.bound&&<button className={mode==='register'?'active':''} onClick={()=>{setMode('register');setError('')}}>开通账户</button>}<button className={mode==='login'?'active':''} onClick={()=>{setMode('login');setError('')}}>{status.bound?'登录绑定账户':'已有账户登录'}</button></div>
     <h2>{mode==='register'?'你的行动力，即刻上市。':'欢迎回到茗喵。'}</h2><p className="muted">{mode==='register'?`每人一支股票，${compact(meta.initialCash)}模拟币，从这里开始。`:'使用唯一用户名与密码登录，每次登录均需人机验证。'}</p>
