@@ -56,7 +56,7 @@ frontend/
 
 追代码从 `src/main.tsx` 开始：hash 路由表、顶层 ErrorBoundary 与主题加载流程都在这里。
 
-茗交所入口为 `src/pages/StockExchange.tsx`，实例侧栏的「茗喵证券交易所」导航位于「资源统计」下方，由 `src/app/App.tsx` 提供；总览资源卡片设置旁的快捷入口已移除，移动端从导航抽屉进入。交易终端独立顶栏固定在窗口顶部，左侧依次提供返回总览与用户入口，右侧留空。开户、登录弹窗提供返回当前实例总览的链接，状态与行情加载期间隐藏返回入口；交互与联调方式见 [前端 README「茗喵证券交易所」](../../../frontend/README.md#茗喵证券交易所)。
+茗交所入口为 `src/pages/StockExchange.tsx`，实例侧栏的「茗喵证券交易所」导航位于「资源统计」下方，由 `src/app/App.tsx` 提供；总览资源卡片设置旁的快捷入口已移除，移动端从导航抽屉进入。交易终端独立顶栏固定在窗口顶部，左侧依次提供返回总览、用户入口与亮暗主题切换按钮，右侧留空。`src/stock/theme.tsx` 管理独立主题，默认暗色，通过 `localStorage` 的 `azurpilot.stock-theme` 记住本机选择，不跟随 WebUI 或系统主题；`src/stock/theme.css` 定义亮色语义配色，图表和验证码使用同一主题上下文，全屏图表的 Portal 显式携带主题属性。切换保留页面、表单与图表缩放范围。开户、登录弹窗提供返回当前实例总览的链接，状态与行情加载期间隐藏返回入口；交互与联调方式见 [前端 README「茗喵证券交易所」](../../../frontend/README.md#茗喵证券交易所)。
 
 茗交所 Mock 还需单独启动相邻交易所仓库的 Go Mock 服务，本仓库 `dev:mock` 只提供模拟 API 与 Vite。代理将上游连接失败归为 `STOCK_UNAVAILABLE` 并提示启动方式，无效 JSON 或响应时间归为 `STOCK_INVALID_RESPONSE`，不再误报为浏览器请求格式错误；修复上游后可在交易页面重试连接。
 
