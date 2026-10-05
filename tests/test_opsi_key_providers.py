@@ -198,6 +198,8 @@ class ProviderTests(unittest.TestCase):
             self.assertNotIn(base64.b64encode(key).decode(), sealed)
             self.assertEqual(provider.key({'key': sealed}), key)
         self.assertIn('fixedtpm|fixedparent|userwithauth|noda', commands[1])
+        # 封存载荷的 tpm2_create 不得带 -G：真实 tpm2-tools 会拒绝 -G 与 -i 同传。
+        self.assertNotIn('-G', commands[1])
 
     def test_tpm_failure_does_not_fall_back_to_file(self):
         provider = opsi_keys.LinuxTPMProvider()
