@@ -17,6 +17,7 @@ import yaml
 from deploy.atomic import atomic_write
 from module.api.protocol import ApiError
 from module.config.transaction import config_transaction
+from module.logger import logger
 
 ROOT = Path(__file__).resolve().parents[2]
 TEMPLATE = 'template'
@@ -373,12 +374,16 @@ class ConfigService:
                     store.copy(source, name)
                 elif bundle is not None:
                     store.import_program(name, {key: bundle[key] for key in ('mode', 'draft', 'active')})
-                protection = GameDataProtector(self.root)
-                if protection.initialized():
-                    protection.resolve(name, fresh=True)
             except Exception:
                 path.unlink(missing_ok=True)
                 raise
+            # 交易所存储只做尽力登记，其损坏不应阻断创建实例。
+            try:
+                protection = GameDataProtector(self.root)
+                if protection.initialized():
+                    protection.resolve(name, fresh=True)
+            except ApiError:
+                logger.warning(f'交易游戏保护存储不可用，已跳过新实例的身份登记：{name}')
             return self.get(name)
 
     @staticmethod
@@ -586,9 +591,13 @@ class ConfigService:
                 raise ApiError('CONFLICT', '配置已变化，请重新加载后删除')
             from module.runtime.game_data import GameDataProtector
             protection = GameDataProtector(self.root)
-            if protection.initialized():
-                with protection.transaction():
-                    pass
+            # 交易所存储不可用只跳过它的校验与登记，不阻断实例删除。
+            try:
+                if protection.initialized():
+                    with protection.transaction():
+                        pass
+            except ApiError:
+                logger.warning(f'交易游戏保护存储不可用，已跳过删除前校验：{name}')
             # 删除操作保留备份，用户可从 config/backup 手动恢复。
             backup = self.directory / 'backup'
             backup.mkdir(exist_ok=True)
@@ -596,5 +605,8 @@ class ConfigService:
             self.path(name).replace(target)
             from module.scheduler.store import ProgramStore
             ProgramStore(self.directory).archive(name, backup / target.stem)
-            protection.retire(name)
+            try:
+                protection.retire(name)
+            except ApiError:
+                logger.warning(f'交易游戏保护存储不可用，已跳过删除后的身份登记：{name}')
             return {'deleted': name}
