@@ -145,9 +145,9 @@ test('金融图表、股票详情、全屏与平移、杠杆交易、验证码�
 async function assertTopbarPinned(page:import('@playwright/test').Page){
   const topbar=page.locator('.mmex-topbar'),back=topbar.getByRole('link',{name:'返回总览',exact:true}),user=topbar.getByRole('button',{name:'查看我的身份识别码'})
   await page.locator('#main-content').evaluate(el=>{el.scrollTop=0})
-  const before=(await topbar.boundingBox())!,actions=(await topbar.locator('.mmex-topbar-right').boundingBox())!,a=(await back.boundingBox())!,b=(await user.boundingBox())!
-  expect(before.y).toBe(0);expect(Math.abs(a.x+a.width/2-page.viewportSize()!.width/2)).toBeLessThan(2)
-  expect(a.y+a.height<=b.y||a.x+a.width<=actions.x||a.x>=actions.x+actions.width).toBeTruthy()
+  const before=(await topbar.boundingBox())!,a=(await back.boundingBox())!,b=(await user.boundingBox())!
+  expect(before.y).toBe(0);expect(a.x+a.width).toBeLessThanOrEqual(b.x)
+  expect(Math.abs(a.y+a.height/2-b.y-b.height/2)).toBeLessThan(2)
   await page.locator('#main-content').evaluate(el=>{el.scrollTop=500})
   expect(await page.locator('#main-content').evaluate(el=>el.scrollTop)).toBeGreaterThan(0)
   expect((await topbar.boundingBox())!.y).toBe(0)

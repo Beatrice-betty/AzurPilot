@@ -40,12 +40,21 @@ async function fixture(page:Page,phase:string,scope:'instance'|'all'='instance')
   return {pending,requests,emit:()=>emit()}
 }
 
-async function centeredReturn(page:Page,vertical=true){
+async function centeredReturn(page:Page){
   const link=page.getByRole('link',{name:'返回总览',exact:true})
   await expect(link).toBeVisible()
   const box=(await link.boundingBox())!,viewport=page.viewportSize()!
   expect(Math.abs(box.x+box.width/2-viewport.width/2)).toBeLessThan(2)
-  if(vertical){expect(box.y).toBeGreaterThan(viewport.height*.2);expect(box.y).toBeLessThan(viewport.height*.9)}
+  expect(box.y).toBeGreaterThan(viewport.height*.2);expect(box.y).toBeLessThan(viewport.height*.9)
+  expect(await link.evaluate(element=>{const rect=element.getBoundingClientRect();return element.contains(document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2))})).toBeTruthy()
+}
+
+async function topbarReturn(page:Page){
+  const topbar=page.locator('.mmex-topbar'),link=topbar.getByRole('link',{name:'返回总览',exact:true}),user=topbar.getByRole('button',{name:'查看我的身份识别码'})
+  await expect(link).toBeVisible();await expect(user).toBeVisible()
+  const a=(await link.boundingBox())!,b=(await user.boundingBox())!
+  expect(a.x+a.width).toBeLessThanOrEqual(b.x)
+  expect(Math.abs(a.y+a.height/2-b.y-b.height/2)).toBeLessThan(2)
   expect(await link.evaluate(element=>{const rect=element.getBoundingClientRect();return element.contains(document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2))})).toBeTruthy()
 }
 
@@ -84,8 +93,8 @@ for(const scope of ['instance','all'] as const){
     await page.getByLabel('我了解重建范围及后果').check();await submit.click()
     await expect(page.getByRole('heading',{name:'每一份行动力，都有价值。'})).toBeVisible()
     expect(state.requests[1]).toEqual({instance:'demo-main',confirm:true,scope})
-    await centeredReturn(page,false)
-    await page.setViewportSize({width:1440,height:900});await centeredReturn(page,false)
+    await topbarReturn(page)
+    await page.setViewportSize({width:1440,height:900});await topbarReturn(page)
     await page.screenshot({path:`test-results/stock-rebuilt-${scope}-desktop.png`})
     expect(errors).toEqual([])
   })
@@ -103,12 +112,12 @@ test('进入终端后玩家身份损坏也切换到茗交所重建页面',async(
   await expect(page.getByRole('button',{name:'仪表盘设置',exact:true})).toBeVisible()
 })
 
-test('最长用户名在桌面和手机上不会遮挡居中的返回总览',async({page})=>{
+test('顶栏返回总览在桌面和手机上位于用户名左侧且不遮挡主题按钮',async({page})=>{
   await fixture(page,'terminal')
   await page.goto('/#/i/demo-main/stock-exchange')
   await expect(page.getByRole('heading',{name:'每一份行动力，都有价值。'})).toBeVisible()
   for(const width of [1600,1200,900,780,390,320]){
-    await page.setViewportSize({width,height:844});await centeredReturn(page,false)
+    await page.setViewportSize({width,height:844});await topbarReturn(page)
     const user=page.getByRole('button',{name:'查看我的身份识别码'})
     await expect(user).toBeVisible()
     const a=(await page.getByRole('link',{name:'返回总览',exact:true}).boundingBox())!,b=(await user.boundingBox())!

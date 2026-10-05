@@ -16,8 +16,7 @@
 .stock-terminal{--mmex-sidebar-width:218px;--mmex-topbar-height:70px}
 .stock-terminal .mmex-workspace{padding-top:var(--mmex-topbar-height)}
 .stock-terminal .mmex-topbar{position:fixed;top:0;left:var(--mmex-sidebar-width);right:0;z-index:20;height:var(--mmex-topbar-height);justify-content:flex-start}
-.stock-terminal .mmex-topbar .overview-link{position:absolute;left:calc(50% - var(--mmex-sidebar-width)/2);top:50%;transform:translate(-50%,-50%)}
-.stock-terminal .mmex-topbar .mmex-topbar-right{max-width:calc(50vw - var(--mmex-sidebar-width) - 94px)}
+.stock-terminal .mmex-topbar .overview-link{flex-shrink:0}
 .stock-terminal .mmex-topbar-right>.mock-badge,.stock-terminal .mmex-topbar-right>.user-avatar,.stock-terminal .mmex-topbar-right>.theme-toggle{flex-shrink:0}
 .stock-terminal .mmex-topbar-right>.user-name{min-width:0;flex-shrink:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .stock-terminal .identity-trigger>span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
@@ -26,7 +25,7 @@
 @media(max-width:1280px){.stock-terminal{--mmex-sidebar-width:190px}}
 @media(max-width:980px){.stock-terminal{--mmex-sidebar-width:76px}}
 @media(max-width:800px){.stock-terminal{--mmex-sidebar-width:0px}.stock-terminal .exchange{padding-top:var(--mmex-topbar-height)}.stock-terminal .mmex-workspace{padding-top:0}}
-@media(max-width:740px){.stock-terminal{--mmex-topbar-height:98px}.stock-terminal .mmex-topbar{justify-content:center;padding-top:42px}.stock-terminal .mmex-topbar .overview-link{top:10px;transform:translateX(-50%)}.stock-terminal .mmex-topbar .mmex-topbar-right{max-width:100%}}
+@media(max-width:740px){.stock-terminal{--mmex-topbar-height:56px}}
 .stock-terminal .quote-status{display:flex;align-items:center;gap:6px;color:var(--mmex-accent-text,#89a393);font-size:10px}
 .stock-terminal .leverage-hint{color:var(--mmex-accent-text,#80958a);font-size:10px;line-height:1.6}
 .stock-terminal .leverage-warning{display:flex;align-items:flex-start;gap:7px;padding:10px;border:1px solid var(--mmex-warning-line,#6e5739);border-radius:6px;background:var(--mmex-warning-soft,#352b203d);color:var(--mmex-warning-text,#c6b592);font-size:10px;line-height:1.8}
