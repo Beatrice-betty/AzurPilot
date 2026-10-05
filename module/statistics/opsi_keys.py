@@ -230,33 +230,39 @@ class SystemKeyringProvider(KeyProvider):
 
 
 class MacOSProvider(DeviceRootProvider):
+    """macOS 登录钥匙串凭据。
+
+    查询形态与 keyring 自带的 macOS 后端一致（登录钥匙串 + create_cf 构造）：
+    数据保护钥匙串要求进程带钥匙串权限签名，未签名进程会直接被拒（-34018），
+    因此只作为旧版本数据的**只读**兼容回退（读取沿用），新环境一律走登录钥匙串。
+    """
+
     name = 'macos-keychain'
     device_class = 'MacOSEnclave'
+    _mode = 'login'
 
     def _use_device(self):
         return os.getenv('ALAS_STATISTICS_SECURE_ENCLAVE') == '1'
 
-    def _native(self, action, slot, state=None):
+    def _native(self, action, slot, state=None, mode='login'):
         try:
             from keyring.backends.macOS import api
             owned = []
 
-            def string(value):
-                pointer = api.create_cf(value)
+            def value(item):
+                pointer = api.create_cf(item)
                 owned.append(pointer)
                 return pointer
 
-            true = ctypes.c_void_p.in_dll(api._found, 'kCFBooleanTrue')
-            false = ctypes.c_void_p.in_dll(api._found, 'kCFBooleanFalse')
             release = api._found.CFRelease
             release.argtypes = [ctypes.c_void_p]
             query = dict(kSecClass=api.k_('kSecClassGenericPassword'),
-                         kSecAttrService=string('AzurPilot.Statistics'), kSecAttrAccount=string(slot),
-                         kSecUseDataProtectionKeychain=true, kSecAttrSynchronizable=false,
-                         kSecUseAuthenticationUI=api.k_('kSecUseAuthenticationUIFail'))
+                         kSecAttrService=value('AzurPilot.Statistics'), kSecAttrAccount=value(slot))
+            if mode == 'dp':
+                query.update(kSecUseDataProtectionKeychain=value(True), kSecAttrSynchronizable=value(False))
             try:
                 if action == 'read':
-                    query['kSecReturnData'] = true
+                    query['kSecReturnData'] = value(True)
                     query['kSecMatchLimit'] = api.k_('kSecMatchLimitOne')
                     ref = api.create_query(**query)
                     owned.append(ref)
@@ -265,7 +271,7 @@ class MacOSProvider(DeviceRootProvider):
                     if status == -25300:
                         return None
                     if status:
-                        raise ProviderUnavailable('本机凭据暂不可用')
+                        raise ProviderUnavailable(f'本机凭据暂不可用（{status}）')
                     try:
                         return json.loads(ctypes.string_at(api.CFDataGetBytePtr(output), api.CFDataGetLength(output)))
                     finally:
@@ -275,44 +281,49 @@ class MacOSProvider(DeviceRootProvider):
                 if action == 'delete':
                     status = api.SecItemDelete(ref)
                     if status not in (0, -25300):
-                        raise ProviderUnavailable('本机凭据暂不可用')
+                        raise ProviderUnavailable(f'本机凭据暂不可用（{status}）')
                     return
-                raw = json.dumps(state, separators=(',', ':')).encode()
-                create = api._found.CFDataCreate
-                create.restype = ctypes.c_void_p
-                create.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long]
-                data = create(None, raw, len(raw))
-                owned.append(data)
-                fields = dict(kSecValueData=data,
-                              kSecAttrAccessible=api.k_('kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly'))
+                fields = dict(kSecValueData=value(json.dumps(state, separators=(',', ':'))))
                 updates = api.create_query(**fields)
                 owned.append(updates)
                 update = api._sec.SecItemUpdate
-                update.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
                 update.restype = ctypes.c_int32
+                update.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
                 status = update(ref, updates)
                 if status == -25300:
                     add = api.create_query(**query, **fields)
                     owned.append(add)
                     status = api.SecItemAdd(add, None)
                 if status:
-                    raise ProviderUnavailable('本机凭据暂不可用')
+                    raise ProviderUnavailable(f'本机凭据暂不可用（{status}）')
             finally:
                 for pointer in reversed(owned):
                     release(pointer)
         except ProviderUnavailable:
             raise
         except Exception as exc:
-            raise ProviderUnavailable('本机凭据暂不可用') from exc
+            # 带上异常类型：钥匙串框架加载失败、符号缺失等都要能被日志区分出来。
+            raise ProviderUnavailable(f'本机凭据暂不可用（{type(exc).__name__}）') from exc
 
     def load(self, slot):
-        return self._check_device(self._native('read', slot))
+        state = self._check_device(self._native('read', slot))
+        if state is None:
+            # 旧版本曾把状态写进数据保护钥匙串：读取沿用该通道，避免环境被判为不存在。
+            legacy = self._check_device(self._native('read', slot, mode='dp'))
+            if legacy is not None:
+                self._mode = 'dp'
+                return legacy
+        return state
 
     def save(self, slot, state):
-        self._save_device_state(slot, state, lambda value: self._native('write', slot, value))
+        self._save_device_state(slot, state, lambda value: self._native('write', slot, value, mode=self._mode))
 
     def delete(self, slot):
-        self._delete_device_state(slot, lambda: self._native('delete', slot))
+        def remove():
+            # 两个钥匙串都清理：只删一个会留下可解密的旧状态，撤销不彻底。
+            for mode in ('login', 'dp'):
+                self._native('delete', slot, mode=mode)
+        self._delete_device_state(slot, remove)
 
 
 class LinuxProvider(SystemKeyringProvider):

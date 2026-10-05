@@ -141,11 +141,48 @@ class ProviderTests(unittest.TestCase):
             self.assertEqual(provider.load('slot'), {'key': 'opaque'})
             provider.save('slot', {'state': 1})
             provider.delete('slot')
-            self.assertEqual([call.args[0] for call in native.call_args_list], ['read', 'write', 'read', 'delete'])
+            self.assertEqual([call.args[0] for call in native.call_args_list],
+                             ['read', 'write', 'read', 'delete', 'delete'])
         with patch.dict(sys.modules, {'keyring.backends.macOS.api': None}):
             if sys.platform != 'darwin':
                 with self.assertRaises(opsi_keys.ProviderUnavailable):
                     provider.load('slot')
+
+    def test_macos_read_falls_back_to_data_protection_keychain(self):
+        """旧版本写入数据保护钥匙串的环境：登录钥匙串读不到时走兼容通道并沿用。"""
+        provider = opsi_keys.MacOSProvider()
+        legacy = {'key': 'opaque', 'installation_id': 'x'}
+
+        def fake_native(action, slot, state=None, mode='login'):
+            if action == 'read':
+                return legacy if mode == 'dp' else None
+            return None
+
+        with patch.object(provider, '_native', side_effect=fake_native) as native:
+            self.assertEqual(provider.load('slot'), legacy)
+            self.assertEqual(provider._mode, 'dp')
+            provider.save('slot', legacy)
+            native.assert_called_with('write', 'slot', legacy, mode='dp')
+
+    def test_macos_save_uses_login_keychain_by_default(self):
+        provider = opsi_keys.MacOSProvider()
+        with patch.object(provider, '_native', return_value=None) as native:
+            provider.save('slot', {'key': 'opaque'})
+        native.assert_called_once_with('write', 'slot', {'key': 'opaque'}, mode='login')
+
+    def test_macos_delete_clears_both_keychain_modes(self):
+        """删除凭据必须两个钥匙串都清理，撤销才彻底。"""
+        provider = opsi_keys.MacOSProvider()
+        calls = []
+
+        def fake_native(action, slot, state=None, mode='login'):
+            calls.append((action, mode))
+            return None
+
+        with patch.object(provider, '_native', side_effect=fake_native):
+            provider.delete('slot')
+        self.assertIn(('delete', 'login'), calls)
+        self.assertIn(('delete', 'dp'), calls)
 
     def test_linux_explicit_service_roundtrip_and_locked(self):
         provider = opsi_keys.LinuxProvider()
