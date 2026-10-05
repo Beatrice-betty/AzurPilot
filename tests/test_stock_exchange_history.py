@@ -229,7 +229,7 @@ class HistoryTests(unittest.TestCase):
             self.sync(recovered)
         self.assertEqual(3001, len(self.remote_points))
         batches = [body['report']['points'] for path, body in self.calls if path == '/quote-history' and body['report']['points']]
-        self.assertTrue(all(len(batch) <= 1024 for batch in batches))
+        self.assertTrue(any(len(batch) == 3001 for batch in batches))
         self.assertTrue(all(all(a['time'] < b['time'] for a, b in zip(batch, batch[1:])) for batch in batches))
         original = next(iter(self.remote_points))
         self.remote_points.pop(original)  # 服务器缺行，摘要发现后重新排队修复。

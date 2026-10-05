@@ -4,9 +4,11 @@ import type {StockExchangeStatus} from '../api/types'
 
 export class ApiError extends Error {constructor(message:string,public code:string,public status:number){super(message)}}
 export interface Reply<T=unknown>{status:number;data:T|null;etag:string;serverTime:number}
+export interface ExchangeUpdate {revision?:number;serverTime?:number;online?:boolean;instance?:string}
 interface Transport {
   <T>(path:string,body?:unknown,token?:string,method?:string):Promise<T>
   response:<T>(path:string,etag?:string)=>Promise<Reply<T>>
+  subscribe:(listener:(update:ExchangeUpdate)=>void)=>()=>void
 }
 const Context=createContext<{api:Transport;status:StockExchangeStatus}|null>(null)
 export function ExchangeProvider({instance,status,children,onSessionChanged}:{instance:string;status:StockExchangeStatus;children:ReactNode;onSessionChanged:()=>void}){
@@ -23,6 +25,12 @@ export function ExchangeProvider({instance,status,children,onSessionChanged}:{in
       if(response.status>=400)throw new ApiError(response.data?.error?.message??'交易所暂不可用',response.data?.error?.code??'HTTP_ERROR',response.status)
       return response as Reply<T>
     }
+    api.subscribe=listener=>pilotAPI.onEvent(event=>{
+      if(event.topic==='stock'){
+        const update=event.data as ExchangeUpdate
+        if(update.instance===instance)listener(update)
+      }
+    })
     return api
   },[instance,onSessionChanged])
   return <Context.Provider value={{api:transport,status}}>{children}</Context.Provider>
