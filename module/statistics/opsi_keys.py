@@ -356,7 +356,8 @@ class LinuxTPMProvider(LinuxProvider):
 
     def load(self, slot):
         state = super().load(slot)
-        if state and state.get('key'):
+        # 只有根密钥确实封存在 TPM 里才需要探测设备；否则沿用普通凭据读取。
+        if state and str(state.get('key', '')).startswith('TPM2:'):
             self._run('tpm2_getcap', 'properties-fixed')
         return state
 
@@ -379,6 +380,10 @@ class LinuxTPMProvider(LinuxProvider):
         cached = getattr(self, '_runtime_key', None)
         if cached and cached[0] == state['key']:
             return cached[1]
+        # 设备可用性变化（如启用/停用 fTPM）会让选择到本 Provider 的既有环境
+        # 只带普通凭据密钥：按基类方式解出即可，不当作设备对象处理。
+        if not str(state.get('key', '')).startswith('TPM2:'):
+            return super().key(state)
         with tempfile.TemporaryDirectory(prefix='azurpilot-device-') as folder:
             parent, public, private, loaded = [str(Path(folder) / name)
                                               for name in ('parent', 'public', 'private', 'loaded')]
@@ -406,10 +411,8 @@ class LinuxTPMProvider(LinuxProvider):
 class ContainerFileProvider(KeyProvider):
     """容器内未配置宿主统计服务时的本地文件凭据（自动兜底，免配置）。
 
-    Root 与运行状态存于本安装的 config/opsi_secure/state.json：数据目录被
-    整体拷走即可解密，属于"防君子不防小人"级别；能配置宿主 Broker 的部署
-    应优先用宿主保管（设置 ALAS_STATISTICS_BROKER）。状态不做 slot 隔离：
-    文件与数据同目录、同搬同走，安装路径变化后应继续可用。
+    状态存于本安装的 config/opsi_secure/state.json，随数据目录迁移；状态不做
+    slot 隔离：文件与数据同目录、同搬同走，安装路径变化后应继续可用。
     """
 
     name = 'container-file'
@@ -459,15 +462,15 @@ def get_provider():
         from module.statistics.opsi_broker import BrokerProvider
         return BrokerProvider.from_environment()
     if in_container():
-        # 容器里没配宿主统计服务时自动兜底为容器本地文件密钥，保证统计能存、
-        # 免手动配置；显式配置了 Broker 但凭据不全时仍失败（不允许静默降级）。
+        # 容器里没配宿主统计服务时自动兜底为容器本地文件密钥；显式配置了
+        # Broker 但凭据不全时仍失败，不允许静默降级。
         global _local_fallback_logged
         if not _local_fallback_logged:
             _local_fallback_logged = True
             try:
                 from module.logger import logger
                 logger.warning('[统计-加密] 容器未配置宿主统计服务，已启用容器本地文件密钥'
-                               '（config/opsi_secure/state.json；拷走数据目录即可解密）')
+                               '（config/opsi_secure/state.json）')
             except Exception:
                 pass
         return ContainerFileProvider()

@@ -521,6 +521,58 @@ class OpsiSecureTestCase(unittest.TestCase):
                                    " WHERE name LIKE '__opsi_count_cl1_data%'").fetchone()[0]
         self.assertEqual(anchors, 2)
 
+    def test_read_seq_skips_missing_database(self):
+        """深检查对不存在的受保护库不得创建空文件（先判存在再连接）。"""
+        self.assertTrue(self.vault.ensure_ready())
+        missing = self.root / 'config' / 'daily_summary.db'
+        self.assertFalse(missing.exists())
+        self.vault.deep_check_once()
+        self.assertFalse(missing.exists())
+
+    def test_legit_content_writes_keep_cumulative_digest_consistent(self):
+        """写入路径维护内容累计摘要：连续合法写入叠加深检查不得误报。"""
+        self.assertTrue(self.vault.ensure_ready())
+        for count in (5, 6, 7):
+            self.update_count(count)
+            self.vault.deep_check_once()
+        self.assertFalse(self.vault.wipe_path.exists())
+        self.assertEqual(self.read_cl1()['battle_count'], 7)
+
+    def test_content_tamper_is_caught_even_after_a_legit_write(self):
+        """洗白场景：库外重加密改内容（不碰链）后紧跟一次合法写入，深检查仍须抓到。"""
+        self.assertTrue(self.vault.ensure_ready())
+        other = opsi_secure.row_context('cl1', {'instance': 'other', 'month': '2026-09'})
+        with db(self.vault.cl1_db) as conn:
+            with self.vault.transaction(conn, self.vault.cl1_db):
+                conn.execute('INSERT INTO cl1_data (instance, month, data_json, secure_json) VALUES (?,?,?,?)',
+                             ('other', '2026-09', '{}', self.vault.seal('cl1', {'battle_count': 7}, other)))
+        self.vault.deep_check_once()
+        context = opsi_secure.row_context('cl1', {'instance': 'inst', 'month': '2026-09'})
+        forged = self.vault.seal('cl1', {'battle_count': 999999}, context)
+        with db(self.vault.cl1_db) as conn:
+            conn.execute("UPDATE cl1_data SET secure_json=? WHERE instance='inst'", (forged,))
+        with db(self.vault.cl1_db) as conn:
+            with self.vault.transaction(conn, self.vault.cl1_db):
+                conn.execute("UPDATE cl1_data SET secure_json=? WHERE instance='other'",
+                             (self.vault.seal('cl1', {'battle_count': 8}, other),))
+        self.vault.deep_check_once()
+        self.assert_wipe_state()
+
+    def test_row_insert_and_delete_through_writes_stay_consistent(self):
+        """经写入通道增删行：累计摘要随 XOR 折入，深检查不得误报。"""
+        self.assertTrue(self.vault.ensure_ready())
+        other = opsi_secure.row_context('cl1', {'instance': 'other', 'month': '2026-09'})
+        with db(self.vault.cl1_db) as conn:
+            with self.vault.transaction(conn, self.vault.cl1_db):
+                conn.execute('INSERT INTO cl1_data (instance, month, data_json, secure_json) VALUES (?,?,?,?)',
+                             ('other', '2026-09', '{}', self.vault.seal('cl1', {'battle_count': 1}, other)))
+        self.vault.deep_check_once()
+        with db(self.vault.cl1_db) as conn:
+            with self.vault.transaction(conn, self.vault.cl1_db):
+                conn.execute("DELETE FROM cl1_data WHERE instance='other'")
+        self.vault.deep_check_once()
+        self.assertFalse(self.vault.wipe_path.exists())
+
     def test_expectation_persists_across_restart(self):
         """文件类路径同样记基线；重启后基线从安全服务恢复，常规状态下无误报。"""
         self.assertTrue(self.vault.ensure_ready())
@@ -743,6 +795,101 @@ class OpsiSecureTestCase(unittest.TestCase):
         self.vault.write_file('ships', self.ship, {'a': 1}, wrapper=True)
         state = self.provider.load(self.vault.slot)
         self.assertLess(len(canonical(state)), 2200)
+
+    def test_migration_preserves_unreadable_legacy_rows(self):
+        """升级迁移遇到解不开的旧行：按原样保留，其余数据照常迁移，环境就绪可写。"""
+        self.to_v1()
+        with db(self.vault.cl1_db) as conn:
+            conn.execute("INSERT INTO cl1_data (instance, month, data_json, encrypted_blob, secure_json)"
+                         " VALUES ('dead', '2026-08', NULL, ?, NULL)", (os.urandom(64),))
+        report = self.vault.ensure_migrated()
+        self.assertGreaterEqual(report.get('quarantined', 0), 1)
+        self.assertTrue(self.vault._active)
+        self.assertFalse(self.vault.wipe_path.exists())
+        self.assertEqual(self.read_cl1(), self.full)
+        with db(self.vault.cl1_db) as conn:
+            row = conn.execute("SELECT data_json, encrypted_blob, secure_json FROM cl1_data"
+                               " WHERE month='2026-08'").fetchone()
+        self.assertIsNone(row[0])
+        self.assertIsNotNone(row[1])
+        self.assertIsNone(row[2])
+        # 新月份写入不受坏行影响。
+        with db(self.vault.cl1_db) as conn:
+            with self.vault.transaction(conn, self.vault.cl1_db):
+                blob = self.vault.seal('cl1', {'battle_count': 5},
+                                       opsi_secure.row_context('cl1', {'instance': 'inst', 'month': '2026-10'}))
+                conn.execute("INSERT INTO cl1_data (instance, month, data_json, secure_json)"
+                             " VALUES ('inst', '2026-10', '{}', ?)", (blob,))
+        with db(self.vault.cl1_db) as conn:
+            self.assertEqual(conn.execute("SELECT count(*) FROM cl1_data WHERE month='2026-10'").fetchone()[0], 1)
+
+    def test_migration_preserves_unreadable_files(self):
+        """升级迁移遇到坏文件（截断 JSON、解不开的旧文件）：按原样保留，迁移继续。"""
+        bad_ship = '{"battle_times": [1, 2'
+        bad_csv = opsi_secure.LEGACY_PREFIX + base64.b64encode(os.urandom(48)).decode()
+        self.ship.write_text(bad_ship)
+        self.csv.write_text(bad_csv)
+        report = self.vault.ensure_migrated()
+        self.assertGreaterEqual(report.get('quarantined', 0), 2)
+        self.assertTrue(self.vault._active)
+        self.assertFalse(self.vault.wipe_path.exists())
+        self.assertEqual(self.ship.read_text(), bad_ship)
+        self.assertEqual(self.csv.read_text(), bad_csv)
+        self.assertEqual(self.read_cl1(), self.full)
+
+    def test_migration_keeps_unreadable_database_and_finishes(self):
+        """单个库文件损坏：按原样保留，其余数据照常迁移，环境就绪。"""
+        daily = self.root / 'config' / 'daily_summary.db'
+        garbage = os.urandom(64)
+        daily.write_bytes(garbage)
+        report = self.vault.ensure_migrated()
+        self.assertGreaterEqual(report.get('quarantined', 0), 1)
+        self.assertTrue(self.vault._active)
+        self.assertFalse(self.vault.wipe_path.exists())
+        self.assertEqual(self.read_cl1(), self.full)
+        self.assertEqual(daily.read_bytes(), garbage)
+
+    def test_missing_descriptor_is_rebuilt_without_wipe(self):
+        """统计描述文件被删除：属可重建的派生信息，按本机状态重建，不清空。"""
+        self.assertTrue(self.vault.ensure_ready())
+        self.vault.keyring_path.unlink()
+        fresh = self.new_vault()
+        self.assertTrue(fresh.ensure_ready())
+        self.assertTrue(self.vault.keyring_path.exists())
+        self.assertFalse(self.vault.wipe_path.exists())
+        self.assertIsNotNone(self.provider.load(self.vault.slot))
+        self.assertEqual(self.read_cl1(fresh), self.full)
+
+    def test_provider_variant_change_updates_descriptor_without_wipe(self):
+        """同一安装的凭据提供方式变化（设备可用性切换）：更新描述文件而非按篡改清空。"""
+        self.assertTrue(self.vault.ensure_ready())
+        self.provider.name = 'isolated-test-variant'
+        fresh = self.new_vault()
+        self.assertTrue(fresh.ensure_ready())
+        self.assertFalse(self.vault.wipe_path.exists())
+        self.assertEqual(json.loads(self.vault.keyring_path.read_bytes())['provider'], 'isolated-test-variant')
+        self.assertEqual(self.read_cl1(fresh), self.full)
+
+    def test_unavailable_environment_note_is_rate_limited(self):
+        """环境暂不可用的提示有限频记录；恢复后自动继续。"""
+        self.assertTrue(self.vault.ensure_ready())
+        self.provider.offline = True
+        try:
+            self.assertFalse(self.vault.ensure_ready())
+            first = self.vault._unavailable_logged_at
+            self.assertGreater(first, 0.0)
+            self.assertFalse(self.vault.ensure_ready())
+            self.assertEqual(self.vault._unavailable_logged_at, first)
+        finally:
+            self.provider.offline = False
+        self.assertTrue(self.vault.ensure_ready())
+
+    def test_unexpected_initialization_error_is_contained(self):
+        """初始化中的未知异常不外抛：调用方拿到不可用结果，环境恢复后自愈。"""
+        with patch.object(opsi_secure.Vault, '_load', side_effect=TypeError('boom')):
+            self.assertFalse(self.vault.ensure_ready())
+        self.assertFalse(self.vault.wipe_path.exists())
+        self.assertTrue(self.vault.ensure_ready())
 
 
 

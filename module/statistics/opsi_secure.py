@@ -57,12 +57,10 @@ MISSING_MARKER = '__opsi_secure_missing__'
 
 MIGRATION_CHUNK = 5000
 
-# 完整性链（2026-10-05“发现即清空”定稿）：库内链行与安全服务期望值两层互证。
-# 浅检查 O(1)（链值/行数锚点/结构指纹），全量摘要只在后台深检查执行。
 CHAIN_TABLE = '__opsi_integrity'
-CHAIN_LEN = 32              # 链值截断长度（128 位 MAC，无敏感内容可明文存库）
-SIG_LEN = 16                # 摘要截断长度（64 位，控制凭据状态体积不超平台上限）
-VERIFY_TIMEOUT = 2          # 浅检查读库超时；数据库繁忙时跳过本轮，绝不据此清空
+CHAIN_LEN = 32              # 链值截断长度
+SIG_LEN = 16                # 摘要截断长度（状态体积有限）
+VERIFY_TIMEOUT = 2          # 浅检查读库超时；繁忙只跳过本轮，不得据此清空
 DEEP_CHECK_MIN_INTERVAL = 120.0
 DEEP_CHECK_PERIODIC = 1800.0
 DEEP_CHECK_WRITE_CADENCE = 40
@@ -74,13 +72,26 @@ CHAIN_DDL = ('CREATE TABLE IF NOT EXISTS ' + CHAIN_TABLE + ' ('
              'chain TEXT NOT NULL, counts TEXT NOT NULL, fingerprint TEXT NOT NULL)')
 COUNTS_DDL = ('CREATE TABLE IF NOT EXISTS ' + COUNT_TABLE + ' ('
               'name TEXT PRIMARY KEY, rows INTEGER NOT NULL)')
+DELTA_TABLE = '__opsi_content_delta'
+DELTA_DDL = ('CREATE TABLE IF NOT EXISTS ' + DELTA_TABLE + ' ('
+             'id INTEGER PRIMARY KEY AUTOINCREMENT, tbl TEXT NOT NULL, op TEXT NOT NULL, '
+             'identity TEXT NOT NULL, old_content TEXT, new_content TEXT)')
+# 内容累计摘要（acc）覆盖的列：(身份列, 载荷列)。行长摘要 = HMAC(链子密钥, 表名|身份|载荷)。
+# 组合用 XOR：写入路径按变更折入（增 ^新、删 ^旧、改 ^旧^新），深检查按现行全量重算比对。
+CONTENT_COLUMNS = {
+    'cl1_data': (('instance', 'month'), ('secure_json',)),
+    'opsi_items': (('id',), ('secure_payload',)),
+    'resource_snapshots': (('id',), ('opsi_payload', 'action_point', 'yellow_coin', 'purple_coin')),
+    'daily_summary_cl1_events': (('id',), ('duration_seconds', 'estimated_exp', 'secure_payload')),
+    'daily_summary_periods': (('instance', 'period_key'), ('report_text',)),
+}
 
 
 def _counter_triggers(table):
-    """行数锚点的增量触发器：任何写入（含库外工具）都自动移动计数器。
+    """行数计数器的增量触发器。
 
     口径与核对一致：日报 periods 只计有正文的行，其余表全量计数。
-    UPDATE 不需要触发器（行数不变），只有 NULL↔正文 的日报状态迁移例外。
+    UPDATE 不改行数，只有 NULL↔正文 的日报状态迁移例外。
     """
     name = '__opsi_count_' + table
     adds = drops = '' if table != 'daily_summary_periods' else None
@@ -101,6 +112,33 @@ def _counter_triggers(table):
     ) if sql)
 
 
+def _content_triggers(table, columns):
+    """内容变更日志触发器（供写入路径折算累计摘要；periods 沿用计数器口径）。
+
+    每条变更按 旧/新内容各记一行 JSON。表上写入必须走 INSERT/UPDATE/DELETE：
+    REPLACE 的冲突删除不触发 DELETE 触发器，勿对受保护表用 OR REPLACE 写业务数据。
+    """
+    identity, content = CONTENT_COLUMNS[table]
+    identity = [c for c in identity if c in columns]
+    content = [c for c in content if c in columns]
+    name = '__opsi_delta_' + table
+
+    def array(prefix, cols):
+        return 'json_array(' + ','.join(prefix + '"' + c + '"' for c in cols) + ')'
+
+    insert = 'INSERT INTO ' + DELTA_TABLE + ' (tbl,op,identity,old_content,new_content) VALUES '
+    when_new = 'WHEN NEW.report_text IS NOT NULL ' if table == 'daily_summary_periods' else ''
+    when_old = 'WHEN OLD.report_text IS NOT NULL ' if table == 'daily_summary_periods' else ''
+    return (
+        f'CREATE TRIGGER IF NOT EXISTS {name}_ins AFTER INSERT ON {table} {when_new}BEGIN '
+        f"{insert}('{table}','i',{array('NEW.', identity)},NULL,{array('NEW.', content)}); END",
+        f'CREATE TRIGGER IF NOT EXISTS {name}_del AFTER DELETE ON {table} {when_old}BEGIN '
+        f"{insert}('{table}','d',{array('OLD.', identity)},{array('OLD.', content)},NULL); END",
+        f'CREATE TRIGGER IF NOT EXISTS {name}_upd AFTER UPDATE ON {table} BEGIN '
+        f"{insert}('{table}','u',{array('NEW.', identity)},{array('OLD.', content)},{array('NEW.', content)}); END",
+    )
+
+
 class VaultError(RuntimeError):
     pass
 
@@ -114,7 +152,7 @@ class IntegrityFailure(VaultError):
 
 
 class RecordTampered(IntegrityFailure):
-    """记录级认证失败：本环境内的密文被库外改动或替换（读取路径的篡改信号）。"""
+    """记录级认证失败：密文无法通过本环境身份校验。"""
 
 
 def partition_cl1(data):
@@ -193,11 +231,13 @@ class Vault:
         self._startup_checked = False
         # 浅检查去重：同一协调锁持有期内不重复做全路径核对。
         self._verified_hold = None
-        # 后台清空去重：读取路径被吞掉的篡改信号只触发一次清空。
+        # 后台清空去重：只触发一次。
         self._wipe_scheduled = False
         self._wipe_thread = None
         # 后台深检查（全量摘要）；测试与工具可传 False 关闭线程。
         self._deep = _DeepCheck(self) if deep_check else None
+        # 环境暂不可用提示的限频时间戳（高频读写路径不能逐次打日志）。
+        self._unavailable_logged_at = 0.0
         self.coordinator.external_lock = lambda: self._provider().lock(self.slot)
 
     def _provider(self):
@@ -279,7 +319,8 @@ class Vault:
                     self._legacy = self._legacy_key(ring)
                 return False
             self._active = self._state.get('phase') == 'ready'
-            if ring != self._descriptor():
+            expected = self._descriptor()
+            if ring != expected and not self._adopt_descriptor(ring, expected):
                 raise IntegrityFailure('统计描述文件与本机状态不匹配')
             self._active = True
             self._resolve_pending()
@@ -294,15 +335,34 @@ class Vault:
         return {'version': 2, 'algorithm': ALGORITHM, 'installation_id': self._state['installation_id'],
                 'provider': self._provider().name}
 
+    def _adopt_descriptor(self, ring, expected):
+        """描述文件缺失、或仅凭据提供方式变化时，按本机状态修复；其余不一致返回 False。
+
+        提供方式变化（如平台设备可用性切换导致同一平台的实现变体不同）不涉及
+        密钥材料，按现状更新即可；安装标识等不一致仍按描述文件被替换处理。
+        """
+        if ring is None:
+            logger.warning('[统计-加密] 统计描述文件缺失，已按本机状态重建')
+        elif (isinstance(ring, dict) and isinstance(ring.get('provider'), str)
+              and ring.get('provider') != expected['provider']
+              and ring.get('version') == expected['version']
+              and ring.get('algorithm') == expected['algorithm']
+              and ring.get('installation_id') == expected['installation_id']):
+            logger.warning(f'[统计-加密] 统计凭据提供方式变化（{ring["provider"]} -> {expected["provider"]}），已更新统计描述文件')
+        else:
+            return False
+        durable_write(self.keyring_path, canonical(expected))
+        return True
+
     def ensure_ready(self):
         return self._refresh() is not False
 
     def _refresh(self):
         """解封安全服务并确认可用；同一协调锁持有期内只解封一次。
 
-        进程内首次解封做一次启动核对（浅检查全部受保护路径：链值/行数/结构
-        + 文件摘要/删除检测），并调度一次后台深检查。普通写入前只核对所写
-        路径（O(1)），读取路径不做任何校验；页面与写入不因核对变慢。
+        进程内首次解封执行一次启动核对，并调度后台深检查；核对不阻塞
+        常规读写。环境暂不可用时屏蔽异常并限频提示：统计暂停记录，
+        环境恢复后自动继续，不打断游戏任务。
         """
         try:
             with self.coordinator.lock():
@@ -317,12 +377,31 @@ class Vault:
                     self._startup_check()
                     self._fresh = self.coordinator.hold_token
                 return self._active
-        except IntegrityFailure:
+        except IntegrityFailure as exc:
             if self._active:
+                logger.warning('[统计-加密] 状态校验失败，统计运行环境已重置')
                 self._wipe('状态校验失败')
+            else:
+                self._note_unavailable(exc)
             return False
-        except (ProviderUnavailable, VaultLocked, OSError, sqlite3.Error, portalocker_error()):
+        except (ProviderUnavailable, VaultLocked, OSError, sqlite3.Error, portalocker_error()) as exc:
+            self._note_unavailable(exc)
             return False
+        except Exception as exc:
+            # 可用性判断不允许把未知异常抛给调用方（写入方与启动钩子都依赖它）。
+            self._note_unavailable(exc, unexpected=True)
+            return False
+
+    def _note_unavailable(self, exc, unexpected=False):
+        """环境暂不可用的限频提示；同一实例最多每 5 分钟记录一次。"""
+        now = time.monotonic()
+        if now - self._unavailable_logged_at < 300:
+            return
+        self._unavailable_logged_at = now
+        if unexpected:
+            logger.exception(f'[统计-加密] 统计运行环境初始化异常（{type(exc).__name__}）')
+        else:
+            logger.warning(f'[统计-加密] 统计运行环境暂不可用（{type(exc).__name__}: {exc}），统计记录暂停，恢复后自动继续')
 
     writer_ready = ensure_ready
 
@@ -375,7 +454,7 @@ class Vault:
             pass
 
     def _tamper(self, key, detail, expected=None, actual=None):
-        """检测到库外修改/替换：写证据 → 救援备份 → 清空，并中止当前操作。"""
+        """记录证据、清空运行环境，随后中止当前操作。"""
         logger.warning(f'[统计-加密] 检测到统计文件被库外修改或替换: {key}（{detail}）')
         self._record_evidence(key, detail, expected, actual)
         try:
@@ -385,7 +464,7 @@ class Vault:
         raise VaultLocked('统计运行环境已重置')
 
     def _schedule_wipe(self, reason):
-        """读取路径被降级逻辑吞掉的篡改信号：后台补做清空，不阻塞当前页面。"""
+        """后台补做清空，不阻塞当前读取。"""
         if self._wipe_scheduled:
             return
         self._wipe_scheduled = True
@@ -400,7 +479,7 @@ class Vault:
         except Exception:
             logger.exception('[统计-加密] 后台清空未完成')
 
-    # ---- 写入意图标记（甲胄甲：区分崩溃窗口与篡改） ----
+    # ---- 写入意图标记（区分崩溃窗口与外部修改） ----
 
     def _pending_path(self):
         return self.directory / 'pending.json'
@@ -451,7 +530,7 @@ class Vault:
             logger.warning(f'[统计-加密] 期望值更新未能写入安全服务: {exc}')
             return False
 
-    # ---- 完整性链（浅检查的库内锚点） ----
+    # ---- 完整性链 ----
 
     def _chain_key(self):
         return self._provider().chain_key(self.slot, self._state)
@@ -477,13 +556,17 @@ class Vault:
         return counts
 
     def _ensure_counters(self, conn):
-        """建行数锚点的计数器表与触发器（幂等；升级/迁移重建时复用）。"""
+        """建行数计数器与内容增量日志（幂等；升级/迁移重建时复用）。"""
         conn.execute(COUNTS_DDL)
+        conn.execute(DELTA_DDL)
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         for table in PROTECTED_TABLES:
             if table not in tables:
                 continue
             for sql in _counter_triggers(table):
+                conn.execute(sql)
+            columns = [row[1] for row in conn.execute('PRAGMA table_info(' + table + ')')]
+            for sql in _content_triggers(table, columns):
                 conn.execute(sql)
 
     def _reset_counters(self, conn):
@@ -495,15 +578,12 @@ class Vault:
         return counts
 
     def _live_counts(self, conn):
-        """读取计数器（O(1)）；库外增删行会让它与链记录失配。"""
+        """读取计数器（O(1)）。"""
         return {name: int(rows) for name, rows in conn.execute('SELECT name, rows FROM ' + COUNT_TABLE)}
 
     @staticmethod
     def _schema_fingerprint(conn):
-        """库结构指纹（含日志模式）：升级改表/切换 WAL 走甲胄乙豁免重记。
-
-        自管的 __opsi_* 对象不参与指纹：它们的存在由链值/计数器自身守护。
-        """
+        """库结构指纹（含日志模式）；自管的 __opsi_* 对象不参与。"""
         mode = conn.execute('PRAGMA journal_mode').fetchone()
         rows = conn.execute("SELECT type,name,tbl_name,sql FROM sqlite_master "
                             "WHERE name NOT GLOB '__opsi_*' AND name NOT LIKE 'sqlite_%' "
@@ -532,12 +612,54 @@ class Vault:
                      (int(seq), chain, canonical(counts).decode('utf-8'), fingerprint))
         return chain
 
+    @staticmethod
+    def _row_digest(chain_key, table, identity_json, content_json):
+        message = (table + '\x1f' + identity_json + '\x1f' + content_json).encode('utf-8')
+        return int.from_bytes(hmac.new(chain_key, message, hashlib.sha256).digest(), 'big')
+
+    def _fold_content_delta(self, conn, key):
+        """把本事务的行变更折入累计摘要（写入事务提交前调用，日志已在事务开始时清空）。"""
+        entry = self._expected().get(key)
+        rows = conn.execute('SELECT tbl,op,identity,old_content,new_content FROM ' + DELTA_TABLE).fetchall()
+        conn.execute('DELETE FROM ' + DELTA_TABLE)
+        if not (isinstance(entry, dict) and isinstance(entry.get('acc'), str)):
+            return
+        chain_key = self._chain_key()
+        value = int(entry['acc'], 16)
+        for table, op, identity, old_content, new_content in rows:
+            if op in ('u', 'd'):
+                value ^= self._row_digest(chain_key, table, identity, old_content)
+            if op in ('i', 'u'):
+                value ^= self._row_digest(chain_key, table, identity, new_content)
+        entry['acc'] = format(value, '064x')
+
+    def _recompute_acc(self, path, chain_key):
+        """按当前内容全量重算累计摘要（深检查慢路径；只读、不加锁）。"""
+        value = 0
+        with closing(sqlite3.connect(path, timeout=VERIFY_TIMEOUT)) as conn:
+            tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            for table, (identity, content) in CONTENT_COLUMNS.items():
+                if table not in tables:
+                    continue
+                columns = [row[1] for row in conn.execute('PRAGMA table_info(' + table + ')')]
+                identity = [c for c in identity if c in columns]
+                content = [c for c in content if c in columns]
+                if not identity:
+                    continue
+                select = ','.join('json_array(' + ','.join('"' + c + '"' for c in cols) + ')'
+                                  for cols in (identity, content))
+                where = ' WHERE report_text IS NOT NULL' if table == 'daily_summary_periods' else ''
+                for identity_json, content_json in conn.execute('SELECT ' + select + ' FROM ' + table + where):
+                    value ^= self._row_digest(chain_key, table, identity_json, content_json)
+        return format(value, '064x')
+
     def _init_database_chain(self, conn, key):
         """首次见到该库（升级/新建）：建链、建计数器并按现状记基线，不触发清空。"""
         self._mark_pending(key)
         with conn:
             conn.execute(CHAIN_DDL)
             self._ensure_counters(conn)
+            conn.execute('DELETE FROM ' + DELTA_TABLE)
             counts = self._reset_counters(conn)
             fingerprint = self._schema_fingerprint(conn)
             chain = self._write_chain(conn, 1, counts, fingerprint)
@@ -546,7 +668,7 @@ class Vault:
         return True
 
     def _rebuild_database_chain(self, conn, key):
-        """按现状重记链值与基线（甲胄乙/甲、显式重记）；不清空。"""
+        """按现状重记链值与基线（显式重记）；不清空。"""
         self._mark_pending(key)
         try:
             row = self._read_chain(conn)
@@ -556,6 +678,7 @@ class Vault:
         with conn:
             conn.execute(CHAIN_DDL)
             self._ensure_counters(conn)
+            conn.execute('DELETE FROM ' + DELTA_TABLE)
             counts = self._reset_counters(conn)
             fingerprint = self._schema_fingerprint(conn)
             chain = self._write_chain(conn, seq, counts, fingerprint)
@@ -577,7 +700,7 @@ class Vault:
         self._expected()[key] = entry
 
     def _verify_database(self, path, key):
-        """浅检查单个受保护数据库；返回基线是否被更新（篡改将清空并中止）。"""
+        """浅检查单个受保护数据库；返回基线是否被更新。"""
         expect = self._expected()
         entry = expect.get(key)
         if not (isinstance(entry, dict) and type(entry.get('s')) is int and entry.get('c')):
@@ -604,6 +727,11 @@ class Vault:
                 if entry is not None:
                     self._tamper(key, '行数锚点缺失')
                 return self._rebuild_database_chain(conn, key)
+            if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                                (DELTA_TABLE,)).fetchone():
+                # 旧版运行环境升级：补齐内容日志设施并重记基线（不清空）。
+                logger.warning(f'[统计-加密] 检测到运行环境升级，重记基线: {key}')
+                return self._rebuild_database_chain(conn, key)
             counts = self._live_counts(conn)
             fingerprint = self._schema_fingerprint(conn)
             if entry is None:
@@ -617,7 +745,7 @@ class Vault:
             if row['seq'] != entry['s'] or row['chain'] != entry['c']:
                 if key in self._pending_keys():
                     logger.warning(f'[统计-加密] 发现未完成的写入窗口，按崩溃恢复重记基线: {key}')
-                    merged = {k: v for k, v in entry.items() if k not in ('s', 'c')}
+                    merged = {k: v for k, v in entry.items() if k not in ('s', 'c', 'acc')}
                     merged.update({'s': row['seq'], 'c': row['chain']})
                     expect[key] = merged
                     return True
@@ -665,7 +793,7 @@ class Vault:
         return False
 
     def _expect_deletions(self, seen):
-        """甲胄丙：基线中存在、当前路径集合里没有、且无豁免 → 清空。"""
+        """基线中存在、当前路径集合里没有、且无豁免 → 清空。"""
         changed = False
         pending = self._pending_keys()
         for key in sorted(set(self._expected()) - seen):
@@ -866,6 +994,15 @@ class Vault:
         except (ValueError, TypeError) as exc:
             raise VaultLocked('旧记录校验失败，保留原数据') from exc
 
+    def _open_legacy_or_none(self, kind, blob):
+        """迁移路径读取旧记录；读取环境或数据不可用时返回 None（由调用方按原样保留）。"""
+        if self._legacy is None and not hasattr(self._provider(), 'legacy_open'):
+            return None
+        try:
+            return self._open_legacy(kind, blob)
+        except VaultLocked:
+            return None
+
     def open_(self, kind, blob, context=None):
         with self.coordinator.lock():
             try:
@@ -903,8 +1040,7 @@ class Vault:
 
     @contextmanager
     def transaction(self, conn, path):
-        """受保护数据库的写事务：写前浅检查（链值/行数/结构）→ 写入意图标记 →
-        数据与链行同事务提交 → 期望值写入安全服务 → 清除标记。"""
+        """受保护数据库的写事务：写前核对 → 数据与链行同事务提交 → 更新安全服务状态。"""
         self.check_database(path)
         with self.coordinator.lock():
             if self._refresh() is False:
@@ -916,12 +1052,15 @@ class Vault:
                 logger.warning('[统计-加密] 重记基线未能写入安全服务，写入标记保留待下次核对')
             self._mark_pending(key)
             conn.execute('BEGIN IMMEDIATE')
+            # 日志只保留本事务的行变更；库外写入留下的记录由此丢弃，其内容由深检查重算比对负责。
+            conn.execute('DELETE FROM ' + DELTA_TABLE)
             outer = self._in_transaction
             self._in_transaction = True
             try:
                 yield conn
                 if conn.execute('PRAGMA foreign_keys').fetchone()[0] and conn.execute('PRAGMA foreign_key_check').fetchone():
                     raise sqlite3.IntegrityError('统计事务的延迟约束未满足')
+                self._fold_content_delta(conn, key)
                 self._bump_database_chain(conn, key)
                 conn.commit()
             except BaseException:
@@ -966,7 +1105,7 @@ class Vault:
             blob = self._seal(kind, data, context or self.file_context(kind, path))
             raw = canonical({WRAPPER_KEY: True, 'payload': blob}) if wrapper else blob.encode()
             if self.coordinator.is_archive(resolved):
-                # 归档/备份载荷不参与基线核对（甲胄丙豁免），直接原子落盘。
+                # 归档/备份载荷不参与基线核对，直接原子落盘。
                 durable_write(resolved, raw)
                 return
             key = self._expect_key(resolved)
@@ -1040,51 +1179,76 @@ class Vault:
         connections = {}
         readers = {}
         original, after, overrides = {}, {}, {}
+        # 内容不可读的历史项：按原样保留、不阻断迁移（否则旧数据里一条坏行会
+        # 让统计环境永远无法就绪，写入全部失败）。
+        skipped = []
         try:
             for path in self.coordinator.paths():
                 if not path.exists():
                     continue
-                reader = sqlite3.connect(path, timeout=5)
-                readers[path] = reader
-                reader.execute('BEGIN IMMEDIATE')
-                image = self._standalone_image(reader.serialize())
-                original[str(path.relative_to(self.root))] = _b64e(image)
-                conn = sqlite3.connect(':memory:')
-                connections[path] = conn
-                conn.deserialize(image)
-                conn.execute('PRAGMA secure_delete=ON')
-                self._convert_database(conn)
+                relative = str(path.relative_to(self.root))
+                reader = None
+                try:
+                    reader = sqlite3.connect(path, timeout=5)
+                    readers[path] = reader
+                    reader.execute('BEGIN IMMEDIATE')
+                    image = self._standalone_image(reader.serialize())
+                    conn = sqlite3.connect(':memory:')
+                    connections[path] = conn
+                    conn.deserialize(image)
+                    conn.execute('PRAGMA secure_delete=ON')
+                except sqlite3.Error as exc:
+                    # 单个库文件不可读：按原样保留，不阻塞其余数据的迁移。
+                    skipped.append(f'{path.name}（{type(exc).__name__}）')
+                    if reader is not None:
+                        readers.pop(path, None)
+                        reader.close()
+                    continue
+                self._convert_database(conn, skipped)
                 conn.commit()
-                after[str(path.relative_to(self.root))] = _b64e(conn.serialize())
+                original[relative] = _b64e(image)
+                after[relative] = _b64e(conn.serialize())
                 overrides[path] = conn
             for path in self.coordinator.files():
-                raw = path.read_bytes()
-                original[str(path.relative_to(self.root))] = _b64e(raw)
-                kind = 'archives' if self.coordinator.is_archive(path) or 'cl1_monthly' in path.name else ('ships' if '.json' in path.name else 'loot')
-                context = self.file_context(kind, path)
-                if self.coordinator.is_archive(path):
-                    data = {'bytes': _b64e(raw)}
-                    blob = self._seal(kind, data, context)
-                    self._check_roundtrip(kind, blob, data, context)
-                    updated = canonical({WRAPPER_KEY: True, 'payload': blob})
-                elif '.json' in path.name:
-                    data = json.loads(raw)
-                    if data.get(LEGACY_WRAPPER_KEY):
-                        data = self._open_legacy(kind, data['payload'])
-                    blob = self._seal(kind, data, context)
-                    self._check_roundtrip(kind, blob, data, context)
-                    updated = canonical({WRAPPER_KEY: True, 'payload': blob})
-                else:
-                    text = raw.decode('utf-8')
-                    if text.startswith(LEGACY_PREFIX):
-                        data = self._open_legacy('loot', text)
+                try:
+                    raw = path.read_bytes()
+                    relative = str(path.relative_to(self.root))
+                    kind = 'archives' if self.coordinator.is_archive(path) or 'cl1_monthly' in path.name else ('ships' if '.json' in path.name else 'loot')
+                    context = self.file_context(kind, path)
+                    if self.coordinator.is_archive(path):
+                        data = {'bytes': _b64e(raw)}
+                        blob = self._seal(kind, data, context)
+                        self._check_roundtrip(kind, blob, data, context)
+                        updated = canonical({WRAPPER_KEY: True, 'payload': blob})
+                    elif '.json' in path.name:
+                        data = json.loads(raw)
+                        if not isinstance(data, dict):
+                            raise ValueError('结构不可用')
+                        if data.get(LEGACY_WRAPPER_KEY):
+                            data = self._open_legacy_or_none(kind, data['payload'])
+                            if data is None:
+                                raise ValueError('旧记录不可读')
+                        blob = self._seal(kind, data, context)
+                        self._check_roundtrip(kind, blob, data, context)
+                        updated = canonical({WRAPPER_KEY: True, 'payload': blob})
                     else:
-                        rows = list(csv.reader(io.StringIO(text)))
-                        data = {'header': rows[0], 'rows': rows[1:]}
-                    blob = self._seal('loot', data, context)
-                    self._check_roundtrip('loot', blob, data, context)
-                    updated = blob.encode()
-                after[str(path.relative_to(self.root))] = _b64e(updated)
+                        text = raw.decode('utf-8')
+                        if text.startswith(LEGACY_PREFIX):
+                            data = self._open_legacy_or_none('loot', text)
+                            if data is None:
+                                raise ValueError('旧记录不可读')
+                        else:
+                            rows = list(csv.reader(io.StringIO(text)))
+                            data = {'header': rows[0], 'rows': rows[1:]}
+                        blob = self._seal('loot', data, context)
+                        self._check_roundtrip('loot', blob, data, context)
+                        updated = blob.encode()
+                except ValueError:
+                    # 单个文件内容不可读：按原样保留，不阻塞其余数据的迁移。
+                    skipped.append(path.name)
+                    continue
+                original[relative] = _b64e(raw)
+                after[relative] = _b64e(updated)
                 overrides[path] = updated
             new_root = self.coordinator.snapshot(overrides)
             journal = {'before': original, 'after': after, 'keyring': _b64e(before_ring) if before_ring else None,
@@ -1108,7 +1272,10 @@ class Vault:
             self._active = True
             self._legacy = None
             self.journal_path.unlink(missing_ok=True)
-            return {'skipped': False, 'cl1': len(original), 'files': len(after)}
+            if skipped:
+                preview = '、'.join(skipped[:5]) + ('、…' if len(skipped) > 5 else '')
+                logger.warning(f'[统计-加密] {len(skipped)} 项历史数据无法读取，已按原样保留: {preview}')
+            return {'skipped': False, 'cl1': len(original), 'files': len(after), 'quarantined': len(skipped)}
         except BaseException:
             for reader in readers.values():
                 reader.rollback()
@@ -1141,7 +1308,13 @@ class Vault:
         if decoded != data:
             raise VaultLocked('迁移回读未通过')
 
-    def _convert_database(self, conn):
+    def _convert_database(self, conn, skipped=None):
+        """把库内旧格式记录迁移到当前格式；单行不可读时按原样保留并记入 skipped。
+
+        不可读 = 旧快照解不开或旧密文校验失败；这类行此前会让整次迁移失败，
+        使统计环境永远无法就绪。保留原样使其余数据（含今后的新写入）不受影响。
+        """
+        skipped = skipped if skipped is not None else []
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         for table, column, kind, fields in [('cl1_data', 'secure_json', 'cl1', CL1_SECURE_FIELDS),
                                             ('opsi_items', 'secure_payload', 'loot', LOOT_SECURE_FIELDS),
@@ -1157,7 +1330,13 @@ class Vault:
             for values in conn.execute('SELECT * FROM ' + table).fetchall():
                 row = dict(zip(columns, values))
                 if kind == 'cl1':
-                    full = json.loads(row['data_json']) if row.get('data_json') else None
+                    label = f'cl1_data:{row.get("instance")}/{row.get("month")}'
+                    full = None
+                    if row.get('data_json'):
+                        try:
+                            full = json.loads(row['data_json'])
+                        except ValueError:
+                            full = None
                     if full is None and row.get('encrypted_blob'):
                         from module.statistics.cl1_legacy import derive_legacy_key, decrypt_legacy_payload
                         from module.base.device_id import get_device_id, get_old_device_id
@@ -1170,14 +1349,21 @@ class Vault:
                                 if full:
                                     break
                     if not isinstance(full, dict):
-                        raise VaultLocked('旧快照无法读取')
+                        skipped.append(label)
+                        continue
                     public, data = partition_cl1(full)
                 else:
+                    label = f'{table}:{row.get("id")}'
                     data = {f: row.get(f) for f in fields}
                 if row.get(column):
-                    if not row[column].startswith(LEGACY_PREFIX):
-                        raise VaultLocked('迁移源格式不支持')
-                    data.update(self._open_legacy(kind, row[column]))
+                    if not str(row[column]).startswith(LEGACY_PREFIX):
+                        skipped.append(label)
+                        continue
+                    payload = self._open_legacy_or_none(kind, row[column])
+                    if payload is None:
+                        skipped.append(label)
+                        continue
+                    data.update(payload)
                 context = row_context(kind, row)
                 blob = self._seal(kind, data, context)
                 self._check_roundtrip(kind, blob, data, context)
@@ -1285,7 +1471,7 @@ class Vault:
             raise VaultLocked('迁移记录未通过校验，保留当前数据') from exc
 
     def _rescue_wipe_copy(self):
-        """清空前把受保护文件与凭据状态复制到救援目录，避免误判造成不可恢复的损失。"""
+        """清空前把受保护文件与凭据状态复制到救援目录（留档与取证）。"""
         try:
             folder = self.directory / time.strftime('rescue-%Y%m%d-%H%M%S')
             written = 0
@@ -1342,7 +1528,7 @@ class Vault:
                     if 'daily_summary_periods' in tables:
                         conn.execute('UPDATE daily_summary_periods SET report_text=NULL')
             except (sqlite3.Error, OSError) as exc:
-                # 单个库被占用不清空不能卡死复位：密钥即将撤销，残留密文不可读。
+                # 单个库被占用不能卡死复位流程。
                 logger.warning(f'[统计-加密] 清空时该库不可用，跳过内容清理: {path.name}（{type(exc).__name__}）')
         for path in self.coordinator.files():
             path.unlink(missing_ok=True)
@@ -1358,11 +1544,11 @@ class Vault:
 
 
 class _DeepCheck:
-    """后台深检查：全量映像摘要（数据库）/字节摘要（文件），绝不进入同步路径。
+    """后台深检查：数据库取全量映像摘要、文件取字节摘要，只在后台线程执行。
 
-    防误报用“序号乐观并发”：先读链序号 → 算摘要 → 再读链序号，期间序号变化
-    说明有正常写入插队，本轮放弃、下次再来；任何异常同样只放弃本轮，绝不据此
-    清空。删除/初始化/结构变化的判定归浅检查。
+    序号乐观并发：先读链序号 → 算摘要 → 再读链序号，期间序号变化说明有
+    正常写入插队，本轮放弃、下次再来；任何异常同样只放弃本轮。删除、
+    初始化与结构变化不在此判定。
     """
 
     def __init__(self, vault):
@@ -1433,12 +1619,37 @@ class _DeepCheck:
 
     @staticmethod
     def _read_seq(path):
+        # 路径不存在直接返回；sqlite3.connect 会创建空文件。
+        if not Path(path).exists():
+            return None
         try:
             with closing(sqlite3.connect(path, timeout=VERIFY_TIMEOUT)) as conn:
                 row = conn.execute('SELECT seq FROM ' + CHAIN_TABLE).fetchone()
         except sqlite3.Error:
             return None
         return int(row[0]) if row else None
+
+    def _load_checked(self):
+        """锁内载入状态；未激活时返回 None。"""
+        vault = self.vault
+        if not vault._active:
+            return None
+        try:
+            vault._load()
+        except (VaultError, ProviderUnavailable, OSError, sqlite3.Error):
+            return None
+        return vault if vault._active else None
+
+    def _chain_consistent(self, path, before):
+        """锁内复核链行与结构指纹：链缺失、序号变化或在途结构变化返回 False。"""
+        vault = self.vault
+        try:
+            with closing(sqlite3.connect(path, timeout=VERIFY_TIMEOUT)) as conn:
+                row = vault._read_chain(conn)
+                fingerprint = vault._schema_fingerprint(conn)
+        except sqlite3.Error:
+            return False
+        return row is not None and row['seq'] == before and row['fingerprint'] == fingerprint
 
     def _check_database(self, path):
         vault = self.vault
@@ -1452,37 +1663,45 @@ class _DeepCheck:
         if self._read_seq(path) != before:
             return  # 有正常写入插队，本轮放弃
         with vault.coordinator.lock():
-            if not vault._active:
-                return
-            try:
-                vault._load()
-            except (VaultError, ProviderUnavailable, OSError, sqlite3.Error):
-                return
-            if not vault._active:
+            if self._load_checked() is None or not self._chain_consistent(path, before):
                 return
             entry = vault._expected().get(key)
             if not isinstance(entry, dict):
                 return
+            quiet = entry.get('q') == before
+            if quiet and entry.get('d') and entry['d'] != digest[:SIG_LEN]:
+                vault._tamper(key, '全量映像与基线不一致（字节级改动）',
+                              expected={'digest': entry['d']}, actual={'digest': digest[:SIG_LEN]})
+            if quiet and entry.get('d') == digest[:SIG_LEN] and isinstance(entry.get('acc'), str):
+                return  # 与上次记录完全一致：无事可做
             try:
-                with closing(sqlite3.connect(path, timeout=VERIFY_TIMEOUT)) as conn:
-                    row = vault._read_chain(conn)
-                    fingerprint = vault._schema_fingerprint(conn)
-            except sqlite3.Error:
+                chain_key = vault._chain_key()
+            except (ProviderUnavailable, VaultError, OSError) as exc:
+                logger.debug(f'[统计-加密] 深检查密钥暂不可用: {path.name}（{type(exc).__name__}）')
                 return
-            if row is None or row['seq'] != before:
-                return  # 链缺失或有写入插队：本轮放弃
-            if row['fingerprint'] != fingerprint:
-                return  # 结构/日志模式变化在途：交浅检查按升级重记
-            digest = digest[:SIG_LEN]
-            if entry.get('d') and entry.get('q') == before:
-                if entry['d'] != digest:
-                    vault._tamper(key, '全量映像与基线不一致（字节级改动）',
-                                  expected={'digest': entry['d']}, actual={'digest': digest})
+        # 慢路径：锁外全量重算内容累计摘要（秒级；期间任何合法写入都会推进 seq）。
+        try:
+            acc_now = vault._recompute_acc(path, chain_key)
+        except (sqlite3.Error, OSError, ProviderUnavailable, VaultError) as exc:
+            logger.debug(f'[统计-加密] 深检查重算暂不可用: {path.name}（{type(exc).__name__}）')
+            return
+        if self._read_seq(path) != before:
+            return  # 有写入插队，本轮放弃
+        with vault.coordinator.lock():
+            if self._load_checked() is None or not self._chain_consistent(path, before):
                 return
-            # 首次深检查或序号已前进（期间写入已被写路径逐笔核对）：以现状记/重记摘要。
-            entry['d'] = digest
-            entry['q'] = before
-            vault._save_expectations()
+            entry = vault._expected().get(key)
+            if not isinstance(entry, dict):
+                return
+            if entry.get('q') != before and isinstance(entry.get('acc'), str) and entry['acc'] != acc_now:
+                vault._tamper(key, '内容累计摘要与基线不一致',
+                              expected={'acc': entry['acc']}, actual={'acc': acc_now})
+            if entry.get('d') != digest[:SIG_LEN] or entry.get('q') != before or entry.get('acc') != acc_now:
+                # 首次深检查或序号已前进：以现状记/重记摘要基线。
+                entry['d'] = digest[:SIG_LEN]
+                entry['q'] = before
+                entry['acc'] = acc_now
+                vault._save_expectations()
 
     def _check_file(self, path):
         vault = self.vault
