@@ -43,11 +43,13 @@ class GameDataProtector:
         self.marker = self.directory / 'protected-v2'
         self.legacy_marker = self.directory / 'protected-v1'
 
-    @staticmethod
-    def _safe(path):
+    def _safe(self, path):
+        """校验游戏数据目录之内的每一级路径都不是链接；root 以上的系统目录不参与判定。"""
         for parent in (path, *path.parents):
             if parent.is_symlink() or parent.is_junction():
                 raise damaged('交易游戏文件路径包含链接，已停止使用')
+            if parent == self.root or parent.resolve() == self.root:
+                break
 
     def initialized(self):
         self.migrate_cache()
