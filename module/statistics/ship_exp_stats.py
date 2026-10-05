@@ -84,6 +84,10 @@ class ShipExpStats:
                                            or data.get(opsi_secure.LEGACY_WRAPPER_KEY)):
                 opened = opsi_secure.decode_file_payload('ships', self._path, data)
                 if opened is None:
+                    if opsi_secure.get_store().vault_keys().definitive():
+                        # 旧载荷确认无法在本机读取：另存到旁路备份后从空数据重新开始。
+                        opsi_secure.quarantine_unreadable('ships', str(self._path), text)
+                        return {}
                     self._locked = True
                     logger.warning('[统计-经验] 舰船经验数据暂不可用，暂不加载（恢复后继续）')
                     return {}

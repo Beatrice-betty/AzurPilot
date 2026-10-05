@@ -201,7 +201,9 @@ class ActionHistory:
                 identity = self.protection.resolve(instance)
                 sealed = self.protection.has_anchor(identity + '/action-point-history')
                 # 接口传入的数据库路径不参与选择，来源始终由当前稳定实例身份确定。
-                with store.connection(instance, write=not sealed, baseline=(row.get('Total'), row.get('Record')) if point and not sealed else None) as source:
+                # 交易所读取路径要求强校验：实例侧已降级跳过，这里损坏仍须报错。
+                with store.connection(instance, write=not sealed, protect=True,
+                                      baseline=(row.get('Total'), row.get('Record')) if point and not sealed else None) as source:
                     if source.history_guard is None:
                         source.history_guard = source.history_factory()
                     maximum = source.execute('SELECT COALESCE(MAX(seq),0) FROM action_point_history').fetchone()[0]

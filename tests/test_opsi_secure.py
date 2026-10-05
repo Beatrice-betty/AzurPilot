@@ -316,14 +316,36 @@ class QuarantineTests(StoreCase):
         # 再跑一次：好行不再重复解密，坏行仍被隔离。
         self.assertEqual(opsi_secure.decrypt_all(), {'pending': True, 'decrypted': 0, 'quarantined': 1})
 
-    def test_write_path_preserves_quarantined_row_instead_of_overwriting(self):
+    def test_unrecoverable_row_is_backed_up_and_stats_resume(self):
+        """确认解不开的旧行：另存旁路备份后按现状继续写入，单月统计不再被冻结。"""
         from module.statistics.cl1_database import Cl1Database
         database = Cl1Database(self.root / 'config' / 'cl1_data.db')
-        with self.assertRaises(opsi_secure.StoreUnavailable):
-            database.increment_akashi_encounter('beta', '2026-09')
+        database.increment_akashi_encounter('beta', '2026-09')
+        with closing(sqlite3.connect(self.root / 'config' / 'cl1_data.db')) as conn:
+            stored = conn.execute(
+                "SELECT secure_json FROM cl1_data WHERE instance='beta'").fetchone()[0]
+        self.assertEqual(json.loads(stored)['akashi_encounters'], 1)
+        self.assertFalse(stored.startswith('OPSIV'))
+        backups = list((self.root / 'config' / 'opsi_secure').glob('unreadable-*.json'))
+        self.assertEqual(len(backups), 1)
+        payload = json.loads(backups[0].read_bytes())
+        self.assertEqual(payload['payload'], self.broken)
+        self.assertEqual(payload['kind'], 'cl1_data')
+        self.assertIn('2026-09', payload['identity'])
+
+    def test_transient_key_outage_keeps_original_row(self):
+        """凭据服务报错的暂时性不可用：保持原样等重试，绝不另存替换。"""
+        from module.statistics import opsi_keys
+        from module.statistics.cl1_database import Cl1Database
+        database = Cl1Database(self.root / 'config' / 'cl1_data.db')
+        with patch.object(opsi_keys.ContainerFileProvider, 'load',
+                          side_effect=opsi_keys.ProviderUnavailable('locked')):
+            with self.assertRaises(opsi_secure.StoreUnavailable):
+                database.increment_akashi_encounter('beta', '2026-09')
         with closing(sqlite3.connect(self.root / 'config' / 'cl1_data.db')) as conn:
             self.assertEqual(conn.execute(
                 "SELECT secure_json FROM cl1_data WHERE instance='beta'").fetchone()[0], self.broken)
+        self.assertEqual(list((self.root / 'config' / 'opsi_secure').glob('unreadable-*.json')), [])
 
 
 class V1MigrationTests(StoreCase):
@@ -385,18 +407,26 @@ class WrapperTransitionTests(StoreCase):
         self.assertIsNone(opsi_secure.decode_file_payload('ships', path, blob_wrapper))
         self.assertIsNone(opsi_secure.decode_file_payload('ships', path, None))
 
-    def test_ship_stats_never_overwrites_undecryptable_wrapper(self):
+    def test_ship_stats_backs_up_undecryptable_wrapper_and_restarts(self):
         from module.statistics.ship_exp_stats import ShipExpStats
+        secure_dir = self.root / 'config' / 'opsi_secure'
+        secure_dir.mkdir(parents=True)
+        (secure_dir / 'keyring.json').write_bytes(json.dumps(
+            {'version': 2, 'algorithm': opsi_secure.ALGORITHM, 'installation_id': 'inst',
+             'provider': 'container-file'}).encode())
         path = self.root / 'log' / 'cl1' / 'inst' / 'ship_exp_data.json'
         path.parent.mkdir(parents=True)
         blob = opsi_secure.BLOB_PREFIX + base64.b64encode(b'x' * 60).decode()
         path.write_bytes(json.dumps({opsi_secure.WRAPPER_KEY: True, 'payload': blob}).encode())
-        before = path.read_bytes()
         stats = ShipExpStats(path=path, instance_name='inst')
         self.assertEqual(stats.data, {})
+        backups = list((self.root / 'config' / 'opsi_secure').glob('unreadable-*.json'))
+        self.assertEqual(len(backups), 1)
+        payload = json.loads(backups[0].read_bytes())
+        self.assertEqual(json.loads(payload['payload'])['payload'], blob)
         stats.data['battle_times'] = {'samples': [1.0], 'average': 1.0}
         stats._save()
-        self.assertEqual(path.read_bytes(), before)
+        self.assertIn('battle_times', json.loads(path.read_text(encoding='utf-8')))
 
 
 class InitializeTests(StoreCase):
