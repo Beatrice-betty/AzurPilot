@@ -208,7 +208,7 @@ class HostBroker:
             if not state or state.get('phase') == 'wiping':
                 raise ProviderUnavailable('宿主状态不可用')
             if action == 'chain-key':
-                # 只回传派生后的链子密钥，根密钥不出宿主。
+                # 只回传派生后的链子密钥。
                 return {'key': base64.b64encode(_subkey(self.provider.key(state), 'opsi-stats/v2/integrity-chain')).decode()}
             info, aad = request['info'], request['aad']
             if info == 'opsi-stats/v2/commit':

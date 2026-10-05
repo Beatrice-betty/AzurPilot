@@ -75,7 +75,7 @@ class StoreCoordinator:
         return [self.root / 'config' / name for name in ('cl1_data.db', 'azurstats_local.db', 'daily_summary.db')]
 
     def snapshot(self, overrides=None):
-        """计算当前全部分量的摘要根；提交阶段必须全量重算，以收编绕开协调的事务外写入。"""
+        """计算当前全部分量的摘要根。"""
         overrides = overrides or {}
         result = {}
         for path in self.paths():

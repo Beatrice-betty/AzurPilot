@@ -521,6 +521,58 @@ class OpsiSecureTestCase(unittest.TestCase):
                                    " WHERE name LIKE '__opsi_count_cl1_data%'").fetchone()[0]
         self.assertEqual(anchors, 2)
 
+    def test_read_seq_skips_missing_database(self):
+        """深检查对不存在的受保护库不得创建空文件（先判存在再连接）。"""
+        self.assertTrue(self.vault.ensure_ready())
+        missing = self.root / 'config' / 'daily_summary.db'
+        self.assertFalse(missing.exists())
+        self.vault.deep_check_once()
+        self.assertFalse(missing.exists())
+
+    def test_legit_content_writes_keep_cumulative_digest_consistent(self):
+        """写入路径维护内容累计摘要：连续合法写入叠加深检查不得误报。"""
+        self.assertTrue(self.vault.ensure_ready())
+        for count in (5, 6, 7):
+            self.update_count(count)
+            self.vault.deep_check_once()
+        self.assertFalse(self.vault.wipe_path.exists())
+        self.assertEqual(self.read_cl1()['battle_count'], 7)
+
+    def test_content_tamper_is_caught_even_after_a_legit_write(self):
+        """洗白场景：库外重加密改内容（不碰链）后紧跟一次合法写入，深检查仍须抓到。"""
+        self.assertTrue(self.vault.ensure_ready())
+        other = opsi_secure.row_context('cl1', {'instance': 'other', 'month': '2026-09'})
+        with db(self.vault.cl1_db) as conn:
+            with self.vault.transaction(conn, self.vault.cl1_db):
+                conn.execute('INSERT INTO cl1_data (instance, month, data_json, secure_json) VALUES (?,?,?,?)',
+                             ('other', '2026-09', '{}', self.vault.seal('cl1', {'battle_count': 7}, other)))
+        self.vault.deep_check_once()
+        context = opsi_secure.row_context('cl1', {'instance': 'inst', 'month': '2026-09'})
+        forged = self.vault.seal('cl1', {'battle_count': 999999}, context)
+        with db(self.vault.cl1_db) as conn:
+            conn.execute("UPDATE cl1_data SET secure_json=? WHERE instance='inst'", (forged,))
+        with db(self.vault.cl1_db) as conn:
+            with self.vault.transaction(conn, self.vault.cl1_db):
+                conn.execute("UPDATE cl1_data SET secure_json=? WHERE instance='other'",
+                             (self.vault.seal('cl1', {'battle_count': 8}, other),))
+        self.vault.deep_check_once()
+        self.assert_wipe_state()
+
+    def test_row_insert_and_delete_through_writes_stay_consistent(self):
+        """经写入通道增删行：累计摘要随 XOR 折入，深检查不得误报。"""
+        self.assertTrue(self.vault.ensure_ready())
+        other = opsi_secure.row_context('cl1', {'instance': 'other', 'month': '2026-09'})
+        with db(self.vault.cl1_db) as conn:
+            with self.vault.transaction(conn, self.vault.cl1_db):
+                conn.execute('INSERT INTO cl1_data (instance, month, data_json, secure_json) VALUES (?,?,?,?)',
+                             ('other', '2026-09', '{}', self.vault.seal('cl1', {'battle_count': 1}, other)))
+        self.vault.deep_check_once()
+        with db(self.vault.cl1_db) as conn:
+            with self.vault.transaction(conn, self.vault.cl1_db):
+                conn.execute("DELETE FROM cl1_data WHERE instance='other'")
+        self.vault.deep_check_once()
+        self.assertFalse(self.vault.wipe_path.exists())
+
     def test_expectation_persists_across_restart(self):
         """文件类路径同样记基线；重启后基线从安全服务恢复，常规状态下无误报。"""
         self.assertTrue(self.vault.ensure_ready())
