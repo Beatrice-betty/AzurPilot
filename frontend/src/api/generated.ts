@@ -14,6 +14,7 @@ export interface Parameters {
   "shop_strategy.validate": { instance: string; task: "EventShop" | "ShopFrequent" | "ShopOnce" | "PrivateQuarters" | "OpsiShop" | "OpsiVoucher"; script: string }
   "overview.get": { instance: string }
   "stock.status": { instance: string }
+  "stock.rebuild": { instance: string; confirm?: boolean; scope?: "instance" | "all" }
   "stock.request": { instance: string; path: string; method?: "GET" | "POST" | "DELETE"; body?: Record<string, unknown> | null; etag?: string }
   "scheduler.start": { instance: string }
   "scheduler.stop": { instance: string }

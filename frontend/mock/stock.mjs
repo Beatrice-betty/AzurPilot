@@ -6,6 +6,7 @@ import {join} from 'node:path'
 // Mock 同样使用 Go 交易引擎和 Cloudflare 官方测试验证码；实例资源来自本地夹具。
 export function createStockProxy(snapshot){
   const instances=new Map()
+  const generations=new Map()
   const listeners=new Set()
   let streamController=null,streamRunning=false
   const url=(process.env.STOCK_EXCHANGE_URL??'http://127.0.0.1:8080').replace(/\/$/,'')
@@ -29,11 +30,12 @@ export function createStockProxy(snapshot){
   function identity(name){
     if(!instances.has(name)){
       // 固定 Mock 身份使演示服务重启后仍能登录 Go 中永久绑定的账户。
-      const seed=createHash('sha256').update(`mmex-mock-identity-v1\n${process.env.AZURPILOT_MOCK_STOCK_NAMESPACE??'local-demo'}\n${name}`).digest()
+      const generation=generations.get(name)??0
+      const seed=createHash('sha256').update(`mmex-mock-identity-v1\n${process.env.AZURPILOT_MOCK_STOCK_NAMESPACE??'local-demo'}\n${name}${generation?'\nrebuild-'+generation:''}`).digest()
       const privateKey=createPrivateKey({key:Buffer.concat([Buffer.from('302e020100300506032b657004220420','hex'),seed]),type:'pkcs8',format:'der'}),publicKey=createPublicKey(privateKey)
       const h=createHash('sha256').update(seed).digest('hex'),id=`${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20,32)}`
       const pub=publicKey.export({type:'spki',format:'der'}).subarray(-32).toString('base64')
-      const directory=fileURLToPath(new URL('../../cache/stock-exchange/mock-history/',import.meta.url)),path=join(directory,h+'.json')
+      const directory=fileURLToPath(new URL('../../config/stock-exchange/mock-history/',import.meta.url)),path=join(directory,h+'.json')
       let rows=[];try{rows=JSON.parse(readFileSync(path,'utf8'))}catch{}
       const history=new Map(rows.filter(r=>Number.isSafeInteger(r.time)&&Number.isSafeInteger(r.actionPoints)&&r.actionPoints>=0&&r.actionPoints<=1000000).map(r=>[r.time,r]))
       instances.set(name,{id,pub,privateKey,key:createHash('sha256').update(pub+'\n'+id).digest('hex'),token:'',upload:'',player:null,history,pending:new Set(history.keys()),directory,path,busy:false,next:0,checked:0})
@@ -104,6 +106,14 @@ export function createStockProxy(snapshot){
     subscribe(listener){listeners.add(listener);void listen();return ()=>{listeners.delete(listener);if(!listeners.size)streamController?.abort()}},
     close(){clearInterval(timer);listeners.clear();streamController?.abort()},
     status(name){const i=identity(name),row=snapshot(name);return {url,instance:name,instanceId:i.id,bindingKey:i.key,bound:!!i.player,boundUsername:i.player?.username??'',authenticated:!!i.token,message:i.player?'Mock 实例账户已永久绑定':'Mock：直接使用当前实例行动力',lastObservedAt:row?.observedAt??0,snapshot:row}},
+    rebuild(name,{confirm=false,scope='instance'}={}){
+      const plan={instance:name,scope:'instance',affectedInstances:[name],rebuilt:false}
+      if(!confirm)return plan
+      if(scope!=='instance')throw Object.assign(new Error('重建范围已变化，请重新确认'),{code:'STOCK_REBUILD_SCOPE_CHANGED',details:plan})
+      const previous=instances.get(name);if(previous){previous.upload='';previous.token='';previous.pending.clear()}
+      instances.delete(name);generations.set(name,(generations.get(name)??0)+1)
+      return {...plan,rebuilt:true}
+    },
     async request(name,{path,method='GET',body=null,etag=''}){
       const i=identity(name)
       const publicRequest=method==='GET'&&( ['/meta','/market','/seasons'].includes(path)||/^\/history\/[1-9]\d*$/.test(path)||stockPath(path))

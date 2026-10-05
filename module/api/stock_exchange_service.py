@@ -8,6 +8,7 @@ import threading
 import time
 from datetime import datetime
 from email.utils import parsedate_to_datetime
+from functools import wraps
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse, parse_qs
@@ -55,13 +56,23 @@ def public_stock_path(path):
     return all(k in patterns and len(v) == 1 and re.fullmatch(patterns[k], v[0]) for k, v in query.items())
 
 
+def account_operation(method):
+    """重建与后台同步互斥，避免旧会话在重建后继续上传。"""
+    @wraps(method)
+    def run(self, *args, **kwargs):
+        with self.operation_lock:
+            return method(self, *args, **kwargs)
+    return run
+
+
 class StockExchangeService:
     """每实例永久绑定一个账户；浏览器不接触远端会话、上传令牌或实例私钥。"""
     def __init__(self, configs):
         self.configs = configs
-        self.path = Path(configs.root) / 'cache' / 'stock-exchange' / 'bindings.json'
         self.protection = GameDataProtector(configs.root)
+        self.path = self.protection.directory / 'bindings.json'
         self.lock = threading.RLock()
+        self.operation_lock = threading.RLock()
         self.stop = threading.Event()
         self.thread = None
         self.event_thread = None
@@ -102,9 +113,11 @@ class StockExchangeService:
                 raise damaged('无法检查游戏文件状态，已停止同步') from None
         return tuple(result)
 
+    @account_operation
     def _refresh(self):
         """文件系统重命名沿用 UUID；删除和同名重建撤销旧会话及监视。"""
         with self.lock:
+            self.protection.migrate_cache()
             stamp = self._storage_stamp()
             if stamp == self.refresh_stamp and self.storage_error is None and time.monotonic() < self.refresh_check:
                 return
@@ -329,6 +342,7 @@ class StockExchangeService:
             raise ApiError(error.get('code', 'STOCK_ERROR'), error.get('message', '交易所拒绝请求'))
         return reply['data']
 
+    @account_operation
     def status(self, instance):
         self._refresh()
         self.configs.path(instance)
@@ -348,6 +362,7 @@ class StockExchangeService:
                     'lastObservedAt': record['observedAt'] if record else 0, 'snapshot': record,
                     'bindingKey': binding_key(identity, key)}
 
+    @account_operation
     def request(self, instance, path, method='GET', body=None, etag=''):
         self._refresh()
         with self._instance_lock(instance):
@@ -355,6 +370,28 @@ class StockExchangeService:
         if method != 'GET' or reply['status'] == 401:
             self._notify({'instance': instance})
         return reply
+
+    @account_operation
+    def rebuild(self, instance, confirm=False, scope='instance'):
+        from module.api.stock_exchange_recovery import StockExchangeRecovery
+        recovery = StockExchangeRecovery(self.configs, self._valid_binding)
+        if confirm:
+            self.history.close()
+        result = recovery.rebuild(instance, confirm, scope)
+        if result['rebuilt']:
+            with self.lock:
+                for name in result['affectedInstances']:
+                    for state in (self.bindings, self.sessions, self.identities, self.names, self.stamps, self.records,
+                                  self.statuses, self.attempts, self.uploaded, self.last_upload, self.history.scanned,
+                                  self.history.next_send, self.history.next_check, self.history.failures,
+                                  self.history.pending, self.history.legacy_warnings):
+                        state.pop(name, None)
+                    self.monitors.discard(name)
+                self.storage_error = None
+                self.refresh_stamp = None
+            self._refresh()
+            self._notify({'instance': instance})
+        return result
 
     def _request(self, instance, path, method='GET', body=None, etag=''):
         self.configs.path(instance)
@@ -433,6 +470,7 @@ class StockExchangeService:
                 self.sessions.pop(instance, None)
         return reply
 
+    @account_operation
     def sync_once(self, only=None, force=False):
         try:
             self._refresh()

@@ -331,7 +331,7 @@ class HistoryTests(unittest.TestCase):
             self.assertEqual({'head': head}, data['anchors'][name])
         from module.scheduler.action_history import ActionPointChain
         with self.assertRaises(OSError), patch.object(ActionPointChain, 'finish', side_effect=OSError('隔离崩溃夹具')):
-            with self.store.connection('test', write=True) as db:
+            with self.store.connection('test', write=True, strict_history=True) as db:
                 self.store._write_observation(db, 'ActionPoint', {'Total': 8000}, (self.now + timedelta(seconds=5)).isoformat(), 'fixture')
         with protection.transaction() as (data, _):
             self.assertIn('pending', data['anchors'][name])
