@@ -236,6 +236,10 @@ class AzurStats:
                 payload = opsi_secure.decode_record('loot', text, opsi_secure.file_context(
                     opsi_secure.get_store().root, 'loot', path))
                 if payload is None:
+                    if opsi_secure.get_store().vault_keys().definitive():
+                        # 旧载荷确认无法在本机读取：另存到旁路备份后按明细重算重写。
+                        opsi_secure.quarantine_unreadable('loot', str(path), text)
+                        return AzurStats.get_meowofficer_farming(instance=instance)
                     raise opsi_secure.StoreUnavailable('统计缓存暂不可用')
                 data = np.array(payload['rows'], dtype=float)
             else:

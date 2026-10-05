@@ -244,6 +244,9 @@ class _VaultKeys:
         self._slot = None
         self._dek = None
         self._legacy = None
+        # 最近一次尝试里出现过"暂时性"失败（凭据服务报错、描述文件读不出）：
+        # 这种环境下不能把解不开的旧载荷当作不可救，必须保留原样等重试。
+        self._blips = True
 
     def _keyring(self):
         try:
@@ -276,11 +279,16 @@ class _VaultKeys:
             return
         self._tried = True
         self._next_retry = now + DECODER_RETRY_INTERVAL
+        self._blips = False
         ring = self._keyring()
+        if ring is None and (self.directory / 'keyring.json').exists():
+            self._blips = True
         slot = installation_slot(self.root)
         self._slot = slot
         if isinstance(ring, dict) and ring.get('version') == 1:
             self._legacy = self._legacy_key(ring)
+            if self._legacy is None:
+                self._blips = True
         provider = provider_for_descriptor(ring.get('provider') if ring else None, self.directory)
         if provider is None:
             if ring is not None:
@@ -293,11 +301,13 @@ class _VaultKeys:
                 state = provider.load(slot)
             except ProviderUnavailable:
                 state = None
+                self._blips = True
             if state is None and isinstance(ring, dict) and ring.get('installation_id'):
                 try:
                     state = provider.load_any(slot, ring['installation_id'])
                 except ProviderUnavailable:
                     state = None
+                    self._blips = True
                 if state is not None:
                     logger.warning('[统计-解密] 当前安装槽没有本机凭据，已按安装标识找回（安装目录可能被移动过）')
             if state is None and not isinstance(provider, ContainerFileProvider):
@@ -307,6 +317,7 @@ class _VaultKeys:
                     state = container.load(slot)
                 except ProviderUnavailable:
                     state = None
+                    self._blips = True
                 if state is not None:
                     self._provider = container
             if state is not None:
@@ -315,11 +326,14 @@ class _VaultKeys:
                     self._dek = provider.key(state)
                 except (ProviderUnavailable, ValueError, KeyError, TypeError):
                     self._dek = None
+                    self._blips = True
                 if self._dek is None and self._provider is not provider:
                     try:
                         self._dek = self._provider.key(state)
                     except (ProviderUnavailable, ValueError, KeyError, TypeError):
                         self._dek = None
+            if self._dek is not None:
+                self._blips = False
         if self._dek is None and self._legacy is None and (ring is not None or self._state is not None):
             logger.warning('[统计-解密] 本机密钥暂不可用，旧密文保持原样，稍后自动重试')
 
@@ -332,6 +346,15 @@ class _VaultKeys:
     def available(self):
         self._ensure()
         return self._dek is not None or self._legacy is not None
+
+    def definitive(self):
+        """密钥已可用，或已确认本机不存在能解密的旧密钥（干净的未命中）。
+
+        凭据服务报错的"暂时不可用"返回 False：调用方应保留原样等重试，
+        不能把还救得回的旧载荷替换掉。
+        """
+        self._ensure()
+        return self._dek is not None or self._legacy is not None or not self._blips
 
     def decrypt_record(self, kind, value, context):
         """旧密文 → 载荷字典；当前不可读时返回 None。"""
@@ -442,6 +465,25 @@ def write_file(kind, path, data):
     """原子写出统计文件：字典写 JSON 文本，字符串原样写。"""
     raw = canonical(data) if isinstance(data, (dict, list)) else str(data).encode('utf-8')
     durable_write(path, raw)
+
+
+def quarantine_unreadable(kind, identity, value):
+    """把无法读取的旧载荷另存到旁路备份文件（原样保留，绝不销毁）；返回存放路径。
+
+    仅在本机确认解不开（密钥可用但记录解不开，或干净的凭据未命中）时调用；
+    调用方之后按现状继续写入，避免单条旧数据永久冻结整个统计。
+    """
+    directory = get_store().directory
+    directory.mkdir(parents=True, exist_ok=True)
+    if isinstance(value, bytes):
+        payload, encoding = base64.b64encode(value).decode('ascii'), 'base64'
+    else:
+        payload, encoding = value, 'text'
+    target = directory / f'unreadable-{time.strftime("%Y%m%d-%H%M%S")}-{os.urandom(3).hex()}.json'
+    durable_write(target, canonical({'kind': kind, 'identity': str(identity), 'encoding': encoding,
+                                     'at': time.strftime('%Y-%m-%d %H:%M:%S'), 'payload': payload}))
+    logger.warning(f'[统计-解密] 旧数据无法在本机解密，已另存备份并按现状继续写入: {identity} -> {target}')
+    return target
 
 
 # ---- 旧密文的一次性解密 ----
