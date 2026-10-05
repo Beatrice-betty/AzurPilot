@@ -12,7 +12,7 @@ import sqlite3
 import threading
 import time
 import uuid
-from contextlib import closing, contextmanager
+from contextlib import closing, contextmanager, suppress
 from functools import wraps
 from pathlib import Path
 from cryptography.hazmat.primitives import hashes
@@ -238,6 +238,8 @@ class Vault:
         self._deep = _DeepCheck(self) if deep_check else None
         # 环境暂不可用提示的限频时间戳（高频读写路径不能逐次打日志）。
         self._unavailable_logged_at = 0.0
+        # 本次加载时状态还没有标记签名密钥（旧版本升级的第一程）：按旧语义宽容一次。
+        self._legacy_pending = False
         self.coordinator.external_lock = lambda: self._provider().lock(self.slot)
 
     def _provider(self):
@@ -323,6 +325,18 @@ class Vault:
             if ring != expected and not self._adopt_descriptor(ring, expected):
                 raise IntegrityFailure('统计描述文件与本机状态不匹配')
             self._active = True
+            # 写入标记签名密钥：缺失或损坏时重新签发并立即落盘（此后标记载荷不可伪造）。
+            self._legacy_pending = True
+            with suppress(ValueError, TypeError):
+                if len(base64.b64decode(self._state.get('pending_key') or '', validate=True)) == 32:
+                    self._legacy_pending = False
+            if self._legacy_pending:
+                self._state['pending_key'] = base64.b64encode(os.urandom(32)).decode('ascii')
+                self._state.setdefault('pending_nonce', 0)
+                try:
+                    self._provider().save(self.slot, self._state)
+                except (ProviderUnavailable, OSError) as exc:
+                    logger.warning(f'[统计-加密] 写入标记密钥未能写入安全服务: {exc}')
             self._resolve_pending()
             return True
         if ring and ring['version'] >= 2:
@@ -484,42 +498,103 @@ class Vault:
     def _pending_path(self):
         return self.directory / 'pending.json'
 
-    def _pending_keys(self):
+    def _pending_document(self):
         try:
             data = json.loads(self._pending_path().read_bytes())
-            return set(str(key) for key in data.get('paths', []))
+            return data if isinstance(data, dict) else None
         except FileNotFoundError:
-            return set()
+            return None
         except (ValueError, TypeError, AttributeError):
             logger.warning('[统计-加密] 写入标记文件不可读，按无标记处理')
-            return set()
+            return None
 
-    def _write_pending(self, keys):
-        durable_write(self._pending_path(),
-                      canonical({'paths': sorted(keys), 'at': time.strftime('%Y-%m-%d %H:%M:%S')}))
+    def _pending_keys(self):
+        data = self._pending_document()
+        return set(str(key) for key in data.get('paths', [])) if data else set()
+
+    def _pending_signature(self, paths, nonce):
+        message = canonical({'paths': sorted(str(path) for path in paths), 'nonce': int(nonce)})
+        return hmac.new(base64.b64decode(self._state['pending_key']), message, hashlib.sha256).hexdigest()
+
+    def _write_pending(self, keys, nonce=None, signature=None):
+        payload = {'paths': sorted(keys), 'at': time.strftime('%Y-%m-%d %H:%M:%S')}
+        if nonce is not None and signature is not None:
+            payload.update({'nonce': int(nonce), 'mac': signature})
+        durable_write(self._pending_path(), canonical(payload))
+
+    def _authenticated_pending(self, key):
+        """写入窗口是否可信：文件须带本机签发的签名与更新的序号。
+
+        只凭明文文件存在就按崩溃窗口宽恕，等于把「伪造一个文件」变成合法重记
+        入口。签名密钥只存于安全服务；序号防止重放旧标记。旧版本状态还没有
+        签名密钥时按旧语义宽容一次（本次进程），加载时即签发密钥并落盘。
+        """
+        data = self._pending_document()
+        if data is None or self._state is None:
+            return False
+        paths = set(str(path) for path in data.get('paths', []))
+        if key not in paths:
+            return False
+        if not self._state.get('pending_key'):
+            return bool(self._legacy_pending)
+        mac, nonce = data.get('mac'), data.get('nonce')
+        if not isinstance(mac, str) or type(nonce) is not int:
+            return False
+        try:
+            expected = self._pending_signature(paths, nonce)
+        except (ValueError, TypeError, KeyError):
+            return False
+        return hmac.compare_digest(mac, expected) and nonce > int(self._state.get('pending_nonce', 0))
 
     def _mark_pending(self, key):
+        """登记写入意图：文件带签名与递增序号；序号随收尾保存持久化。"""
         keys = self._pending_keys()
         if key in keys:
-            return
+            data = self._pending_document()
+            if isinstance(data, dict) and data.get('mac'):
+                return
         keys.add(key)
+        nonce = signature = None
+        if self._state and self._state.get('pending_key'):
+            nonce = int(self._state.get('pending_nonce', 0)) + 1
+            signature = self._pending_signature(keys, nonce)
         try:
-            self._write_pending(keys)
+            self._write_pending(keys, nonce, signature)
         except OSError as exc:
             raise VaultLocked('统计写入意图未能落盘，本次写入已中止') from exc
+        if nonce is not None:
+            self._state['pending_nonce'] = nonce
 
     def _clear_pending(self, key):
+        """撤销写入意图；剩余标记重新签发，序号随之推进。"""
         keys = self._pending_keys()
         if key not in keys:
             return
         keys.discard(key)
         try:
-            if keys:
+            if keys and self._state and self._state.get('pending_key'):
+                nonce = int(self._state.get('pending_nonce', 0)) + 1
+                self._write_pending(keys, nonce, self._pending_signature(keys, nonce))
+                self._state['pending_nonce'] = nonce
+            elif keys:
                 self._write_pending(keys)
             else:
                 self._pending_path().unlink(missing_ok=True)
         except OSError as exc:
             logger.warning(f'[统计-加密] 清理写入标记失败: {exc}')
+
+    def _close_windows(self, keys):
+        """收尾写入窗口：保存期望值（连同已推进的标记序号）后清掉文件标记。
+
+        序号必须随新期望值在同一次保存里落盘，过期序号会拒绝旧标记，所以
+        保存失败时保留文件标记，留给下次核对按崩溃恢复处理。
+        """
+        if not self._save_expectations():
+            logger.warning('[统计-加密] 期望值未能写入安全服务，保留写入标记待下次核对')
+            return False
+        for key in keys:
+            self._clear_pending(key)
+        return True
 
     def _save_expectations(self):
         """把期望值写入安全服务；返回是否成功（失败保留写入标记待下次核对）。"""
@@ -668,7 +743,21 @@ class Vault:
         return True
 
     def _rebuild_database_chain(self, conn, key):
-        """按现状重记链值与基线（显式重记）；不清空。"""
+        """按现状重记链值与基线（升级/结构变化/显式重记），不清空。
+
+        重记是内容防线最容易被绕过的地方，两条纪律：重记前若已有内容累计摘要
+        （acc），先按现行内容重算比对——内容被改过（acc 脱节）即判篡改并清空；
+        重记后把 d/q/acc 锚点原样保留——整体丢弃锚点会让此前的任何内容篡改
+        被"以现状重记"永久洗白。
+        """
+        old = self._expected().get(key)
+        old = dict(old) if isinstance(old, dict) else {}
+        old_acc = old.get('acc')
+        if isinstance(old_acc, str):
+            acc_now = self._recompute_acc(str(self.root / key), self._chain_key())
+            if acc_now != old_acc:
+                self._tamper(key, '结构变化重记时内容累计摘要不一致（疑似内容被改）',
+                             expected={'acc': old_acc}, actual={'acc': acc_now})
         self._mark_pending(key)
         try:
             row = self._read_chain(conn)
@@ -682,7 +771,9 @@ class Vault:
             counts = self._reset_counters(conn)
             fingerprint = self._schema_fingerprint(conn)
             chain = self._write_chain(conn, seq, counts, fingerprint)
-        self._expected()[key] = {'s': seq, 'c': chain}
+        entry = {k: old[k] for k in ('d', 'q', 'acc') if k in old}
+        entry.update({'s': seq, 'c': chain})
+        self._expected()[key] = entry
         return True
 
     def _bump_database_chain(self, conn, key):
@@ -708,7 +799,7 @@ class Vault:
         if not path.exists():
             if entry is None:
                 return False
-            if key in self._pending_keys():
+            if self._authenticated_pending(key):
                 expect.pop(key, None)
                 return True
             self._tamper(key, '受保护数据库缺失')
@@ -743,7 +834,7 @@ class Vault:
                     return self._rebuild_database_chain(conn, key)
                 return True
             if row['seq'] != entry['s'] or row['chain'] != entry['c']:
-                if key in self._pending_keys():
+                if self._authenticated_pending(key):
                     logger.warning(f'[统计-加密] 发现未完成的写入窗口，按崩溃恢复重记基线: {key}')
                     merged = {k: v for k, v in entry.items() if k not in ('s', 'c', 'acc')}
                     merged.update({'s': row['seq'], 'c': row['chain']})
@@ -773,7 +864,7 @@ class Vault:
         if not path.exists():
             if entry is None:
                 return False
-            if key in self._pending_keys():
+            if self._authenticated_pending(key):
                 expect.pop(key, None)
                 return True
             self._tamper(key, '受保护统计文件缺失')
@@ -782,7 +873,7 @@ class Vault:
             expect[key] = {'d': digest}
             return True
         if entry['d'] != digest:
-            if key in self._pending_keys():
+            if self._authenticated_pending(key):
                 logger.warning(f'[统计-加密] 发现未完成的写入窗口，按崩溃恢复重记文件基线: {key}')
                 expect[key] = {'d': digest}
                 return True
@@ -795,10 +886,9 @@ class Vault:
     def _expect_deletions(self, seen):
         """基线中存在、当前路径集合里没有、且无豁免 → 清空。"""
         changed = False
-        pending = self._pending_keys()
         for key in sorted(set(self._expected()) - seen):
             path = self.root / key
-            if self.coordinator.is_archive(path) or key in pending:
+            if self.coordinator.is_archive(path) or self._authenticated_pending(key):
                 self._expected().pop(key, None)
                 changed = True
                 continue
@@ -836,9 +926,8 @@ class Vault:
             if not self._active:
                 return changed
         changed = self._expect_deletions(seen) or changed
-        if changed and self._save_expectations():
-            for key in touched:
-                self._clear_pending(key)
+        if changed:
+            self._close_windows(touched)
         return changed
 
     def _startup_check(self):
@@ -866,7 +955,11 @@ class Vault:
             self._deep.kick()
 
     def revouch(self, path):
-        """按现状重记单条受保护路径的基线（豁免路径与测试使用；不触发清空）。"""
+        """按现状重记单条受保护路径的基线（仅供诊断/测试；不触发清空）。
+
+        重记仍受内容累计摘要约束：内容被改过的路径会按篡改处理而不是被接受，
+        因此这里不是可用于放行任意改动的通用入口。
+        """
         path = Path(path).resolve()
         with self.coordinator.lock():
             if not self.ensure_ready():
@@ -888,8 +981,7 @@ class Vault:
                     entry = dict(entry) if isinstance(entry, dict) else {}
                     entry['d'] = hashlib.sha256(path.read_bytes()).hexdigest()[:SIG_LEN]
                     self._expected()[key] = entry
-            if self._save_expectations():
-                self._clear_pending(key)
+            self._close_windows({key})
 
     def deep_check_once(self):
         """同步执行一轮深检查（测试/诊断入口；生产路径一律走后台线程）。"""
@@ -1050,6 +1142,8 @@ class Vault:
             rebuilt = self._verify_database(resolved, key)
             if rebuilt and not self._save_expectations():
                 logger.warning('[统计-加密] 重记基线未能写入安全服务，写入标记保留待下次核对')
+            snapshot = self._expected().get(key)
+            snapshot = dict(snapshot) if isinstance(snapshot, dict) else None
             self._mark_pending(key)
             conn.execute('BEGIN IMMEDIATE')
             # 日志只保留本事务的行变更；库外写入留下的记录由此丢弃，其内容由深检查重算比对负责。
@@ -1066,14 +1160,16 @@ class Vault:
             except BaseException:
                 conn.rollback()
                 self._in_transaction = outer
+                # 回滚后期望值回到提交前，避免内存里的已推进链值在下次核对被当成篡改。
+                if snapshot is None:
+                    self._expected().pop(key, None)
+                else:
+                    self._expected()[key] = snapshot
                 if not rebuilt:
-                    self._clear_pending(key)
+                    self._close_windows({key})
                 raise
             self._in_transaction = outer
-            if self._save_expectations():
-                self._clear_pending(key)
-            else:
-                logger.warning('[统计-加密] 期望值未能写入安全服务，保留写入标记待下次核对')
+            self._close_windows({key})
             if self._deep:
                 self._deep.note_write()
 
@@ -1109,23 +1205,15 @@ class Vault:
                 durable_write(resolved, raw)
                 return
             key = self._expect_key(resolved)
-            changed = self._verify_protected_file(resolved, key)
+            self._verify_protected_file(resolved, key)
             digest = hashlib.sha256(raw).hexdigest()[:SIG_LEN]
             entry = self._expected().get(key)
             entry = dict(entry) if isinstance(entry, dict) else {}
-            if entry.get('d') != digest:
-                changed = True
             entry['d'] = digest
             self._expected()[key] = entry
             self._mark_pending(key)
             durable_write(resolved, raw)
-            if changed:
-                if self._save_expectations():
-                    self._clear_pending(key)
-                else:
-                    logger.warning('[统计-加密] 期望值未能写入安全服务，保留写入标记待下次核对')
-            else:
-                self._clear_pending(key)
+            self._close_windows({key})
 
     def remove_files(self, paths):
         with self.coordinator.lock():
@@ -1140,18 +1228,10 @@ class Vault:
                 self._mark_pending(key)
             for path in paths:
                 path.unlink(missing_ok=True)
-            changed = False
             for key in keys:
-                if self._expected().pop(key, None) is not None:
-                    changed = True
-            if changed:
-                if self._save_expectations():
-                    for key in keys:
-                        self._clear_pending(key)
-                # 保存失败：保留标记，缺失 + 标记 → 下次核对按崩溃窗口丢弃记录
-            else:
-                for key in keys:
-                    self._clear_pending(key)
+                self._expected().pop(key, None)
+            # 无论期望值是否变化，标记与新期望一并收尾保存。
+            self._close_windows(set(keys))
 
     def _kick_migration(self):
         if not self._background_migration or self._migration_kicked:
@@ -1265,7 +1345,8 @@ class Vault:
             durable_write(self.keyring_path, canonical(self._descriptor()))
             if self.coordinator.snapshot() != new_root:
                 raise VaultLocked('迁移回读未通过')
-            ready = dict(self._state, phase='ready', root=new_root, generation=1)
+            ready = dict(self._state, phase='ready', root=new_root, generation=1,
+                         pending_key=base64.b64encode(os.urandom(32)).decode('ascii'), pending_nonce=0)
             ready.pop('journal', None)
             provider.save(self.slot, ready)
             self._state = ready

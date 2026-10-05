@@ -891,6 +891,109 @@ class OpsiSecureTestCase(unittest.TestCase):
         self.assertFalse(self.vault.wipe_path.exists())
         self.assertTrue(self.vault.ensure_ready())
 
+    def test_schema_change_must_not_launder_prior_content_tamper(self):
+        """T4a 回归：先改内容再加索引触发结构重记，重记必须发现内容摘要不符。"""
+        self.assertTrue(self.vault.ensure_ready())
+        self.vault.deep_check_once()
+        context = opsi_secure.row_context('cl1', {'instance': 'inst', 'month': '2026-09'})
+        with db(self.vault.cl1_db) as conn:
+            conn.execute('UPDATE cl1_data SET secure_json=?',
+                         (self.vault.seal('cl1', {'battle_count': 999999}, context),))
+            conn.execute('CREATE INDEX probe_idx ON cl1_data(instance)')
+        with self.assertRaises(opsi_secure.VaultLocked):
+            self.update_count(1)
+        self.assert_wipe_state()
+
+    def test_missing_delta_table_must_not_launder_prior_content_tamper(self):
+        """T4c 回归：DROP 内容日志表触发的重记同样不得洗白内容篡改。"""
+        self.assertTrue(self.vault.ensure_ready())
+        self.vault.deep_check_once()
+        context = opsi_secure.row_context('cl1', {'instance': 'inst', 'month': '2026-09'})
+        with db(self.vault.cl1_db) as conn:
+            conn.execute('UPDATE cl1_data SET secure_json=?',
+                         (self.vault.seal('cl1', {'battle_count': 999999}, context),))
+            conn.execute('DROP TABLE __opsi_content_delta')
+        with self.assertRaises(opsi_secure.VaultLocked):
+            self.update_count(1)
+        self.assert_wipe_state()
+
+    def test_forged_pending_marker_does_not_rebaseline(self):
+        """T4b 回归：伪造 pending.json + 链前进不得按崩溃恢复重记（需安全服务背书）。"""
+        self.assertTrue(self.vault.ensure_ready())
+        self.update_count(10)
+        key = str(self.vault.cl1_db.resolve().relative_to(self.root))
+        with db(self.vault.cl1_db) as conn:
+            row = conn.execute('SELECT seq, counts, fingerprint FROM __opsi_integrity').fetchone()
+            seq = row[0] + 1
+            chain = self.vault._chain_mac(seq, json.loads(row[1]), row[2])
+            conn.execute('UPDATE __opsi_integrity SET seq=?, chain=?', (seq, chain))
+        self.vault._write_pending({key})  # 伪造无认证的明文标记
+        with self.assertRaises(opsi_secure.VaultLocked):
+            self.update_count(11)
+        self.assert_wipe_state()
+
+    def test_forged_pending_signature_is_rejected(self):
+        """T4b 变体：带格式但签名伪造的标记同样无效。"""
+        self.assertTrue(self.vault.ensure_ready())
+        self.update_count(10)
+        key = str(self.vault.cl1_db.resolve().relative_to(self.root))
+        with db(self.vault.cl1_db) as conn:
+            row = conn.execute('SELECT seq, counts, fingerprint FROM __opsi_integrity').fetchone()
+            seq = row[0] + 1
+            chain = self.vault._chain_mac(seq, json.loads(row[1]), row[2])
+            conn.execute('UPDATE __opsi_integrity SET seq=?, chain=?', (seq, chain))
+        self.vault._write_pending({key}, nonce=99, signature='0' * 64)
+        with self.assertRaises(opsi_secure.VaultLocked):
+            self.update_count(11)
+        self.assert_wipe_state()
+
+    def test_replayed_pending_marker_is_rejected(self):
+        """T4b 变体：旧序号的合法签名标记（重放）不再被接受。"""
+        self.assertTrue(self.vault.ensure_ready())
+        self.update_count(10)
+        key = str(self.vault.cl1_db.resolve().relative_to(self.root))
+        with db(self.vault.cl1_db) as conn:
+            row = conn.execute('SELECT seq, counts, fingerprint FROM __opsi_integrity').fetchone()
+            seq = row[0] + 1
+            chain = self.vault._chain_mac(seq, json.loads(row[1]), row[2])
+            conn.execute('UPDATE __opsi_integrity SET seq=?, chain=?', (seq, chain))
+        keys = {key}
+        self.vault._write_pending(keys, 0, self.vault._pending_signature(keys, 0))  # 序号过旧
+        with self.assertRaises(opsi_secure.VaultLocked):
+            self.update_count(11)
+        self.assert_wipe_state()
+
+    def test_crash_window_marker_is_signed(self):
+        """真实崩溃窗口的标记带安全服务签发的签名与序号。"""
+        self.assertTrue(self.vault.ensure_ready())
+        with patch.object(self.vault, '_save_expectations', return_value=False):
+            self.update_count(500)
+        data = json.loads(self.vault._pending_path().read_bytes())
+        self.assertTrue(data.get('mac'))
+        self.assertGreaterEqual(data.get('nonce'), 1)
+        self.assertTrue(data.get('at'))
+        fresh = self.new_vault()
+        self.assertTrue(fresh.ensure_ready())
+        self.assertFalse(self.vault.wipe_path.exists())
+        self.assertEqual(self.read_cl1(fresh)['battle_count'], 500)
+
+    def test_legit_structure_change_keeps_content_anchors(self):
+        """纯结构变化（内容未动）重记后必须保留内容锚点，深检查仍可对照。"""
+        self.assertTrue(self.vault.ensure_ready())
+        self.vault.deep_check_once()
+        key = str(self.vault.cl1_db.resolve().relative_to(self.root))
+        armed = self.vault._state['expect'][key].get('acc')
+        self.assertTrue(armed)
+        with db(self.vault.cl1_db) as conn:
+            conn.execute('CREATE INDEX probe_idx ON cl1_data(instance)')
+        self.vault.verify_on_page_open()
+        self.assertFalse(self.vault.wipe_path.exists())
+        self.assertEqual(self.vault._state['expect'][key].get('acc'), armed)
+        self.vault.deep_check_once()
+        self.assertFalse(self.vault.wipe_path.exists())
+        self.update_count(7)
+        self.assertEqual(self.read_cl1()['battle_count'], 7)
+
 
 
 
