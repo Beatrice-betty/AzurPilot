@@ -2362,11 +2362,12 @@
                 "instances",
                 "overview",
                 "logs",
-                "preview"
+                "preview",
+                "stock"
               ],
               "type": "string"
             },
-            "maxItems": 4,
+            "maxItems": 5,
             "title": "Topics",
             "type": "array"
           }
