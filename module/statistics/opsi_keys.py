@@ -47,6 +47,11 @@ class KeyProvider:
         from module.statistics.opsi_secure import _decrypt, _subkey
         return _decrypt(_subkey(self.key(state), info), token, aad)
 
+    def chain_key(self, slot, state):
+        """完整性链的独立子密钥；从根密钥派生，与记录加密子密钥分离。"""
+        from module.statistics.opsi_secure import _subkey
+        return _subkey(self.key(state), 'opsi-stats/v2/integrity-chain')
+
 
 class DeviceRootProvider(KeyProvider):
     device_class = ''
@@ -344,7 +349,8 @@ class LinuxTPMProvider(LinuxProvider):
     def _run(*args, data=None):
         try:
             command = [args[0], '-T', 'device:/dev/tpmrm0', *args[1:]]
-            return subprocess.run(command, input=data, check=True, capture_output=True, timeout=15).stdout
+            # fTPM 建 RSA-2048 primary 实测约 10s，new_key/key 各建一次，留足余量。
+            return subprocess.run(command, input=data, check=True, capture_output=True, timeout=60).stdout
         except (OSError, subprocess.SubprocessError) as exc:
             raise ProviderUnavailable('本机设备服务暂不可用') from exc
 
@@ -359,7 +365,8 @@ class LinuxTPMProvider(LinuxProvider):
             parent, public, private = [str(Path(folder) / name) for name in ('parent', 'public', 'private')]
             self._run('tpm2_createprimary', '-Q', '-C', 'o', '-G', 'rsa', '-c', parent)
             raw = os.urandom(32)
-            self._run('tpm2_create', '-Q', '-C', parent, '-G', 'keyedhash', '-i', '-',
+            # 封存数据（-i）时 tpm2-tools 禁止 -G：只允许 keyedhash + null scheme。
+            self._run('tpm2_create', '-Q', '-C', parent, '-i', '-',
                       '-a', 'fixedtpm|fixedparent|userwithauth|noda', '-u', public, '-r', private, data=raw)
             wrapped = [base64.b64encode(Path(p).read_bytes()).decode() for p in (public, private)]
             token = 'TPM2:' + base64.b64encode(json.dumps(wrapped).encode()).decode()
@@ -396,14 +403,74 @@ class LinuxTPMProvider(LinuxProvider):
         super().delete(slot)
 
 
+class ContainerFileProvider(KeyProvider):
+    """容器内未配置宿主统计服务时的本地文件凭据（自动兜底，免配置）。
+
+    Root 与运行状态存于本安装的 config/opsi_secure/state.json：数据目录被
+    整体拷走即可解密，属于"防君子不防小人"级别；能配置宿主 Broker 的部署
+    应优先用宿主保管（设置 ALAS_STATISTICS_BROKER）。状态不做 slot 隔离：
+    文件与数据同目录、同搬同走，安装路径变化后应继续可用。
+    """
+
+    name = 'container-file'
+
+    def __init__(self, state_path=None):
+        self.state_path = Path(state_path) if state_path else (
+            Path(__file__).resolve().parents[2] / 'config' / 'opsi_secure' / 'state.json')
+
+    def load(self, slot):
+        try:
+            payload = json.loads(self.state_path.read_bytes())
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError) as exc:
+            raise ProviderUnavailable('统计本地凭据不可用') from exc
+        if not isinstance(payload, dict) or not isinstance(payload.get('state'), dict):
+            raise ProviderUnavailable('统计本地凭据不可用')
+        return payload['state']
+
+    def save(self, slot, state):
+        try:
+            self.state_path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = self.state_path.with_name(self.state_path.name + '.tmp')
+            temporary.write_bytes(json.dumps({'slot': slot, 'state': state},
+                                             separators=(',', ':')).encode())
+            os.replace(temporary, self.state_path)
+            os.chmod(self.state_path, 0o600)
+        except OSError as exc:
+            raise ProviderUnavailable('统计本地凭据不可用') from exc
+
+    def delete(self, slot):
+        try:
+            self.state_path.unlink(missing_ok=True)
+        except OSError as exc:
+            raise ProviderUnavailable('统计本地凭据不可用') from exc
+
+
 def in_container():
     return Path('/.dockerenv').exists() or Path('/run/.containerenv').exists() or bool(os.getenv('container'))
 
 
+_local_fallback_logged = False
+
+
 def get_provider():
-    if in_container() or os.getenv('ALAS_STATISTICS_BROKER'):
+    if os.getenv('ALAS_STATISTICS_BROKER'):
         from module.statistics.opsi_broker import BrokerProvider
         return BrokerProvider.from_environment()
+    if in_container():
+        # 容器里没配宿主统计服务时自动兜底为容器本地文件密钥，保证统计能存、
+        # 免手动配置；显式配置了 Broker 但凭据不全时仍失败（不允许静默降级）。
+        global _local_fallback_logged
+        if not _local_fallback_logged:
+            _local_fallback_logged = True
+            try:
+                from module.logger import logger
+                logger.warning('[统计-加密] 容器未配置宿主统计服务，已启用容器本地文件密钥'
+                               '（config/opsi_secure/state.json；拷走数据目录即可解密）')
+            except Exception:
+                pass
+        return ContainerFileProvider()
     if sys.platform == 'win32':
         return WindowsProvider()
     if sys.platform == 'darwin':
