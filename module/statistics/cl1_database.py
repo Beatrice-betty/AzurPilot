@@ -354,14 +354,24 @@ class Cl1Database:
                 row = cursor.fetchone()
                 if row:
                     data = self._deserialize_data(row[0])
-                    if data is None and row[1] and isinstance(data := self._decrypt(row[1]), dict):
+                    decoded = False
+                    if data is None and row[1]:
+                        data = self._decrypt(row[1])
+                        decoded = isinstance(data, dict)
+                    if decoded:
                         try:
                             with self._stats_transaction() as write_conn:
-                                data = self._get_stats_in_connection(write_conn, instance, month)
-                                self._save_stats_in_connection(write_conn, instance, month, data)
+                                merged = self._get_stats_in_connection(write_conn, instance, month)
+                                self._save_stats_in_connection(write_conn, instance, month, merged)
+                                data = merged
                         except Exception:
                             # 迁移只是读取时的可选维护，保存失败仍返回已经读取还原的数据。
                             logger.warning(f"[Statistics] 旧数据迁移未落盘: {instance} {month}")
+                            if row[2]:
+                                data = self._merge_secure_part(data, row[2], month, instance)
+                        # 展示路径不需要保留降级标记。
+                        data.pop(opsi_secure.MISSING_MARKER, None)
+                        return data
                     if isinstance(data, dict):
                         data = self._merge_secure_part(data, row[2], month, instance)
                         # 展示路径不需要保留降级标记。
@@ -757,6 +767,9 @@ class Cl1Database:
         data = self._deserialize_data(row[0])
         if data is None and row[1]:
             data = self._decrypt(row[1])
+            if isinstance(data, dict) and not row[2]:
+                # 旧记录在读取侧解出（迁移未覆盖到的行）：完整内容即此数据，直接采用。
+                return data
         if not isinstance(data, dict):
             raise ValueError(f"统计数据无法解码: {instance} {month}")
         return self._merge_secure_part(data, row[2], month, instance)

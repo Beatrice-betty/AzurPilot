@@ -236,6 +236,8 @@ class Vault:
         self._wipe_thread = None
         # 后台深检查（全量摘要）；测试与工具可传 False 关闭线程。
         self._deep = _DeepCheck(self) if deep_check else None
+        # 环境暂不可用提示的限频时间戳（高频读写路径不能逐次打日志）。
+        self._unavailable_logged_at = 0.0
         self.coordinator.external_lock = lambda: self._provider().lock(self.slot)
 
     def _provider(self):
@@ -317,7 +319,8 @@ class Vault:
                     self._legacy = self._legacy_key(ring)
                 return False
             self._active = self._state.get('phase') == 'ready'
-            if ring != self._descriptor():
+            expected = self._descriptor()
+            if ring != expected and not self._adopt_descriptor(ring, expected):
                 raise IntegrityFailure('统计描述文件与本机状态不匹配')
             self._active = True
             self._resolve_pending()
@@ -332,6 +335,25 @@ class Vault:
         return {'version': 2, 'algorithm': ALGORITHM, 'installation_id': self._state['installation_id'],
                 'provider': self._provider().name}
 
+    def _adopt_descriptor(self, ring, expected):
+        """描述文件缺失、或仅凭据提供方式变化时，按本机状态修复；其余不一致返回 False。
+
+        提供方式变化（如平台设备可用性切换导致同一平台的实现变体不同）不涉及
+        密钥材料，按现状更新即可；安装标识等不一致仍按描述文件被替换处理。
+        """
+        if ring is None:
+            logger.warning('[统计-加密] 统计描述文件缺失，已按本机状态重建')
+        elif (isinstance(ring, dict) and isinstance(ring.get('provider'), str)
+              and ring.get('provider') != expected['provider']
+              and ring.get('version') == expected['version']
+              and ring.get('algorithm') == expected['algorithm']
+              and ring.get('installation_id') == expected['installation_id']):
+            logger.warning(f'[统计-加密] 统计凭据提供方式变化（{ring["provider"]} -> {expected["provider"]}），已更新统计描述文件')
+        else:
+            return False
+        durable_write(self.keyring_path, canonical(expected))
+        return True
+
     def ensure_ready(self):
         return self._refresh() is not False
 
@@ -339,7 +361,8 @@ class Vault:
         """解封安全服务并确认可用；同一协调锁持有期内只解封一次。
 
         进程内首次解封执行一次启动核对，并调度后台深检查；核对不阻塞
-        常规读写。
+        常规读写。环境暂不可用时屏蔽异常并限频提示：统计暂停记录，
+        环境恢复后自动继续，不打断游戏任务。
         """
         try:
             with self.coordinator.lock():
@@ -354,12 +377,31 @@ class Vault:
                     self._startup_check()
                     self._fresh = self.coordinator.hold_token
                 return self._active
-        except IntegrityFailure:
+        except IntegrityFailure as exc:
             if self._active:
+                logger.warning('[统计-加密] 状态校验失败，统计运行环境已重置')
                 self._wipe('状态校验失败')
+            else:
+                self._note_unavailable(exc)
             return False
-        except (ProviderUnavailable, VaultLocked, OSError, sqlite3.Error, portalocker_error()):
+        except (ProviderUnavailable, VaultLocked, OSError, sqlite3.Error, portalocker_error()) as exc:
+            self._note_unavailable(exc)
             return False
+        except Exception as exc:
+            # 可用性判断不允许把未知异常抛给调用方（写入方与启动钩子都依赖它）。
+            self._note_unavailable(exc, unexpected=True)
+            return False
+
+    def _note_unavailable(self, exc, unexpected=False):
+        """环境暂不可用的限频提示；同一实例最多每 5 分钟记录一次。"""
+        now = time.monotonic()
+        if now - self._unavailable_logged_at < 300:
+            return
+        self._unavailable_logged_at = now
+        if unexpected:
+            logger.exception(f'[统计-加密] 统计运行环境初始化异常（{type(exc).__name__}）')
+        else:
+            logger.warning(f'[统计-加密] 统计运行环境暂不可用（{type(exc).__name__}: {exc}），统计记录暂停，恢复后自动继续')
 
     writer_ready = ensure_ready
 
@@ -952,6 +994,15 @@ class Vault:
         except (ValueError, TypeError) as exc:
             raise VaultLocked('旧记录校验失败，保留原数据') from exc
 
+    def _open_legacy_or_none(self, kind, blob):
+        """迁移路径读取旧记录；读取环境或数据不可用时返回 None（由调用方按原样保留）。"""
+        if self._legacy is None and not hasattr(self._provider(), 'legacy_open'):
+            return None
+        try:
+            return self._open_legacy(kind, blob)
+        except VaultLocked:
+            return None
+
     def open_(self, kind, blob, context=None):
         with self.coordinator.lock():
             try:
@@ -1128,51 +1179,76 @@ class Vault:
         connections = {}
         readers = {}
         original, after, overrides = {}, {}, {}
+        # 内容不可读的历史项：按原样保留、不阻断迁移（否则旧数据里一条坏行会
+        # 让统计环境永远无法就绪，写入全部失败）。
+        skipped = []
         try:
             for path in self.coordinator.paths():
                 if not path.exists():
                     continue
-                reader = sqlite3.connect(path, timeout=5)
-                readers[path] = reader
-                reader.execute('BEGIN IMMEDIATE')
-                image = self._standalone_image(reader.serialize())
-                original[str(path.relative_to(self.root))] = _b64e(image)
-                conn = sqlite3.connect(':memory:')
-                connections[path] = conn
-                conn.deserialize(image)
-                conn.execute('PRAGMA secure_delete=ON')
-                self._convert_database(conn)
+                relative = str(path.relative_to(self.root))
+                reader = None
+                try:
+                    reader = sqlite3.connect(path, timeout=5)
+                    readers[path] = reader
+                    reader.execute('BEGIN IMMEDIATE')
+                    image = self._standalone_image(reader.serialize())
+                    conn = sqlite3.connect(':memory:')
+                    connections[path] = conn
+                    conn.deserialize(image)
+                    conn.execute('PRAGMA secure_delete=ON')
+                except sqlite3.Error as exc:
+                    # 单个库文件不可读：按原样保留，不阻塞其余数据的迁移。
+                    skipped.append(f'{path.name}（{type(exc).__name__}）')
+                    if reader is not None:
+                        readers.pop(path, None)
+                        reader.close()
+                    continue
+                self._convert_database(conn, skipped)
                 conn.commit()
-                after[str(path.relative_to(self.root))] = _b64e(conn.serialize())
+                original[relative] = _b64e(image)
+                after[relative] = _b64e(conn.serialize())
                 overrides[path] = conn
             for path in self.coordinator.files():
-                raw = path.read_bytes()
-                original[str(path.relative_to(self.root))] = _b64e(raw)
-                kind = 'archives' if self.coordinator.is_archive(path) or 'cl1_monthly' in path.name else ('ships' if '.json' in path.name else 'loot')
-                context = self.file_context(kind, path)
-                if self.coordinator.is_archive(path):
-                    data = {'bytes': _b64e(raw)}
-                    blob = self._seal(kind, data, context)
-                    self._check_roundtrip(kind, blob, data, context)
-                    updated = canonical({WRAPPER_KEY: True, 'payload': blob})
-                elif '.json' in path.name:
-                    data = json.loads(raw)
-                    if data.get(LEGACY_WRAPPER_KEY):
-                        data = self._open_legacy(kind, data['payload'])
-                    blob = self._seal(kind, data, context)
-                    self._check_roundtrip(kind, blob, data, context)
-                    updated = canonical({WRAPPER_KEY: True, 'payload': blob})
-                else:
-                    text = raw.decode('utf-8')
-                    if text.startswith(LEGACY_PREFIX):
-                        data = self._open_legacy('loot', text)
+                try:
+                    raw = path.read_bytes()
+                    relative = str(path.relative_to(self.root))
+                    kind = 'archives' if self.coordinator.is_archive(path) or 'cl1_monthly' in path.name else ('ships' if '.json' in path.name else 'loot')
+                    context = self.file_context(kind, path)
+                    if self.coordinator.is_archive(path):
+                        data = {'bytes': _b64e(raw)}
+                        blob = self._seal(kind, data, context)
+                        self._check_roundtrip(kind, blob, data, context)
+                        updated = canonical({WRAPPER_KEY: True, 'payload': blob})
+                    elif '.json' in path.name:
+                        data = json.loads(raw)
+                        if not isinstance(data, dict):
+                            raise ValueError('结构不可用')
+                        if data.get(LEGACY_WRAPPER_KEY):
+                            data = self._open_legacy_or_none(kind, data['payload'])
+                            if data is None:
+                                raise ValueError('旧记录不可读')
+                        blob = self._seal(kind, data, context)
+                        self._check_roundtrip(kind, blob, data, context)
+                        updated = canonical({WRAPPER_KEY: True, 'payload': blob})
                     else:
-                        rows = list(csv.reader(io.StringIO(text)))
-                        data = {'header': rows[0], 'rows': rows[1:]}
-                    blob = self._seal('loot', data, context)
-                    self._check_roundtrip('loot', blob, data, context)
-                    updated = blob.encode()
-                after[str(path.relative_to(self.root))] = _b64e(updated)
+                        text = raw.decode('utf-8')
+                        if text.startswith(LEGACY_PREFIX):
+                            data = self._open_legacy_or_none('loot', text)
+                            if data is None:
+                                raise ValueError('旧记录不可读')
+                        else:
+                            rows = list(csv.reader(io.StringIO(text)))
+                            data = {'header': rows[0], 'rows': rows[1:]}
+                        blob = self._seal('loot', data, context)
+                        self._check_roundtrip('loot', blob, data, context)
+                        updated = blob.encode()
+                except ValueError:
+                    # 单个文件内容不可读：按原样保留，不阻塞其余数据的迁移。
+                    skipped.append(path.name)
+                    continue
+                original[relative] = _b64e(raw)
+                after[relative] = _b64e(updated)
                 overrides[path] = updated
             new_root = self.coordinator.snapshot(overrides)
             journal = {'before': original, 'after': after, 'keyring': _b64e(before_ring) if before_ring else None,
@@ -1196,7 +1272,10 @@ class Vault:
             self._active = True
             self._legacy = None
             self.journal_path.unlink(missing_ok=True)
-            return {'skipped': False, 'cl1': len(original), 'files': len(after)}
+            if skipped:
+                preview = '、'.join(skipped[:5]) + ('、…' if len(skipped) > 5 else '')
+                logger.warning(f'[统计-加密] {len(skipped)} 项历史数据无法读取，已按原样保留: {preview}')
+            return {'skipped': False, 'cl1': len(original), 'files': len(after), 'quarantined': len(skipped)}
         except BaseException:
             for reader in readers.values():
                 reader.rollback()
@@ -1229,7 +1308,13 @@ class Vault:
         if decoded != data:
             raise VaultLocked('迁移回读未通过')
 
-    def _convert_database(self, conn):
+    def _convert_database(self, conn, skipped=None):
+        """把库内旧格式记录迁移到当前格式；单行不可读时按原样保留并记入 skipped。
+
+        不可读 = 旧快照解不开或旧密文校验失败；这类行此前会让整次迁移失败，
+        使统计环境永远无法就绪。保留原样使其余数据（含今后的新写入）不受影响。
+        """
+        skipped = skipped if skipped is not None else []
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         for table, column, kind, fields in [('cl1_data', 'secure_json', 'cl1', CL1_SECURE_FIELDS),
                                             ('opsi_items', 'secure_payload', 'loot', LOOT_SECURE_FIELDS),
@@ -1245,7 +1330,13 @@ class Vault:
             for values in conn.execute('SELECT * FROM ' + table).fetchall():
                 row = dict(zip(columns, values))
                 if kind == 'cl1':
-                    full = json.loads(row['data_json']) if row.get('data_json') else None
+                    label = f'cl1_data:{row.get("instance")}/{row.get("month")}'
+                    full = None
+                    if row.get('data_json'):
+                        try:
+                            full = json.loads(row['data_json'])
+                        except ValueError:
+                            full = None
                     if full is None and row.get('encrypted_blob'):
                         from module.statistics.cl1_legacy import derive_legacy_key, decrypt_legacy_payload
                         from module.base.device_id import get_device_id, get_old_device_id
@@ -1258,14 +1349,21 @@ class Vault:
                                 if full:
                                     break
                     if not isinstance(full, dict):
-                        raise VaultLocked('旧快照无法读取')
+                        skipped.append(label)
+                        continue
                     public, data = partition_cl1(full)
                 else:
+                    label = f'{table}:{row.get("id")}'
                     data = {f: row.get(f) for f in fields}
                 if row.get(column):
-                    if not row[column].startswith(LEGACY_PREFIX):
-                        raise VaultLocked('迁移源格式不支持')
-                    data.update(self._open_legacy(kind, row[column]))
+                    if not str(row[column]).startswith(LEGACY_PREFIX):
+                        skipped.append(label)
+                        continue
+                    payload = self._open_legacy_or_none(kind, row[column])
+                    if payload is None:
+                        skipped.append(label)
+                        continue
+                    data.update(payload)
                 context = row_context(kind, row)
                 blob = self._seal(kind, data, context)
                 self._check_roundtrip(kind, blob, data, context)

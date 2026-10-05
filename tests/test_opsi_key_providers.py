@@ -233,6 +233,17 @@ class ProviderTests(unittest.TestCase):
             with self.assertRaises(opsi_keys.ProviderUnavailable):
                 provider.new_key()
 
+    def test_linux_tpm_provider_serves_plain_credentials(self):
+        """设备可用性切换（如启用 fTPM）后既有环境只带普通凭据密钥：
+        按基类方式解出密钥，且不触达任何设备命令。"""
+        provider = opsi_keys.LinuxTPMProvider()
+        raw = os.urandom(32)
+        state = {'key': base64.b64encode(raw).decode()}
+        with patch.object(opsi_keys.LinuxTPMProvider, '_run', side_effect=AssertionError('不应触达设备命令')):
+            self.assertEqual(provider.key(state), raw)
+            with patch.object(opsi_keys.LinuxProvider, 'load', return_value=state):
+                self.assertEqual(provider.load('slot'), state)
+
 
 def certificates(folder):
     now = datetime.now(timezone.utc)

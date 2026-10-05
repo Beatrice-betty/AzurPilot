@@ -75,20 +75,30 @@ class StoreCoordinator:
         return [self.root / 'config' / name for name in ('cl1_data.db', 'azurstats_local.db', 'daily_summary.db')]
 
     def snapshot(self, overrides=None):
-        """计算当前全部分量的摘要根。"""
+        """计算当前全部分量的摘要根。
+
+        单个分量不可读（文件损坏、权限异常）时跳过该分量：坏库不应让其余
+        统计一起不可用，跳过对同一现状是确定的（恢复文件后摘要随之恢复）。
+        """
         overrides = overrides or {}
         result = {}
         for path in self.paths():
             if not path.exists() and path not in overrides:
                 continue
-            if path in overrides:
-                result.update(self.database(path, overrides[path]))
-            else:
-                with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=5)) as conn:
-                    result.update(self.database(path, conn))
+            try:
+                if path in overrides:
+                    result.update(self.database(path, overrides[path]))
+                else:
+                    with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=5)) as conn:
+                        result.update(self.database(path, conn))
+            except sqlite3.Error:
+                continue
         file_paths = set(self.files()) | {p for p in overrides if p not in self.paths()}
         for path in sorted(file_paths):
-            raw = overrides[path] if path in overrides else path.read_bytes()
+            try:
+                raw = overrides[path] if path in overrides else path.read_bytes()
+            except OSError:
+                continue
             if raw is not None:
                 result[str(path.relative_to(self.root))] = hashlib.sha256(raw).hexdigest()
         return digest(result)

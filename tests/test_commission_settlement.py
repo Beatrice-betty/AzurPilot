@@ -220,8 +220,9 @@ class TestCommissionSettlement(unittest.TestCase):
             conn.execute("INSERT INTO cl1_data (instance, month, data_json, encrypted_blob) "
                          "VALUES (?, ?, NULL, ?)", ("test", "2025-12", b"legacy"))
         decoded = {"battle_count": 12}
+        # 旧记录可在读取侧还原、但落盘维护失败时，返回已解出的数据而不是空快照。
         with patch.object(self.db, "_decrypt", return_value=decoded), \
-                patch.object(self.db, "save_stats", side_effect=sqlite3.OperationalError("readonly")):
+                patch.object(self.db, "_save_stats_in_connection", side_effect=sqlite3.OperationalError("readonly")):
             self.assertEqual(self.db.get_stats("test", "2025-12"), decoded)
 
 

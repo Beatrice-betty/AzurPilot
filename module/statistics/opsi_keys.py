@@ -356,7 +356,8 @@ class LinuxTPMProvider(LinuxProvider):
 
     def load(self, slot):
         state = super().load(slot)
-        if state and state.get('key'):
+        # 只有根密钥确实封存在 TPM 里才需要探测设备；否则沿用普通凭据读取。
+        if state and str(state.get('key', '')).startswith('TPM2:'):
             self._run('tpm2_getcap', 'properties-fixed')
         return state
 
@@ -379,6 +380,10 @@ class LinuxTPMProvider(LinuxProvider):
         cached = getattr(self, '_runtime_key', None)
         if cached and cached[0] == state['key']:
             return cached[1]
+        # 设备可用性变化（如启用/停用 fTPM）会让选择到本 Provider 的既有环境
+        # 只带普通凭据密钥：按基类方式解出即可，不当作设备对象处理。
+        if not str(state.get('key', '')).startswith('TPM2:'):
+            return super().key(state)
         with tempfile.TemporaryDirectory(prefix='azurpilot-device-') as folder:
             parent, public, private, loaded = [str(Path(folder) / name)
                                               for name in ('parent', 'public', 'private', 'loaded')]
