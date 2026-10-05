@@ -708,7 +708,15 @@ class Cl1Database:
     def _save_stats_in_connection(self, conn, instance, month, data):
         """在已协调的事务内保存单个月份；不可用时由事务完整回滚。"""
         if data.pop(opsi_secure.MISSING_MARKER, False):
-            raise opsi_secure.StoreUnavailable('统计快照暂不可用')
+            stored = conn.execute('SELECT secure_json FROM cl1_data WHERE instance = ? AND month = ?',
+                                  (instance, month)).fetchone()
+            stored = stored[0] if stored else None
+            if not (isinstance(stored, str) and stored
+                    and opsi_secure.get_store().vault_keys().definitive()):
+                # 密钥可能只是暂时不可用：保持原样等待重试，避免把还能救的旧载荷换掉。
+                raise opsi_secure.StoreUnavailable('统计快照暂不可用')
+            # 旧载荷确认无法在本机读取：另存到旁路备份后按现状继续写入（不冻结该月统计）。
+            opsi_secure.quarantine_unreadable('cl1_data', f'{instance}/{month}', stored)
         public, secure = opsi_secure.partition_cl1(data)
         payload = opsi_secure.serialize_obj(secure)
         conn.execute(
