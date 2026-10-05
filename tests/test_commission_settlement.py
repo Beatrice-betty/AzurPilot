@@ -12,7 +12,7 @@ from types import MethodType, SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch
 
 from module.statistics import cl1_database as database
-from tests.opsi_test_support import install_vault
+from tests.opsi_test_support import install_store
 
 
 NOW = datetime(2026, 1, 1, 12)
@@ -32,7 +32,7 @@ class TestCommissionSettlement(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(self.directory.cleanup)
-        install_vault(self, self.directory.name)
+        install_store(self, self.directory.name)
         with patch.object(database.Cl1Database, "_get_legacy_decryption_keys", return_value=[]):
             self.db = database.Cl1Database(Path(self.directory.name) / "config" / "cl1_data.db")
         fixed = patch.object(database, "datetime", FixedDatetime)
@@ -48,8 +48,7 @@ class TestCommissionSettlement(unittest.TestCase):
             return conn.execute("SELECT month, data_json, encrypted_blob FROM cl1_data ORDER BY month").fetchall()
 
     def fail_current_month(self):
-        self.assertTrue(database.opsi_secure.get_vault().writer_ready())
-        with closing(sqlite3.connect(self.db.db_path)) as conn, database.opsi_secure.get_vault().transaction(conn, self.db.db_path):
+        with closing(sqlite3.connect(self.db.db_path)) as conn, conn:
             conn.execute("""
                 CREATE TRIGGER reject_archive BEFORE INSERT ON cl1_data
                 WHEN NEW.month = '2026-01'
@@ -124,7 +123,7 @@ class TestCommissionSettlement(unittest.TestCase):
     def test_sqlite_commit_failure_rolls_back_and_propagates(self):
         self.seed("2025-12", [commission()])
         before = self.rows()
-        with closing(sqlite3.connect(self.db.db_path)) as conn, database.opsi_secure.get_vault().transaction(conn, self.db.db_path):
+        with closing(sqlite3.connect(self.db.db_path)) as conn, conn:
             conn.execute("CREATE TABLE guard_parent (id INTEGER PRIMARY KEY)")
             conn.execute("CREATE TABLE guard_child (parent_id INTEGER REFERENCES guard_parent(id) DEFERRABLE INITIALLY DEFERRED)")
             conn.execute("CREATE TRIGGER fail_commit BEFORE INSERT ON cl1_data WHEN NEW.month = '2026-01' BEGIN INSERT INTO guard_child VALUES (1); END")

@@ -1,4 +1,18 @@
-"""大世界统计的版本化存储运行服务。"""
+"""大世界统计的本地存储支持与旧加密数据的自动解密。
+
+统计载荷存在两代历史加密格式：V1（`OPSIV1.`，本机 DPAPI 密钥）与
+V2（`OPSIV2.XCHACHA20-POLY1305.`，本机凭据/设备封装密钥）。2026-10 起
+统计不再加密：载荷直接以明文 JSON 存放在既有列与文件位形里
+（cl1_data.secure_json、opsi_items.secure_payload、resource_snapshots.opsi_payload、
+daily_summary_cl1_events.secure_payload 存 JSON 文本，daily_summary_periods.report_text
+存正文文本，日志文件为普通 JSON/CSV）。
+
+本模块保留两类职责：
+1. 明文载荷的编解码、原子文件写出与统计写事务；
+2. 旧密文的兼容读取与一次性解密：启动时 initialize() 有界地尝试把全部密文
+   解密为明文，确认无残留后才移除描述文件并撤销本机密钥；密钥暂不可用时
+   按原样保留，读取路径与后续启动自动重试（可用性优先，绝不丢数据）。
+"""
 from __future__ import annotations
 import base64
 import csv
@@ -11,18 +25,16 @@ import re
 import sqlite3
 import threading
 import time
-import uuid
 from contextlib import closing, contextmanager
-from functools import wraps
 from pathlib import Path
+
+import portalocker
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from Crypto.Cipher import AES, ChaCha20_Poly1305
-from module.statistics.opsi_keys import ProviderUnavailable, get_provider, installation_slot
-from module.statistics.opsi_state import StoreCoordinator, canonical, durable_write
+from module.statistics.opsi_keys import (ContainerFileProvider, ProviderUnavailable, installation_slot,
+                                         provider_for_descriptor)
 from module.logger import logger
-
-KINDS = ('cl1', 'ships', 'loot', 'res', 'daily', 'reports', 'archives')
 
 CL1_SECURE_FIELDS = frozenset({
     'battle_count',
@@ -55,113 +67,39 @@ LEGACY_WRAPPER_KEY = '__opsi_secure_v1__'
 WRAPPER_KEY = '__opsi_secure_v2__'
 MISSING_MARKER = '__opsi_secure_missing__'
 
-MIGRATION_CHUNK = 5000
+# 加密时代的辅助对象（触发器与辅助表），解密迁移时连同触发器一并移除。
+AUX_PREFIX = '__opsi_'
+DATABASE_NAMES = ('cl1_data.db', 'azurstats_local.db', 'daily_summary.db')
+# 加密时代可能存放密文的位置：(库文件名, 表, 列, 载荷类别)。
+DATABASE_LAYOUT = (
+    ('cl1_data.db', 'cl1_data', 'secure_json', 'cl1'),
+    ('azurstats_local.db', 'opsi_items', 'secure_payload', 'loot'),
+    ('azurstats_local.db', 'resource_snapshots', 'opsi_payload', 'res'),
+    ('daily_summary.db', 'daily_summary_cl1_events', 'secure_payload', 'daily'),
+    ('daily_summary.db', 'daily_summary_periods', 'report_text', 'reports'),
+)
+# 加密时代收尾遗留的标记文件：数据解密完成后一并移除。
+RESIDUE_FILES = ('keyring.json', 'pending.json', 'wipe.json', 'integrity.json', 'transition.bin', 'state.json')
 
-CHAIN_TABLE = '__opsi_integrity'
-CHAIN_LEN = 32              # 链值截断长度
-SIG_LEN = 16                # 摘要截断长度（状态体积有限）
-VERIFY_TIMEOUT = 2          # 浅检查读库超时；繁忙只跳过本轮，不得据此清空
-DEEP_CHECK_MIN_INTERVAL = 120.0
-DEEP_CHECK_PERIODIC = 1800.0
-DEEP_CHECK_WRITE_CADENCE = 40
-PROTECTED_TABLES = ('cl1_data', 'opsi_items', 'resource_snapshots',
-                    'daily_summary_cl1_events', 'daily_summary_periods')
-COUNT_TABLE = '__opsi_integrity_counts'
-CHAIN_DDL = ('CREATE TABLE IF NOT EXISTS ' + CHAIN_TABLE + ' ('
-             'id INTEGER PRIMARY KEY CHECK (id = 1), seq INTEGER NOT NULL, '
-             'chain TEXT NOT NULL, counts TEXT NOT NULL, fingerprint TEXT NOT NULL)')
-COUNTS_DDL = ('CREATE TABLE IF NOT EXISTS ' + COUNT_TABLE + ' ('
-              'name TEXT PRIMARY KEY, rows INTEGER NOT NULL)')
-DELTA_TABLE = '__opsi_content_delta'
-DELTA_DDL = ('CREATE TABLE IF NOT EXISTS ' + DELTA_TABLE + ' ('
-             'id INTEGER PRIMARY KEY AUTOINCREMENT, tbl TEXT NOT NULL, op TEXT NOT NULL, '
-             'identity TEXT NOT NULL, old_content TEXT, new_content TEXT)')
-# 内容累计摘要（acc）覆盖的列：(身份列, 载荷列)。行长摘要 = HMAC(链子密钥, 表名|身份|载荷)。
-# 组合用 XOR：写入路径按变更折入（增 ^新、删 ^旧、改 ^旧^新），深检查按现行全量重算比对。
-CONTENT_COLUMNS = {
-    'cl1_data': (('instance', 'month'), ('secure_json',)),
-    'opsi_items': (('id',), ('secure_payload',)),
-    'resource_snapshots': (('id',), ('opsi_payload', 'action_point', 'yellow_coin', 'purple_coin')),
-    'daily_summary_cl1_events': (('id',), ('duration_seconds', 'estimated_exp', 'secure_payload')),
-    'daily_summary_periods': (('instance', 'period_key'), ('report_text',)),
-}
+MIGRATION_LOCK_TIMEOUT = 20.0
+DECODER_RETRY_INTERVAL = 60.0
 
 
-def _counter_triggers(table):
-    """行数计数器的增量触发器。
-
-    口径与核对一致：日报 periods 只计有正文的行，其余表全量计数。
-    UPDATE 不改行数，只有 NULL↔正文 的日报状态迁移例外。
-    """
-    name = '__opsi_count_' + table
-    adds = drops = '' if table != 'daily_summary_periods' else None
-    update = None
-    if table == 'daily_summary_periods':
-        adds = 'WHEN NEW.report_text IS NOT NULL '
-        drops = 'WHEN OLD.report_text IS NOT NULL '
-        update = (f'CREATE TRIGGER IF NOT EXISTS {name}_upd AFTER UPDATE OF report_text ON {table} '
-                  f'WHEN (OLD.report_text IS NULL) <> (NEW.report_text IS NULL) BEGIN '
-                  f'UPDATE {COUNT_TABLE} SET rows = rows + CASE WHEN NEW.report_text IS NULL THEN -1 ELSE 1 END '
-                  f"WHERE name = '{table}'; END")
-    return tuple(sql for sql in (
-        f'CREATE TRIGGER IF NOT EXISTS {name}_ins AFTER INSERT ON {table} {adds}BEGIN '
-        f"UPDATE {COUNT_TABLE} SET rows = rows + 1 WHERE name = '{table}'; END",
-        f'CREATE TRIGGER IF NOT EXISTS {name}_del AFTER DELETE ON {table} {drops}BEGIN '
-        f"UPDATE {COUNT_TABLE} SET rows = rows - 1 WHERE name = '{table}'; END",
-        update,
-    ) if sql)
+class StoreError(RuntimeError):
+    """统计存储错误基类。"""
 
 
-def _content_triggers(table, columns):
-    """内容变更日志触发器（供写入路径折算累计摘要；periods 沿用计数器口径）。
-
-    每条变更按 旧/新内容各记一行 JSON。表上写入必须走 INSERT/UPDATE/DELETE：
-    REPLACE 的冲突删除不触发 DELETE 触发器，勿对受保护表用 OR REPLACE 写业务数据。
-    """
-    identity, content = CONTENT_COLUMNS[table]
-    identity = [c for c in identity if c in columns]
-    content = [c for c in content if c in columns]
-    name = '__opsi_delta_' + table
-
-    def array(prefix, cols):
-        return 'json_array(' + ','.join(prefix + '"' + c + '"' for c in cols) + ')'
-
-    insert = 'INSERT INTO ' + DELTA_TABLE + ' (tbl,op,identity,old_content,new_content) VALUES '
-    when_new = 'WHEN NEW.report_text IS NOT NULL ' if table == 'daily_summary_periods' else ''
-    when_old = 'WHEN OLD.report_text IS NOT NULL ' if table == 'daily_summary_periods' else ''
-    return (
-        f'CREATE TRIGGER IF NOT EXISTS {name}_ins AFTER INSERT ON {table} {when_new}BEGIN '
-        f"{insert}('{table}','i',{array('NEW.', identity)},NULL,{array('NEW.', content)}); END",
-        f'CREATE TRIGGER IF NOT EXISTS {name}_del AFTER DELETE ON {table} {when_old}BEGIN '
-        f"{insert}('{table}','d',{array('OLD.', identity)},{array('OLD.', content)},NULL); END",
-        f'CREATE TRIGGER IF NOT EXISTS {name}_upd AFTER UPDATE ON {table} BEGIN '
-        f"{insert}('{table}','u',{array('NEW.', identity)},{array('OLD.', content)},{array('NEW.', content)}); END",
-    )
+class StoreUnavailable(StoreError):
+    """统计运行环境暂不可用（旧密文尚未解密、载荷不可读等）。"""
 
 
-class VaultError(RuntimeError):
-    pass
+def canonical(value):
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
 
 
-class VaultLocked(VaultError):
-    pass
-
-
-class IntegrityFailure(VaultError):
-    pass
-
-
-class RecordTampered(IntegrityFailure):
-    """记录级认证失败：密文无法通过本环境身份校验。"""
-
-
-def partition_cl1(data):
-    return ({k: v for k, v in data.items() if k not in CL1_SECURE_FIELDS},
-            {k: v for k, v in data.items() if k in CL1_SECURE_FIELDS})
-
-
-def _b64e(data):
-    return base64.b64encode(data).decode('ascii')
+def serialize_obj(obj):
+    """把统计载荷编码为存储文本（明文 JSON）。"""
+    return canonical(obj).decode('utf-8')
 
 
 def _b64d(text):
@@ -172,23 +110,24 @@ def _subkey(key, info):
     return HKDF(algorithm=hashes.SHA256(), length=32, salt=None, info=info.encode()).derive(key)
 
 
-def _encrypt(key, raw, aad):
-    cipher = ChaCha20_Poly1305.new(key=key, nonce=os.urandom(24))
-    cipher.update(canonical(aad))
-    data, tag = cipher.encrypt_and_digest(raw)
-    return _b64e(cipher.nonce + data + tag)
-
-
 def _decrypt(key, value, aad):
-    try:
-        raw = _b64d(value)
-        if len(raw) < 40:
-            raise ValueError()
-        cipher = ChaCha20_Poly1305.new(key=key, nonce=raw[:24])
-        cipher.update(canonical(aad))
-        return cipher.decrypt_and_verify(raw[24:-16], raw[-16:])
-    except (ValueError, TypeError) as exc:
-        raise RecordTampered('记录校验失败') from exc
+    """解密一条 V2 记录；失败抛出 ValueError（调用方按不可读处理）。"""
+    raw = _b64d(value)
+    if len(raw) < 40:
+        raise ValueError('记录长度不合法')
+    cipher = ChaCha20_Poly1305.new(key=key, nonce=raw[:24])
+    cipher.update(canonical(aad))
+    return cipher.decrypt_and_verify(raw[24:-16], raw[-16:])
+
+
+def is_ciphertext(value):
+    """值是否为旧加密载荷（V1/V2 前缀）。"""
+    return isinstance(value, str) and value.startswith((BLOB_PREFIX, LEGACY_PREFIX))
+
+
+def partition_cl1(data):
+    return ({k: v for k, v in data.items() if k not in CL1_SECURE_FIELDS},
+            {k: v for k, v in data.items() if k in CL1_SECURE_FIELDS})
 
 
 def row_context(kind, row):
@@ -203,1606 +142,684 @@ def row_context(kind, row):
             'imgid': row.get('imgid'), 'device': row.get('device_id'), 'genre': row.get('genre')}
 
 
-class Vault:
-    def __init__(self, root=None, protected_files=None, clock=time.time, background_migration=True,
-                 provider=None, deep_check=True):
-        self.root = Path(root).resolve() if root else Path(__file__).resolve().parents[2]
+def report_context(instance, period):
+    month = re.search(r'\d{4}-\d{2}', period)
+    return {'dataset': 'reports', 'instance': instance, 'identity': str(period), 'period': month[0] if month else period}
+
+
+def file_context(root, kind, path, instance=None):
+    path = Path(path).resolve()
+    relative = str(path.relative_to(Path(root).resolve())).replace('\\', '/')
+    # 缓存与舰船文件覆盖多个月，逻辑周期属于整个历史集合。
+    return {'dataset': kind, 'instance': instance if instance is not None else relative,
+            'identity': relative, 'period': 'all-history'}
+
+
+def durable_write(path, data):
+    """原子写出文件：同目录临时文件 + fsync + replace。"""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_name(path.name + '.' + os.urandom(12).hex() + '.stage')
+    try:
+        with open(temp, 'xb') as stream:
+            stream.write(data if isinstance(data, bytes) else data.encode('utf-8'))
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temp, path)
+        if os.name != 'nt':
+            descriptor = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+    finally:
+        temp.unlink(missing_ok=True)
+
+
+@contextmanager
+def immediate_transaction(conn):
+    """统计写事务：BEGIN IMMEDIATE 取写锁，跨线程与跨进程串行化读改写。"""
+    conn.execute('BEGIN IMMEDIATE')
+    try:
+        yield conn
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+
+
+def database_paths(root):
+    return [Path(root) / 'config' / name for name in DATABASE_NAMES]
+
+
+def protected_files(root):
+    """登记过的统计文件（舰船经验、月度 JSON 与 farming CSV 及其备份）。"""
+    root = Path(root)
+    files = set()
+    cl1 = root / 'log' / 'cl1'
+    for pattern in ('*/ship_exp_data.json', '*/ship_exp_data.json.bak',
+                    '*/cl1_monthly.json', '*/cl1_monthly.json.bak'):
+        files.update(cl1.glob(pattern))
+    for pattern in ('azurstat_meowofficer_farming*.csv', 'azurstat_meowofficer_farming*.csv.bak'):
+        files.update((root / 'log').glob(pattern))
+    return sorted(files)
+
+
+def _file_kind(path):
+    if 'cl1_monthly' in path.name:
+        return 'archives'
+    return 'ships' if '.json' in path.name else 'loot'
+
+
+def archive_files(root):
+    """备份目录里的受保护归档（加密时代为包装文件）。"""
+    base = Path(root) / 'AzurPilot_Data_Backup'
+    if not base.exists():
+        return []
+    result = []
+    for path in base.rglob('*'):
+        if not path.is_file():
+            continue
+        if path.name in DATABASE_NAMES or (path.parent.name == 'opsi_secure' and path.suffix == '.json'):
+            result.append(path)
+    return sorted(result)
+
+
+class _VaultKeys:
+    """旧加密环境的密钥材料（按需加载，进程内缓存）。
+
+    - V2：按描述文件恢复当时的凭据提供者并读取状态；本机按当前安装槽读不到时，
+      枚举同 installation_id 的状态找回（安装目录被移动或复制后的解密路径）。
+    - V1：描述文件自带 DPAPI 保护的本地密钥。
+    任一步失败都只记录一次并按间隔重试（进入系统后钥匙串或凭据服务可能才可用）。
+    """
+
+    def __init__(self, root):
+        self.root = Path(root).resolve()
         self.directory = self.root / 'config' / 'opsi_secure'
-        self.keyring_path = self.directory / 'keyring.json'
-        self.wipe_path = self.directory / 'wipe.json'
-        self.journal_path = self.directory / 'transition.bin'
-        self.cl1_db = self.root / 'config' / 'cl1_data.db'
-        self.azurstats_db = self.root / 'config' / 'azurstats_local.db'
-        self.coordinator = StoreCoordinator(self.root)
-        self.slot = installation_slot(self.root)
-        self.provider = provider
+        self._tried = False
+        self._next_retry = 0.0
+        self._provider = None
         self._state = None
+        self._slot = None
         self._dek = None
         self._legacy = None
-        self._active = False
-        self._read_warned = set()
-        self._dropped = {}
-        self._background_migration = background_migration
-        self._migration_kicked = False
-        self._in_transaction = False
-        # 已完成解封的协调锁持有令牌：同一持有期内不重复解封。
-        self._fresh = None
-        # 进程内是否已做过启动基线核对。
-        self._startup_checked = False
-        # 浅检查去重：同一协调锁持有期内不重复做全路径核对。
-        self._verified_hold = None
-        # 后台清空去重：只触发一次。
-        self._wipe_scheduled = False
-        self._wipe_thread = None
-        # 后台深检查（全量摘要）；测试与工具可传 False 关闭线程。
-        self._deep = _DeepCheck(self) if deep_check else None
-        # 环境暂不可用提示的限频时间戳（高频读写路径不能逐次打日志）。
-        self._unavailable_logged_at = 0.0
-        self.coordinator.external_lock = lambda: self._provider().lock(self.slot)
-
-    def _provider(self):
-        if self.provider is None:
-            self.provider = get_provider()
-        return self.provider
+        # 最近一次尝试里出现过"暂时性"失败（凭据服务报错、描述文件读不出）：
+        # 这种环境下不能把解不开的旧载荷当作不可救，必须保留原样等重试。
+        self._blips = True
 
     def _keyring(self):
         try:
-            value = json.loads(self.keyring_path.read_bytes())
-            if not isinstance(value, dict) or type(value.get('version')) is not int or value['version'] < 1:
-                raise ValueError()
-            return value
+            value = json.loads((self.directory / 'keyring.json').read_bytes())
         except FileNotFoundError:
             return None
-        except (ValueError, TypeError) as exc:
-            raise IntegrityFailure('统计描述文件无效') from exc
-
-    def keyring_present(self):
-        return self.keyring_path.exists()
-
-    def is_configured(self):
-        # 无可靠服务时仍禁止写入普通格式。
-        return True
-
-    def legacy_plaintext_readable(self):
-        return not self._active and (self._legacy is not None or bool(
-            self._state and self._state.get('phase') == 'preparing'))
-
-    def _dpapi(self, data, decrypt=False):
-        from module.runtime.account_local import dpapi
-        return dpapi(data, decrypt=decrypt)
+        except (OSError, ValueError, TypeError):
+            logger.warning('[统计-解密] 统计描述文件不可读，旧密文保持原样')
+            return None
+        return value if isinstance(value, dict) else None
 
     def _legacy_key(self, ring):
-        if hasattr(self._provider(), 'prepare_legacy'):
-            self._provider().prepare_legacy(self.slot, ring)
-            return b'@host'
+        """V1 描述文件里的 DPAPI 本地密钥（含完整性校验）。"""
         try:
-            key = self._dpapi(_b64d(ring['wrapped_local']), decrypt=True)
-        except Exception as exc:
-            raise VaultLocked('旧统计环境暂不可用') from exc
+            key = _dpapi(_b64d(ring['wrapped_local']), decrypt=True)
+        except Exception:
+            return None
         payload = {k: v for k, v in ring.items() if k != 'mac'}
         mac_key = _subkey(key, 'opsi-stats/v1/keyring-mac')
         mac = hmac.new(mac_key, canonical(payload), hashlib.sha256).hexdigest()
         if len(key) != 32 or not hmac.compare_digest(mac, str(ring.get('mac', ''))):
-            raise VaultLocked('旧统计描述文件校验失败，保留原数据')
+            return None
         return key
 
-    def _load(self):
-        self._active = False
-        self._legacy = None
-        self._dek = None
-        try:
-            self._state = self._provider().load(self.slot)
-        except ProviderUnavailable:
-            ring = self._keyring()
-            if ring and ring['version'] == 1:
-                self._legacy = self._legacy_key(ring)
-                return False
-            raise
-        self._active = bool(self._state and self._state.get('phase') == 'ready')
-        if self._state and self._state.get('schema', 2) > 2:
-            self._active = False
-            raise VaultLocked('当前软件不支持此统计版本')
-        if self._state and self._state.get('phase') != 'wiping' and self._state.get('algorithm') != ALGORITHM:
-            self._active = False
-            raise VaultLocked('当前软件不支持此统计算法')
-        ring = self._keyring()
-        if self._state:
-            if self._state.get('phase') == 'wiping':
-                self._finish_wipe()
-                raise VaultLocked('统计环境已重置')
-            self._dek = self._provider().key(self._state)
-            if self._state.get('phase') == 'migration':
-                self._recover_migration()
-                ring = self._keyring()
-            if self._state.get('phase') == 'preparing':
-                if ring and ring['version'] == 1:
-                    self._legacy = self._legacy_key(ring)
-                return False
-            self._active = self._state.get('phase') == 'ready'
-            expected = self._descriptor()
-            if ring != expected and not self._adopt_descriptor(ring, expected):
-                raise IntegrityFailure('统计描述文件与本机状态不匹配')
-            self._active = True
-            self._resolve_pending()
-            return True
-        if ring and ring['version'] >= 2:
-            raise VaultLocked('当前设备或账户没有统计环境')
-        if ring:
-            self._legacy = self._legacy_key(ring)
-        return False
-
-    def _descriptor(self):
-        return {'version': 2, 'algorithm': ALGORITHM, 'installation_id': self._state['installation_id'],
-                'provider': self._provider().name}
-
-    def _adopt_descriptor(self, ring, expected):
-        """描述文件缺失、或仅凭据提供方式变化时，按本机状态修复；其余不一致返回 False。
-
-        提供方式变化（如平台设备可用性切换导致同一平台的实现变体不同）不涉及
-        密钥材料，按现状更新即可；安装标识等不一致仍按描述文件被替换处理。
-        """
-        if ring is None:
-            logger.warning('[统计-加密] 统计描述文件缺失，已按本机状态重建')
-        elif (isinstance(ring, dict) and isinstance(ring.get('provider'), str)
-              and ring.get('provider') != expected['provider']
-              and ring.get('version') == expected['version']
-              and ring.get('algorithm') == expected['algorithm']
-              and ring.get('installation_id') == expected['installation_id']):
-            logger.warning(f'[统计-加密] 统计凭据提供方式变化（{ring["provider"]} -> {expected["provider"]}），已更新统计描述文件')
-        else:
-            return False
-        durable_write(self.keyring_path, canonical(expected))
-        return True
-
-    def ensure_ready(self):
-        return self._refresh() is not False
-
-    def _refresh(self):
-        """解封安全服务并确认可用；同一协调锁持有期内只解封一次。
-
-        进程内首次解封执行一次启动核对，并调度后台深检查；核对不阻塞
-        常规读写。环境暂不可用时屏蔽异常并限频提示：统计暂停记录，
-        环境恢复后自动继续，不打断游戏任务。
-        """
-        try:
-            with self.coordinator.lock():
-                if self._active and self._fresh == self.coordinator.hold_token:
-                    return True
-                if self._load():
-                    self._startup_check()
-                    self._fresh = self.coordinator.hold_token
-                    return True
-                self.ensure_migrated()
-                if self._active:
-                    self._startup_check()
-                    self._fresh = self.coordinator.hold_token
-                return self._active
-        except IntegrityFailure as exc:
-            if self._active:
-                logger.warning('[统计-加密] 状态校验失败，统计运行环境已重置')
-                self._wipe('状态校验失败')
-            else:
-                self._note_unavailable(exc)
-            return False
-        except (ProviderUnavailable, VaultLocked, OSError, sqlite3.Error, portalocker_error()) as exc:
-            self._note_unavailable(exc)
-            return False
-        except Exception as exc:
-            # 可用性判断不允许把未知异常抛给调用方（写入方与启动钩子都依赖它）。
-            self._note_unavailable(exc, unexpected=True)
-            return False
-
-    def _note_unavailable(self, exc, unexpected=False):
-        """环境暂不可用的限频提示；同一实例最多每 5 分钟记录一次。"""
+    def _ensure(self):
         now = time.monotonic()
-        if now - self._unavailable_logged_at < 300:
+        if self._dek is not None or self._legacy is not None:
             return
-        self._unavailable_logged_at = now
-        if unexpected:
-            logger.exception(f'[统计-加密] 统计运行环境初始化异常（{type(exc).__name__}）')
-        else:
-            logger.warning(f'[统计-加密] 统计运行环境暂不可用（{type(exc).__name__}: {exc}），统计记录暂停，恢复后自动继续')
-
-    writer_ready = ensure_ready
-
-    def ensure_integrity(self):
-        self.ensure_ready()
-
-    def status(self):
-        integrity = self.directory / 'integrity.json'
-        return {'configured': self._active or self.keyring_present(), 'keyringPresent': self.keyring_present(),
-                'lastWipe': json.loads(self.wipe_path.read_bytes()) if self.wipe_path.exists() else None,
-                'lastMismatch': json.loads(integrity.read_bytes()) if integrity.exists() else None,
-                'dropped': dict(self._dropped)}
-
-    def record_dropped(self, kind):
-        self._dropped[kind] = self._dropped.get(kind, 0) + 1
-
-    def _path_digest(self, path):
-        """受保护路径的内容摘要：数据库取逻辑映像，普通文件取原始字节。
-
-        数据库摘要用 serialize() 的映像计算：与 WAL/checkpoint 状态无关，
-        同一份内容在不同进程、不同时间得到同一摘要。
-        """
-        path = Path(path).resolve()
-        if not path.exists():
-            return None
-        if path in set(self.coordinator.paths()):
-            try:
-                with closing(sqlite3.connect(path, timeout=5)) as conn:
-                    return hashlib.sha256(conn.serialize()).hexdigest()
-            except sqlite3.Error:
-                return None
-        try:
-            return hashlib.sha256(path.read_bytes()).hexdigest()
-        except OSError:
-            return None
-
-    def _expected(self):
-        return self._state.setdefault('expect', {})
-
-    def _expect_key(self, path):
-        return str(Path(path).resolve().relative_to(self.root))
-
-    def _record_evidence(self, key, detail, expected=None, actual=None):
-        """把不一致证据落盘（integrity.json），失败不阻断清空流程。"""
-        try:
-            durable_write(self.directory / 'integrity.json',
-                          canonical({'at': time.strftime('%Y-%m-%d %H:%M:%S'), 'path': key,
-                                     'detail': detail, 'expected': expected, 'actual': actual}))
-        except OSError:
-            pass
-
-    def _tamper(self, key, detail, expected=None, actual=None):
-        """记录证据、清空运行环境，随后中止当前操作。"""
-        logger.warning(f'[统计-加密] 检测到统计文件被库外修改或替换: {key}（{detail}）')
-        self._record_evidence(key, detail, expected, actual)
-        try:
-            self._wipe('检测到统计文件被库外修改或替换')
-        except Exception:
-            logger.exception('[统计-加密] 清空流程未完整执行，等待下次核对重试')
-        raise VaultLocked('统计运行环境已重置')
-
-    def _schedule_wipe(self, reason):
-        """后台补做清空，不阻塞当前读取。"""
-        if self._wipe_scheduled:
+        if self._tried and now < self._next_retry:
             return
-        self._wipe_scheduled = True
-        thread = threading.Thread(target=self._background_wipe, args=(reason,),
-                                  name='statistics-tamper-wipe', daemon=True)
-        self._wipe_thread = thread
-        thread.start()
-
-    def _background_wipe(self, reason):
-        try:
-            self._wipe(reason)
-        except Exception:
-            logger.exception('[统计-加密] 后台清空未完成')
-
-    # ---- 写入意图标记（区分崩溃窗口与外部修改） ----
-
-    def _pending_path(self):
-        return self.directory / 'pending.json'
-
-    def _pending_keys(self):
-        try:
-            data = json.loads(self._pending_path().read_bytes())
-            return set(str(key) for key in data.get('paths', []))
-        except FileNotFoundError:
-            return set()
-        except (ValueError, TypeError, AttributeError):
-            logger.warning('[统计-加密] 写入标记文件不可读，按无标记处理')
-            return set()
-
-    def _write_pending(self, keys):
-        durable_write(self._pending_path(),
-                      canonical({'paths': sorted(keys), 'at': time.strftime('%Y-%m-%d %H:%M:%S')}))
-
-    def _mark_pending(self, key):
-        keys = self._pending_keys()
-        if key in keys:
-            return
-        keys.add(key)
-        try:
-            self._write_pending(keys)
-        except OSError as exc:
-            raise VaultLocked('统计写入意图未能落盘，本次写入已中止') from exc
-
-    def _clear_pending(self, key):
-        keys = self._pending_keys()
-        if key not in keys:
-            return
-        keys.discard(key)
-        try:
-            if keys:
-                self._write_pending(keys)
-            else:
-                self._pending_path().unlink(missing_ok=True)
-        except OSError as exc:
-            logger.warning(f'[统计-加密] 清理写入标记失败: {exc}')
-
-    def _save_expectations(self):
-        """把期望值写入安全服务；返回是否成功（失败保留写入标记待下次核对）。"""
-        try:
-            self._provider().save(self.slot, self._state)
-            return True
-        except (ProviderUnavailable, OSError) as exc:
-            logger.warning(f'[统计-加密] 期望值更新未能写入安全服务: {exc}')
-            return False
-
-    # ---- 完整性链 ----
-
-    def _chain_key(self):
-        return self._provider().chain_key(self.slot, self._state)
-
-    def _chain_mac(self, seq, counts, fingerprint):
-        payload = {'seq': int(seq), 'counts': counts, 'fingerprint': fingerprint,
-                   'installation_id': self._state['installation_id']}
-        return hmac.new(self._chain_key(), canonical(payload), hashlib.sha256).hexdigest()[:CHAIN_LEN]
-
-    @staticmethod
-    def _protected_counts(conn):
-        """受保护表的实况行数（全表扫描，仅建链/重记时使用）；口径见触发器。"""
-        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        counts = {}
-        for table in PROTECTED_TABLES:
-            if table not in tables:
-                continue
-            if table == 'daily_summary_periods':
-                counts[table] = conn.execute(
-                    'SELECT COUNT(*) FROM daily_summary_periods WHERE report_text IS NOT NULL').fetchone()[0]
-            else:
-                counts[table] = conn.execute('SELECT COUNT(*) FROM ' + table).fetchone()[0]
-        return counts
-
-    def _ensure_counters(self, conn):
-        """建行数计数器与内容增量日志（幂等；升级/迁移重建时复用）。"""
-        conn.execute(COUNTS_DDL)
-        conn.execute(DELTA_DDL)
-        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        for table in PROTECTED_TABLES:
-            if table not in tables:
-                continue
-            for sql in _counter_triggers(table):
-                conn.execute(sql)
-            columns = [row[1] for row in conn.execute('PRAGMA table_info(' + table + ')')]
-            for sql in _content_triggers(table, columns):
-                conn.execute(sql)
-
-    def _reset_counters(self, conn):
-        """按库内实况重算计数器并返回行数（仅建链/重记路径调用，O(表)）。"""
-        counts = self._protected_counts(conn)
-        conn.execute('DELETE FROM ' + COUNT_TABLE)
-        conn.executemany('INSERT INTO ' + COUNT_TABLE + '(name, rows) VALUES (?, ?)',
-                         list(counts.items()))
-        return counts
-
-    def _live_counts(self, conn):
-        """读取计数器（O(1)）。"""
-        return {name: int(rows) for name, rows in conn.execute('SELECT name, rows FROM ' + COUNT_TABLE)}
-
-    @staticmethod
-    def _schema_fingerprint(conn):
-        """库结构指纹（含日志模式）；自管的 __opsi_* 对象不参与。"""
-        mode = conn.execute('PRAGMA journal_mode').fetchone()
-        rows = conn.execute("SELECT type,name,tbl_name,sql FROM sqlite_master "
-                            "WHERE name NOT GLOB '__opsi_*' AND name NOT LIKE 'sqlite_%' "
-                            "ORDER BY type,name").fetchall()
-        return hashlib.sha256(canonical([mode[0] if mode else '', [list(row) for row in rows]])).hexdigest()[:SIG_LEN]
-
-    def _has_chain_table(self, conn):
-        return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
-                            (CHAIN_TABLE,)).fetchone() is not None
-
-    def _read_chain(self, conn):
-        """读取链行；数据库繁忙等环境错误一律向上抛（调用方按跳过/中止处理）。"""
-        row = conn.execute('SELECT seq,chain,counts,fingerprint FROM ' + CHAIN_TABLE).fetchone()
-        if row is None:
-            return None
-        try:
-            counts = json.loads(row[2])
-        except (TypeError, ValueError):
-            return None
-        return {'seq': int(row[0]), 'chain': row[1], 'counts': counts, 'fingerprint': row[3]}
-
-    def _write_chain(self, conn, seq, counts, fingerprint):
-        chain = self._chain_mac(seq, counts, fingerprint)
-        conn.execute('INSERT OR REPLACE INTO ' + CHAIN_TABLE
-                     + ' (id,seq,chain,counts,fingerprint) VALUES (1,?,?,?,?)',
-                     (int(seq), chain, canonical(counts).decode('utf-8'), fingerprint))
-        return chain
-
-    @staticmethod
-    def _row_digest(chain_key, table, identity_json, content_json):
-        message = (table + '\x1f' + identity_json + '\x1f' + content_json).encode('utf-8')
-        return int.from_bytes(hmac.new(chain_key, message, hashlib.sha256).digest(), 'big')
-
-    def _fold_content_delta(self, conn, key):
-        """把本事务的行变更折入累计摘要（写入事务提交前调用，日志已在事务开始时清空）。"""
-        entry = self._expected().get(key)
-        rows = conn.execute('SELECT tbl,op,identity,old_content,new_content FROM ' + DELTA_TABLE).fetchall()
-        conn.execute('DELETE FROM ' + DELTA_TABLE)
-        if not (isinstance(entry, dict) and isinstance(entry.get('acc'), str)):
-            return
-        chain_key = self._chain_key()
-        value = int(entry['acc'], 16)
-        for table, op, identity, old_content, new_content in rows:
-            if op in ('u', 'd'):
-                value ^= self._row_digest(chain_key, table, identity, old_content)
-            if op in ('i', 'u'):
-                value ^= self._row_digest(chain_key, table, identity, new_content)
-        entry['acc'] = format(value, '064x')
-
-    def _recompute_acc(self, path, chain_key):
-        """按当前内容全量重算累计摘要（深检查慢路径；只读、不加锁）。"""
-        value = 0
-        with closing(sqlite3.connect(path, timeout=VERIFY_TIMEOUT)) as conn:
-            tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-            for table, (identity, content) in CONTENT_COLUMNS.items():
-                if table not in tables:
-                    continue
-                columns = [row[1] for row in conn.execute('PRAGMA table_info(' + table + ')')]
-                identity = [c for c in identity if c in columns]
-                content = [c for c in content if c in columns]
-                if not identity:
-                    continue
-                select = ','.join('json_array(' + ','.join('"' + c + '"' for c in cols) + ')'
-                                  for cols in (identity, content))
-                where = ' WHERE report_text IS NOT NULL' if table == 'daily_summary_periods' else ''
-                for identity_json, content_json in conn.execute('SELECT ' + select + ' FROM ' + table + where):
-                    value ^= self._row_digest(chain_key, table, identity_json, content_json)
-        return format(value, '064x')
-
-    def _init_database_chain(self, conn, key):
-        """首次见到该库（升级/新建）：建链、建计数器并按现状记基线，不触发清空。"""
-        self._mark_pending(key)
-        with conn:
-            conn.execute(CHAIN_DDL)
-            self._ensure_counters(conn)
-            conn.execute('DELETE FROM ' + DELTA_TABLE)
-            counts = self._reset_counters(conn)
-            fingerprint = self._schema_fingerprint(conn)
-            chain = self._write_chain(conn, 1, counts, fingerprint)
-        self._expected()[key] = {'s': 1, 'c': chain}
-        logger.info(f'[统计-加密] 已建立完整性链: {key}')
-        return True
-
-    def _rebuild_database_chain(self, conn, key):
-        """按现状重记链值与基线（显式重记）；不清空。"""
-        self._mark_pending(key)
-        try:
-            row = self._read_chain(conn)
-        except sqlite3.Error:
-            row = None
-        seq = row['seq'] + 1 if row else 1
-        with conn:
-            conn.execute(CHAIN_DDL)
-            self._ensure_counters(conn)
-            conn.execute('DELETE FROM ' + DELTA_TABLE)
-            counts = self._reset_counters(conn)
-            fingerprint = self._schema_fingerprint(conn)
-            chain = self._write_chain(conn, seq, counts, fingerprint)
-        self._expected()[key] = {'s': seq, 'c': chain}
-        return True
-
-    def _bump_database_chain(self, conn, key):
-        """数据写入事务内同步更新链行（与数据原子提交）。"""
-        row = self._read_chain(conn)
-        if row is None:
-            raise sqlite3.OperationalError('统计完整性链缺失')
-        counts = self._live_counts(conn)
-        fingerprint = self._schema_fingerprint(conn)
-        seq = row['seq'] + 1
-        chain = self._write_chain(conn, seq, counts, fingerprint)
-        entry = self._expected().get(key)
-        entry = dict(entry) if isinstance(entry, dict) else {}
-        entry.update({'s': seq, 'c': chain})
-        self._expected()[key] = entry
-
-    def _verify_database(self, path, key):
-        """浅检查单个受保护数据库；返回基线是否被更新。"""
-        expect = self._expected()
-        entry = expect.get(key)
-        if not (isinstance(entry, dict) and type(entry.get('s')) is int and entry.get('c')):
-            entry = None
-        if not path.exists():
-            if entry is None:
-                return False
-            if key in self._pending_keys():
-                expect.pop(key, None)
-                return True
-            self._tamper(key, '受保护数据库缺失')
-        with closing(sqlite3.connect(path, timeout=VERIFY_TIMEOUT)) as conn:
-            if not self._has_chain_table(conn):
-                if entry is not None:
-                    self._tamper(key, '完整性链缺失')
-                return self._init_database_chain(conn, key)
-            row = self._read_chain(conn)
-            if row is None:
-                if entry is not None:
-                    self._tamper(key, '完整性链损坏')
-                return self._rebuild_database_chain(conn, key)
-            if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
-                                (COUNT_TABLE,)).fetchone():
-                if entry is not None:
-                    self._tamper(key, '行数锚点缺失')
-                return self._rebuild_database_chain(conn, key)
-            if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
-                                (DELTA_TABLE,)).fetchone():
-                # 旧版运行环境升级：补齐内容日志设施并重记基线（不清空）。
-                logger.warning(f'[统计-加密] 检测到运行环境升级，重记基线: {key}')
-                return self._rebuild_database_chain(conn, key)
-            counts = self._live_counts(conn)
-            fingerprint = self._schema_fingerprint(conn)
-            if entry is None:
-                # 升级后的首次见到：链行自洽则采纳，否则按现状重记（无历史可对照）。
-                if row['chain'] == self._chain_mac(row['seq'], row['counts'], row['fingerprint']) \
-                        and row['counts'] == counts and row['fingerprint'] == fingerprint:
-                    expect[key] = {'s': row['seq'], 'c': row['chain']}
-                else:
-                    return self._rebuild_database_chain(conn, key)
-                return True
-            if row['seq'] != entry['s'] or row['chain'] != entry['c']:
-                if key in self._pending_keys():
-                    logger.warning(f'[统计-加密] 发现未完成的写入窗口，按崩溃恢复重记基线: {key}')
-                    merged = {k: v for k, v in entry.items() if k not in ('s', 'c', 'acc')}
-                    merged.update({'s': row['seq'], 'c': row['chain']})
-                    expect[key] = merged
-                    return True
-                self._tamper(key, f'链值与期望不一致（库内 seq={row["seq"]}，期望 {entry["s"]}）',
-                             expected={'seq': entry['s'], 'chain': entry['c']},
-                             actual={'seq': row['seq'], 'chain': row['chain']})
-            if row['chain'] != self._chain_mac(row['seq'], row['counts'], row['fingerprint']):
-                self._tamper(key, '完整性链校验失败（链行被库外改写）')
-            if row['counts'] != counts:
-                self._tamper(key, '受保护表行数与链记录不一致（库外增删行）',
-                             expected=row['counts'], actual=counts)
-            if row['fingerprint'] != fingerprint:
-                logger.warning(f'[统计-加密] 检测到库结构变化，按升级重记基线: {key}')
-                return self._rebuild_database_chain(conn, key)
-            if key in self._pending_keys():
-                self._clear_pending(key)
-            return False
-
-    def _verify_protected_file(self, path, key):
-        """浅检查单个受保护文件（字节摘要）；返回基线是否被更新。"""
-        expect = self._expected()
-        entry = expect.get(key)
-        if not (isinstance(entry, dict) and entry.get('d')):
-            entry = None
-        if not path.exists():
-            if entry is None:
-                return False
-            if key in self._pending_keys():
-                expect.pop(key, None)
-                return True
-            self._tamper(key, '受保护统计文件缺失')
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()[:SIG_LEN]
-        if entry is None:
-            expect[key] = {'d': digest}
-            return True
-        if entry['d'] != digest:
-            if key in self._pending_keys():
-                logger.warning(f'[统计-加密] 发现未完成的写入窗口，按崩溃恢复重记文件基线: {key}')
-                expect[key] = {'d': digest}
-                return True
-            self._tamper(key, '文件内容与基线不一致',
-                         expected={'digest': entry['d']}, actual={'digest': digest})
-        if key in self._pending_keys():
-            self._clear_pending(key)
-        return False
-
-    def _expect_deletions(self, seen):
-        """基线中存在、当前路径集合里没有、且无豁免 → 清空。"""
-        changed = False
-        pending = self._pending_keys()
-        for key in sorted(set(self._expected()) - seen):
-            path = self.root / key
-            if self.coordinator.is_archive(path) or key in pending:
-                self._expected().pop(key, None)
-                changed = True
-                continue
-            self._tamper(key, '受保护统计文件缺失')
-        return changed
-
-    def _verify_all_shallow(self):
-        """核对全部受保护路径（浅检查）；返回基线是否有更新。
-
-        读库遭遇繁忙等环境错误时只跳过该路径本轮，绝不据此清空。
-        """
-        if not self._active or not self._state:
-            return False
-        changed = False
-        touched = []
-        seen = set()
-        paths = set(self.coordinator.paths())
-        for path in [*paths, *self.coordinator.files()]:
-            path = Path(path).resolve()
-            if self.coordinator.is_archive(path):
-                continue
-            key = self._expect_key(path)
-            seen.add(key)
-            try:
-                if path in paths:
-                    updated = self._verify_database(path, key)
-                else:
-                    updated = self._verify_protected_file(path, key)
-            except (sqlite3.Error, OSError) as exc:
-                logger.debug(f'[统计-加密] 浅检查暂不可用，本轮跳过: {key}（{type(exc).__name__}）')
-                continue
-            if updated:
-                changed = True
-                touched.append(key)
-            if not self._active:
-                return changed
-        changed = self._expect_deletions(seen) or changed
-        if changed and self._save_expectations():
-            for key in touched:
-                self._clear_pending(key)
-        return changed
-
-    def _startup_check(self):
-        """每进程一次：启动（开机）核对全部受保护路径 + 调度后台深检查。"""
-        if self._startup_checked:
-            return
-        self._startup_checked = True
-        self._verified_hold = self.coordinator.hold_token
-        self._verify_all_shallow()
-        if self._deep:
-            self._deep.kick(force=True)
-
-    def verify_on_page_open(self):
-        """打开/刷新统计页的核对点：毫秒级浅检查 + 后台深检查（节流）。"""
-        try:
-            with self.coordinator.lock():
-                if not self.ensure_ready():
-                    return
-                if self._verified_hold != self.coordinator.hold_token:
-                    self._verified_hold = self.coordinator.hold_token
-                    self._verify_all_shallow()
-        except (VaultError, ProviderUnavailable, OSError, sqlite3.Error) as exc:
-            logger.debug(f'[统计-加密] 页面核对未完成: {type(exc).__name__}')
-        if self._deep:
-            self._deep.kick()
-
-    def revouch(self, path):
-        """按现状重记单条受保护路径的基线（豁免路径与测试使用；不触发清空）。"""
-        path = Path(path).resolve()
-        with self.coordinator.lock():
-            if not self.ensure_ready():
-                raise VaultLocked('统计运行环境暂不可用')
-            if self.coordinator.is_archive(path):
-                return
-            key = self._expect_key(path)
-            if path in set(self.coordinator.paths()):
-                if not path.exists():
-                    self._expected().pop(key, None)
-                else:
-                    with closing(sqlite3.connect(path, timeout=VERIFY_TIMEOUT)) as conn:
-                        self._rebuild_database_chain(conn, key)
-            else:
-                if not path.exists():
-                    self._expected().pop(key, None)
-                else:
-                    entry = self._expected().get(key)
-                    entry = dict(entry) if isinstance(entry, dict) else {}
-                    entry['d'] = hashlib.sha256(path.read_bytes()).hexdigest()[:SIG_LEN]
-                    self._expected()[key] = entry
-            if self._save_expectations():
-                self._clear_pending(key)
-
-    def deep_check_once(self):
-        """同步执行一轮深检查（测试/诊断入口；生产路径一律走后台线程）。"""
-        checker = self._deep or _DeepCheck(self)
-        checker.run_once()
-
-    def _resolve_pending(self):
-        pending = self._state.get('pending')
-        if not pending:
-            return
-        actual = self.coordinator.snapshot()
-        if actual == self._state['root'] and actual != pending['root']:
-            try:
-                token = self.journal_path.read_bytes()
-            except FileNotFoundError as exc:
-                raise IntegrityFailure('统计提交记录缺失') from exc
-            if hashlib.sha256(token).hexdigest() != pending['journal']:
-                raise IntegrityFailure('统计提交记录不一致')
-            images = json.loads(self._decode('opsi-stats/v2/commit', token.decode(),
-                                           {'slot': self.slot, 'generation': pending['generation']}))
-            self._restore_images(images, data_only=True)
-            actual = self.coordinator.snapshot()
-        if actual != pending['root']:
-            raise IntegrityFailure('统计提交状态不一致')
-        self._state.update(root=pending['root'], generation=pending['generation'])
-        self._state.pop('pending', None)
-        self._fresh = None
-        self._provider().save(self.slot, self._state)
-        self.journal_path.unlink(missing_ok=True)
-
-    def _begin_commit(self, new_root, images):
-        pending = {'root': new_root, 'generation': self._state['generation'] + 1}
-        token = self._encode('opsi-stats/v2/commit', canonical(images),
-                             {'slot': self.slot, 'generation': pending['generation']}).encode()
-        durable_write(self.journal_path, token)
-        pending['journal'] = hashlib.sha256(token).hexdigest()
-        self._state['pending'] = pending
-        self._provider().save(self.slot, self._state)
-
-    def _end_commit(self):
-        pending = self._state.pop('pending')
-        self._state.update(root=pending['root'], generation=pending['generation'])
-        self._fresh = None
-        self._provider().save(self.slot, self._state)
-        self.journal_path.unlink(missing_ok=True)
-
-    def context(self, kind, instance, identity, period):
-        return {'dataset': kind, 'instance': instance, 'identity': str(identity), 'period': str(period)}
-
-    def report_context(self, instance, period):
-        month = re.search(r'\d{4}-\d{2}', period)
-        return self.context('reports', instance, period, month[0] if month else period)
-
-    def file_context(self, kind, path, instance=None):
-        path = Path(path).resolve()
-        relative = str(path.relative_to(self.root)).replace('\\', '/')
-        # 缓存与舰船文件覆盖多个月，逻辑周期属于整个历史集合。
-        return self.context(kind, instance if instance is not None else relative,
-                            relative, 'all-history')
-
-    def check_database(self, path):
-        if Path(path).resolve() not in self.coordinator.paths():
-            raise VaultLocked('统计数据库不属于当前运行环境')
-
-    def check_file(self, path):
-        path = Path(path).resolve()
-        if not path.is_relative_to(self.root):
-            raise VaultLocked('统计文件不属于当前运行环境')
-        valid = self.coordinator.is_archive(path) or (path.parent.parent == self.root / 'log' / 'cl1' and
-            path.name in ('ship_exp_data.json', 'ship_exp_data.json.bak', 'cl1_monthly.json', 'cl1_monthly.json.bak')) or (
-            path.parent == self.root / 'log' and path.name.startswith('azurstat_meowofficer_farming') and
-            (path.name.endswith('.csv') or path.name.endswith('.csv.bak')))
-        if not valid:
-            raise VaultLocked('统计文件未登记')
-
-    def _seal(self, kind, obj, context):
-        if kind not in KINDS or not context or context.get('dataset') != kind:
-            raise VaultError('记录身份不完整')
-        aad = dict(context, schema=2, algorithm=ALGORITHM, installation_id=self._state['installation_id'])
-        return BLOB_PREFIX + self._encode('opsi-stats/v2/' + kind, canonical(obj), aad)
-
-    def _encode(self, info, raw, aad):
-        return self._provider().encode(self.slot, self._state, info, raw, aad)
-
-    def _decode(self, info, token, aad):
-        return self._provider().decode(self.slot, self._state, info, token, aad)
-
-    def seal(self, kind, obj, context=None):
-        with self.coordinator.lock():
-            if not self._in_transaction and not self.ensure_ready():
-                raise VaultLocked('统计运行环境暂不可用')
-            return self._seal(kind, obj, context)
-
-    def _open_legacy(self, kind, blob):
-        if hasattr(self._provider(), 'legacy_open'):
-            return self._provider().legacy_open(self.slot, kind, blob)
-        try:
-            raw = _b64d(blob[len(LEGACY_PREFIX):])
-            cipher = AES.new(_subkey(self._legacy, 'opsi-stats/v1/' + kind), AES.MODE_GCM, nonce=raw[:12])
-            cipher.update(('opsi-stats/v1/' + kind).encode())
-            return json.loads(cipher.decrypt_and_verify(raw[12:-16], raw[-16:]))
-        except (ValueError, TypeError) as exc:
-            raise VaultLocked('旧记录校验失败，保留原数据') from exc
-
-    def _open_legacy_or_none(self, kind, blob):
-        """迁移路径读取旧记录；读取环境或数据不可用时返回 None（由调用方按原样保留）。"""
-        if self._legacy is None and not hasattr(self._provider(), 'legacy_open'):
-            return None
-        try:
-            return self._open_legacy(kind, blob)
-        except VaultLocked:
-            return None
-
-    def open_(self, kind, blob, context=None):
-        with self.coordinator.lock():
-            try:
-                if not self._in_transaction:
-                    try:
-                        self._load()
-                    except IntegrityFailure:
-                        raise
-                if isinstance(blob, str) and blob.startswith(LEGACY_PREFIX) and not self._active:
-                    if self._legacy is None:
-                        raise VaultLocked('旧统计环境暂不可用')
-                    return self._open_legacy(kind, blob)
-                if not self._active:
-                    raise VaultLocked('统计运行环境暂不可用')
-                if not context or context.get('dataset') != kind or not isinstance(blob, str) or not blob.startswith(BLOB_PREFIX):
-                    raise IntegrityFailure('记录身份不一致')
-                aad = dict(context, schema=2, algorithm=ALGORITHM, installation_id=self._state['installation_id'])
-                return json.loads(self._decode('opsi-stats/v2/' + kind, blob[len(BLOB_PREFIX):], aad))
-            except IntegrityFailure as exc:
-                if self._active:
-                    if not self._in_transaction:
-                        self._wipe('记录校验失败')
-                    elif isinstance(exc, RecordTampered):
-                        # 读取被既有降级逻辑吞掉时的兜底：后台补做清空。
-                        self._schedule_wipe('记录校验失败')
-                raise
-            except ProviderUnavailable as exc:
-                raise VaultLocked('统计运行环境暂不可用') from exc
-
-    def open_or_none(self, kind, blob, context=None):
-        try:
-            return self.open_(kind, blob, context)
-        except (VaultError, ProviderUnavailable, OSError, sqlite3.Error):
-            return None
-
-    @contextmanager
-    def transaction(self, conn, path):
-        """受保护数据库的写事务：写前核对 → 数据与链行同事务提交 → 更新安全服务状态。"""
-        self.check_database(path)
-        with self.coordinator.lock():
-            if self._refresh() is False:
-                raise VaultLocked('统计运行环境暂不可用')
-            resolved = Path(path).resolve()
-            key = self._expect_key(resolved)
-            rebuilt = self._verify_database(resolved, key)
-            if rebuilt and not self._save_expectations():
-                logger.warning('[统计-加密] 重记基线未能写入安全服务，写入标记保留待下次核对')
-            self._mark_pending(key)
-            conn.execute('BEGIN IMMEDIATE')
-            # 日志只保留本事务的行变更；库外写入留下的记录由此丢弃，其内容由深检查重算比对负责。
-            conn.execute('DELETE FROM ' + DELTA_TABLE)
-            outer = self._in_transaction
-            self._in_transaction = True
-            try:
-                yield conn
-                if conn.execute('PRAGMA foreign_keys').fetchone()[0] and conn.execute('PRAGMA foreign_key_check').fetchone():
-                    raise sqlite3.IntegrityError('统计事务的延迟约束未满足')
-                self._fold_content_delta(conn, key)
-                self._bump_database_chain(conn, key)
-                conn.commit()
-            except BaseException:
-                conn.rollback()
-                self._in_transaction = outer
-                if not rebuilt:
-                    self._clear_pending(key)
-                raise
-            self._in_transaction = outer
-            if self._save_expectations():
-                self._clear_pending(key)
-            else:
-                logger.warning('[统计-加密] 期望值未能写入安全服务，保留写入标记待下次核对')
-            if self._deep:
-                self._deep.note_write()
-
-    @contextmanager
-    def reading(self):
-        with self.coordinator.lock():
-            outer = self._in_transaction
-            try:
-                if not outer:
-                    if not self._active:
-                        if not self._load() and self._legacy is None and self._state is None:
-                            self.ensure_ready()
-                    if self._active or self._legacy is not None:
-                        self._in_transaction = True
-                yield
-            except IntegrityFailure:
-                if self._active and not outer:
-                    self._wipe('状态校验失败')
-                raise
-            finally:
-                self._in_transaction = outer
-
-    def write_file(self, kind, path, data, context=None, wrapper=False):
-        self.check_file(path)
-        with self.coordinator.lock():
-            if not self.ensure_ready():
-                raise VaultLocked('统计运行环境暂不可用')
-            resolved = Path(path).resolve()
-            blob = self._seal(kind, data, context or self.file_context(kind, path))
-            raw = canonical({WRAPPER_KEY: True, 'payload': blob}) if wrapper else blob.encode()
-            if self.coordinator.is_archive(resolved):
-                # 归档/备份载荷不参与基线核对，直接原子落盘。
-                durable_write(resolved, raw)
-                return
-            key = self._expect_key(resolved)
-            changed = self._verify_protected_file(resolved, key)
-            digest = hashlib.sha256(raw).hexdigest()[:SIG_LEN]
-            entry = self._expected().get(key)
-            entry = dict(entry) if isinstance(entry, dict) else {}
-            if entry.get('d') != digest:
-                changed = True
-            entry['d'] = digest
-            self._expected()[key] = entry
-            self._mark_pending(key)
-            durable_write(resolved, raw)
-            if changed:
-                if self._save_expectations():
-                    self._clear_pending(key)
-                else:
-                    logger.warning('[统计-加密] 期望值未能写入安全服务，保留写入标记待下次核对')
-            else:
-                self._clear_pending(key)
-
-    def remove_files(self, paths):
-        with self.coordinator.lock():
-            if not self.ensure_ready():
-                raise VaultLocked('统计运行环境暂不可用')
-            paths = {Path(path).resolve(): None for path in paths}
-            if not set(paths).issubset(set(self.coordinator.files())):
-                raise VaultError('统计清理路径无效')
-            keys = [self._expect_key(path) for path in paths
-                    if not self.coordinator.is_archive(path)]
-            for key in keys:
-                self._mark_pending(key)
-            for path in paths:
-                path.unlink(missing_ok=True)
-            changed = False
-            for key in keys:
-                if self._expected().pop(key, None) is not None:
-                    changed = True
-            if changed:
-                if self._save_expectations():
-                    for key in keys:
-                        self._clear_pending(key)
-                # 保存失败：保留标记，缺失 + 标记 → 下次核对按崩溃窗口丢弃记录
-            else:
-                for key in keys:
-                    self._clear_pending(key)
-
-    def _kick_migration(self):
-        if not self._background_migration or self._migration_kicked:
-            return
-        self._migration_kicked = True
-        threading.Thread(target=self.ensure_ready, name='statistics-transition', daemon=True).start()
-
-    def ensure_migrated(self):
-        with self.coordinator.lock():
-            if self._load():
-                return {'skipped': False}
-            return self._migrate()
-
-    def _migrate(self):
+        self._tried = True
+        self._next_retry = now + DECODER_RETRY_INTERVAL
+        self._blips = False
         ring = self._keyring()
-        before_ring = self.keyring_path.read_bytes() if ring else None
-        provider = self._provider()
-        if not self._state:
-            self._state = {'phase': 'preparing', 'schema': 2, 'algorithm': ALGORITHM, 'installation_id': uuid.uuid4().hex,
-                           'key': provider.new_key(), 'root': '', 'generation': 0}
-            provider.save(self.slot, self._state)
-        self._dek = provider.key(self._state)
-        if ring and ring['version'] == 1:
+        if ring is None and (self.directory / 'keyring.json').exists():
+            self._blips = True
+        slot = installation_slot(self.root)
+        self._slot = slot
+        if isinstance(ring, dict) and ring.get('version') == 1:
             self._legacy = self._legacy_key(ring)
-        connections = {}
-        readers = {}
-        original, after, overrides = {}, {}, {}
-        # 内容不可读的历史项：按原样保留、不阻断迁移（否则旧数据里一条坏行会
-        # 让统计环境永远无法就绪，写入全部失败）。
-        skipped = []
-        try:
-            for path in self.coordinator.paths():
-                if not path.exists():
-                    continue
-                relative = str(path.relative_to(self.root))
-                reader = None
+            if self._legacy is None:
+                self._blips = True
+        provider = provider_for_descriptor(ring.get('provider') if ring else None, self.directory)
+        if provider is None:
+            if ring is not None:
+                logger.warning(f'[统计-解密] 描述文件的凭据提供者不受支持（{ring.get("provider")}），旧密文保持原样')
+            if self._legacy is None:
+                return
+        else:
+            self._provider = provider
+            try:
+                state = provider.load(slot)
+            except ProviderUnavailable:
+                state = None
+                self._blips = True
+            if state is None and isinstance(ring, dict) and ring.get('installation_id'):
                 try:
-                    reader = sqlite3.connect(path, timeout=5)
-                    readers[path] = reader
-                    reader.execute('BEGIN IMMEDIATE')
-                    image = self._standalone_image(reader.serialize())
-                    conn = sqlite3.connect(':memory:')
-                    connections[path] = conn
-                    conn.deserialize(image)
-                    conn.execute('PRAGMA secure_delete=ON')
-                except sqlite3.Error as exc:
-                    # 单个库文件不可读：按原样保留，不阻塞其余数据的迁移。
-                    skipped.append(f'{path.name}（{type(exc).__name__}）')
-                    if reader is not None:
-                        readers.pop(path, None)
-                        reader.close()
-                    continue
-                self._convert_database(conn, skipped)
-                conn.commit()
-                original[relative] = _b64e(image)
-                after[relative] = _b64e(conn.serialize())
-                overrides[path] = conn
-            for path in self.coordinator.files():
+                    state = provider.load_any(slot, ring['installation_id'])
+                except ProviderUnavailable:
+                    state = None
+                    self._blips = True
+                if state is not None:
+                    logger.warning('[统计-解密] 当前安装槽没有本机凭据，已按安装标识找回（安装目录可能被移动过）')
+            if state is None and not isinstance(provider, ContainerFileProvider):
+                # 描述文件缺失或提供者不可用时，再试数据目录内的本地文件状态。
+                container = ContainerFileProvider(self.directory / 'state.json')
                 try:
-                    raw = path.read_bytes()
-                    relative = str(path.relative_to(self.root))
-                    kind = 'archives' if self.coordinator.is_archive(path) or 'cl1_monthly' in path.name else ('ships' if '.json' in path.name else 'loot')
-                    context = self.file_context(kind, path)
-                    if self.coordinator.is_archive(path):
-                        data = {'bytes': _b64e(raw)}
-                        blob = self._seal(kind, data, context)
-                        self._check_roundtrip(kind, blob, data, context)
-                        updated = canonical({WRAPPER_KEY: True, 'payload': blob})
-                    elif '.json' in path.name:
-                        data = json.loads(raw)
-                        if not isinstance(data, dict):
-                            raise ValueError('结构不可用')
-                        if data.get(LEGACY_WRAPPER_KEY):
-                            data = self._open_legacy_or_none(kind, data['payload'])
-                            if data is None:
-                                raise ValueError('旧记录不可读')
-                        blob = self._seal(kind, data, context)
-                        self._check_roundtrip(kind, blob, data, context)
-                        updated = canonical({WRAPPER_KEY: True, 'payload': blob})
-                    else:
-                        text = raw.decode('utf-8')
-                        if text.startswith(LEGACY_PREFIX):
-                            data = self._open_legacy_or_none('loot', text)
-                            if data is None:
-                                raise ValueError('旧记录不可读')
-                        else:
-                            rows = list(csv.reader(io.StringIO(text)))
-                            data = {'header': rows[0], 'rows': rows[1:]}
-                        blob = self._seal('loot', data, context)
-                        self._check_roundtrip('loot', blob, data, context)
-                        updated = blob.encode()
-                except ValueError:
-                    # 单个文件内容不可读：按原样保留，不阻塞其余数据的迁移。
-                    skipped.append(path.name)
-                    continue
-                original[relative] = _b64e(raw)
-                after[relative] = _b64e(updated)
-                overrides[path] = updated
-            new_root = self.coordinator.snapshot(overrides)
-            journal = {'before': original, 'after': after, 'keyring': _b64e(before_ring) if before_ring else None,
-                       'descriptor': self._descriptor(), 'root': new_root}
-            token = self._encode('opsi-stats/v2/transition', canonical(journal), self.slot).encode()
-            durable_write(self.journal_path, token)
-            self._state.update(phase='migration', journal=hashlib.sha256(token).hexdigest())
-            provider.save(self.slot, self._state)
-            for reader in readers.values():
-                reader.rollback()
-                reader.close()
-            readers.clear()
-            self._restore_images(after)
-            durable_write(self.keyring_path, canonical(self._descriptor()))
-            if self.coordinator.snapshot() != new_root:
-                raise VaultLocked('迁移回读未通过')
-            ready = dict(self._state, phase='ready', root=new_root, generation=1)
-            ready.pop('journal', None)
-            provider.save(self.slot, ready)
-            self._state = ready
-            self._active = True
-            self._legacy = None
-            self.journal_path.unlink(missing_ok=True)
-            if skipped:
-                preview = '、'.join(skipped[:5]) + ('、…' if len(skipped) > 5 else '')
-                logger.warning(f'[统计-加密] {len(skipped)} 项历史数据无法读取，已按原样保留: {preview}')
-            return {'skipped': False, 'cl1': len(original), 'files': len(after), 'quarantined': len(skipped)}
-        except BaseException:
-            for reader in readers.values():
-                reader.rollback()
-                reader.close()
-            readers.clear()
-            for conn in connections.values():
-                conn.rollback()
-                conn.close()
-            connections.clear()
-            # 未发布 V2 前的任何失败都不触发清空；可重入恢复原状态。
-            if self._state.get('phase') == 'migration':
-                self._recover_migration(rollback=True)
-            raise
-        finally:
-            for reader in readers.values():
-                reader.close()
-            for conn in connections.values():
-                conn.close()
+                    state = container.load(slot)
+                except ProviderUnavailable:
+                    state = None
+                    self._blips = True
+                if state is not None:
+                    self._provider = container
+            if state is not None:
+                self._state = state
+                try:
+                    self._dek = provider.key(state)
+                except (ProviderUnavailable, ValueError, KeyError, TypeError):
+                    self._dek = None
+                    self._blips = True
+                if self._dek is None and self._provider is not provider:
+                    try:
+                        self._dek = self._provider.key(state)
+                    except (ProviderUnavailable, ValueError, KeyError, TypeError):
+                        self._dek = None
+            if self._dek is not None:
+                self._blips = False
+        if self._dek is None and self._legacy is None and (ring is not None or self._state is not None):
+            logger.warning('[统计-解密] 本机密钥暂不可用，旧密文保持原样，稍后自动重试')
 
-    @staticmethod
-    def _standalone_image(raw):
-        # serialize 已合并当前快照；独立副本不依赖原目录的 WAL。
-        if raw[:16] != b'SQLite format 3\x00':
-            raise VaultLocked('统计快照不可用')
-        return raw[:18] + b'\x01\x01' + raw[20:]
+    def retry(self):
+        """显式重试：丢弃失败缓存后重新加载（启动解密入口使用，读取路径仍按间隔限频）。"""
+        if self._dek is None and self._legacy is None:
+            self._tried = False
+        self._ensure()
 
-    def _check_roundtrip(self, kind, blob, data, context):
-        aad = dict(context, schema=2, algorithm=ALGORITHM, installation_id=self._state['installation_id'])
-        decoded = json.loads(self._decode('opsi-stats/v2/' + kind, blob[len(BLOB_PREFIX):], aad))
-        if decoded != data:
-            raise VaultLocked('迁移回读未通过')
+    def available(self):
+        self._ensure()
+        return self._dek is not None or self._legacy is not None
 
-    def _convert_database(self, conn, skipped=None):
-        """把库内旧格式记录迁移到当前格式；单行不可读时按原样保留并记入 skipped。
+    def definitive(self):
+        """密钥已可用，或已确认本机不存在能解密的旧密钥（干净的未命中）。
 
-        不可读 = 旧快照解不开或旧密文校验失败；这类行此前会让整次迁移失败，
-        使统计环境永远无法就绪。保留原样使其余数据（含今后的新写入）不受影响。
+        凭据服务报错的"暂时不可用"返回 False：调用方应保留原样等重试，
+        不能把还救得回的旧载荷替换掉。
         """
-        skipped = skipped if skipped is not None else []
-        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        for table, column, kind, fields in [('cl1_data', 'secure_json', 'cl1', CL1_SECURE_FIELDS),
-                                            ('opsi_items', 'secure_payload', 'loot', LOOT_SECURE_FIELDS),
-                                            ('resource_snapshots', 'opsi_payload', 'res', RES_SECURE_FIELDS),
-                                            ('daily_summary_cl1_events', 'secure_payload', 'daily',
-                                             ('duration_seconds', 'estimated_exp'))]:
-            if table not in tables:
-                continue
-            columns = [r[1] for r in conn.execute('PRAGMA table_info(' + table + ')')]
-            if column not in columns:
-                conn.execute('ALTER TABLE ' + table + ' ADD COLUMN ' + column + ' TEXT')
-                columns.append(column)
-            for values in conn.execute('SELECT * FROM ' + table).fetchall():
-                row = dict(zip(columns, values))
-                if kind == 'cl1':
-                    label = f'cl1_data:{row.get("instance")}/{row.get("month")}'
-                    full = None
-                    if row.get('data_json'):
-                        try:
-                            full = json.loads(row['data_json'])
-                        except ValueError:
-                            full = None
-                    if full is None and row.get('encrypted_blob'):
-                        from module.statistics.cl1_legacy import derive_legacy_key, decrypt_legacy_payload
-                        from module.base.device_id import get_device_id, get_old_device_id
-                        for device in (get_device_id(), get_old_device_id()):
-                            if device:
-                                try:
-                                    full = decrypt_legacy_payload(row['encrypted_blob'], derive_legacy_key(device))
-                                except (ValueError, TypeError, UnicodeError):
-                                    continue
-                                if full:
-                                    break
-                    if not isinstance(full, dict):
-                        skipped.append(label)
-                        continue
-                    public, data = partition_cl1(full)
-                else:
-                    label = f'{table}:{row.get("id")}'
-                    data = {f: row.get(f) for f in fields}
-                if row.get(column):
-                    if not str(row[column]).startswith(LEGACY_PREFIX):
-                        skipped.append(label)
-                        continue
-                    payload = self._open_legacy_or_none(kind, row[column])
-                    if payload is None:
-                        skipped.append(label)
-                        continue
-                    data.update(payload)
-                context = row_context(kind, row)
-                blob = self._seal(kind, data, context)
-                self._check_roundtrip(kind, blob, data, context)
-                if kind == 'cl1':
-                    conn.execute('UPDATE cl1_data SET data_json=?, secure_json=?, encrypted_blob=NULL WHERE instance=? AND month=?',
-                                 (canonical(public).decode(), blob, row['instance'], row['month']))
-                else:
-                    clear = ','.join(f + ('=0' if kind == 'daily' else '=NULL') for f in fields if f in columns)
-                    conn.execute('UPDATE ' + table + ' SET ' + column + '=?,' + clear + ' WHERE id=?', (blob, row['id']))
-        if 'daily_summary_periods' in tables:
-            for instance, period, text in conn.execute('SELECT instance,period_key,report_text FROM daily_summary_periods WHERE report_text IS NOT NULL').fetchall():
-                context = self.report_context(instance, period)
-                data = {'text': text}
-                blob = self._seal('reports', data, context)
-                self._check_roundtrip('reports', blob, data, context)
-                conn.execute('UPDATE daily_summary_periods SET report_text=? WHERE instance=? AND period_key=?', (blob, instance, period))
+        self._ensure()
+        return self._dek is not None or self._legacy is not None or not self._blips
 
-    def _restore_images(self, images, data_only=False):
-        for relative, encoded in images.items():
-            path = (self.root / relative).resolve()
-            allowed_file = (path.parent.parent == self.root / 'log' / 'cl1' and path.name in
-                            ('ship_exp_data.json', 'ship_exp_data.json.bak', 'cl1_monthly.json', 'cl1_monthly.json.bak')) or \
-                (path.parent == self.root / 'log' and path.name.startswith('azurstat_meowofficer_farming') and
-                 (path.name.endswith('.csv') or path.name.endswith('.csv.bak')))
-            if not path.is_relative_to(self.root) or (path not in self.coordinator.paths() and not allowed_file and
-                                                    not self.coordinator.is_archive(path)):
-                raise VaultLocked('迁移记录路径无效')
-            if encoded is None:
-                path.unlink(missing_ok=True)
-                continue
-            raw = _b64d(encoded)
-            if path in self.coordinator.paths():
-                if data_only:
-                    with closing(sqlite3.connect(':memory:')) as memory, closing(sqlite3.connect(path, timeout=5)) as target:
-                        memory.deserialize(self._standalone_image(raw))
-                        self._restore_rows(memory, target)
-                else:
-                    # 原数据库不写迁移中间值；只发布已经回读通过的完整映像。
-                    durable_write(path, self._standalone_image(raw))
-                    for suffix in ('-wal', '-shm', '-journal'):
-                        Path(str(path) + suffix).unlink(missing_ok=True)
-            else:
-                durable_write(path, raw)
-
-    @staticmethod
-    def _restore_rows(source, target):
-        tables = {r[0] for r in source.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        protected_tables = ('cl1_data', 'opsi_items', 'resource_snapshots', 'daily_summary_cl1_events', 'daily_summary_periods')
-        triggers = [row for row in source.execute("SELECT name,tbl_name,sql FROM sqlite_master WHERE type='trigger'")
-                    if row[1] in protected_tables]
-        with target:
-            target.execute('BEGIN IMMEDIATE')
-            for name, table in target.execute("SELECT name,tbl_name FROM sqlite_master WHERE type='trigger'").fetchall():
-                if table in protected_tables:
-                    target.execute('DROP TRIGGER "' + name.replace('"', '""') + '"')
-            for table in protected_tables:
-                if table not in tables:
-                    continue
-                columns = [r[1] for r in source.execute('PRAGMA table_info(' + table + ')')]
-                protected = {'cl1_data': ['secure_json', 'encrypted_blob'],
-                             'resource_snapshots': ['opsi_payload', 'action_point', 'yellow_coin', 'purple_coin'],
-                             'daily_summary_periods': ['report_text']} .get(table)
-                if table in ('opsi_items', 'daily_summary_cl1_events'):
-                    target.execute('DELETE FROM ' + table)
-                else:
-                    identity = ['instance', 'month'] if table == 'cl1_data' else \
-                        (['instance', 'period_key'] if table == 'daily_summary_periods' else ['id'])
-                    present = {tuple(row) for row in source.execute('SELECT ' + ','.join(identity) + ' FROM ' + table)}
-                    for key in target.execute('SELECT ' + ','.join(identity) + ' FROM ' + table).fetchall():
-                        if tuple(key) not in present:
-                            target.execute('DELETE FROM ' + table + ' WHERE ' + ' AND '.join(k + '=?' for k in identity), key)
-                for values in source.execute('SELECT * FROM ' + table):
-                    row = dict(zip(columns, values))
-                    if protected:
-                        identity = ['instance', 'month'] if table == 'cl1_data' else \
-                            (['instance', 'period_key'] if table == 'daily_summary_periods' else ['id'])
-                        condition = ' AND '.join(k + '=?' for k in identity)
-                        key = [row[k] for k in identity]
-                        if target.execute('SELECT 1 FROM ' + table + ' WHERE ' + condition, key).fetchone():
-                            target.execute('UPDATE ' + table + ' SET ' + ','.join(k + '=?' for k in protected)
-                                           + ' WHERE ' + condition, [row[k] for k in protected] + key)
-                            continue
-                    target.execute('INSERT INTO ' + table + '(' + ','.join(columns) + ') VALUES ('
-                                   + ','.join('?' for _ in columns) + ')', values)
-            for _, _, sql in triggers:
-                target.execute(sql)
-
-    def _recover_migration(self, rollback=True):
-        try:
-            token = self.journal_path.read_bytes()
-            if hashlib.sha256(token).hexdigest() != self._state['journal']:
-                raise VaultLocked('迁移记录未通过校验，保留当前数据')
-            journal = json.loads(self._decode('opsi-stats/v2/transition', token.decode(), self.slot))
-            self._restore_images(journal['before'])
-            if journal['keyring']:
-                durable_write(self.keyring_path, _b64d(journal['keyring']))
-            else:
-                self.keyring_path.unlink(missing_ok=True)
-            self._state.update(phase='preparing', root='', generation=0)
-            self._state.pop('journal', None)
-            self._provider().save(self.slot, self._state)
-            self._active = False
-            self.journal_path.unlink(missing_ok=True)
-        except IntegrityFailure as exc:
-            raise VaultLocked('迁移记录未通过校验，保留当前数据') from exc
-
-    def _rescue_wipe_copy(self):
-        """清空前把受保护文件与凭据状态复制到救援目录（留档与取证）。"""
-        try:
-            folder = self.directory / time.strftime('rescue-%Y%m%d-%H%M%S')
-            written = 0
-            for path in [*self.coordinator.paths(), *self.coordinator.files()]:
-                if not path.exists():
-                    continue
-                target = folder / f'{written:03d}-{path.name}'
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(path.read_bytes())
-                written += 1
-            if self._state:
-                folder.mkdir(parents=True, exist_ok=True)
-                (folder / 'provider_state.json').write_bytes(canonical(self._state))
-            logger.warning(f'[统计-加密] 清空前已救援备份 {written} 个文件到 {folder}')
-        except OSError as exc:
-            logger.warning(f'[统计-加密] 清空前救援备份失败: {exc}')
-
-    def _wipe(self, reason):
-        with self.coordinator.lock():
-            if not self._active:
-                return
-            # 先撤销凭据，普通 I/O 失败后仍可继续清理，不能再读取旧记录。
-            self._rescue_wipe_copy()
-            self._fresh = None
-            self._state = {'phase': 'wiping', 'installation_id': self._state['installation_id']}
-            self._provider().save(self.slot, self._state)
-            self._dek = self._legacy = None
-            self._active = False
-            self._finish_wipe()
-            durable_write(self.wipe_path, canonical({'reason': reason, 'at': time.strftime('%Y-%m-%d %H:%M:%S')}))
-
-    def _finish_wipe(self):
-        for path in self.coordinator.paths():
-            if not path.exists():
-                continue
+    def decrypt_record(self, kind, value, context):
+        """旧密文 → 载荷字典；当前不可读时返回 None。"""
+        self._ensure()
+        if value.startswith(BLOB_PREFIX):
+            if self._dek is None or not context or not self._state:
+                return None
+            aad = dict(context, schema=2, algorithm=ALGORITHM,
+                       installation_id=self._state.get('installation_id'))
             try:
-                with closing(sqlite3.connect(path, timeout=5)) as conn, conn:
-                    conn.execute('PRAGMA secure_delete=ON')
-                    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-                    for name, table in conn.execute("SELECT name,tbl_name FROM sqlite_master WHERE type='trigger'").fetchall():
-                        if table in ('cl1_data', 'opsi_items', 'resource_snapshots', 'daily_summary_cl1_events', 'daily_summary_periods'):
-                            conn.execute('DROP TRIGGER "' + name.replace('"', '""') + '"')
-                    if 'cl1_data' in tables:
-                        for instance, month, text in conn.execute('SELECT instance,month,data_json FROM cl1_data').fetchall():
-                            public, _ = partition_cl1(json.loads(text or '{}'))
-                            conn.execute('UPDATE cl1_data SET data_json=?, secure_json=NULL, encrypted_blob=NULL WHERE instance=? AND month=?',
-                                         (canonical(public).decode(), instance, month))
-                    if 'opsi_items' in tables:
-                        conn.execute('DELETE FROM opsi_items')
-                    if 'resource_snapshots' in tables:
-                        conn.execute('UPDATE resource_snapshots SET opsi_payload=NULL, action_point=NULL, yellow_coin=NULL, purple_coin=NULL')
-                    if 'daily_summary_cl1_events' in tables:
-                        conn.execute('DELETE FROM daily_summary_cl1_events')
-                    if 'daily_summary_periods' in tables:
-                        conn.execute('UPDATE daily_summary_periods SET report_text=NULL')
-            except (sqlite3.Error, OSError) as exc:
-                # 单个库被占用不能卡死复位流程。
-                logger.warning(f'[统计-加密] 清空时该库不可用，跳过内容清理: {path.name}（{type(exc).__name__}）')
-        for path in self.coordinator.files():
-            path.unlink(missing_ok=True)
-        self.keyring_path.unlink(missing_ok=True)
-        self.journal_path.unlink(missing_ok=True)
-        self._pending_path().unlink(missing_ok=True)
-        self._provider().delete(self.slot)
-        self._state = None
-        self._wipe_scheduled = False
-
-    def wipe(self, reason):
-        self._wipe(reason)
+                return json.loads(_decrypt(_subkey(self._dek, 'opsi-stats/v2/' + kind),
+                                           value[len(BLOB_PREFIX):], aad))
+            except (ValueError, TypeError, UnicodeError):
+                return None
+        if value.startswith(LEGACY_PREFIX):
+            if self._legacy is None:
+                return None
+            try:
+                raw = _b64d(value[len(LEGACY_PREFIX):])
+                cipher = AES.new(_subkey(self._legacy, 'opsi-stats/v1/' + kind), AES.MODE_GCM, nonce=raw[:12])
+                cipher.update(('opsi-stats/v1/' + kind).encode())
+                return json.loads(cipher.decrypt_and_verify(raw[12:-16], raw[-16:]))
+            except (ValueError, TypeError, UnicodeError):
+                return None
+        return None
 
 
-class _DeepCheck:
-    """后台深检查：数据库取全量映像摘要、文件取字节摘要，只在后台线程执行。
+def _dpapi(data, decrypt=False):
+    from module.runtime.account_local import dpapi
+    return dpapi(data, decrypt=decrypt)
 
-    序号乐观并发：先读链序号 → 算摘要 → 再读链序号，期间序号变化说明有
-    正常写入插队，本轮放弃、下次再来；任何异常同样只放弃本轮。删除、
-    初始化与结构变化不在此判定。
+
+class StatsStore:
+    """统计存储句柄：根目录与读取兼容入口。"""
+
+    def __init__(self, root=None):
+        self.root = Path(root).resolve() if root else Path(__file__).resolve().parents[2]
+        self._keys = None
+
+    @property
+    def directory(self):
+        return self.root / 'config' / 'opsi_secure'
+
+    def vault_keys(self):
+        if self._keys is None:
+            self._keys = _VaultKeys(self.root)
+        return self._keys
+
+
+_STORE = None
+
+
+def get_store():
+    global _STORE
+    if _STORE is None:
+        _STORE = StatsStore()
+    return _STORE
+
+
+def set_store(store):
+    global _STORE
+    _STORE = store
+
+
+def decode_record(kind, value, context=None):
+    """读取一条统计载荷：明文 JSON 直接解析；旧密文尝试解密，失败返回 None。"""
+    if not isinstance(value, str) or not value:
+        return None
+    if is_ciphertext(value):
+        return get_store().vault_keys().decrypt_record(kind, value, context)
+    try:
+        data = json.loads(value)
+    except (ValueError, TypeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def decode_text(value, context=None):
+    """读取日报正文：明文即正文；旧密文解密出 {'text': ...}。"""
+    if not isinstance(value, str) or not value:
+        return None
+    if is_ciphertext(value):
+        payload = get_store().vault_keys().decrypt_record('reports', value, context)
+        text = payload.get('text') if isinstance(payload, dict) else None
+        return text if isinstance(text, str) else None
+    return value
+
+
+def decode_file_payload(kind, path, data, root=None):
+    """读取统计文件载荷：普通 JSON 直接返回；旧包装解开并解密，失败返回 None。"""
+    if not isinstance(data, dict):
+        return None
+    if not (data.get(WRAPPER_KEY) or data.get(LEGACY_WRAPPER_KEY)):
+        return data
+    payload = data.get('payload')
+    if isinstance(payload, dict):
+        return payload
+    if isinstance(payload, str):
+        try:
+            context = file_context(root or get_store().root, kind, path)
+        except ValueError:
+            return None
+        return get_store().vault_keys().decrypt_record(kind, payload, context)
+    return None
+
+
+def write_file(kind, path, data):
+    """原子写出统计文件：字典写 JSON 文本，字符串原样写。"""
+    raw = canonical(data) if isinstance(data, (dict, list)) else str(data).encode('utf-8')
+    durable_write(path, raw)
+
+
+def quarantine_unreadable(kind, identity, value):
+    """把无法读取的旧载荷另存到旁路备份文件（原样保留，绝不销毁）；返回存放路径。
+
+    仅在本机确认解不开（密钥可用但记录解不开，或干净的凭据未命中）时调用；
+    调用方之后按现状继续写入，避免单条旧数据永久冻结整个统计。
     """
+    directory = get_store().directory
+    directory.mkdir(parents=True, exist_ok=True)
+    if isinstance(value, bytes):
+        payload, encoding = base64.b64encode(value).decode('ascii'), 'base64'
+    else:
+        payload, encoding = value, 'text'
+    target = directory / f'unreadable-{time.strftime("%Y%m%d-%H%M%S")}-{os.urandom(3).hex()}.json'
+    durable_write(target, canonical({'kind': kind, 'identity': str(identity), 'encoding': encoding,
+                                     'at': time.strftime('%Y-%m-%d %H:%M:%S'), 'payload': payload}))
+    logger.warning(f'[统计-解密] 旧数据无法在本机解密，已另存备份并按现状继续写入: {identity} -> {target}')
+    return target
 
-    def __init__(self, vault):
-        self.vault = vault
-        self._event = threading.Event()
-        self._thread = None
-        self._lock = threading.Lock()
-        self._last = 0.0
-        self._writes = 0
 
-    def kick(self, force=False):
-        self._ensure_thread()
-        if force:
-            with self._lock:
-                self._last = 0.0
-        self._event.set()
+# ---- 旧密文的一次性解密 ----
 
-    def note_write(self):
-        with self._lock:
-            self._writes += 1
-            due = self._writes >= DEEP_CHECK_WRITE_CADENCE
-            if due:
-                self._writes = 0
-        if due:
-            self.kick()
+def _database_rows(conn, path):
+    """按登记位置清点库内密文行，yield (table, column, kind, rowid, value)。"""
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    for name, table, column, kind in DATABASE_LAYOUT:
+        if name != Path(path).name or table not in tables:
+            continue
+        columns = [row[1] for row in conn.execute('PRAGMA table_info(' + table + ')')]
+        if column not in columns:
+            continue
+        for rowid, value in conn.execute(f'SELECT rowid, {column} FROM {table}').fetchall():
+            if is_ciphertext(value):
+                yield table, column, kind, rowid, value
 
-    def _ensure_thread(self):
-        with self._lock:
-            if self._thread is not None:
-                return
-            self._thread = threading.Thread(target=self._loop, name='statistics-deep-check', daemon=True)
-            self._thread.start()
 
-    def _loop(self):
-        while True:
-            triggered = self._event.wait(timeout=DEEP_CHECK_PERIODIC)
-            self._event.clear()
-            with self._lock:
-                run = (not triggered) or (time.monotonic() - self._last >= DEEP_CHECK_MIN_INTERVAL)
-            if not run:
-                continue
-            try:
-                self.run_once()
-            except Exception:
-                logger.debug('[统计-加密] 深检查本轮放弃', exc_info=True)
-            with self._lock:
-                self._last = time.monotonic()
-
-    def run_once(self):
-        """执行一轮深检查（后台线程里跑；测试与诊断可直接调用）。"""
-        vault = self.vault
-        if not vault._active or not vault._state:
-            return
-        paths = set(vault.coordinator.paths())
-        for path in [*paths, *vault.coordinator.files()]:
-            path = Path(path).resolve()
-            if vault.coordinator.is_archive(path):
-                continue
-            try:
-                if path in paths:
-                    self._check_database(path)
-                else:
-                    self._check_file(path)
-            except (sqlite3.Error, OSError, VaultLocked) as exc:
-                logger.debug(f'[统计-加密] 深检查暂不可用: {path.name}（{type(exc).__name__}）')
-            if not vault._active:
-                return
-
-    @staticmethod
-    def _read_seq(path):
-        # 路径不存在直接返回；sqlite3.connect 会创建空文件。
-        if not Path(path).exists():
-            return None
+def pending_blobs(root):
+    """清点仍处于加密态的位置；返回位置描述列表，空列表表示没有密文。"""
+    root = Path(root).resolve()
+    pending = []
+    for path in database_paths(root):
+        if not path.exists():
+            continue
         try:
-            with closing(sqlite3.connect(path, timeout=VERIFY_TIMEOUT)) as conn:
-                row = conn.execute('SELECT seq FROM ' + CHAIN_TABLE).fetchone()
-        except sqlite3.Error:
-            return None
-        return int(row[0]) if row else None
-
-    def _load_checked(self):
-        """锁内载入状态；未激活时返回 None。"""
-        vault = self.vault
-        if not vault._active:
-            return None
+            with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=5)) as conn:
+                counts = {}
+                for table, _, _, _, _ in _database_rows(conn, path):
+                    counts[table] = counts.get(table, 0) + 1
+                for table, count in sorted(counts.items()):
+                    pending.append(f'{path.name}:{table}×{count}')
+        except sqlite3.Error as exc:
+            # 读不了就不能断言"没有密文"：按待处理对待，下次再试。
+            pending.append(f'{path.name}（{type(exc).__name__}）')
+    for path in [*protected_files(root), *archive_files(root)]:
         try:
-            vault._load()
-        except (VaultError, ProviderUnavailable, OSError, sqlite3.Error):
-            return None
-        return vault if vault._active else None
-
-    def _chain_consistent(self, path, before):
-        """锁内复核链行与结构指纹：链缺失、序号变化或在途结构变化返回 False。"""
-        vault = self.vault
+            with path.open('rb') as stream:
+                head = stream.read(64)
+        except OSError:
+            # 读不了就不能断言"没有密文"：按待处理对待。
+            pending.append(str(path.relative_to(root)))
+            continue
+        if head.startswith((f'{{"{LEGACY_WRAPPER_KEY}"'.encode(), f'{{"{WRAPPER_KEY}"'.encode())):
+            pending.append(str(path.relative_to(root)))
+            continue
         try:
-            with closing(sqlite3.connect(path, timeout=VERIFY_TIMEOUT)) as conn:
-                row = vault._read_chain(conn)
-                fingerprint = vault._schema_fingerprint(conn)
-        except sqlite3.Error:
-            return False
-        return row is not None and row['seq'] == before and row['fingerprint'] == fingerprint
+            with path.open(encoding='utf-8') as stream:
+                text = stream.read(64)
+        except (OSError, UnicodeError):
+            continue
+        if text.startswith((BLOB_PREFIX, LEGACY_PREFIX)):
+            pending.append(str(path.relative_to(root)))
+    return pending
 
-    def _check_database(self, path):
-        vault = self.vault
-        key = vault._expect_key(path)
-        before = self._read_seq(path)
-        if before is None:
-            return  # 链缺失/未初始化：由浅检查负责
-        digest = vault._path_digest(path)
-        if digest is None:
-            return
-        if self._read_seq(path) != before:
-            return  # 有正常写入插队，本轮放弃
-        with vault.coordinator.lock():
-            if self._load_checked() is None or not self._chain_consistent(path, before):
-                return
-            entry = vault._expected().get(key)
-            if not isinstance(entry, dict):
-                return
-            quiet = entry.get('q') == before
-            if quiet and entry.get('d') and entry['d'] != digest[:SIG_LEN]:
-                vault._tamper(key, '全量映像与基线不一致（字节级改动）',
-                              expected={'digest': entry['d']}, actual={'digest': digest[:SIG_LEN]})
-            if quiet and entry.get('d') == digest[:SIG_LEN] and isinstance(entry.get('acc'), str):
-                return  # 与上次记录完全一致：无事可做
-            try:
-                chain_key = vault._chain_key()
-            except (ProviderUnavailable, VaultError, OSError) as exc:
-                logger.debug(f'[统计-加密] 深检查密钥暂不可用: {path.name}（{type(exc).__name__}）')
-                return
-        # 慢路径：锁外全量重算内容累计摘要（秒级；期间任何合法写入都会推进 seq）。
+
+def _row_context_for(kind, row):
+    if kind == 'reports':
+        return report_context(row['instance'], row['period_key'])
+    return row_context(kind, row)
+
+
+def _decrypt_database(conn, path, keys, quarantined):
+    """解密一个库文件里的全部密文行；返回解密行数。不可读行按原样保留并记入隔离。"""
+    done = 0
+    columns_cache = {}
+    for table, column, kind, rowid, value in _database_rows(conn, path):
+        if table not in columns_cache:
+            columns_cache[table] = [r[1] for r in conn.execute('PRAGMA table_info(' + table + ')')]
         try:
-            acc_now = vault._recompute_acc(path, chain_key)
-        except (sqlite3.Error, OSError, ProviderUnavailable, VaultError) as exc:
-            logger.debug(f'[统计-加密] 深检查重算暂不可用: {path.name}（{type(exc).__name__}）')
-            return
-        if self._read_seq(path) != before:
-            return  # 有写入插队，本轮放弃
-        with vault.coordinator.lock():
-            if self._load_checked() is None or not self._chain_consistent(path, before):
-                return
-            entry = vault._expected().get(key)
-            if not isinstance(entry, dict):
-                return
-            if entry.get('q') != before and isinstance(entry.get('acc'), str) and entry['acc'] != acc_now:
-                vault._tamper(key, '内容累计摘要与基线不一致',
-                              expected={'acc': entry['acc']}, actual={'acc': acc_now})
-            if entry.get('d') != digest[:SIG_LEN] or entry.get('q') != before or entry.get('acc') != acc_now:
-                # 首次深检查或序号已前进：以现状记/重记摘要基线。
-                entry['d'] = digest[:SIG_LEN]
-                entry['q'] = before
-                entry['acc'] = acc_now
-                vault._save_expectations()
-
-    def _check_file(self, path):
-        vault = self.vault
-        key = vault._expect_key(path)
-        with vault.coordinator.lock():
-            if not vault._active:
-                return
-            try:
-                vault._load()
-            except (VaultError, ProviderUnavailable, OSError, sqlite3.Error):
-                return
-            if not vault._active:
-                return
-            entry = vault._expected().get(key)
-            if not (isinstance(entry, dict) and entry.get('d')):
-                return
-            if not path.exists():
-                return  # 删除判定归浅检查
-            digest = hashlib.sha256(path.read_bytes()).hexdigest()[:SIG_LEN]
-            if entry['d'] != digest:
-                vault._tamper(key, '文件字节与基线不一致',
-                              expected={'digest': entry['d']}, actual={'digest': digest})
-
-
-def portalocker_error():
-    import portalocker
-    return portalocker.exceptions.LockException
-
-
-_VAULT = None
-
-
-def get_vault():
-    global _VAULT
-    if _VAULT is None:
-        _VAULT = Vault()
-    return _VAULT
-
-
-def set_vault(vault):
-    global _VAULT
-    _VAULT = vault
-
-
-def is_configured():
-    return get_vault().is_configured()
-
-
-def writer_ready():
-    return get_vault().writer_ready()
-
-
-def seal(kind, obj, context=None):
-    return get_vault().seal(kind, obj, context)
-
-
-def open_(kind, blob, context=None):
-    return get_vault().open_(kind, blob, context)
-
-
-def open_or_none(kind, blob, context=None):
-    return get_vault().open_or_none(kind, blob, context)
-
-
-def ensure_migrated():
-    return get_vault().ensure_migrated()
-
-
-def status():
-    return get_vault().status()
-
-
-def verify_on_page_open():
-    """统计页面打开/刷新的核对点（由 WebUI 报表入口调用）。"""
-    get_vault().verify_on_page_open()
-
-
-def record_dropped(kind):
-    get_vault().record_dropped(kind)
-
-
-def checked_read(function):
-    @wraps(function)
-    def read(*args, **kwargs):
-        vault = get_vault()
-        if args and hasattr(args[0], 'db_path'):
-            vault.check_database(args[0].db_path)
-        elif args and hasattr(args[0], '_path'):
-            vault.check_file(args[0]._path)
-        elif 'AzurStats' in function.__globals__:
-            stats = function.__globals__['AzurStats']
-            if function.__name__ == 'load_meowofficer_farming':
-                vault.check_file(stats._meowofficer_farming_path(kwargs.get('instance', args[0] if args else None)))
+            row = dict(zip(columns_cache[table],
+                           conn.execute(f'SELECT * FROM {table} WHERE rowid=?', (rowid,)).fetchone()))
+            payload = keys.decrypt_record(kind, value, _row_context_for(kind, row))
+        except (sqlite3.Error, KeyError, TypeError, ValueError):
+            payload = None
+        updated = None
+        if isinstance(payload, dict):
+            if kind == 'reports':
+                text = payload.get('text')
+                updated = text if isinstance(text, str) else None
             else:
-                vault.check_database(stats.LOCAL_DB)
-        elif '_LOCAL_DB' in function.__globals__:
-            vault.check_database(function.__globals__['_LOCAL_DB'])
+                updated = serialize_obj(payload)
+        if updated is None:
+            quarantined.append(f'{Path(path).name}:{table}#{rowid}')
+            continue
+        conn.execute(f'UPDATE {table} SET {column}=? WHERE rowid=?', (updated, rowid))
+        done += 1
+    return done
+
+
+def _drop_aux_objects(conn):
+    """移除加密时代的触发器与辅助表。
+
+    触发器引用辅助表，必须一并移除（先触发器后表），否则后续写入会失败。
+    """
+    for (name,) in conn.execute("SELECT name FROM sqlite_master WHERE type='trigger' AND substr(name,1,7)=?",
+                                (AUX_PREFIX,)).fetchall():
+        conn.execute('DROP TRIGGER IF EXISTS "' + name.replace('"', '""') + '"')
+    for (name,) in conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND substr(name,1,7)=?",
+                                (AUX_PREFIX,)).fetchall():
+        conn.execute('DROP TABLE IF EXISTS "' + name.replace('"', '""') + '"')
+
+
+def _payload_to_csv(payload):
+    stream = io.StringIO()
+    writer = csv.writer(stream, lineterminator='\n')
+    writer.writerow(payload.get('header') or [])
+    for row in payload.get('rows') or []:
+        writer.writerow(row)
+    return stream.getvalue().encode('utf-8')
+
+
+def _decode_file_blob(root, path, kind, payload, keys):
+    """解密文件载荷；`.bak` 是主文件的字节拷贝，身份绑定主文件，失败时按主文件重试。"""
+    opened = keys.decrypt_record(kind, payload, file_context(root, kind, path))
+    if opened is None and path.name.endswith('.bak'):
+        base = path.with_name(path.name[:-len('.bak')])
+        opened = keys.decrypt_record(kind, payload, file_context(root, kind, base))
+    return opened
+
+
+def _decrypt_file(root, path, keys, quarantined):
+    """解密一个统计文件（JSON 包装或整体密文）；返回是否已改写。"""
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return False
+    kind = _file_kind(path)
+    if raw[:1] == b'{':
         try:
-            with vault.reading():
-                return function(*args, **kwargs)
-        except (ProviderUnavailable, VaultLocked, OSError, sqlite3.Error):
-            # 原调用方的形状及只读降级逻辑保持不变。
-            return function(*args, **kwargs)
-    return read
+            data = json.loads(raw)
+        except (ValueError, UnicodeError):
+            return False
+        if not (isinstance(data, dict) and (data.get(WRAPPER_KEY) or data.get(LEGACY_WRAPPER_KEY))):
+            return False
+        payload = data.get('payload')
+        if isinstance(payload, dict):
+            opened = payload
+        elif isinstance(payload, str):
+            opened = _decode_file_blob(root, path, kind, payload, keys)
+        else:
+            opened = None
+        if not isinstance(opened, dict):
+            quarantined.append(str(path.relative_to(root)))
+            return False
+        durable_write(path, canonical(opened))
+        return True
+    try:
+        text = raw.decode('utf-8')
+    except UnicodeError:
+        return False
+    if not is_ciphertext(text):
+        return False
+    opened = _decode_file_blob(root, path, kind, text, keys)
+    if not isinstance(opened, dict) or not isinstance(opened.get('rows'), list):
+        quarantined.append(str(path.relative_to(root)))
+        return False
+    durable_write(path, _payload_to_csv(opened))
+    return True
+
+
+def _decrypt_database_image(image, name, keys, quarantined):
+    """解密归档库映像内部的行与辅助对象，返回 (新映像, 解密行数)。"""
+    with closing(sqlite3.connect(':memory:')) as conn:
+        conn.deserialize(image)
+        done = _decrypt_database(conn, Path(name), keys, quarantined)
+        _drop_aux_objects(conn)
+        conn.commit()
+        return conn.serialize(), done
+
+
+def _decrypt_archive(root, path, keys, quarantined):
+    """解密备份目录里的一个归档包装；返回解密处数。"""
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return 0
+    if raw[:1] != b'{':
+        return 0
+    try:
+        data = json.loads(raw)
+    except (ValueError, UnicodeError):
+        return 0
+    if not (isinstance(data, dict) and (data.get(WRAPPER_KEY) or data.get(LEGACY_WRAPPER_KEY))):
+        return 0
+    payload = data.get('payload')
+    if isinstance(payload, dict):
+        opened = payload
+    elif isinstance(payload, str):
+        opened = keys.decrypt_record('archives', payload, file_context(root, 'archives', path))
+    else:
+        opened = None
+    if not isinstance(opened, dict) or not isinstance(opened.get('bytes'), str):
+        quarantined.append(str(path.relative_to(root)))
+        return 0
+    try:
+        content = _b64d(opened['bytes'])
+    except (ValueError, TypeError):
+        quarantined.append(str(path.relative_to(root)))
+        return 0
+    if path.name in DATABASE_NAMES and content[:16] == b'SQLite format 3\x00':
+        try:
+            content, _ = _decrypt_database_image(content, path.name, keys, quarantined)
+        except sqlite3.Error:
+            quarantined.append(str(path.relative_to(root)))
+            return 0
+    durable_write(path, content)
+    return 1
+
+
+def _decrypt_all_databases(root, keys, quarantined):
+    done = 0
+    for path in database_paths(root):
+        if not path.exists():
+            continue
+        try:
+            with closing(sqlite3.connect(path, timeout=10)) as conn:
+                conn.execute('BEGIN IMMEDIATE')
+                done += _decrypt_database(conn, path, keys, quarantined)
+                _drop_aux_objects(conn)
+                conn.commit()
+        except sqlite3.Error as exc:
+            logger.warning(f'[统计-解密] {path.name} 暂时无法处理（{type(exc).__name__}），本次保留原样')
+    return done
+
+
+def _decrypt_all_files(root, keys, quarantined):
+    done = 0
+    for path in protected_files(root):
+        if _decrypt_file(root, path, keys, quarantined):
+            done += 1
+    return done
+
+
+def _decrypt_all_archives(root, keys, quarantined):
+    done = 0
+    for path in archive_files(root):
+        done += _decrypt_archive(root, path, keys, quarantined)
+    return done
+
+
+def _cleanup_encryption(keys, root):
+    """解密完成后的收尾：移除描述文件与标记文件，撤销本机密钥。"""
+    directory = Path(root) / 'config' / 'opsi_secure'
+    provider, slot = keys._provider, keys._slot
+    for name in RESIDUE_FILES:
+        (directory / name).unlink(missing_ok=True)
+    if provider is not None and slot is not None:
+        try:
+            provider.delete(slot)
+        except (ProviderUnavailable, OSError) as exc:
+            logger.warning(f'[统计-解密] 本机统计密钥未能撤销（{type(exc).__name__}），描述文件已移除')
+    rescue = sorted(path for path in directory.glob('rescue-*') if path.is_dir())
+    if rescue:
+        logger.warning(f'[统计-解密] 检测到 {len(rescue)} 个历史清空备份目录（rescue-*），按原样保留')
+
+
+def _finish_if_clean(root):
+    """无密文但仍有加密时代残留文件时的收尾（上次收尾被中断）。"""
+    directory = Path(root) / 'config' / 'opsi_secure'
+    if not directory.exists():
+        return False
+    if not any((directory / name).exists() for name in RESIDUE_FILES):
+        return False
+    keys = get_store().vault_keys()
+    keys._ensure()
+    _cleanup_encryption(keys, root)
+    return True
+
+
+def decrypt_all():
+    """把本机全部旧密文解密为明文；可用性优先，失败保持原样等待重试。
+
+    Returns:
+        dict: {'pending': bool, 'decrypted': int, 'quarantined': int}
+    """
+    root = get_store().root
+    pending = pending_blobs(root)
+    if not pending:
+        if _finish_if_clean(root):
+            logger.info('[统计-解密] 统计描述文件与旧密钥已移除（历史数据均为明文）')
+        return {'pending': False, 'decrypted': 0, 'quarantined': 0}
+    keys = get_store().vault_keys()
+    keys.retry()
+    if not keys.available():
+        logger.warning(f'[统计-解密] 检测到 {len(pending)} 处旧加密数据，但本机密钥暂不可用；保持原样稍后自动重试')
+        return {'pending': True, 'decrypted': 0, 'quarantined': 0}
+    directory = root / 'config' / 'opsi_secure'
+    directory.mkdir(parents=True, exist_ok=True)
+    with portalocker.Lock(str(directory / 'migration.lock'), timeout=MIGRATION_LOCK_TIMEOUT):
+        if not pending_blobs(root):
+            if _finish_if_clean(root):
+                logger.info('[统计-解密] 统计描述文件与旧密钥已移除（历史数据均为明文）')
+            return {'pending': False, 'decrypted': 0, 'quarantined': 0}
+        quarantined = []
+        decrypted = _decrypt_all_databases(root, keys, quarantined)
+        decrypted += _decrypt_all_files(root, keys, quarantined)
+        decrypted += _decrypt_all_archives(root, keys, quarantined)
+        leftovers = pending_blobs(root)
+        if leftovers or quarantined:
+            blocked = quarantined + leftovers
+            preview = '、'.join(blocked[:5]) + ('、…' if len(blocked) > 5 else '')
+            # 两轮名单会重复收录同一位置（行级隔离条目与只读重扫），按较大者计处数。
+            count = max(len(quarantined), len(leftovers))
+            logger.warning(f'[统计-解密] 仍有 {count} 处旧数据暂无法解密，已按原样保留: {preview}')
+            return {'pending': True, 'decrypted': decrypted, 'quarantined': count}
+        _cleanup_encryption(keys, root)
+        logger.info(f'[统计-解密] 历史加密数据已全部解密为明文（{decrypted} 处），统计加密环境已移除')
+        return {'pending': False, 'decrypted': decrypted, 'quarantined': 0}
+
+
+_INIT_DONE = None
+
+
+def initialize(timeout=30.0):
+    """启动钩子：有界等待旧统计密文自动解密完成。
+
+    解密包含本机凭据与磁盘 I/O；异常环境（锁竞争、凭据服务未就绪）不允许
+    拖住应用启动——超时后解密转入后台继续，统计读写不依赖它。
+    """
+    global _INIT_DONE
+    if _INIT_DONE is not None:
+        return _INIT_DONE
+    result = {}
+
+    def worker():
+        try:
+            result.update(decrypt_all())
+        except Exception:
+            logger.exception('[统计-解密] 启动解密未完成（稍后自动重试）')
+
+    thread = threading.Thread(target=worker, name='statistics-decrypt', daemon=True)
+    thread.start()
+    thread.join(timeout)
+    if thread.is_alive():
+        logger.warning(f'[统计-解密] 旧统计数据处理超过 {int(timeout)} 秒未完成，转入后台继续（不阻塞本次启动）')
+        return False
+    _INIT_DONE = bool(result) and result.get('pending') is False
+    return _INIT_DONE

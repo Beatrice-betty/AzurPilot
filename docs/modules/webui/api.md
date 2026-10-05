@@ -419,3 +419,5 @@ ws.send_json({'v':1,'type':'request','id':'2','method':'events.subscribe',
 `events.subscribe` 接受实例级 `stock` 主题。`Session.stock_producer()` 订阅 `StockExchangeService` 的共享远端 SSE，回调用 `loop.call_soon_threadsafe()` 唤醒独立生产者，发送 `{instance,revision,serverTime,online}`；不占用 RPC 工作槽，也不回传凭据。普通主题仍遵循原采样机制。`stock.request` 与 `stock.status` 不计入通用请求频率限制；股票公开数据和本人账户/完整委托/自选接口仍由代理白名单与实例永久绑定保护。
 
 游戏历史后台每 250 毫秒检查文件修改状态，新记录立即转发；待传月份完整签名并连续补传，无 15 秒节流、1024 点或 3 秒配额。断网时指数退避，日志、身份、哈希链及跨实例隔离语义保留。同步完整性只涵盖已采集、保存且认证通过的记录。
+
+玩家数据校验仅阻断交易请求与同步，不阻断配置管理、实例创建/复制/导入/删除或普通调度资源事务。`stock.rebuild` 默认预览 `{instance,scope,affectedInstances,rebuilt:false}`；确认实际范围后用 `confirm=true` 和同一 `scope` 重建。单实例身份和历史错误只重建当前账户，共享密钥、登记或绑定损坏时范围为所有本地账户；范围变化返回 `STOCK_REBUILD_SCOPE_CHANGED`，不得自动扩大。先备份原件，再清理本地交易身份、绑定、会话与历史，保留配置及普通运行数据。重建不释放或转移远端永久绑定，新身份重新开户须使用新用户名。入参与结果见 [前端 API](../../../frontend/API.md#原生证券交易终端)。
