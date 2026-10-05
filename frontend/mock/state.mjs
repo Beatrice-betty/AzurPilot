@@ -1082,5 +1082,5 @@ export function createMockState({ empty = false } = {}) {
       log(name, '模拟任务正在运行，等待下一轮调度。')
     }
   }
-  return { dispatch, tick, setUpdateScenario }
+  return { dispatch, tick, setUpdateScenario, subscribeStock:stock.subscribe, close:stock.close }
 }

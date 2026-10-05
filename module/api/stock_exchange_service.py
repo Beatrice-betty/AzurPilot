@@ -64,6 +64,9 @@ class StockExchangeService:
         self.lock = threading.RLock()
         self.stop = threading.Event()
         self.thread = None
+        self.event_thread = None
+        self.event_response = None
+        self.listeners = set()
         self.bindings, self.sessions, self.identities, self.instance_locks = {}, {}, {}, {}
         self.stamps, self.records, self.statuses, self.attempts = {}, {}, {}, {}
         self.uploaded, self.last_upload = {}, {}
@@ -196,11 +199,60 @@ class StockExchangeService:
 
     def close(self):
         self.stop.set()
+        if self.event_response:
+            self.event_response.close()
+        if self.event_thread:
+            self.event_thread.join(timeout=2)
         if self.thread:
             self.thread.join(timeout=10)
         # 正在网络超时中的守护线程退出后再关闭日志，避免竞态。
         if not self.thread or not self.thread.is_alive():
             self.history.close()
+
+    def subscribe(self, listener):
+        """复用一个远端事件流；浏览器订阅只收到公开变更通知。"""
+        with self.lock:
+            self.listeners.add(listener)
+            if self.event_thread is None or not self.event_thread.is_alive():
+                self.event_thread = threading.Thread(target=self._listen_events, name='stock-market-events', daemon=True)
+                self.event_thread.start()
+
+        def unsubscribe():
+            with self.lock:
+                self.listeners.discard(listener)
+        return unsubscribe
+
+    def _notify(self, data):
+        with self.lock:
+            listeners = tuple(self.listeners)
+        for listener in listeners:
+            listener(data)
+
+    def _listen_events(self):
+        failures = 0
+        while not self.stop.is_set():
+            try:
+                request = Request(exchange_url() + '/api/events', headers={'Accept': 'text/event-stream'})
+                with urlopen(request, timeout=12) as response:
+                    self.event_response = response
+                    if response.headers.get_content_type() != 'text/event-stream':
+                        raise ValueError('交易所不支持实时事件流')
+                    while not self.stop.is_set():
+                        line = response.readline()
+                        if not line:
+                            raise OSError('交易所事件流已断开')
+                        if line.startswith(b'data: '):
+                            data = json.loads(line[6:])
+                            if isinstance(data, dict) and type(data.get('revision')) is int:
+                                failures = 0
+                                self._notify({**data, 'online': True})
+            except (URLError, TimeoutError, OSError, ValueError, ApiError):
+                if not self.stop.is_set():
+                    self._notify({'online': False})
+                    failures = min(failures + 1, 5)
+                    self.stop.wait(min(30, 2 ** (failures - 1)))
+            finally:
+                self.event_response = None
 
     def _save(self):
         from module.config.transaction import config_transaction
@@ -262,7 +314,7 @@ class StockExchangeService:
         except (URLError, TimeoutError, OSError):
             raise ApiError('STOCK_UNAVAILABLE', '交易所暂不可连接，稍后自动重试') from None
         with response:
-            raw = response.read(4 * 1024 * 1024)
+            raw = response.read()
             try:
                 data = json.loads(raw) if raw else None
                 server_time = int(parsedate_to_datetime(response.headers['Date']).timestamp()) if response.headers.get('Date') else int(time.time())
@@ -299,13 +351,16 @@ class StockExchangeService:
     def request(self, instance, path, method='GET', body=None, etag=''):
         self._refresh()
         with self._instance_lock(instance):
-            return self._request(instance, path, method, body, etag)
+            reply = self._request(instance, path, method, body, etag)
+        if method != 'GET' or reply['status'] == 401:
+            self._notify({'instance': instance})
+        return reply
 
     def _request(self, instance, path, method='GET', body=None, etag=''):
         self.configs.path(instance)
         public = method == 'GET' and (path in ('/meta', '/market', '/seasons') or re.fullmatch(r'/history/[1-9][0-9]*', path) or public_stock_path(path))
         auth = method == 'POST' and path in ('/register', '/login')
-        private = (method == 'GET' and path == '/account' or method == 'POST' and path in ('/orders', '/sync', '/logout')
+        private = (method == 'GET' and path in ('/account', '/orders') or method == 'POST' and path in ('/orders', '/watchlist', '/sync', '/logout')
                    or method == 'DELETE' and re.fullmatch(r'/orders/[1-9][0-9]*', path))
         if not (public or auth or private):
             raise ApiError('INVALID_PARAMS', '交易接口不在实例代理白名单中')
@@ -416,6 +471,8 @@ class StockExchangeService:
                 return
             identity, key = self._identity(instance)
             self.history.synchronize(instance, identity, key, binding, self._remote, self._accepted, force)
+            while self.history.pending.get(instance) and not self.stop.is_set():
+                self.history.synchronize(instance, identity, key, binding, self._remote, self._accepted, force)
         except (ApiError, OSError, sqlite3.Error, ValueError, TypeError) as error:
             with self.lock:
                 self.statuses[instance] = '行动力历史等待补传：' + str(error)
@@ -438,7 +495,7 @@ class StockExchangeService:
                 done = self.uploaded.get(instance) == stamp
             if done:
                 return
-            if not force and (time.monotonic() < retry_at or time.monotonic() - self.last_upload.get(instance, -100) < 15):
+            if not force and time.monotonic() < retry_at:
                 return
             if record['observedAt'] < time.time() - 86400:
                 return  # 旧记录由整月历史接口补传，实时接口只接收新鲜报价。
@@ -455,13 +512,13 @@ class StockExchangeService:
         except (ApiError, OSError, ValueError, TypeError) as error:
             with self.lock:
                 self.statuses[instance] = str(error)
-                self.attempts[instance] = {stamp: (attempts + 1, time.monotonic() + min(60, 15 * 2 ** min(attempts, 2)))}
+                self.attempts[instance] = {stamp: (attempts + 1, time.monotonic() + min(60, 2 ** min(attempts, 6)))}
             if force:
                 raise
 
     def _run(self):
         try:
-            while not self.stop.wait(2):
+            while not self.stop.wait(.25):
                 self.sync_once()
         finally:
             self.history.close()
