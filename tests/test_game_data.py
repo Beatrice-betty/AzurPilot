@@ -19,6 +19,14 @@ from module.runtime.account_local import LocalProtector
 from module.runtime.game_data import GameDataProtector, canonical
 
 
+def make_directory_link(link, target):
+    """建立目录链接：Windows 用 junction（免管理员权限），其余平台用符号链接。"""
+    if os.name == 'nt':
+        subprocess.run(['cmd', '/c', 'mklink', '/J', str(link), str(target)], check=True, capture_output=True)
+    else:
+        Path(link).symlink_to(target, target_is_directory=True)
+
+
 class GameDataTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -325,6 +333,20 @@ with patch.object(LocalProtector, 'key_directory', return_value=Path(sys.argv[2]
         self.assertEqual(0o700, stat.S_IMODE(self.protection.state_path.parent.stat().st_mode))
         self.assertEqual(0o600, stat.S_IMODE(self.protection.key_path.stat().st_mode))
         self.assertEqual(0o600, stat.S_IMODE(self.protection.state_path.stat().st_mode))
+
+    def test_path_alias_above_root_is_not_a_link(self):
+        """root 之上的路径别名（macOS 的 /var、Windows junction）不参与链接判定；root 之内的链接仍被拒绝。"""
+        alias = Path(self.temp.name) / 'alias'
+        inside = self.root / 'cache' / 'stock-exchange'
+        try:
+            make_directory_link(alias, Path(self.temp.name))
+            inside.mkdir(parents=True)
+            make_directory_link(inside / 'linked', self.root / 'config')
+        except (OSError, subprocess.CalledProcessError):
+            self.skipTest('本机不允许创建目录链接')
+        self.protection._safe(alias / 'project' / 'cache' / 'stock-exchange' / 'cl1_data.db')
+        with self.assertRaises(ApiError):
+            self.protection._safe(inside / 'linked' / 'cl1_data.db')
 
 
 @unittest.skipUnless(sys.platform == 'darwin', '需要原生 macOS，跨平台模拟由通用测试覆盖')
