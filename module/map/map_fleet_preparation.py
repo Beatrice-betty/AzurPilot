@@ -361,13 +361,10 @@ class FleetPreparation(InfoHandler):
         if self.map_fleet_checked:
             return False
 
-        # 跳过编队检测：信任游戏内当前预选的舰队，不操作下拉菜单
-        # 适用于舰队槽位未完全解锁的账号，避免下拉菜单检测卡死
-        if self.config.Fleet_SkipPreparation:
-            logger.info('[地图-编队] 跳过舰队准备 (Fleet_SkipPreparation=True), '
-                        '使用游戏中当前预选的舰队')
-            return True
-
+        # 校准自动搜索设置按钮（AUTO_SEARCH_SET_*）的坐标：以清空按钮为锚点。
+        # enter_map() 在 fleet_preparation() 之后紧接着就会调用 handle_auto_search_setting()，
+        # 这里只做识别与内存偏移、不点击界面，因此跳过编队检测时也必须执行，
+        # 否则 W15/16 章等新布局下会扫不到高亮项（误报「未找到活跃的自动搜索设置」）
         if self.appear(FLEET_1_CLEAR, offset=FleetOperator.OFFSET):
             AUTO_SEARCH_SET_MOB.load_offset(FLEET_1_CLEAR)
             AUTO_SEARCH_SET_BOSS.load_offset(FLEET_1_CLEAR)
@@ -376,6 +373,13 @@ class FleetPreparation(InfoHandler):
         if self.appear(SUBMARINE_CLEAR, offset=FleetOperator.OFFSET):
             AUTO_SEARCH_SET_SUB_AUTO.load_offset(SUBMARINE_CLEAR)
             AUTO_SEARCH_SET_SUB_STANDBY.load_offset(SUBMARINE_CLEAR)
+
+        # 跳过编队检测：信任游戏内当前预选的舰队，不操作下拉菜单
+        # 适用于舰队槽位未完全解锁的账号，避免下拉菜单检测卡死
+        if self.config.Fleet_SkipPreparation:
+            logger.info('[地图-编队] 跳过舰队准备 (Fleet_SkipPreparation=True), '
+                        '使用游戏中当前预选的舰队')
+            return True
 
         fleet_1 = FleetOperator(
             choose=FLEET_1_CHOOSE, advice=FLEET_1_ADVICE, bar=FLEET_1_BAR, clear=FLEET_1_CLEAR,
