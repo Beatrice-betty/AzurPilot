@@ -55,6 +55,7 @@ from module.retire.assets import DOCK_CHECK, SORTING_CLICK
 from module.statistics.item import AmountOcr
 from module.combat.level import LevelOcr
 from module.retire.dock import CARD_GRIDS, CARD_LEVEL_GRIDS, DOCK_SCROLL, Dock, OCR_DOCK_SELECTED
+from module.retire.enhancement import OCR_DOCK_AMOUNT
 from module.retire.scanner import FleetScanner, LevelScanner
 from module.ui.assets import BACK_ARROW, REWARD_GOTO_COMMISSION
 from module.tactical.assets import TACTICAL_CLASS_START, TACTICAL_CLASS_CANCEL
@@ -87,9 +88,15 @@ _SLOT_EMPTY_LUMINANCE = 130
 
 # 无法开始的委托（如等级不足）在短暂等待后放弃，而不是循环到
 # GameStuckError 重启游戏。
-COMMISSION_SKIP_AFTER_RECOMMEND = 5   # 推荐后开始按钮仍灰多久算失败（秒）。
+COMMISSION_SKIP_AFTER_RECOMMEND = 3   # 推荐后开始按钮仍灰多久算失败（秒）。
 COMMISSION_SKIP_TIMEOUT = 90          # 单个委托的绝对超时（秒）。
 COMMISSION_SKIP_MAX_RECOMMEND = 3     # 触发闪烁 bug 前的推荐点击上限。
+
+# 舰队询问弹窗（"舰船在已有舰队编成中，是否移出编队？"）的红色关闭按钮区域，
+# 基于 1280x720 国服截图校准（2026-10-07）：弹窗出现时该区域红色占比
+# 实测 0.93，无弹窗时 < 0.05。该弹窗的"取消/确定"是无背板白字与蓝底按钮，
+# 与仓库 POPUP_CONFIRM 的橙色模板不匹配，只能单独检测。
+COMMISSION_FLEET_QUESTION_AREA = (859, 172, 929, 220)
 
 # 委托船坞的筛选面板，基于 1280x720 国服截图校准（2026-09-30）。
 # 状态通过区域均值颜色回读。
@@ -133,10 +140,6 @@ _ROW3_LEVEL_AREA = tuple(
 # （滚动条可见时 set 没有拖动上限，会一直拖到防连点崩溃），
 # 因此翻页与到底判定在委托内自行实现。
 _DOCK_SCROLL_BOTTOM = 0.9
-# 翻页手势的上拖距离（约 2 行，行高 227），残差由
-# _commission_dock_align 吸附到整行，保证每步净进约 2 行、不漏读；
-# 440 使拖后行间缝落在 align 检测窗口（240-344）中部。
-_DOCK_PAGE_DISTANCE = 440
 
 # 每个委托要求的最低舰船等级（按游戏自身补位规则，至少一艘达标）。
 # 键为国服 OCR 读到的委托名；未知则为 0。
@@ -840,9 +843,13 @@ class RewardCommission(Dock, UI, InfoHandler):
 
     def _commission_dock_fleet_question(self):
         """游戏询问是否把点击的舰船移出舰队时为 True。"""
-        # 这里的确认按钮是蓝色，仓库素材里的是橙色，
-        # handle_popup_confirm() 看不到它，必须自己应答。
-        return self.appear(POPUP_CANCEL, offset=self._popup_offset)
+        image = np.asarray(self.device.image).astype(int)
+        x0, y0, x1, y1 = COMMISSION_FLEET_QUESTION_AREA
+        region = image[y0:y1, x0:x1]
+        red = (region[:, :, 0] > 140) \
+            & (region[:, :, 0] > region[:, :, 1] + 40) \
+            & (region[:, :, 0] > region[:, :, 2] + 40)
+        return red.mean() > 0.5
 
     def _commission_dock_answer_fleet_question(self, confirm):
         """应答舰队询问；confirm 表示把舰船移出所在舰队。"""
@@ -971,24 +978,35 @@ class RewardCommission(Dock, UI, InfoHandler):
             last = position
         return False
 
-    def _commission_dock_scroll_page(self):
-        """在列表底部内容区上拖一页（退役翻页手势）。
+    def _commission_dock_row_step(self):
+        """两行舰船对应的滚动条位置增量，按船坞容量估算。
 
-        滑动及其收尾手势从点击记录中弹出，避免防连点误杀
-        （参见 module/retire/scanner.py 的 multi_scan）。
+        列表按 7 列排布、视口约 3 行；筛选后的列表通常不长于全部舰船，
+        因此按全量估算偏保守：步长偏小只会变慢，不会跳过整行。
         """
-        click_zone_index = random_normal_distribution_int(0, 6)
-        start = random_rectangle_point((
-            240 + click_zone_index * 165, 555, 250 + click_zone_index * 165, 719
-        ))
-        distance = random_normal_distribution_int(
-            _DOCK_PAGE_DISTANCE - 20, _DOCK_PAGE_DISTANCE + 20)
-        end = (start[0], start[1] - distance)
-        sharp_end = (end[0] - 165, end[1])
-        self.device.swipe(start, end, name='COMMISSION_DOCK_PAGE')
+        ship_count, _, _ = OCR_DOCK_AMOUNT.ocr(self.device.image)
+        if ship_count <= 0:
+            return 0.125
+        rows = (ship_count + 6) // 7
+        scrollable = max(rows - 3, 3)
+        return min(max(2 / scrollable, 0.05), 0.5)
+
+    def _commission_dock_scroll_page(self):
+        """把船坞滚动条向下拖约两行，返回拖动后的位置。
+
+        走滚动条拖动而不是内容区手势（内容区起手区被底部按钮条覆盖，
+        拖不动列表），也不能用 Scroll.set/drag_page——滚动条可见时两者
+        没有拖动上限，而该滚动条到底后位置读数封顶约 0.93 永远不收敛，
+        会一直拖到防连点崩溃。滑动从点击记录中弹出，避免连点误杀。
+        """
+        before = DOCK_SCROLL.cal_position(main=self)
+        target = min(before + self._commission_dock_row_step(), 1.0)
+        p1 = random_rectangle_point(DOCK_SCROLL.position_to_screen(before), n=1)
+        p2 = random_rectangle_point(DOCK_SCROLL.position_to_screen(target), n=1)
+        self.device.swipe(p1, p2, name='COMMISSION_DOCK_PAGE', distance_check=False)
         self.device.click_record.pop()
-        self.device.swipe(end, sharp_end, name='COMMISSION_DOCK_PAGE')
-        self.device.click_record.pop()
+        self._commission_dock_wait_stable()
+        return DOCK_SCROLL.cal_position(main=self)
 
     def _commission_dock_scroll_top(self):
         """有界地把船坞列表滚回顶部。"""
@@ -1198,7 +1216,12 @@ class RewardCommission(Dock, UI, InfoHandler):
             return True
         # 列表可能停在上一档扫完的位置，先回到顶部再扫描。
         self._commission_dock_scroll_top()
+        steps = 0
         while 1:
+            steps += 1
+            if steps > 30:
+                logger.warning('[委托-选船] 翻页次数过多，停止扫描')
+                return False
             if not self.appear(DOCK_CHECK, offset=(20, 20)):
                 # 选满后船坞可能自行关闭，停止扫描，
                 # 不要扫描留在身后的任意画面。
@@ -1266,9 +1289,7 @@ class RewardCommission(Dock, UI, InfoHandler):
                         picked.add(ship['idx'])
                         logger.attr('已选舰船', f'Lv{ship["level"]} (末行)')
                 return count >= total
-            self._commission_dock_scroll_page()
-            self._commission_dock_wait_stable()
-            after = DOCK_SCROLL.cal_position(main=self)
+            after = self._commission_dock_scroll_page()
             if abs(after - before) < 0.005:
                 if after >= _DOCK_SCROLL_BOTTOM:
                     # 这一拖刚好到底，下一轮读末行。
@@ -1337,12 +1358,14 @@ class RewardCommission(Dock, UI, InfoHandler):
                     return True
             return False
 
-        picked = fill(allow_fleet=False)
-        if not picked and self.config.Commission_NoFreeShipPolicy == 'use_fleet':
+        # picked 是已选卡片集合（fill 的闭包用它判重），
+        # fill 的返回值必须用另一个名字，覆盖会破坏集合语义。
+        filled = fill(allow_fleet=False)
+        if not filled and self.config.Commission_NoFreeShipPolicy == 'use_fleet':
             logger.info('[委托-选船] 重试并允许使用舰队中的舰船')
             self.device.click_record_clear()
-            picked = fill(allow_fleet=True)
-        if not picked:
+            filled = fill(allow_fleet=True)
+        if not filled:
             count, _ = self._commission_dock_ship_count()
             if count <= 0:
                 logger.warning('[委托-选船] 没有为委托选到船，跳过')
