@@ -60,5 +60,52 @@ class TestCommissionFleetQuestion(unittest.TestCase):
                 self.assertFalse(self._detect(image))
 
 
+class TestCommissionDockGapOffset(unittest.TestCase):
+    """行间缝检测：对齐读数与滚动偏移回读。"""
+
+    @staticmethod
+    def _detect(image):
+        fake = types.SimpleNamespace(device=types.SimpleNamespace(image=image))
+        return RewardCommission._commission_dock_gap_offset(fake)
+
+    @staticmethod
+    def _fixture():
+        return np.array(
+            Image.open(FIXTURES / 'commission_dock_list.png').convert('RGB'))
+
+    def test_aligned_fixture_offset_near_zero(self):
+        """列表停在顶部、游戏自然对齐的实机截图：偏移应接近 0。
+
+        该截图上带用户标注的红色箭头横穿行间缝，
+        平滑后不应影响缝的定位。
+        """
+        offset = self._detect(self._fixture())
+        self.assertLessEqual(abs(offset), 9)
+
+    def test_shifted_content_reports_shift(self):
+        """整体滚动内容后，偏移随移动量变化，误差在几个像素内。"""
+        image = self._fixture()
+        for roll in (-45, 60, -100):
+            with self.subTest(roll=roll):
+                offset = self._detect(np.roll(image, roll, axis=0))
+                expected = (291 - 292 + roll + 113) % 227 - 113
+                self.assertAlmostEqual(offset, expected, delta=6)
+
+
+class TestCommissionDockScrollMetrics(unittest.TestCase):
+    def test_pixels_per_position_from_thumb_fraction(self):
+        """滑块占轨道 306/565（实机精英档测量值）时，
+        每 1.0 位置约 548 内容像素，1.7 行的翻页步长约 0.7 位置。"""
+        from module.retire.dock import DOCK_SCROLL
+        old = DOCK_SCROLL.length
+        try:
+            DOCK_SCROLL.length = 306
+            value = RewardCommission._commission_dock_pixels_per_position(
+                types.SimpleNamespace())
+            self.assertAlmostEqual(value, 548, delta=3)
+        finally:
+            DOCK_SCROLL.length = old
+
+
 if __name__ == '__main__':
     unittest.main()

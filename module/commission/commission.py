@@ -27,6 +27,7 @@ from datetime import datetime, timedelta
 import numpy as np
 
 from scipy import signal
+from scipy.ndimage import uniform_filter1d
 
 from module.base.button import Button, ButtonGrid
 from module.base.timer import Timer
@@ -55,7 +56,6 @@ from module.retire.assets import DOCK_CHECK, SORTING_CLICK
 from module.statistics.item import AmountOcr
 from module.combat.level import LevelOcr
 from module.retire.dock import CARD_GRIDS, CARD_LEVEL_GRIDS, DOCK_SCROLL, Dock, OCR_DOCK_SELECTED
-from module.retire.enhancement import OCR_DOCK_AMOUNT
 from module.retire.scanner import FleetScanner, LevelScanner
 from module.ui.assets import BACK_ARROW, REWARD_GOTO_COMMISSION
 from module.tactical.assets import TACTICAL_CLASS_START, TACTICAL_CLASS_CANCEL
@@ -125,7 +125,7 @@ DOCK_FILTER_RARITY = {
 }
 # 稀有度档位，从用户设定的最低档向上遍历。
 _COMMISSION_RARITY_STAGES = ['common', 'rare', 'elite', 'super_rare', 'ultra']
-# 每次翻页在滚动条上拖动一屏，随后测量暗色行间缝并对齐到 OCR 网格线。
+# 每次翻页拖动滚动条约两行，并测量行间缝对齐到 OCR 网格线。
 CARD_GRIDS_ROW3 = ButtonGrid(
     origin=(93, 530), delta=(164 + 2 / 3, 227), button_shape=(138, 204),
     grid_shape=(7, 1), name='CARD_ROW3')
@@ -144,8 +144,21 @@ _DOCK_SCROLL_BOTTOM = 0.9
 # 内容区落点不可控、拖不到列表两端，且会误触舰船卡片。
 # 手势必须用 device.drag（到达目标后按住再松手）：swipe 的小位移
 # 手势（<~25px）会被游戏回弹，drag 松手速度为 0、滑块精确停在目标处。
-_DOCK_SCROLL_STEP_MIN = 0.05
-_DOCK_SCROLL_STEP_MAX = 0.5
+#
+# 下列几何常量基于 1280x720 国服实机截图（2026-10-07）测量：
+# 行距 = CARD_GRIDS.delta[1] = 227；两行卡片之间暗缝的中心
+# = 第一行卡片下缘 76+204 加上缝宽（227-204）的一半 ≈ 292。
+_DOCK_ROW_PITCH = 227
+_DOCK_SEAM_Y = 292
+# 滚动视口约 2.85 行：卡片顶 76 到屏幕下缘 720 的可见区域
+# （底部按钮条半透明覆盖在列表上）。
+_DOCK_VIEWPORT_ROWS = 2.85
+# 每屏向下翻约 1.7 行：给位置换算误差留出余量，确保实际推进
+# 不超过 2 行（图像扫描每次只读顶部两行，超过 2 行会整行漏读）。
+_DOCK_PAGE_ROWS = 1.7
+# 实测游戏会吃掉拖拽起手约 10px 的位移（23px 的拖动实际只走 11px），
+# 拖拽终点按方向外扩作为补偿；每轮对齐会重新测量，残差可继续收敛。
+_DOCK_DRAG_SLOP = 8
 
 # 每个委托要求的最低舰船等级（按游戏自身补位规则，至少一艘达标）。
 # 键为国服 OCR 读到的委托名；未知则为 0。
@@ -972,6 +985,39 @@ class RewardCommission(Dock, UI, InfoHandler):
             })
         return ships
 
+    def _commission_dock_pick_row3(self, row3_scanner, required, picked, count, total):
+        """扫描并点击第三行（列表末行）的候选舰船，返回新的已选计数。
+
+        末行的舰队徽标被底栏遮挡，无法识别舰队归属，
+        只应在不允许拆舰队的档位（allow_fleet=False）使用。
+        """
+        for ship in self._commission_dock_scan_row3(row3_scanner):
+            if count >= total:
+                break
+            if ship['idx'] in picked:
+                continue
+            if ship['occupied']:
+                continue
+            if not 1 <= ship['level'] <= 125 or ship['level'] < required:
+                continue
+            after = self._commission_dock_click_ship(ship['button'], allow_fleet=False)
+            if after < 0:
+                continue
+            if after == count - 1:
+                # 这张卡已被推荐选中，刚才的点击把它取消了，
+                # 点回来且不计数。
+                self.device.click(ship['button'])
+                self.device.sleep(0.4)
+                self.device.screenshot()
+                restored, _ = self._commission_dock_ship_count()
+                if restored >= 0:
+                    count = restored
+                continue
+            count = after
+            picked.add(ship['idx'])
+            logger.attr('已选舰船', f'Lv{ship["level"]} (末行)')
+        return count
+
     def _commission_dock_wait_stable(self, timeout=4):
         """等待滚动条停止移动，列表已稳定。"""
         timer = Timer(timeout)
@@ -985,40 +1031,46 @@ class RewardCommission(Dock, UI, InfoHandler):
             last = position
         return False
 
-    def _commission_dock_row_step(self):
-        """两行舰船对应的滚动条位置增量，按船坞容量估算。
+    def _commission_dock_pixels_per_position(self):
+        """滚动条位置每 1.0 对应的内容像素数。
 
-        列表按 7 列排布、视口约 3 行；筛选后的列表通常不长于全部
-        舰船，按全量估算偏保守：步长偏小只会变慢，不会漏行。
+        滑块长度占轨道的比例 = 视口 / 内容，由此反推：
+        内容 = 行高 x 视口行数 / 比例，可滚动像素 = 内容 - 视口。
+        列表被稀有度筛选缩短后滑块会变长，只能按滑块估算，
+        不能用船坞总容量推行数。
         """
-        ship_count, _, _ = OCR_DOCK_AMOUNT.ocr(self.device.image)
-        if ship_count <= 0:
-            return 0.125
-        rows = (ship_count + 6) // 7
-        scrollable = max(rows - 3, 3)
-        return min(max(2 / scrollable, _DOCK_SCROLL_STEP_MIN),
-                   _DOCK_SCROLL_STEP_MAX)
+        total = DOCK_SCROLL.total
+        length = DOCK_SCROLL.length
+        if total <= 0 or length <= 0:
+            return _DOCK_ROW_PITCH * _DOCK_VIEWPORT_ROWS
+        fraction = min(max(length / total, 0.05), 0.95)
+        return _DOCK_ROW_PITCH * _DOCK_VIEWPORT_ROWS * (1 - fraction) / fraction
 
     def _commission_dock_scroll_drag(self, target):
         """把右侧滚动条滑块拖到 target 位置（0-1），返回拖动后的位置。
 
         直接拖滚动条，起点终点都在滚动条上（x≈1239-1248），不会
         误触舰船卡片；device.drag 到达目标后按住再松手，滑块精确
-        停在目标处、不带惯性。
+        停在目标处、不带惯性。终点按拖动方向外扩一点，
+        补偿游戏吃掉的手势起手位移。
         """
         current = DOCK_SCROLL.cal_position(main=self)
         p1 = random_rectangle_point(DOCK_SCROLL.position_to_screen(current), n=1)
         p2 = random_rectangle_point(DOCK_SCROLL.position_to_screen(target), n=1)
+        dy = p2[1] - p1[1]
+        if dy:
+            p2 = (p2[0], p2[1] + (_DOCK_DRAG_SLOP if dy > 0 else -_DOCK_DRAG_SLOP))
+            p2 = (p2[0], min(max(p2[1], 78), 639))
         self.device.drag(p1, p2, name='COMMISSION_DOCK_SCROLL',
-                         point_random=(-3, -5, 3, 5))
+                         point_random=(-2, -3, 2, 3), hold_duration=0.15)
         self.device.click_record.pop()
         self._commission_dock_wait_stable()
         return DOCK_SCROLL.cal_position(main=self)
 
-    def _commission_dock_scroll_page(self):
+    def _commission_dock_scroll_page(self, before):
         """滚动条向下拖约两行，返回拖动后的位置。"""
-        before = DOCK_SCROLL.cal_position(main=self)
-        target = min(before + self._commission_dock_row_step(), 1.0)
+        pixels = self._commission_dock_pixels_per_position()
+        target = min(before + _DOCK_PAGE_ROWS * _DOCK_ROW_PITCH / max(pixels, 1), 1.0)
         return self._commission_dock_scroll_drag(target)
 
     def _commission_dock_scroll_top(self):
@@ -1031,35 +1083,48 @@ class RewardCommission(Dock, UI, InfoHandler):
         return DOCK_SCROLL.cal_position(main=self) <= 0.05
 
     def _commission_dock_gap_offset(self):
-        """第一行下方暗色缝相对对齐位置（中心 292）的偏移，
-        窗口内看不到缝时返回 None。"""
-        image = np.asarray(self.device.image).astype(float)
-        band = image[240:344, 93:1219].mean(axis=2).mean(axis=1)
-        if band.min() > 110:
-            return None
-        return int(np.argmin(band)) + 240 - 292
+        """行间缝相对网格线（_DOCK_SEAM_Y）的偏移，折算到一个行距内。
 
-    def _commission_dock_align(self):
-        """把行间缝吸附到网格线。
-
-        修正用 device.drag 做无惯性微调（swipe 的惯性会让修正过冲，
-        来回震荡不收敛）；慢拖还解决距离检查会丢弃 <10px 滑动的问题。
+        窗口取网格线上下各约半行，缝滚到哪里都落在窗口内。
+        亮度剖面先做 17px 平滑再取最暗点：单像素暗线（卡片顶边
+        阴影等，实测比行间缝更暗）会被平滑抹掉，只有约 20px 宽的
+        行间缝保留下来。
         """
-        for _ in range(4):
+        image = np.asarray(self.device.image).astype(float)
+        y0 = _DOCK_SEAM_Y - 113 - 8
+        y1 = _DOCK_SEAM_Y + 114 + 8
+        band = image[y0:y1, 93:1219].mean(axis=2).mean(axis=1)
+        smooth = uniform_filter1d(band, size=17, mode='nearest')
+        inner = smooth[8:len(smooth) - 8]
+        y = int(np.argmin(inner)) + 8 + y0
+        return (y - _DOCK_SEAM_Y + 113) % _DOCK_ROW_PITCH - 113
+
+    def _commission_dock_align(self, pixels_per_position):
+        """把行间缝拖回网格线，全程只动滚动条，不碰卡片区。
+
+        修正量按位置换算后重拖，逐轮逼近（起手死区会吃掉一部分
+        位移）。顶部/底部钳制导致拉不动时按当前位置接受。
+        返回是否对齐；调用方无论结果都继续扫描。
+        """
+        for _ in range(3):
             self.device.screenshot()
             offset = self._commission_dock_gap_offset()
-            if offset is None:
-                # 窗口内没有缝，要么已对齐要么在列表边缘，
-                # 调用方照常读取可见内容。
-                return True
             if abs(offset) <= 9:
-                # 更小的修正（<10px）会被游戏当作点击，9px 内的错位接受。
+                # 9px 内的错位接受：等级文字带高 22px，
+                # 偏移 9px 仍完整落在 OCR 区域内。
                 return True
-            self.device.drag((650, 400), (650, 400 - offset),
-                             hold_duration=0.2, name='COMMISSION_DOCK_ALIGN')
-            self.device.click_record.pop()
-            self._commission_dock_wait_stable()
-        return False
+            position = DOCK_SCROLL.cal_position(main=self)
+            if offset < 0 and position <= 0.02:
+                # 已在顶部：缝偏上需要向下拉，游戏钳制拉不动，
+                # 游戏自然停靠的顶部位置就是对齐位置。
+                return True
+            if offset > 0 and position >= 0.98:
+                # 已在底部同理。
+                return True
+            target = position + offset / max(pixels_per_position, 1)
+            self._commission_dock_scroll_drag(min(max(target, 0.0), 1.0))
+        self.device.screenshot()
+        return abs(self._commission_dock_gap_offset()) <= 9
 
     def _commission_filter_panel_open(self):
         """面板自身的红色取消按钮覆盖该区域时说明面板已打开。"""
@@ -1270,50 +1335,35 @@ class RewardCommission(Dock, UI, InfoHandler):
             if count >= total:
                 return True
             before = DOCK_SCROLL.cal_position(main=self)
-            if before >= _DOCK_SCROLL_BOTTOM:
+            at_bottom = before >= _DOCK_SCROLL_BOTTOM
+            if not at_bottom:
+                after = self._commission_dock_scroll_page(before)
+                if abs(after - before) < 0.005:
+                    # 偶尔一次手势丢帧，重试一次再放弃。
+                    after = self._commission_dock_scroll_page(before)
+                if abs(after - before) < 0.005 and after < _DOCK_SCROLL_BOTTOM:
+                    # 两次拖动都没动：列表已到末端被游戏钳制，或设备丢帧。
+                    # 按已到底处理，读完末行收尾，不再中止整个档位。
+                    logger.warning('[委托-选船] 滚动条无法继续移动，按已到底处理')
+                    at_bottom = True
+            if at_bottom:
                 # 已经到底，读最后一行；最后一行露出在底栏上方，
                 # 其舰队徽标被遮挡，因此拆舰队时跳过它。
                 if not allow_fleet:
-                    for ship in self._commission_dock_scan_row3(row3_scanner):
-                        if count >= total:
-                            break
-                        if ship['idx'] in picked:
-                            continue
-                        if ship['occupied']:
-                            continue
-                        if not 1 <= ship['level'] <= 125 or ship['level'] < required:
-                            continue
-                        after = self._commission_dock_click_ship(
-                            ship['button'], allow_fleet=False)
-                        if after < 0:
-                            continue
-                        if after == count - 1:
-                            self.device.click(ship['button'])
-                            self.device.sleep(0.4)
-                            self.device.screenshot()
-                            restored, _ = self._commission_dock_ship_count()
-                            if restored >= 0:
-                                count = restored
-                            continue
-                        count = after
-                        picked.add(ship['idx'])
-                        logger.attr('已选舰船', f'Lv{ship["level"]} (末行)')
+                    count = self._commission_dock_pick_row3(
+                        row3_scanner, required, picked, count, total)
                 return count >= total
-            after = self._commission_dock_scroll_page()
-            if abs(after - before) < 0.005:
-                if after >= _DOCK_SCROLL_BOTTOM:
-                    # 这一拖刚好到底，下一轮读末行。
-                    continue
-                # 偶尔一次手势丢帧，重试一次再放弃。
-                after = self._commission_dock_scroll_page()
-                if abs(after - before) < 0.005:
-                    if after >= _DOCK_SCROLL_BOTTOM:
-                        continue
-                    logger.warning('[委托-选船] 滚动条未移动，停止翻页')
-                    return False
-            if not self._commission_dock_align():
-                logger.warning('[委托-选船] 船坞页面未对齐，停止翻页')
-                return False
+            # 对齐失败不中止：按当前画面继续扫描，错位行读不到等级
+            # 会被跳过，比整个档位白扫好。
+            if not self._commission_dock_align(self._commission_dock_pixels_per_position()):
+                logger.warning('[委托-选船] 船坞页面未能对齐，按当前画面继续')
+            if DOCK_SCROLL.cal_position(main=self) <= before + 0.02:
+                # 对齐把刚才的翻页抵消了（列表末端附近），按已到底处理。
+                logger.info('[委托-选船] 无法继续向下翻页')
+                if not allow_fleet:
+                    count = self._commission_dock_pick_row3(
+                        row3_scanner, required, picked, count, total)
+                return count >= total
 
     def _commission_dock_pick_ships(self, comm=None):
         """通过船坞自带筛选面板手动填充槽位：按等级排序，
