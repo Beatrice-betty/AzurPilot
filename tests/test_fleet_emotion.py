@@ -44,6 +44,12 @@ class FleetEmotionTests(unittest.TestCase):
         })
 
     def test_first_filter_combines_mood_and_vanguard_then_preserves_sort(self):
+        self._check_filter_transitions({'all'})
+
+    def test_existing_multiple_ship_types_are_cleared(self):
+        self._check_filter_transitions({'vanguard', 'main', 'ss'})
+
+    def _check_filter_transitions(self, initial_indices):
         # 使用真实 Setting 检测截图上的选中状态；虚拟面板记录操作，禁止设备连接。
         runner = FleetManagement.__new__(FleetManagement)
         runner.config = SimpleNamespace(SERVER='cn')
@@ -55,32 +61,57 @@ class FleetEmotionTests(unittest.TestCase):
         runner._save_result = Mock()
         runner.dock_reset = Mock()
         events = []
-        selected = dict(runner.dock_filter.settings_default)
+        selected = {key: {value} for key, value in runner.dock_filter.settings_default.items()}
+        selected['index'] = set(initial_indices)
 
         def active(button, **kwargs):
-            return any(b is button and selected[key] == option
+            return any(b is button and option in selected[key]
                        for (key, option), b in runner.dock_filter.settings.items())
 
         def click(button):
             key, option = next(k for k, b in runner.dock_filter.settings.items() if b is button)
-            selected[key] = option
+            # 舰种为多选；“全部”清除各舰种，选择具体舰种只取消“全部”。
+            if key == 'index' and option != 'all':
+                selected[key].discard('all')
+                if option in selected[key]:
+                    selected[key].remove(option)
+                else:
+                    selected[key].add(option)
+            else:
+                selected[key] = {option}
             events.append((key, option))
 
         runner.image_color_count = active
         runner.device.click = click
         runner.dock_filter_enter = lambda: events.append('enter')
-        runner.dock_filter_confirm = lambda **kwargs: events.append(('confirm', selected.copy()))
+        runner.dock_filter_confirm = lambda **kwargs: events.append(('confirm', copy.deepcopy(selected)))
         with patch('module.retire.fleet_management.FleetManagementScanner') as scanner:
             scanner.return_value.scan.return_value = {}
             runner.run()
         confirms = [event[1] for event in events if isinstance(event, tuple) and event[0] == 'confirm']
-        self.assertEqual([c['index'] for c in confirms], ['vanguard', 'main', 'ss'])
-        self.assertEqual([c['sort'] for c in confirms], ['mood'] * 3)
-        self.assertEqual(events[:4], ['enter', ('sort', 'mood'), ('index', 'vanguard'),
-                                     ('confirm', confirms[0])])
+        self.assertEqual([c['index'] for c in confirms], [{'vanguard'}, {'main'}, {'ss'}])
+        self.assertEqual([c['sort'] for c in confirms], [{'mood'}] * 3)
+        for target in ('main', 'ss'):
+            index = events.index(('index', target))
+            self.assertEqual(events[index - 1], ('index', 'all'))
+        first_confirm = events.index(('confirm', confirms[0]))
+        self.assertLess(events.index(('sort', 'mood')), first_confirm)
+        self.assertLess(events.index(('index', 'vanguard')), first_confirm)
+        self.assertEqual(events.count('enter'), 3)
         self.assertEqual(events.count(('sort', 'mood')), 1)
         self.assertTrue(runner.dock_filter.reset_first)
         runner.dock_reset.assert_called_once()
+
+    def test_actual_multi_selected_filter_screenshot(self):
+        from module.base.utils import load_image
+
+        runner = FleetManagement.__new__(FleetManagement)
+        runner.config = SimpleNamespace(SERVER='cn')
+        runner.device = SimpleNamespace(image=load_image(str(Path(__file__).parent / 'fixtures/fleet_multi_filter.png')))
+        active = {key for key, button in runner.dock_filter.settings.items()
+                  if runner.dock_filter.is_option_active(button)}
+        self.assertIn(('sort', 'mood'), active)
+        self.assertEqual({option for key, option in active if key == 'index'}, {'vanguard', 'main', 'ss'})
 
     def test_cleanup_on_failure_does_not_save_partial_result(self):
         runner = FleetManagement.__new__(FleetManagement)

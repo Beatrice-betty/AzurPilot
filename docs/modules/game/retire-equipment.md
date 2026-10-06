@@ -83,6 +83,9 @@ module/storage/
 第一次在同一个筛选面板选择 `index='vanguard'` 与 `sort='mood'`，统一确认；
 后续分类传 `sort=None`，保留游戏记住的心情排序。任务期间关闭 `Setting.reset_first`，
 避免默认重置先清掉心情排序，`finally` 恢复该标志并执行原有 `dock_reset()`。
+舰种索引支持多选，切换不能只点下一舰种：每次传 `reset_index=True`，在同一面板
+先选“全部”取消旧舰种，再选择目标舰种，最后统一确认；清除索引时保留心情排序。
+此选项默认为 `False`，不改变其他船坞调用方的筛选行为。
 
 `FleetManagementScanner` 保持原有舰队归属、名称纠正和等级识别，增加
 `FleetEmotionScanner`，复用 `CARD_EMOTION_GRIDS` 裁剪与 OCR 框架，网格形状与排除位置保持一致。

@@ -86,6 +86,7 @@ class FleetManagement(Dock):
                     rarity="all",
                     extra="no_limit",
                     wait_loading=False,
+                    reset_index=True,
                 )
                 self._wait_dock_filter_loaded()
                 result[category] = self._normalize_result(scanner.scan(self.device.image))
