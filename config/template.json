@@ -2052,7 +2052,11 @@
       "DetectShipDrop": false,
       "GemNotify": true,
       "GemStatistics": false,
-      "GemStatisticsPeriod": "month"
+      "GemStatisticsPeriod": "month",
+      "AutoPickShip": false,
+      "PickMinRarity": "rare",
+      "PickLevelOrder": "low_first",
+      "NoFreeShipPolicy": "skip"
     },
     "Storage": {
       "Storage": {}

@@ -11075,6 +11075,36 @@
           "week",
           "month"
         ]
+      },
+      "AutoPickShip": {
+        "type": "checkbox",
+        "value": false
+      },
+      "PickMinRarity": {
+        "type": "select",
+        "value": "rare",
+        "option": [
+          "common",
+          "rare",
+          "elite",
+          "super_rare"
+        ]
+      },
+      "PickLevelOrder": {
+        "type": "select",
+        "value": "low_first",
+        "option": [
+          "low_first",
+          "high_first"
+        ]
+      },
+      "NoFreeShipPolicy": {
+        "type": "select",
+        "value": "skip",
+        "option": [
+          "skip",
+          "use_fleet"
+        ]
       }
     },
     "Storage": {
