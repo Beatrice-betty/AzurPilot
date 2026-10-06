@@ -60,14 +60,5 @@ class TestCommissionFleetQuestion(unittest.TestCase):
                 self.assertFalse(self._detect(image))
 
 
-class TestCommissionDockRowStep(unittest.TestCase):
-    def test_row_step_from_real_dock(self):
-        """实机船坞 131/160：19 行、视口 3 行 → 两行步长约 0.125。"""
-        image = np.array(Image.open(FIXTURES / 'commission_dock_list.png').convert('RGB'))
-        fake = types.SimpleNamespace(device=types.SimpleNamespace(image=image))
-        self.assertAlmostEqual(
-            RewardCommission._commission_dock_row_step(fake), 0.125, places=3)
-
-
 if __name__ == '__main__':
     unittest.main()

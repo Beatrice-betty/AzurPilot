@@ -55,7 +55,6 @@ from module.retire.assets import DOCK_CHECK, SORTING_CLICK
 from module.statistics.item import AmountOcr
 from module.combat.level import LevelOcr
 from module.retire.dock import CARD_GRIDS, CARD_LEVEL_GRIDS, DOCK_SCROLL, Dock, OCR_DOCK_SELECTED
-from module.retire.enhancement import OCR_DOCK_AMOUNT
 from module.retire.scanner import FleetScanner, LevelScanner
 from module.ui.assets import BACK_ARROW, REWARD_GOTO_COMMISSION
 from module.tactical.assets import TACTICAL_CLASS_START, TACTICAL_CLASS_CANCEL
@@ -140,6 +139,11 @@ _ROW3_LEVEL_AREA = tuple(
 # （滚动条可见时 set 没有拖动上限，会一直拖到防连点崩溃），
 # 因此翻页与到底判定在委托内自行实现。
 _DOCK_SCROLL_BOTTOM = 0.9
+# 翻页拖拽距离（约 2 行，行高 227）。船坞列表的手势必须用
+# device.drag（到达终点后按住再松手）而不能用 swipe：swipe 松手带
+# 速度，内容会甩出惯性，且实测 <25px 的快速手势会被游戏直接回弹，
+# 导致"划不动"；drag 松手速度为 0，内容停在手指终点、位置可预期。
+_DOCK_PAGE_DISTANCE = 440
 
 # 每个委托要求的最低舰船等级（按游戏自身补位规则，至少一艘达标）。
 # 键为国服 OCR 读到的委托名；未知则为 0。
@@ -857,7 +861,8 @@ class RewardCommission(Dock, UI, InfoHandler):
         # 清除仓库按钮上次匹配残留的 offset。
         button.clear_offset()
         self.device.click(button)
-        self.device.sleep(0.5)
+        # 弹窗关闭与选中刷新期间计数会短暂读不到，等充分再截图。
+        self.device.sleep(0.8)
         self.device.screenshot()
 
     def _commission_dock_click_ship(self, button, allow_fleet=False):
@@ -978,47 +983,35 @@ class RewardCommission(Dock, UI, InfoHandler):
             last = position
         return False
 
-    def _commission_dock_row_step(self):
-        """两行舰船对应的滚动条位置增量，按船坞容量估算。
+    def _commission_dock_drag(self, distance):
+        """内容区拖拽 distance 像素（正数=列表向后翻）。
 
-        列表按 7 列排布、视口约 3 行；筛选后的列表通常不长于全部舰船，
-        因此按全量估算偏保守：步长偏小只会变慢，不会跳过整行。
+        用 device.drag 而不是 swipe（见 _DOCK_PAGE_DISTANCE 的说明）；
+        起手区避开底部按钮条（y>640）与顶部筛选面板（y<80）。
         """
-        ship_count, _, _ = OCR_DOCK_AMOUNT.ocr(self.device.image)
-        if ship_count <= 0:
-            return 0.125
-        rows = (ship_count + 6) // 7
-        scrollable = max(rows - 3, 3)
-        return min(max(2 / scrollable, 0.05), 0.5)
+        column = random_normal_distribution_int(0, 6)
+        x = random_normal_distribution_int(240 + column * 165, 250 + column * 165)
+        if distance >= 0:
+            start = (x, random_normal_distribution_int(460, 590))
+        else:
+            start = (x, random_normal_distribution_int(150, 270))
+        end = (x, start[1] - distance)
+        self.device.drag(start, end, hold_duration=0.5, name='COMMISSION_DOCK_PAGE')
+        self.device.click_record.pop()
 
     def _commission_dock_scroll_page(self):
-        """把船坞滚动条向下拖约两行，返回拖动后的位置。
-
-        走滚动条拖动而不是内容区手势（内容区起手区被底部按钮条覆盖，
-        拖不动列表），也不能用 Scroll.set/drag_page——滚动条可见时两者
-        没有拖动上限，而该滚动条到底后位置读数封顶约 0.93 永远不收敛，
-        会一直拖到防连点崩溃。滑动从点击记录中弹出，避免连点误杀。
-        """
-        before = DOCK_SCROLL.cal_position(main=self)
-        target = min(before + self._commission_dock_row_step(), 1.0)
-        p1 = random_rectangle_point(DOCK_SCROLL.position_to_screen(before), n=1)
-        p2 = random_rectangle_point(DOCK_SCROLL.position_to_screen(target), n=1)
-        self.device.swipe(p1, p2, name='COMMISSION_DOCK_PAGE', distance_check=False)
-        self.device.click_record.pop()
+        """内容区拖拽约两行，返回拖动后的滚动条位置。"""
+        self._commission_dock_drag(_DOCK_PAGE_DISTANCE)
         self._commission_dock_wait_stable()
         return DOCK_SCROLL.cal_position(main=self)
 
     def _commission_dock_scroll_top(self):
         """有界地把船坞列表滚回顶部。"""
-        for _ in range(3):
+        for _ in range(10):
             position = DOCK_SCROLL.cal_position(main=self)
             if position <= 0.05:
                 return True
-            p1 = random_rectangle_point(DOCK_SCROLL.position_to_screen(position), n=1)
-            p2 = random_rectangle_point(
-                DOCK_SCROLL.position_to_screen(0.0, random_range=(0.05, 0.15)), n=1)
-            self.device.swipe(p1, p2, name=DOCK_SCROLL.name, distance_check=False)
-            self.device.click_record.pop()
+            self._commission_dock_drag(-_DOCK_PAGE_DISTANCE)
             self._commission_dock_wait_stable()
         return DOCK_SCROLL.cal_position(main=self) <= 0.05
 
@@ -1032,21 +1025,23 @@ class RewardCommission(Dock, UI, InfoHandler):
         return int(np.argmin(band)) + 240 - 292
 
     def _commission_dock_align(self):
-        """拖动滑块不会恰好落在网格线上；测量缝隙偏移，
-        用一次小幅慢滑纠正。"""
-        for _ in range(3):
+        """把行间缝吸附到网格线。
+
+        修正用 device.drag 做无惯性微调（swipe 的惯性会让修正过冲，
+        来回震荡不收敛）；慢拖还解决距离检查会丢弃 <10px 滑动的问题。
+        """
+        for _ in range(4):
             self.device.screenshot()
             offset = self._commission_dock_gap_offset()
             if offset is None:
                 # 窗口内没有缝，要么已对齐要么在列表边缘，
                 # 调用方照常读取可见内容。
                 return True
-            if abs(offset) <= 4:
+            if abs(offset) <= 9:
+                # 更小的修正（<10px）会被游戏当作点击，9px 内的错位接受。
                 return True
-            # 距离检查会丢弃 <10px 的滑动，而这里恰恰是 5~9px 的微调，
-            # 因此关闭距离检查；滑动本身也从点击记录中弹出。
-            self.device.swipe((650, 400), (650, 400 - offset),
-                              name='DOCK_ALIGN', distance_check=False)
+            self.device.drag((650, 400), (650, 400 - offset),
+                             hold_duration=0.2, name='COMMISSION_DOCK_ALIGN')
             self.device.click_record.pop()
             self._commission_dock_wait_stable()
         return False
