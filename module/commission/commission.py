@@ -128,6 +128,16 @@ _row3_level = CARD_LEVEL_GRIDS.origin - CARD_GRIDS.origin
 _ROW3_LEVEL_AREA = tuple(
     int(v) for v in np.append(_row3_level, _row3_level + CARD_LEVEL_GRIDS.button_shape))
 
+# 船坞列表到底时 DOCK_SCROLL.cal_position 实测封顶约 0.93：既达不到
+# Scroll.at_bottom 的 0.95 阈值，也进不了 Scroll.set(1) 的收敛范围
+# （滚动条可见时 set 没有拖动上限，会一直拖到防连点崩溃），
+# 因此翻页与到底判定在委托内自行实现。
+_DOCK_SCROLL_BOTTOM = 0.9
+# 翻页手势的上拖距离（约 2 行，行高 227），残差由
+# _commission_dock_align 吸附到整行，保证每步净进约 2 行、不漏读；
+# 440 使拖后行间缝落在 align 检测窗口（240-344）中部。
+_DOCK_PAGE_DISTANCE = 440
+
 # 每个委托要求的最低舰船等级（按游戏自身补位规则，至少一艘达标）。
 # 键为国服 OCR 读到的委托名；未知则为 0。
 # 来源：wiki.biligame.com/blhx/军事委托，「需求舰娘等级」列。
@@ -961,6 +971,39 @@ class RewardCommission(Dock, UI, InfoHandler):
             last = position
         return False
 
+    def _commission_dock_scroll_page(self):
+        """在列表底部内容区上拖一页（退役翻页手势）。
+
+        滑动及其收尾手势从点击记录中弹出，避免防连点误杀
+        （参见 module/retire/scanner.py 的 multi_scan）。
+        """
+        click_zone_index = random_normal_distribution_int(0, 6)
+        start = random_rectangle_point((
+            240 + click_zone_index * 165, 555, 250 + click_zone_index * 165, 719
+        ))
+        distance = random_normal_distribution_int(
+            _DOCK_PAGE_DISTANCE - 20, _DOCK_PAGE_DISTANCE + 20)
+        end = (start[0], start[1] - distance)
+        sharp_end = (end[0] - 165, end[1])
+        self.device.swipe(start, end, name='COMMISSION_DOCK_PAGE')
+        self.device.click_record.pop()
+        self.device.swipe(end, sharp_end, name='COMMISSION_DOCK_PAGE')
+        self.device.click_record.pop()
+
+    def _commission_dock_scroll_top(self):
+        """有界地把船坞列表滚回顶部。"""
+        for _ in range(3):
+            position = DOCK_SCROLL.cal_position(main=self)
+            if position <= 0.05:
+                return True
+            p1 = random_rectangle_point(DOCK_SCROLL.position_to_screen(position), n=1)
+            p2 = random_rectangle_point(
+                DOCK_SCROLL.position_to_screen(0.0, random_range=(0.05, 0.15)), n=1)
+            self.device.swipe(p1, p2, name=DOCK_SCROLL.name, distance_check=False)
+            self.device.click_record.pop()
+            self._commission_dock_wait_stable()
+        return DOCK_SCROLL.cal_position(main=self) <= 0.05
+
     def _commission_dock_gap_offset(self):
         """第一行下方暗色缝相对对齐位置（中心 292）的偏移，
         窗口内看不到缝时返回 None。"""
@@ -982,7 +1025,11 @@ class RewardCommission(Dock, UI, InfoHandler):
                 return True
             if abs(offset) <= 4:
                 return True
-            self.device.swipe((650, 400), (650, 400 - offset), name='DOCK_ALIGN')
+            # 距离检查会丢弃 <10px 的滑动，而这里恰恰是 5~9px 的微调，
+            # 因此关闭距离检查；滑动本身也从点击记录中弹出。
+            self.device.swipe((650, 400), (650, 400 - offset),
+                              name='DOCK_ALIGN', distance_check=False)
+            self.device.click_record.pop()
             self._commission_dock_wait_stable()
         return False
 
@@ -1149,7 +1196,8 @@ class RewardCommission(Dock, UI, InfoHandler):
             return False
         if count >= total:
             return True
-        swipes = 0
+        # 列表可能停在上一档扫完的位置，先回到顶部再扫描。
+        self._commission_dock_scroll_top()
         while 1:
             if not self.appear(DOCK_CHECK, offset=(20, 20)):
                 # 选满后船坞可能自行关闭，停止扫描，
@@ -1188,9 +1236,10 @@ class RewardCommission(Dock, UI, InfoHandler):
                 logger.attr('已选舰船', f'Lv{ship["level"]} fleet{ship["fleet"]}')
             if count >= total:
                 return True
-            if DOCK_SCROLL.at_bottom(main=self):
-                # 最后一行露出在底栏上方，其舰队徽标被遮挡，
-                # 因此拆舰队时跳过它。
+            before = DOCK_SCROLL.cal_position(main=self)
+            if before >= _DOCK_SCROLL_BOTTOM:
+                # 已经到底，读最后一行；最后一行露出在底栏上方，
+                # 其舰队徽标被遮挡，因此拆舰队时跳过它。
                 if not allow_fleet:
                     for ship in self._commission_dock_scan_row3(row3_scanner):
                         if count >= total:
@@ -1217,16 +1266,13 @@ class RewardCommission(Dock, UI, InfoHandler):
                         picked.add(ship['idx'])
                         logger.attr('已选舰船', f'Lv{ship["level"]} (末行)')
                 return count >= total
-            before = DOCK_SCROLL.cal_position(main=self)
-            if not DOCK_SCROLL.drag_page(1.0, main=self):
-                logger.warning('[委托-选船] 滚动条未移动，停止翻页')
-                return False
-            swipes += 1
-            if swipes % 6 == 0:
-                # 翻页可能要拖很多次，让连点保护保持安静。
-                self.device.click_record_clear()
+            self._commission_dock_scroll_page()
             self._commission_dock_wait_stable()
-            if abs(DOCK_SCROLL.cal_position(main=self) - before) < 0.005:
+            after = DOCK_SCROLL.cal_position(main=self)
+            if abs(after - before) < 0.005:
+                if after >= _DOCK_SCROLL_BOTTOM:
+                    # 这一拖刚好到底，下一轮读末行。
+                    continue
                 logger.warning('[委托-选船] 滚动条未移动，停止翻页')
                 return False
             if not self._commission_dock_align():
