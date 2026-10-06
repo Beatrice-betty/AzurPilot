@@ -1,8 +1,8 @@
 /**
- * @fileoverview 任务参数设置与自定义策略脚本编辑页面。
+ * @fileoverview 任务参数设置页面。
  */
 
-import { Suspense, lazy, useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CalendarClock, Clock3, ListTree, Play, RotateCcw, Search, Settings2, Ship, Terminal } from 'lucide-react'
 import { api } from '../api/client'
@@ -18,7 +18,6 @@ import { LogPanel } from '../components/LogPanel'
 import { MeowfficerScorePanel } from '../components/MeowfficerScorePanel'
 import { OpsiSimulatorPanel } from '../components/OpsiSimulatorPanel'
 import { FieldInput } from '../components/FieldInput'
-import { ShopStrategyHelp } from '../components/ShopStrategyHelp'
 import { StorageField } from '../components/StorageField'
 import { SchedulerWidget } from '../components/SchedulerWidget'
 import { TaskQueue } from '../components/TaskQueue'
@@ -28,10 +27,9 @@ import { EditStatus } from '../components/EditStatus'
 import { AccountPanel } from '../components/AccountPanel'
 import { isFieldVisible } from './configVisibility'
 
-const RestrictedLuaEditor = lazy(() => import('../components/RestrictedLuaEditor').then(module => ({default: module.RestrictedLuaEditor})))
 export function TaskConfig() {
   const {instance = '', task = ''} = useParams()
-  const {schema, t, ui, notify, language, theme} = useApp()
+  const {schema, t, ui, notify, theme} = useApp()
   const connection = useConnection()
   const railView = useSyncExternalStore(subscribeRailView, readRailView, readRailView)
   // 只在真的切到调度器时才请求总览数据，否则这一页白拉一份队列。
@@ -41,7 +39,6 @@ export function TaskConfig() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [confirmRun, setConfirmRun] = useState(false)
-  const [shopModeError, setShopModeError] = useState('')
 
   const queue = editor(`config:${instance}`)
   const {edits, storageError} = useSyncExternalStore(queue.subscribe, queue.getSnapshot, queue.getSnapshot)
@@ -96,7 +93,6 @@ export function TaskConfig() {
     }).catch(error => { if (active) setError(error.message) })
     return () => { active = false }
   }, [connection, instance, task, startupQueue])
-  useEffect(() => { setShopModeError('') }, [instance, task])
 
   async function run() {
     setBusy(true)
@@ -184,9 +180,6 @@ export function TaskConfig() {
           <h2 data-text={t(`${group}._info.name`)}>{t(`${group}._info.name`)}</h2>
         </div>
       </div>
-      {group === 'ShopAdvanced' && (
-        <ShopStrategyHelp task={task} language={language}/>
-      )}
       {visible.map(([arg, field]) => {
         const path = `${task}.${group}.${arg}`
         const edit = edits[path]
@@ -194,13 +187,11 @@ export function TaskConfig() {
         const label = t(`${group}.${arg}.name`)
         const help = t(`${group}.${arg}.help`)
         const readonly = ['disabled', 'readonly'].includes(field.display ?? '') || ['storage', 'stored', 'state', 'lock'].includes(field.type)
-        const restrictedLua = field.mode === 'restricted_lua'
-        const shopMode = group === 'ShopAdvanced' && arg === 'Mode'
         // 「立刻运行」只对每个任务的调度时间有意义，其他时间字段（如仪表盘记录时间）不显示。
         const runNow = group === 'Scheduler' && arg === 'NextRun' && !readonly
         const clearProgress = path === 'OpsiExplore.OpsiExplore.ExploreProgress'
           || path === 'OpsiScheduling.OpsiSmartExplore.Progress'
-        const isMultiline = ['textarea', 'task_priority', 'yaml', 'storage'].includes(field.type) || field.mode === 'yaml' || restrictedLua
+        const isMultiline = ['textarea', 'task_priority', 'yaml', 'storage'].includes(field.type) || field.mode === 'yaml'
 
         return (
           <div className={`field-row ${isMultiline ? 'field-row-multiline' : ''}`} key={arg}>
@@ -218,22 +209,6 @@ export function TaskConfig() {
             <div className="field-control">
               {field.type === 'storage' ? (
                 <StorageField value={value} disabled={false} onClear={() => queue.change(path, {})} />
-              ) : restrictedLua ? (
-                <Suspense fallback={<div role="status">{ui('field.loadingEditor')}</div>}>
-                  <RestrictedLuaEditor
-                    id={path}
-                    value={String(value ?? '')}
-                    draftKey={`${instance}.${path}`}
-                    label={label}
-                    disabled={readonly}
-                    offline={connection !== 'ready'}
-                    onCheck={script => api.request('shop_strategy.validate', {instance, task: task as 'EventShop' | 'ShopFrequent' | 'ShopOnce' | 'PrivateQuarters' | 'OpsiShop' | 'OpsiVoucher', script})}
-                    onApply={async script => {
-                      setConfig(await api.request('config.patch', {instance, changes: [{path, value: script}]}))
-                      setShopModeError('')
-                    }}
-                  />
-                </Suspense>
               ) : (
                 <FieldInput
                   id={path}
@@ -243,18 +218,10 @@ export function TaskConfig() {
                   options={field.option}
                   disabled={readonly}
                   preserveText
-                  invalid={edit?.status === 'error' || (shopMode && !!shopModeError)}
+                  invalid={edit?.status === 'error'}
                   label={label}
                   translateOption={option => t(`${group}.${arg}.${option}`)}
                   onChange={next => {
-                    if (shopMode && next === 'advanced') {
-                      const script = String(config.values[task]?.ShopAdvanced?.Script ?? '')
-                      if (!script.trim()) {
-                        setShopModeError(ui('script.modeRequiresScript'))
-                        return
-                      }
-                    }
-                    if (shopMode) setShopModeError('')
                     const {payload, text, error} = prepareValue(next, field)
                     queue.change(path, text ?? next, payload, error)
                   }}
@@ -277,9 +244,7 @@ export function TaskConfig() {
                     onClick={() => queue.change(path, '')}><RotateCcw size={15}/></button>
                 </div>
               )}
-              {!isMultiline && (shopMode && shopModeError && !edit ? (
-                <div id={`${path}-status`} className="edit-status edit-error" role="alert">{shopModeError}</div>
-              ) : <EditStatus id={path} edit={edit} retry={queue.retry} queue={queue} />)}
+              {!isMultiline && <EditStatus id={path} edit={edit} retry={queue.retry} queue={queue} />}
             </div>
           </div>
         )
