@@ -7219,22 +7219,6 @@
         "value": "EquipUR > EquipSSR > Cube > GachaTicket\n> Array > Chip > CatT3 \n> Meta > SkinBox\n> Oil > Coin > Medal > ExpBookT1 > FoodT1\n> DR > PR\n> AugmentCore > AugmentEnhanceT2 > AugmentChangeT2 > AugmentChangeT1\n> CatT2 > CatT1 > PlateGeneralT3 > PlateT3 > BoxT4\n> ShipSSR"
       }
     },
-    "ShopAdvanced": {
-      "Mode": {
-        "type": "select",
-        "value": "legacy",
-        "option": [
-          "legacy",
-          "advanced"
-        ]
-      },
-      "Script": {
-        "type": "textarea",
-        "value": "",
-        "mode": "restricted_lua",
-        "preserve_empty": true
-      }
-    },
     "Storage": {
       "Storage": {
         "type": "storage",
@@ -12679,22 +12663,6 @@
         "value": "BookRedT3 > BookYellowT3 > BookBlueT3 > BookRedT2\n> Cube\n> FoodT6 > FoodT5"
       }
     },
-    "ShopAdvanced": {
-      "Mode": {
-        "type": "select",
-        "value": "legacy",
-        "option": [
-          "legacy",
-          "advanced"
-        ]
-      },
-      "Script": {
-        "type": "textarea",
-        "value": "",
-        "mode": "restricted_lua",
-        "preserve_empty": true
-      }
-    },
     "Storage": {
       "Storage": {
         "type": "storage",
@@ -12992,22 +12960,6 @@
       "Filter": {
         "type": "textarea",
         "value": "Array"
-      }
-    },
-    "ShopAdvanced": {
-      "Mode": {
-        "type": "select",
-        "value": "legacy",
-        "option": [
-          "legacy",
-          "advanced"
-        ]
-      },
-      "Script": {
-        "type": "textarea",
-        "value": "",
-        "mode": "restricted_lua",
-        "preserve_empty": true
       }
     },
     "Storage": {
@@ -13502,22 +13454,6 @@
           "nakhimov",
           "implacable"
         ]
-      }
-    },
-    "ShopAdvanced": {
-      "Mode": {
-        "type": "select",
-        "value": "legacy",
-        "option": [
-          "legacy",
-          "advanced"
-        ]
-      },
-      "Script": {
-        "type": "textarea",
-        "value": "",
-        "mode": "restricted_lua",
-        "preserve_empty": true
       }
     },
     "Storage": {
@@ -14049,22 +13985,6 @@
         "value": 0
       }
     },
-    "ShopAdvanced": {
-      "Mode": {
-        "type": "select",
-        "value": "legacy",
-        "option": [
-          "legacy",
-          "advanced"
-        ]
-      },
-      "Script": {
-        "type": "textarea",
-        "value": "",
-        "mode": "restricted_lua",
-        "preserve_empty": true
-      }
-    },
     "Storage": {
       "Storage": {
         "type": "storage",
@@ -14130,22 +14050,6 @@
       "Filter": {
         "type": "textarea",
         "value": "LoggerAbyssal > LoggerObscure > Book > Coin > Fragment"
-      }
-    },
-    "ShopAdvanced": {
-      "Mode": {
-        "type": "select",
-        "value": "legacy",
-        "option": [
-          "legacy",
-          "advanced"
-        ]
-      },
-      "Script": {
-        "type": "textarea",
-        "value": "",
-        "mode": "restricted_lua",
-        "preserve_empty": true
       }
     },
     "Storage": {

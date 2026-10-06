@@ -112,9 +112,6 @@ interface RemoteAccessStatus { enabled: boolean; state: string; address: string;
 export interface Settings { groups: {key: string; label: string; fields: DeployField[]}[]; notice: string; demo: boolean; remote?: RemoteAccessStatus }
 export interface ApiEvent { v: 1; type: 'event'; topic: string; seq: number; data: unknown }
 export interface ApiResponse { v: 1; type: 'response'; id: string; ok: boolean; result?: unknown; error?: {code: string; message: string; details?: unknown} }
-export interface ScriptDiagnostic { code?: string; message: string; line?: number | null; column?: number | null; severity?: 'error' | 'warning' }
-export interface ShopStrategyValidation { valid: boolean; diagnostics: ScriptDiagnostic[]; summary?: string }
-export type ShopStrategyTask = 'EventShop' | 'ShopFrequent' | 'ShopOnce' | 'PrivateQuarters' | 'OpsiShop' | 'OpsiVoucher'
 export interface Announcement {
   announcementId: string
   title: string
@@ -173,7 +170,6 @@ export interface Results {
   'instances.delete': {deleted: string}
   'config.get': Config
   'config.patch': Config
-  'shop_strategy.validate': ShopStrategyValidation
   'overview.get': Overview
   'scheduler.start': Overview
   'scheduler.stop': Overview

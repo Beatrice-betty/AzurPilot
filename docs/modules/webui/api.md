@@ -171,7 +171,6 @@ flowchart TD
 | [配置系统](../config.md) | `args.json`/`menu.json`/`i18n` 作为校验依据与下发数据；`config_transaction` 跨进程写锁 |
 | [调度器](../entry/alas.md) | `scheduler.start`/`tasks.run` 最终拉起的进程 |
 | `module/statistics/*` | 资源时间线、大世界月度、委托收益、舰船经验、掉落缓存 |
-| `module/shop_strategy` | 高级商店策略的静态校验（不执行脚本） |
 | `deploy/atomic` | 配置与 `password.txt` 的原子写 |
 
 ## 8. 数据流
