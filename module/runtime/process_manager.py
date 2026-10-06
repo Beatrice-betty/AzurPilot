@@ -18,7 +18,7 @@ from rich.console import ConsoleRenderable
 from rich.text import Text
 
 from module.config.utils import DEFAULT_CONFIG_NAME
-from module.logger import logger, set_file_logger, set_func_logger
+from module.logger import logger, set_console_logger, set_file_logger, set_func_logger
 from module.runtime.process_control import is_process_alive, stop_process, stop_process_tree
 from module.runtime.setting import State
 from module.runtime.worker_events import ExitEvent, TaskEvent, WorkerResult
@@ -853,10 +853,8 @@ class ProcessManager:
         set_file_logger(name=config_name)
         prepare_statistics()
         if State.electron or os.environ.get("AZURPILOT_TUI") == "1":
-            # 运行于 Electron 或 TUI 终端界面时，移除标准输出处理器避免污染终端渲染
-            from module.logger import console_hdlr
-
-            logger.removeHandler(console_hdlr)
+            # 运行于 Electron 或 TUI 终端界面时，关闭控制台日志避免污染终端渲染
+            set_console_logger(False)
         set_func_logger(func=q.put)
         if preview_queue is not None:
             from module.runtime.preview import initialize
