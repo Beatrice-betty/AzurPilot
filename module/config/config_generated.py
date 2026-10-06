@@ -409,6 +409,10 @@ class GeneratedConfig:
     Commission_GemNotify = True
     Commission_GemStatistics = False
     Commission_GemStatisticsPeriod = 'month'  # today, week, month
+    Commission_AutoPickShip = False
+    Commission_PickMinRarity = 'rare'  # common, rare, elite, super_rare
+    Commission_PickLevelOrder = 'low_first'  # low_first, high_first
+    Commission_NoFreeShipPolicy = 'skip'  # skip, use_fleet
 
     # 配置组 `Tactical`
     Tactical_TacticalFilter = 'SameT4 > SameT3 > SameT2 > SameT1\n> BlueT2 > YellowT2 > RedT2\n> BlueT3 > YellowT3 > RedT3\n> BlueT4 > YellowT4 > RedT4\n> BlueT1 > YellowT1 > RedT1\n> first'

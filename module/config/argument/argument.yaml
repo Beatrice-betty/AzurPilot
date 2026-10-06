@@ -855,6 +855,16 @@ Commission:
   GemStatisticsPeriod:
     value: month
     option: [today, week, month]
+  AutoPickShip: false
+  PickMinRarity:
+    value: rare
+    option: [ common, rare, elite, super_rare ]
+  PickLevelOrder:
+    value: low_first
+    option: [ low_first, high_first ]
+  NoFreeShipPolicy:
+    value: skip
+    option: [ skip, use_fleet ]
 Tactical:
   TacticalFilter: |-
     SameT4 > SameT3 > SameT2 > SameT1
