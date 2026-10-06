@@ -9,6 +9,7 @@ fixture 截图来自 2026-10-06/07 实机测试（1280x720 国服）：
 import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 from PIL import Image
@@ -105,6 +106,82 @@ class TestCommissionDockScrollMetrics(unittest.TestCase):
             self.assertAlmostEqual(value, 548, delta=3)
         finally:
             DOCK_SCROLL.length = old
+
+
+class TestCommissionDockFillStageFlow(unittest.TestCase):
+    """翻页/对齐异常路径的控制流：函数级打桩，不依赖设备。"""
+
+    def _run(self, positions, pages, align_ok=True):
+        """驱动一次 _commission_dock_fill_stage。
+
+        Args:
+            positions: DOCK_SCROLL.cal_position 依次回读的位置，
+                不足时重复最后一个。
+            pages: _commission_dock_scroll_page 依次返回的位置。
+            align_ok: _commission_dock_align 的返回值。
+        """
+        obj = types.SimpleNamespace()
+        state = {'pos': 0, 'row3': 0, 'align': 0, 'pages': list(pages)}
+
+        def cal_position(*args, **kwargs):
+            i = min(state['pos'], len(positions) - 1)
+            state['pos'] += 1
+            return positions[i]
+
+        def pick_row3(*args):
+            state['row3'] += 1
+            return 0
+
+        def align(*args):
+            state['align'] += 1
+            return align_ok
+
+        obj._commission_dock_scroll_top = lambda: True
+        obj._commission_dock_scan_page = lambda *a: []
+        obj._commission_dock_scan_row3 = lambda *a: []
+        obj._commission_dock_pick_row3 = pick_row3
+        obj._commission_dock_scroll_page = \
+            lambda before: state['pages'].pop(0) if state['pages'] else before
+        obj._commission_dock_align = align
+        obj._commission_dock_pixels_per_position = lambda: 548
+        obj._commission_dock_ship_count = lambda: (0, 1)
+        obj.appear = lambda *a, **k: True
+
+        with mock.patch('module.commission.commission.DOCK_SCROLL') as scroll:
+            scroll.cal_position.side_effect = cal_position
+            result = RewardCommission._commission_dock_fill_stage(
+                obj, allow_fleet=False, protected=set(), required=0,
+                scanners=(None, None, None), picked=set())
+        return result, state
+
+    def test_page_then_reach_bottom_reads_row3_next_loop(self):
+        """正常翻页：位置到 0.9 后下一轮读末行收尾。"""
+        result, state = self._run(positions=[0.0, 0.5, 1.0], pages=[0.5])
+        self.assertFalse(result)
+        self.assertEqual(state['row3'], 1)
+        self.assertEqual(state['align'], 1)
+
+    def test_stuck_scrollbar_treated_as_bottom(self):
+        """滚动条两次拖不动：按已到底处理，读末行，不中止。"""
+        result, state = self._run(positions=[0.0], pages=[0.0, 0.0])
+        self.assertFalse(result)
+        self.assertEqual(state['row3'], 1)
+        self.assertEqual(state['align'], 0)
+
+    def test_align_undoing_page_treated_as_bottom(self):
+        """对齐把翻页抵消（位置回到原位附近）：按已到底处理。"""
+        result, state = self._run(positions=[0.0, 0.01], pages=[0.5])
+        self.assertFalse(result)
+        self.assertEqual(state['row3'], 1)
+        self.assertEqual(state['align'], 1)
+
+    def test_align_failure_continues_scanning(self):
+        """对齐失败但位置前进：继续下一轮而不是中止整个档位。"""
+        result, state = self._run(positions=[0.0, 0.5, 1.0], pages=[0.5],
+                                  align_ok=False)
+        self.assertFalse(result)
+        self.assertEqual(state['align'], 1)
+        self.assertEqual(state['row3'], 1)
 
 
 if __name__ == '__main__':
