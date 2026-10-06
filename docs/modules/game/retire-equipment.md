@@ -77,6 +77,24 @@ module/storage/
 | `Equipment.equipment_take_on/off()` | 演习、困难模式等按 `fleet` 记录装卸装备的底层入口 |
 | `EquipmentCodeHandler.code_apply()` / `code_clear()` | GemsFarming/Ambush11 换船时回装/卸下配装 |
 
+### 舰队信息扫描
+
+`FleetManagement.run()` 复用 `Dock.dock_filter_set()`，依次扫描前排、后排、潜艇。
+第一次在同一个筛选面板选择 `index='vanguard'` 与 `sort='mood'`，统一确认；
+后续分类传 `sort=None`，保留游戏记住的心情排序。任务期间关闭 `Setting.reset_first`，
+避免默认重置先清掉心情排序，`finally` 恢复该标志并执行原有 `dock_reset()`。
+
+`FleetManagementScanner` 保持原有舰队归属、名称纠正和等级识别，增加
+`FleetEmotionScanner`，复用 `CARD_EMOTION_GRIDS` 裁剪与 OCR 框架，网格形状与排除位置保持一致。
+心情只接受完整的 0–150 数字，空白、非法文字或越界为 `None`；不使用通用心情扫描器的
+颜色纠正或截位猜数。单个心情未知不会删掉对应名称、等级记录。
+
+三类扫描完成后仍一次性保存到 `FleetInfo.FleetInfo.Result` 和 `Record`，单船结构扩展为
+`{'name': str, 'level': int, 'emotion': int | None}`，JSON 中未知心情为 `null`。
+WebUI 舰队信息同时显示名称、等级与心情；旧字符串/缺少心情的对象仍可显示，心情标为未知。
+定向验证入口：`tests/test_fleet_emotion.py`（匿名心情裁剪、筛选顺序、失败保留和真实配置落盘）
+及 `frontend/e2e/fleet-info.spec.ts`（隔离服务页面显示）。截图夹具不包含账号信息。
+
 ## 6. 工作流程
 
 ### 退役（module/retire）
