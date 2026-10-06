@@ -72,13 +72,18 @@ COMMISSION_SCROLL = Scroll(COMMISSION_SCROLL_AREA, color=(247, 211, 66), name='C
 # 委托收益截图保留张数：与统计页「最近委托记录」的 50 条上限保持一致。
 # 仅在「掉落记录 - 截图保留天数」为 0 时生效，填了天数就改按天数清理。
 COMMISSION_REWARD_SCREENSHOT_KEEP = 50
-# 委托详情面板的第一个舰船槽位，点击打开船坞。
-# 面板位置由橙色「推荐」按钮（COMMISSION_ADVICE 中心 935,352）按固定距离
-# 推算（槽位中心 270,347）；推荐填充舰船后槽位颜色会变化，
-# 因此该按钮绝不能用颜色匹配，下方 area/color 只是构造函数占位。
-COMMISSION_SHIP_SLOT = Button(
-    area=(229, 306, 311, 388), color=(127, 134, 150),
-    button=(229, 306, 311, 388), name='COMMISSION_SHIP_SLOT')
+# 委托详情面板的 6 个舰船槽位（1280x720 国服实机截图标定，2026-10-07），
+# 第一格中心 (270,347) 与「推荐」按钮左下按固定距离对齐。
+# 点击已有舰船的槽位不会打开船坞，只有点空槽位（'+'）才会，
+# 且空槽位首次点击有时只展开面板，需要再点一次。
+COMMISSION_SHIP_SLOTS = ButtonGrid(
+    origin=(229, 306), delta=(101.5, 0), button_shape=(82, 82),
+    grid_shape=(6, 1), name='COMMISSION_SHIP_SLOTS')
+
+# 空槽判别：槽中心区域的平均亮度。实测空槽 ≈85（深色底 + 灰 '+'），
+# 有舰船立绘 ≥180，阈值取 130（实机截图 recommended_5 / empty_slots 标定）。
+_SLOT_CENTER_INSET = 20
+_SLOT_EMPTY_LUMINANCE = 130
 
 # 无法开始的委托（如等级不足）在短暂等待后放弃，而不是循环到
 # GameStuckError 重启游戏。
@@ -192,6 +197,22 @@ def commission_level_requirement(name):
         if group:
             return group.get(match.group(1), 0)
     return 0
+
+
+def commission_slot_is_empty(image, button):
+    """槽位中心是深色底（空槽 '+'）还是舰船立绘。
+
+    Args:
+        image (np.ndarray): RGB 截图。
+        button (Button): 槽位按钮。
+
+    Returns:
+        bool: True 表示空槽位。
+    """
+    x0, y0, x1, y1 = button.area
+    center = image[y0 + _SLOT_CENTER_INSET:y1 - _SLOT_CENTER_INSET,
+                   x0 + _SLOT_CENTER_INSET:x1 - _SLOT_CENTER_INSET]
+    return center.mean() < _SLOT_EMPTY_LUMINANCE
 
 
 class CommissionAmount(AmountOcr):
@@ -1076,6 +1097,46 @@ class RewardCommission(Dock, UI, InfoHandler):
                 return False
         return self.appear(DOCK_CHECK, offset=(20, 20))
 
+    def _commission_empty_slot(self):
+        """最右侧空槽位的 Button；6 格全满时返回 None。"""
+        image = np.asarray(self.device.image)
+        for button in reversed(COMMISSION_SHIP_SLOTS.buttons):
+            if commission_slot_is_empty(image, button):
+                return button
+        return None
+
+    def _commission_enter_dock_by_slot(self):
+        """从委托详情面板的空槽位进入船坞。
+
+        点击已有舰船的槽位不会打开船坞，必须点空槽位（'+'）；
+        空槽位首次点击有时只展开面板，未进船坞时再点一次。
+
+        Returns:
+            bool: 是否已进入船坞（DOCK_CHECK 出现）。
+        """
+        slot = self._commission_empty_slot()
+        if slot is None:
+            # 6 格全满：先取消最后一艘，腾出空槽位。
+            logger.info('[委托-启动] 槽位已满，取消最后一艘以腾出空槽')
+            self.device.click(COMMISSION_SHIP_SLOTS[(5, 0)])
+            self.device.sleep(0.6)
+            self.device.screenshot()
+            slot = self._commission_empty_slot()
+            if slot is None:
+                logger.warning('[委托-启动] 没有空槽位可用，无法进入船坞')
+                return False
+        for attempt in range(2):
+            self.device.click(slot)
+            if self._commission_wait_dock(timeout=3 if attempt == 0 else 10):
+                return True
+            if attempt == 0:
+                logger.info('[委托-启动] 空槽位首次点击未进入船坞，再点一次')
+                self.device.screenshot()
+                recheck = self._commission_empty_slot()
+                if recheck is not None:
+                    slot = recheck
+        return False
+
     def _commission_dock_fill_stage(self, allow_fleet, protected, required,
                                     scanners, picked):
         """在一个稀有度档位内填充槽位，每次翻一屏，只读顶部两行。
@@ -1297,14 +1358,13 @@ class RewardCommission(Dock, UI, InfoHandler):
                     recommend_timer = None
                 elif self.config.Commission_AutoPickShip and not enter_dock_tried \
                         and self.match_template_color(COMMISSION_ADVICE, offset=(10, 10)):
-                    # 推荐后开始仍灰：从第一个舰船槽位打开船坞，船坞一次最多可
-                    # 选六艘船。以橙色「推荐」按钮为门卫——槽位行位于其左侧固定
-                    # 距离处，按设计就是盲点。
-                    logger.info('[委托-启动] 推荐后开始仍灰，从第一个舰船槽位进入船坞')
+                    # 推荐后开始仍灰：从空槽位打开船坞，船坞一次最多可
+                    # 选六艘船。以橙色「推荐」按钮为门卫——槽位行位于其
+                    # 左侧固定距离处；点已有舰船的槽位不会进船坞，
+                    # 由亮度判别找空槽位。
+                    logger.info('[委托-启动] 推荐后开始仍灰，点击空槽位进入船坞')
                     enter_dock_tried = True
-                    COMMISSION_SHIP_SLOT.clear_offset()
-                    self.device.click(COMMISSION_SHIP_SLOT)
-                    if not self._commission_wait_dock():
+                    if not self._commission_enter_dock_by_slot():
                         logger.warning(f'[委托-启动] 船坞未从舰船槽位打开，跳过: {comm.name}')
                         return False
                     recommend_timer = None
