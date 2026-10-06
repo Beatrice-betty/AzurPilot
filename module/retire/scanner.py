@@ -526,7 +526,7 @@ class FleetScanner(Scanner):
 
 
 class FleetNameScanner(Scanner):
-    """识别船坞卡片中的舰娘名称，保留 OCR 原始结果。"""
+    """识别船坞舰名，仅依据精确身份或唯一截断补全，未确认时保留原文。"""
     OCR_LANG = {
         'cn': 'ppocr_v6',
         'en': 'ppocr_v6',
@@ -593,10 +593,31 @@ class FleetNameScanner(Scanner):
 
     def _scan(self, image) -> List:
         names = self.ocr_model.ocr(image)
-        corrected = [self.name_matcher.correct(name) for name in names]
-        for raw, name in zip(names, corrected):
-            if raw != name:
-                logger.info(f'[舰队扫描-OCR] 舰娘名修正: {raw!r} -> {name!r}')
+        names = names if isinstance(names, list) else [names]
+        resolved = [self.name_matcher.resolve(name) for name in names]
+        corrected = [name for name, _ in resolved]
+        unresolved = [i for i, (_, status) in enumerate(resolved) if self.name_matcher.names
+                      if status not in ('exact', 'prefix', 'missing_catalog')]
+        if unresolved:
+            # 同一截图、相同名称裁剪；只对未确认名称追加一次原彩色识别，不放大猜字。
+            regions = [crop(image, self.ocr_model.buttons[i])[
+                self.NameOcr.TEXT_ROWS[0]:self.NameOcr.TEXT_ROWS[1], self.NameOcr.TEXT_LEFT:
+            ] for i in unresolved]
+            retries = self.ocr_model.cnocr.atomic_ocr_for_single_lines(regions, None)
+            for i, retry in zip(unresolved, retries):
+                retry = ''.join(retry)
+                candidate = self.name_matcher.retry_candidate(names[i], retry)
+                if candidate is not None:
+                    corrected[i] = candidate
+                    logger.info(f'[舰队扫描-OCR] 彩色复识别确认: {names[i]!r} -> {candidate!r}')
+                else:
+                    logger.info(f'[舰队扫描-OCR] 名称未确认，保留原文: {names[i]!r}，'
+                                f'依据={resolved[i][1]}，彩色结果={retry!r}')
+        for raw, name, (_, status) in zip(names, corrected, resolved):
+            if raw != name and status in ('exact', 'prefix'):
+                logger.info(f'[舰队扫描-OCR] 舰娘名确认: {raw!r} -> {name!r}，依据={status}')
+            elif status == 'missing_catalog':
+                logger.info(f'[舰队扫描-OCR] 名单不可用，保留原文: {raw!r}')
         return corrected
 
     def limit_value(self, value) -> str:
