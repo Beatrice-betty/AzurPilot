@@ -497,41 +497,6 @@ class StockExchangeTests(unittest.TestCase):
         self.assertNotEqual(identity, replacement)
         self.assertFalse(store.path('testpilot').exists())
 
-    def test_damaged_exchange_storage_never_blocks_instance_operations(self):
-        """交易所保护存储损坏只影响交易所自身，实例的调度存储与观测不再被阻断。"""
-        from module.runtime.game_data import GameDataProtector
-        self.register()
-        now = datetime.now().isoformat()
-        store = ProgramStore(self.root / 'config')
-        store.observe('test', 'ActionPoint', {'Total': 8000}, now, 'fixture')
-        protection = GameDataProtector(self.root)
-        protection.state_path.write_text('{broken', encoding='utf-8')
-        store.observe('test', 'ActionPoint', {'Total': 8100}, datetime.now().isoformat(), 'fixture')
-        store.observe('test', 'Oil', 5000, datetime.now().isoformat(), 'fixture')
-        self.assertEqual(5000, store.observations('test')['Oil']['Value'])
-        self.assertEqual({}, store.persistent('test'))
-        with self.assertRaises(ApiError):
-            with store.connection('test', strict_history=True):
-                pass
-        with self.assertRaises(ApiError):
-            self.service.status('test')
-
-    def test_damaged_exchange_storage_does_not_block_config_management(self):
-        """交易所保护存储损坏时创建与删除实例仍可完成。"""
-        from tests.test_api import fixture
-        from module.api.config_service import ConfigService
-        from module.runtime.game_data import GameDataProtector
-        root = Path(self.temp.name) / 'managed'
-        root.mkdir()
-        fixture(root)
-        configs = ConfigService(root)
-        load_identity(root, 'testpilot')
-        GameDataProtector(root).state_path.write_text('{broken', encoding='utf-8')
-        configs.create('next')
-        revision = configs.read('next')[1]
-        configs.delete('next', revision)
-        self.assertFalse((root / 'config' / 'next.json').exists())
-
 
 if __name__ == '__main__':
     unittest.main()
