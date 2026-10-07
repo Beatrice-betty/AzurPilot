@@ -776,6 +776,10 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
         runtime = self.__dict__.get('_scheduler_runtime')
         if runtime is not None and runtime.mode != 'native':
             return runtime.should_yield(self)
+        if runtime is not None:
+            decision = runtime.oil_control.should_yield(self)
+            if decision is not None:
+                return decision
         prev = getattr(self, '_task_switch_owner', self.task)
         self.load()
         new = self.get_next()

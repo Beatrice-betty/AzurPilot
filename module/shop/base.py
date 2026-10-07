@@ -278,6 +278,22 @@ class ShopBase(UI):
             logger.info('未找到商店物品')
             return []
 
+    def shop_purchase_result_handle(self):
+        """关闭已获得物品界面，供购买流程确认真实成交后记录资源收支。"""
+        if self.appear(GET_SHIP, offset=(20, 20), interval=1):
+            logger.info(f'商店遮挡: {GET_SHIP} -> {SHOP_CLICK_SAFE_AREA}')
+            self.device.click(SHOP_CLICK_SAFE_AREA)
+            return True
+        if self.appear(GET_ITEMS_1, interval=1):
+            logger.info(f'商店遮挡: {GET_ITEMS_1} -> {SHOP_CLICK_SAFE_AREA}')
+            self.device.click(SHOP_CLICK_SAFE_AREA)
+            return True
+        if self.appear(GET_ITEMS_3, interval=1):
+            logger.info(f'商店遮挡: {GET_ITEMS_3} -> {SHOP_CLICK_SAFE_AREA}')
+            self.device.click(SHOP_CLICK_SAFE_AREA)
+            return True
+        return False
+
     def shop_obstruct_handle(self):
         """
         移除商店视图中的遮挡物（如果存在）。
@@ -288,23 +304,11 @@ class ShopBase(UI):
         Returns:
             bool: 是否存在并处理了遮挡物。
         """
-        # Handle shop obstructions
-        if self.appear(GET_SHIP, offset=(20, 20), interval=1):
-            logger.info(f'Shop obstruct: {GET_SHIP} -> {SHOP_CLICK_SAFE_AREA}')
-            self.device.click(SHOP_CLICK_SAFE_AREA)
+        if self.shop_purchase_result_handle():
             return True
         # To lock new ships
         if self.handle_popup_confirm('SHOP_OBSTRUCT'):
             return True
-        if self.appear(GET_ITEMS_1, interval=1):
-            logger.info(f'Shop obstruct: {GET_ITEMS_1} -> {SHOP_CLICK_SAFE_AREA}')
-            self.device.click(SHOP_CLICK_SAFE_AREA)
-            return True
-        if self.appear(GET_ITEMS_3, interval=1):
-            logger.info(f'Shop obstruct: {GET_ITEMS_3} -> {SHOP_CLICK_SAFE_AREA}')
-            self.device.click(SHOP_CLICK_SAFE_AREA)
-            return True
-
         return False
 
     def shop_get_items(self, skip_first_screenshot=True):

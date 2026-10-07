@@ -81,6 +81,7 @@ class Router:
             'preview.capture': Method(p.InstanceParams, lambda x: runtime.capture(x.instance)),
             'statistics.refreshLoot': Method(p.InstanceParams, self.refresh_loot, True),
             'statistics.report': Method(p.StatisticsReportParams, self.statistics_report),
+            'statistics.resourceFlows': Method(p.ResourceFlowsParams, self.resource_flows),
             'meowfficer.scoreReport': Method(p.MeowfficerScoreReportParams, self.meowfficer_score_report),
             'meowfficer.clearReport': Method(p.MeowfficerClearReportParams,
                                              self.meowfficer_clear_report, True),
@@ -204,6 +205,11 @@ class Router:
                         params.days, params.period, research_series=params.series,
                         research_scope=params.scope, loot_task=params.task)
         return {**result, **compact_axis(result.get('series') or [])}
+
+    def resource_flows(self, params: p.ResourceFlowsParams):
+        """查询库存与资源流向；沿用现有实例访问边界。"""
+        from module.api.resource_service import resource_flows
+        return resource_flows(self.configs, params)
 
     def meowfficer_score_report(self, params: p.MeowfficerScoreReportParams):
         """获取指挥喵评分报告。

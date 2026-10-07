@@ -150,18 +150,30 @@ class EventShopUI(UI):
         return self.ui_process_check_button(check_button=blacklist)
 
     def event_shop_get_pt(self):
-        if self.is_pt_reversed:
-            pt = OCR_EVENT_SHOP_URPT.ocr(self.device.image)
-        else:
-            pt = OCR_EVENT_SHOP_PT.ocr(self.device.image)
-        return pt
+        """识别并获取当前活动 PT 点数余额。
+
+        Returns:
+            int: PT 点数数量。
+        """
+        ocr = OCR_EVENT_SHOP_URPT if self.is_pt_reversed else OCR_EVENT_SHOP_PT
+        value = ocr.ocr(self.device.image)
+        if getattr(ocr, 'last_valid', False):
+            from module.log_res import LogRes
+            LogRes(self.config).record('Pt', value, observed=True)
+        return value
 
     def event_shop_get_urpt(self):
-        if self.is_pt_reversed:
-            urpt = OCR_EVENT_SHOP_PT.ocr(self.device.image)
-        else:
-            urpt = OCR_EVENT_SHOP_URPT.ocr(self.device.image)
-        return urpt
+        """识别并获取当前活动 URpt 点数余额。
+
+        Returns:
+            int: URpt 点数数量。
+        """
+        ocr = OCR_EVENT_SHOP_PT if self.is_pt_reversed else OCR_EVENT_SHOP_URPT
+        value = ocr.ocr(self.device.image)
+        if getattr(ocr, 'last_valid', False):
+            from module.statistics.resource_flow import observe
+            observe(self.config, 'URPt', value)
+        return value
 
     def get_oil(self, skip_first_screenshot=True):
         """获取当前石油余额。

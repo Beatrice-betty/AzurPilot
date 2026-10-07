@@ -3,6 +3,7 @@
  */
 
 import { developerEnUS, developerJaJP, developerZhCN, developerZhTW } from './i18n.dev'
+import {resourceZhCN, resourceZhTW, resourceEnUS, resourceJaJP, resourceZhMiao} from './i18n.resources'
 
 export type Language = 'zh-CN' | 'zh-TW' | 'en-US' | 'ja-JP' | 'zh-MIAO'
 type TranslationParams = Record<string, string | number>
@@ -16,6 +17,7 @@ export const languages: Record<Language, string> = {
 }
 
 const zhCN = {
+  ...resourceZhCN,
   'stats.category.storage': '仓库物品',
   'stats.runStorage': '运行仓库统计',
   'stats.storageStarted': '仓库统计已启动，完整扫描完成后更新数量。',
@@ -585,6 +587,7 @@ export type UiKey = keyof typeof zhCN
 export type UiTranslator = (key: UiKey, params?: TranslationParams) => string
 
 const enUS: Record<UiKey, string> = {
+  ...resourceEnUS,
   'stats.category.storage': 'Inventory',
   'stats.runStorage': 'Scan inventory',
   'stats.storageStarted': 'Inventory scan started. Counts update after a complete scan.',
@@ -728,6 +731,7 @@ const enUS: Record<UiKey, string> = {
 }
 
 const jaJP: Record<UiKey, string> = {
+  ...resourceJaJP,
   'stats.category.storage': '倉庫アイテム',
   'stats.runStorage': '倉庫を集計',
   'stats.storageStarted': '倉庫の集計を開始しました。全体の確認が終わると数量が更新されます。',
@@ -932,6 +936,7 @@ const jaJP: Record<UiKey, string> = {
 }
 
 const zhTW: Record<UiKey, string> = {
+  ...resourceZhTW,
   'stats.category.storage': '倉庫物品',
   'stats.runStorage': '執行倉庫統計',
   'stats.storageStarted': '倉庫統計已啟動，完整掃描完成後更新數量。',
@@ -1185,6 +1190,7 @@ const zhTW: Record<UiKey, string> = {
 
 const zhMiao: Record<UiKey, string> = {
   ...zhCN,
+  ...resourceZhMiao,
   'stats.category.storage': '仓库物品喵',
   'stats.runStorage': '运行仓库统计喵',
   'stats.storageStarted': '仓库统计已启动喵，完整扫描完成后更新数量。',

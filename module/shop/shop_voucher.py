@@ -222,10 +222,12 @@ class VoucherShop(ShopClerk, ShopStatus):
             item: 待购买的商品对象。
             skip_first_screenshot (bool): 是否跳过首次截图。默认 True。
 
-        Returns:
-            bool: 购买是否成功。
         """
         success = False
+        confirmed_purchase = False
+        from module.statistics.resource_tracking import receipt_totals
+        receipts = receipt_totals(self.config)
+        item._resource_purchase_quantity = 1
         self.shop_interval_clear()
 
         while 1:
@@ -246,6 +248,10 @@ class VoucherShop(ShopClerk, ShopStatus):
             if self.handle_retirement():
                 self.interval_reset(BACK_ARROW)
                 continue
+            if self.shop_purchase_result_handle():
+                self.interval_reset(BACK_ARROW)
+                success = confirmed_purchase = True
+                continue
             if self.shop_obstruct_handle():
                 self.interval_reset(BACK_ARROW)
                 success = True
@@ -257,6 +263,9 @@ class VoucherShop(ShopClerk, ShopStatus):
 
             # End
             if success and self.appear(BACK_ARROW, offset=(30, 30)):
+                if confirmed_purchase:
+                    from module.statistics.resource_tracking import record_purchase
+                    record_purchase(self.config, item, item._resource_purchase_quantity, receipts)
                 break
 
     def run(self):

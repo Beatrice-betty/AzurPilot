@@ -60,6 +60,9 @@ class OSShop(PortShop, AkashiShop):
             in: PORT_SUPPLY_CHECK
         """
         success = False
+        from module.statistics.resource_tracking import receipt_totals
+        receipts = receipt_totals(self.config)
+        button._resource_purchase_quantity = 1
         amount_finish = False
         self.interval_clear([
             PORT_SUPPLY_CHECK, SHOP_BUY_CONFIRM_AMOUNT,
@@ -112,6 +115,9 @@ class OSShop(PortShop, AkashiShop):
             if success and self.appear(PORT_SUPPLY_CHECK, offset=(20, 20)):
                 break
 
+        if success:
+            from module.statistics.resource_tracking import record_purchase
+            record_purchase(self.config, button, button._resource_purchase_quantity, receipts)
         return success
 
     def os_shop_buy(self, select_func) -> int:
@@ -261,9 +267,11 @@ class OSShop(PortShop, AkashiShop):
         if getattr(self, '_opsi_action_point_purchase', False):
             self.ui_ensure_index(count, letter=OCR_SHOP_AMOUNT, prev_button=AMOUNT_MINUS,
                                  next_button=AMOUNT_PLUS, skip_first_screenshot=True)
+            item._resource_purchase_quantity = count
             return True
 
         if count == 1:
+            item._resource_purchase_quantity = 1
             return True
 
         coins = self.get_coins_no_limit(item)
@@ -299,6 +307,7 @@ class OSShop(PortShop, AkashiShop):
 
         self.ui_ensure_index(limit, letter=OCR_SHOP_AMOUNT, prev_button=AMOUNT_MINUS, next_button=AMOUNT_PLUS,
                              skip_first_screenshot=True)
+        item._resource_purchase_quantity = limit
         return True
 
     def handle_port_supply_buy(self) -> bool:

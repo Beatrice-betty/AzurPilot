@@ -224,6 +224,7 @@ class ShopClerk(ShopBase, Retirement):
         self.ui_ensure_index(limit, letter=shop_buy_select_ensure_index, prev_button=SELECT_MINUS,
                              next_button=SELECT_PLUS,
                              skip_first_screenshot=True)
+        item._resource_purchase_quantity = limit
         self.device.click(SHOP_BUY_CONFIRM_SELECT)
         return True
 
@@ -278,6 +279,7 @@ class ShopClerk(ShopBase, Retirement):
 
         self.ui_ensure_index(limit, letter=OCR_SHOP_AMOUNT, prev_button=AMOUNT_MINUS, next_button=AMOUNT_PLUS,
                              skip_first_screenshot=True)
+        item._resource_purchase_quantity = limit
         self.device.click(SHOP_BUY_CONFIRM_AMOUNT)
         return True
 
@@ -313,6 +315,11 @@ class ShopClerk(ShopBase, Retirement):
             skip_first_screenshot: 是否跳过首次截图
         """
         success = False
+        confirmed_purchase = False
+        from module.statistics.resource_tracking import receipt_totals
+        receipts = receipt_totals(self.config)
+        # 每次成交独立记录；数量选择框确认后再覆盖默认的一次购买。
+        item._resource_purchase_quantity = 1
         self.shop_interval_clear()
 
         while 1:
@@ -333,6 +340,10 @@ class ShopClerk(ShopBase, Retirement):
             if self.handle_retirement():
                 self.interval_reset(SHOP_BACK_ARROW)
                 continue
+            if self.shop_purchase_result_handle():
+                self.interval_reset(SHOP_BACK_ARROW)
+                success = confirmed_purchase = True
+                continue
             if self.shop_obstruct_handle():
                 self.interval_reset(SHOP_BACK_ARROW)
                 success = True
@@ -344,6 +355,9 @@ class ShopClerk(ShopBase, Retirement):
 
             # End
             if success and self.appear(SHOP_BACK_ARROW, offset=(30, 30)):
+                if confirmed_purchase:
+                    from module.statistics.resource_tracking import record_purchase
+                    record_purchase(self.config, item, item._resource_purchase_quantity, receipts)
                 break
 
     def shop_buy(self):
