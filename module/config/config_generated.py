@@ -141,6 +141,13 @@ class GeneratedConfig:
     Watchdog_CheckInterval = 30
     Watchdog_DailySummaryCheckInterval = 1
 
+    # 配置组 `Reboot`
+    Reboot_Tries = 3
+    Reboot_FirstTryWaitSeconds = 30
+    Reboot_SubsequentTryWaitSeconds = 20
+    Reboot_ObserveSeconds = 180
+    Reboot_ObserveInterval = 15
+
     # 配置组 `DailySummary`
     DailySummary_Enable = False  # True, False
     DailySummary_TriggerTime = '20:00'

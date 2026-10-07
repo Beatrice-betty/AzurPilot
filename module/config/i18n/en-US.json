@@ -858,6 +858,32 @@
       "help": "How often the daily summary timer thread checks its trigger time. Smaller values trigger more precisely at slightly higher cost.\nDefault 1."
     }
   },
+  "Reboot": {
+    "_info": {
+      "name": "Login & Reboot",
+      "help": "Retry count, wait and observe pacing of the game app restart."
+    },
+    "Tries": {
+      "name": "Restart attempts",
+      "help": "How many times to retry after the app fails to start. After this many consecutive failures, the observe phase begins; if the app still does not recover, an emulator restart is triggered.\nDefault 3."
+    },
+    "FirstTryWaitSeconds": {
+      "name": "First failure wait (seconds)",
+      "help": "Seconds to wait before retrying after the first start failure.\nDefault 30."
+    },
+    "SubsequentTryWaitSeconds": {
+      "name": "Subsequent failure wait (seconds)",
+      "help": "Seconds to wait before retrying after the second and later start failures.\nDefault 20."
+    },
+    "ObserveSeconds": {
+      "name": "Observe phase duration (seconds)",
+      "help": "After consecutive restart failures, how long to wait for the app to recover on its own before triggering an emulator restart.\nDefault 180."
+    },
+    "ObserveInterval": {
+      "name": "Observe check interval (seconds)",
+      "help": "How often to check whether the app has recovered during the observe phase.\nDefault 15."
+    }
+  },
   "DailySummary": {
     "_info": {
       "name": "Daily summary",

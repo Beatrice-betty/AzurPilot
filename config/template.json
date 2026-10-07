@@ -3614,6 +3614,13 @@
       "CheckInterval": 30,
       "DailySummaryCheckInterval": 1
     },
+    "Reboot": {
+      "Tries": 3,
+      "FirstTryWaitSeconds": 30,
+      "SubsequentTryWaitSeconds": 20,
+      "ObserveSeconds": 180,
+      "ObserveInterval": 15
+    },
     "Storage": {
       "Storage": {}
     }

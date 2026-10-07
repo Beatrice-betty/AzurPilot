@@ -19080,6 +19080,48 @@
         ]
       }
     },
+    "Reboot": {
+      "Tries": {
+        "type": "input",
+        "value": 3,
+        "validate": [
+          1,
+          10
+        ]
+      },
+      "FirstTryWaitSeconds": {
+        "type": "input",
+        "value": 30,
+        "validate": [
+          5,
+          300
+        ]
+      },
+      "SubsequentTryWaitSeconds": {
+        "type": "input",
+        "value": 20,
+        "validate": [
+          5,
+          300
+        ]
+      },
+      "ObserveSeconds": {
+        "type": "input",
+        "value": 180,
+        "validate": [
+          30,
+          600
+        ]
+      },
+      "ObserveInterval": {
+        "type": "input",
+        "value": 15,
+        "validate": [
+          1,
+          60
+        ]
+      }
+    },
     "Storage": {
       "Storage": {
         "type": "storage",

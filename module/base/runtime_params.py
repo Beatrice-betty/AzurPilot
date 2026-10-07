@@ -27,3 +27,21 @@ DAILY_SUMMARY_CHECK_INTERVAL = 1
 EMULATOR_RESTART_INTERVAL_HOURS_DEFAULT = 4
 # Error.WatchdogTaskTimeout 读取失败时的兜底分钟数（0 表示禁用）
 WATCHDOG_TASK_TIMEOUT_DEFAULT = 120
+
+# ==================== 配置兜底：登录与重启（RunParams.Reboot） ====================
+
+# 应用重启恢复策略：连续 N 次启动失败后进入观察阶段，观察期间仍无恢复
+# 则由上层调度器执行模拟器重启，避免长时间无效重试。
+RESTART_TRIES = 3
+RESTART_FIRST_TRY_WAIT_SECONDS = 30
+RESTART_SUBSEQUENT_TRY_WAIT_SECONDS = 20
+RESTART_OBSERVE_SECONDS = 180
+RESTART_OBSERVE_INTERVAL = 15
+# 单次 app_stop/app_start 操作的硬超时秒数。
+# 仅作为配置读取失败的兜底默认值；实际值从配置 Error.RestartOperationTimeout
+# 读取，可在 WebUI「调试设置」中修改。
+# atx-agent 自恢复可能耗时 70 秒以上，给 120 秒余量；超过则判定模拟器或
+# atx-agent 卡死，立即抛出 EmulatorNotRunningError 触发模拟器重启，
+# 避免 u2 调用无限挂起导致 LoginWaitTimeout / GameStuckRestart 等保护机制
+# （依赖 screenshot() 中的 stuck_record_check）均无法触发的死锁。
+RESTART_OPERATION_TIMEOUT = 120

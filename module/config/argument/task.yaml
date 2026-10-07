@@ -478,6 +478,7 @@ RunParams:
   tasks:
     RunParams:
       - Watchdog
+      - Reboot
 
 # ==================== Tool ====================
 

@@ -239,6 +239,22 @@ Watchdog:
   DailySummaryCheckInterval:
     value: 1
     validate: [1, 60]
+Reboot:
+  Tries:
+    value: 3
+    validate: [1, 10]
+  FirstTryWaitSeconds:
+    value: 30
+    validate: [5, 300]
+  SubsequentTryWaitSeconds:
+    value: 20
+    validate: [5, 300]
+  ObserveSeconds:
+    value: 180
+    validate: [30, 600]
+  ObserveInterval:
+    value: 15
+    validate: [1, 60]
 DailySummary:
   Enable:
     type: checkbox
