@@ -266,6 +266,18 @@ class AzurLaneAutoScript:
         self._daily_summary_settings_mtime = modified_at
         return self._daily_summary_settings
 
+    def _daily_summary_interval(self):
+        """日报定时线程的检查间隔（秒）。
+
+        通过 __dict__ 读取 config，避免在守护线程里意外触发配置懒加载；
+        配置尚未加载时使用兜底默认值。
+        """
+        config = self.__dict__.get('config')
+        if config is None:
+            return DAILY_SUMMARY_CHECK_INTERVAL
+        return read_run_param(
+            config, 'Watchdog_DailySummaryCheckInterval', DAILY_SUMMARY_CHECK_INTERVAL)
+
     def _daily_summary_loop(self):
         """独立检查日报时间，避免长任务或服务器等待错过触发时刻。"""
         stop_event = self._daily_summary_stop
@@ -279,11 +291,7 @@ class AzurLaneAutoScript:
                     logger.info('[日报] 功能已关闭，停止独立定时检查')
                     return
                 self._check_daily_summary(config)
-                stop_event.wait(read_run_param(
-                    self.config,
-                    'Watchdog_DailySummaryCheckInterval',
-                    DAILY_SUMMARY_CHECK_INTERVAL,
-                ))
+                stop_event.wait(self._daily_summary_interval())
         finally:
             if self._daily_summary_thread is threading.current_thread():
                 self._daily_summary_stop = None
@@ -619,6 +627,17 @@ class AzurLaneAutoScript:
             self._watchdog_thread = None
         logger.info('[Alas][看门狗] 看门狗已停止')
 
+    def _watchdog_interval(self):
+        """看门狗检查间隔（秒）。
+
+        与 _daily_summary_interval 相同，通过 __dict__ 读取 config，
+        不触发懒加载；未加载时回退兜底默认值。
+        """
+        config = self.__dict__.get('config')
+        if config is None:
+            return WATCHDOG_CHECK_INTERVAL
+        return read_run_param(config, 'Watchdog_CheckInterval', WATCHDOG_CHECK_INTERVAL)
+
     def _watchdog_loop(self):
         """看门狗主循环：检测任务运行时间超时和强制定时重启。
 
@@ -636,11 +655,9 @@ class AzurLaneAutoScript:
         恢复方式：强制杀死模拟器进程，使主线程的下次 I/O 调用失败并抛出
         异常，触发正常的异常恢复流程。
         """
-        while not self._watchdog_stop.wait(read_run_param(
-                self.config,
-                'Watchdog_CheckInterval',
-                WATCHDOG_CHECK_INTERVAL,
-        )):
+        while True:
+            if self._watchdog_stop.wait(self._watchdog_interval()):
+                break
             if not self._watchdog_active:
                 continue
 
