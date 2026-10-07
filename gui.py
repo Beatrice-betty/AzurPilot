@@ -4,6 +4,15 @@
 跨平台进程清理以及在独立子进程中执行 Python 依赖同步（uv sync）。
 """
 
+# 启动器行为参数集中在 module/base/runtime_params.py(WebUI 启动器域);
+# 该模块零 import,对启动器最早期阶段无额外依赖。
+from module.base.runtime_params import (
+    DEPENDENCY_SYNC_START_RETRY_LIMIT,
+    WEBUI_READY_TIMEOUT,
+    WEBUI_RUNTIME_RETRY_LIMIT,
+    WEBUI_STABLE_RUNTIME,
+    WEBUI_START_RETRY_LIMIT,
+)
 import errno
 import os
 import queue
@@ -40,11 +49,7 @@ from module.runtime.setting import (
 )
 
 
-WEBUI_READY_TIMEOUT = 120
-WEBUI_START_RETRY_LIMIT = 3
-WEBUI_RUNTIME_RETRY_LIMIT = 3
-WEBUI_STABLE_RUNTIME = 60
-DEPENDENCY_SYNC_START_RETRY_LIMIT = 3
+
 DEPENDENCY_SYNC_RESPONSE_TIMEOUT = DEPENDENCY_SYNC_TIMEOUT + 60
 
 # 退出码定义

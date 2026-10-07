@@ -158,3 +158,78 @@ HANDOVER_CONFLICT_RETRY_MINUTES = 15
 # 语义，与秒数强耦合，不开放配置。
 GACHA_PREP_SUBMIT_WAIT_FRAMES = 2
 GACHA_PREP_TIMEOUT_FRAMES = 20
+
+
+# ==================== 进程级：调度器（alas.py） ====================
+
+# 模拟器 stop/start 单次操作的硬超时秒数。
+# 必须覆盖 PlatformWindows.emulator_start() 的完整预算，一次调用最多：
+#   关闭 30 + 深度清场 90（关全部实例≤60 + 等进程退出≤30） + 等实例真正关闭 60
+#   + 启动监视 300（阶梯上限） = 480 秒
+# 普通路径没有深度清场那 90 秒（实测 390 秒封顶），但按最坏情况取。
+# 取 600 秒：宁可慢，也不能在模拟器正在启动时放弃——超时被放弃的
+# worker 线程仍会继续对模拟器执行关/开操作，是历史上“模拟器永远起不来”
+# 的根因（原值 120 秒 < 内层 180 秒监视超时，必然超时、必然残留）。
+# 残留线程由 PlatformWindows 的启停互斥锁兜底：它结束之前，任何新的
+# 启停操作都会抛 EmulatorOpBusy 被跳过，不会再打断正在进行的启动。
+RESTART_EMULATOR_OP_TIMEOUT = 600
+
+# ==================== 进程级：WebUI 启动器（gui.py） ====================
+
+# 等待 WebUI 后端就绪的超时（秒）
+WEBUI_READY_TIMEOUT = 120
+# WebUI 子进程启动/运行异常时的重试次数上限
+WEBUI_START_RETRY_LIMIT = 3
+WEBUI_RUNTIME_RETRY_LIMIT = 3
+# 子进程连续稳定运行超过该秒数后，重试计数归零
+WEBUI_STABLE_RUNTIME = 60
+# 启动阶段依赖同步（uv sync）的重试次数上限
+DEPENDENCY_SYNC_START_RETRY_LIMIT = 3
+
+# 注：deploy/ 包保持零项目依赖（无 module 包的独立运行环境，如安装器/
+# 引导阶段），其常量（WINDOWS_MAX_ATTEMPT 等）留在 deploy/ 原处，不收拢。
+
+# ==================== 进程级：运行时服务（module/runtime/、module/api/） ====================
+
+# 本地控制命令（launcher → 子进程）的请求超时（秒）
+COMMAND_TIMEOUT = 10
+# 控制连接的空闲过期时间（秒）
+CONNECTION_EXPIRE = 45
+# 免密令牌有效期（秒），短时一次性
+TOKEN_TTL_SECONDS = 60
+# worker 注册表文件锁的等待超时（秒）
+REGISTRY_LOCK_TIMEOUT = 10.0
+# 注册表文件锁的重试间隔（秒）
+REGISTRY_LOCK_RETRY_INTERVAL = 0.05
+# 已鉴权 SSE 会话的有效期（秒），每次成功 POST 滑动续期：12 小时
+SESSION_TTL_SECONDS = 12 * 3600
+# SSE 断开后的宽限期（秒），避免客户端最后一帧 POST 被误拒
+SESSION_DISCONNECT_GRACE_SECONDS = 60
+# 会话登记表容量上限，超出按插入顺序淘汰
+SESSION_MAX_ENTRIES = 512
+# 远程访问 P2P 打洞的建连超时（秒）
+P2P_SETUP_TIMEOUT = 60
+# SSH 隧道重连的初始等待（秒），指数退避
+SSH_RECONNECT_DELAY = 2
+# SSH 隧道重连等待的上限（秒）
+SSH_RECONNECT_MAX_DELAY = 30
+# 更新触发重启的标记文件有效期（秒）：30 分钟
+UPDATE_RESTART_TTL = 1800
+# 资源统计拉取外部资源时的单请求超时（秒）
+DOWNLOAD_TIMEOUT = 10
+
+# ==================== 进程级：统计与清理（module/statistics/、module/base/） ====================
+
+# 日报统计的保留天数
+DAILY_SUMMARY_KEEP_DAYS = 35
+# 日报 LLM 生成与通知推送的尝试次数
+DAILY_SUMMARY_LLM_ATTEMPTS = 3
+DAILY_SUMMARY_NOTIFY_ATTEMPTS = 3
+# 掉落截图目录清理的节流间隔（秒）
+DROP_SCREENSHOT_CLEANUP_INTERVAL = 3600
+# 配置/数据库备份的保留天数
+BACKUP_KEEP_DAYS = 7
+# 茗交所存储迁移文件锁的等待超时（秒）
+MIGRATION_LOCK_TIMEOUT = 20.0
+# 茗交所存储解密失败后的重试等待（秒）
+DECODER_RETRY_INTERVAL = 60.0
