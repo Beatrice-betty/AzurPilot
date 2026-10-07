@@ -168,7 +168,7 @@
     },
     "StorageStatistics": {
       "name": "Inventory statistics",
-      "help": "Scan and verify the material inventory twice before updating Statistics. Disabled by default; can be run manually. Does not consume items. Currently verified for CN only."
+      "help": "Read three rows per page and scan selected gold/rainbow materials once, with a brief check on each page before updating statistics. Disabled by default. When enabled, run at the configured interval (7 days by default); manual runs are also available. No items are used or consumed. Only verified CN templates are supported."
     },
     "Dorm": {
       "name": "Dorm",
@@ -2406,6 +2406,16 @@
     "MaxLevel": {
       "name": "Only add ships at level <= X",
       "help": "0 means no limit\nWhen it conflicts with the minimum level, both are treated as 0 (disabled)"
+    }
+  },
+  "StorageStatistics": {
+    "_info": {
+      "name": "Storage statistics",
+      "help": ""
+    },
+    "RunIntervalDays": {
+      "name": "Run interval (days)",
+      "help": "Run again this many days after a successful scan. Default: 7 days; range: 1–3650. Failed scans keep the existing retry interval. Enable the task for automatic runs; manual runs are also available."
     }
   },
   "Research": {

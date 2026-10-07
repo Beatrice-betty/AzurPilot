@@ -246,6 +246,7 @@ Reward:
       - Research
     StorageStatistics:
       - Scheduler
+      - StorageStatistics
     Dorm:
       - Scheduler
       - Dorm

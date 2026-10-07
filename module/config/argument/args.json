@@ -11422,7 +11422,7 @@
       },
       "SuccessInterval": {
         "type": "input",
-        "value": 1440,
+        "value": 10080,
         "display": "hide"
       },
       "FailureInterval": {
@@ -11441,6 +11441,16 @@
         "option": [
           true,
           false
+        ]
+      }
+    },
+    "StorageStatistics": {
+      "RunIntervalDays": {
+        "type": "input",
+        "value": 7,
+        "validate": [
+          1,
+          3650
         ]
       }
     },
