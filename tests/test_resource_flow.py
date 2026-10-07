@@ -83,6 +83,7 @@ class ResourceFlowTests(unittest.TestCase):
         from module.storage.statistics import StorageStatistics
         task = StorageStatistics.__new__(StorageStatistics)
         task.config = self.config
+        self.config.StorageStatistics_RunIntervalDays = 7
         self.config.task_delay = Mock()
         task.ui_goto_storage = Mock()
         task._storage_enter_material = Mock()
@@ -91,7 +92,8 @@ class ResourceFlowTests(unittest.TestCase):
         catalog.snapshot_items.return_value = [{'id': 'Chip', 'amount': 13393}]
         with flow.task_session('testpilot', 'StorageStatistics'), patch('module.storage.statistics.StorageCatalog', return_value=catalog), patch('module.storage.statistics.save_snapshot') as save:
             task.run()
-        self.assertEqual(2, task._scan_pass.call_count)
+        self.assertEqual(1, task._scan_pass.call_count)
+        self.config.task_delay.assert_called_once_with(minute=10080)
         save.assert_called_once()
         self.assertEqual(0, self.report()['total'])
         self.assertEqual(13393, next(item for item in self.report()['resources'] if item['key'] == 'Chip')['current'])

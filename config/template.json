@@ -2130,10 +2130,13 @@
       "PushNotification": false,
       "NextRun": "2020-01-01 00:00:00",
       "Command": "StorageStatistics",
-      "SuccessInterval": 1440,
+      "SuccessInterval": 10080,
       "FailureInterval": 60,
       "ServerUpdate": "04:00",
       "Sensitive": false
+    },
+    "StorageStatistics": {
+      "RunIntervalDays": 7
     },
     "Storage": {
       "Storage": {}

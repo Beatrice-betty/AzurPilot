@@ -72,6 +72,25 @@ class OilControlTests(unittest.TestCase):
         self.assertEqual(['Main', 'Commission'], self.calls)
         self.assertEqual({}, self.runtime.overlay)
 
+    def test_storage_scan_skips_oil_navigation_and_preserves_next_task_check(self):
+        self.enable('StorageStatistics', 'Commission', 'Main')
+        self.script.config.cross_set_many({
+            'Commission.Scheduler.NextRun': self.time + timedelta(hours=1),
+            'Main.Scheduler.NextRun': self.time + timedelta(hours=1),
+        })
+        read = self.readings(25000)
+        self.assertEqual('StorageStatistics', self.script.get_next_task())
+        read.assert_not_called()
+        self.assertTrue(self.oil.check_pending)
+        self.script.config.task_delay(minute=10080)
+        self.runtime.task_finished('StorageStatistics', True)
+        self.script.config.cross_set_many({
+            'Commission.Scheduler.NextRun': self.time,
+            'Main.Scheduler.NextRun': self.time,
+        })
+        self.assertEqual('Main', self.script.get_next_task())
+        read.assert_called_once()
+
     def test_cooling_farm_uses_dorm_without_resetting_next_run(self):
         self.enable('Commission', 'Main')
         deadline = self.time + timedelta(hours=2)

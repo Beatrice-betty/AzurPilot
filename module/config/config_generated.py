@@ -432,6 +432,9 @@ class GeneratedConfig:
     AddNewStudent_MinLevel = 50
     AddNewStudent_MaxLevel = 0
 
+    # 配置组 `StorageStatistics`
+    StorageStatistics_RunIntervalDays = 7
+
     # 配置组 `Research`
     Research_UseCube = 'only_05_hour'  # always_use, only_05_hour, only_no_project, do_not_use
     Research_UseCoin = 'always_use'  # always_use, only_05_hour, only_no_project, do_not_use
