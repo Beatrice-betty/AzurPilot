@@ -59,7 +59,8 @@ class StorageCatalog:
                 path = ROOT / relative
                 fingerprint.update(path.read_bytes())
                 image = cv2.resize(load_image(str(path)), (96, 96), interpolation=cv2.INTER_AREA)
-                self.templates.append((item['id'], image[14:70, 14:82], np.array(item['background'])))
+                self.templates.append((item['id'], image[14:70, 14:82].astype(np.float32),
+                                       np.array(item['background'])))
         self.version = fingerprint.hexdigest()
 
     def _scores(self, icon, context=None, identifier=None):
@@ -73,6 +74,8 @@ class StorageCatalog:
             candidates = [cv2.resize(context[y:y + 128, x:x + 128], (96, 96),
                                     interpolation=cv2.INTER_AREA)
                           for y in range(1, 4) for x in range(1, 4)]
+        # 预转浮点，避免数千次匹配重复处理类型；缩放像素、搜索范围和门槛保持一致。
+        candidates = [candidate.astype(np.float32) for candidate in candidates]
         scores = {}
         for candidate_id, template, template_color in self.templates:
             if identifier is not None and candidate_id != identifier:

@@ -160,6 +160,9 @@ class NativeOilControl:
             return original
         if original == 'Restart' or self.recovery_due():
             return 'Restart'
+        # 仓库统计只读取物品，不消耗石油或领取奖励；保留检查状态给下一项业务。
+        if original == 'StorageStatistics':
+            return original
         if self.retry_at is not None and now() < self.retry_at:
             return original
         if original is None and not self.active:

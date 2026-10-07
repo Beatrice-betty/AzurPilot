@@ -4,6 +4,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 
+import cv2
 import numpy as np
 
 from module.base.utils import load_image
@@ -17,6 +18,29 @@ class ThreeRowPagingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.catalog = StorageCatalog()
+
+    def test_float_matching_keeps_legacy_uint8_scores_and_confidence(self):
+        for name in ('page_3.png', 'page_4.png', 'live_rainbow_plan_phase.png'):
+            with self.subTest(image=name):
+                card = detect_rows(load_image(str(FIXTURES / name)))[0][0]
+                actual = self.catalog._scores(card.image, card.context)
+                color = cv2.resize(card.image, (96, 96), interpolation=cv2.INTER_AREA)[5:13, 5:13].mean(axis=(0, 1))
+                phases = [cv2.resize(card.context[y:y + 128, x:x + 128], (96, 96),
+                                     interpolation=cv2.INTER_AREA)
+                          for y in range(1, 4) for x in range(1, 4)]
+                legacy = {}
+                for identifier, template, background in self.catalog.templates:
+                    if np.max(np.abs(color - background)) > 45:
+                        continue
+                    score = max(cv2.minMaxLoc(cv2.matchTemplate(phase[:74], template.astype(np.uint8),
+                                                               cv2.TM_CCOEFF_NORMED))[1] for phase in phases)
+                    legacy[identifier] = max(legacy.get(identifier, -1.), score)
+                self.assertEqual(actual.keys(), legacy.keys())
+                for identifier in legacy:
+                    self.assertAlmostEqual(actual[identifier], legacy[identifier], delta=.00001)
+                ranks = sorted(legacy, key=legacy.get, reverse=True)
+                expected = ranks[0] if legacy[ranks[0]] >= .90 else None
+                self.assertEqual(self.catalog.identify(card.image, card.context), expected)
 
     def test_native_overlap_calibrates_three_row_distance(self):
         before = detect_rows(load_image(str(FIXTURES / 'scrollbar_top.png')))

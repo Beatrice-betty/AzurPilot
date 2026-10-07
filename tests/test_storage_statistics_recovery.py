@@ -97,6 +97,36 @@ class StorageRecoveryTests(unittest.TestCase):
         self.assertEqual(len(self.device.swipes), 2)
         self.device.click_record_clear.assert_not_called()
 
+    def test_recognition_time_counts_toward_fresh_frame_verification_interval(self):
+        completed = []
+        verified = []
+        original_verify = self.module.verify_targets
+
+        def screenshots(**kwargs):
+            for _ in range(100):
+                self.clock.advance(.2)
+                yield self.device.screenshot()
+            raise AssertionError('三行扫描未按顺序完成')
+
+        def read(*args, **kwargs):
+            result = self.read(*args, **kwargs)
+            self.clock.advance(2)
+            completed.append(self.clock.now)
+            return result
+
+        def verify(*args):
+            verified.append(self.clock.now)
+            return original_verify(*args)
+
+        self.task.loop = screenshots
+        with patch.object(self.module, 'recognize_rows', side_effect=read), \
+             patch.object(self.module, 'verify_targets', side_effect=verify):
+            result = self.task._scan_pass(self.catalog)
+        self.assertEqual(result.pages, 4)
+        self.assertEqual(len(result.rows), 12)
+        for finish, check in zip(completed, verified):
+            self.assertAlmostEqual(check - finish, .2)
+
     def test_persistent_failure_stops_and_preserves_snapshot_and_click_protection(self):
         with tempfile.TemporaryDirectory() as directory:
             database = Path(directory) / 'warehouse.db'

@@ -47,7 +47,7 @@ class StorageStatistics(StorageUI):
         goal_bottom = False
         attempts = 0
         layout = previous = None
-        settle = Timer(1.5, count=2)
+        settle = Timer(.6, count=2)
         stable = Timer(.8)
         action = Timer(2, count=2)
         timeout = Timer(30, count=2).start()
@@ -150,8 +150,8 @@ class StorageStatistics(StorageUI):
                 logger.info('仓库金/彩材料区域已完整读取，整页紫色物品不再识别')
                 return traversal
             if previous is None:
-                previous = recognize_rows(image, catalog, rows=rows, target_only=True)
                 stable.reset()
+                previous = recognize_rows(image, catalog, rows=rows, target_only=True)
                 continue
             if not stable.reached():
                 continue
