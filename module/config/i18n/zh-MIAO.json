@@ -36,6 +36,10 @@
       "name": "舰队管理喵",
       "help": ""
     },
+    "RunParams": {
+      "name": "运行参数",
+      "help": ""
+    },
     "Tool": {
       "name": "雪风的工具箱",
       "help": "里面装满了雪风的私房道具喵，别乱翻！(｀皿´＃)"
@@ -385,6 +389,10 @@
     "FleetInfo": {
       "name": "舰队信息喵",
       "help": "查看最近一次舰队扫描结果喵"
+    },
+    "RunParams": {
+      "name": "运行参数",
+      "help": "调度器、看门狗、设备还有各个功能等待节奏的参数喵～平时保持默认就好喵。"
     },
     "FleetScan": {
       "name": "舰队扫描喵",
@@ -834,6 +842,20 @@
     "LlmModel": {
       "name": "LLM 模型选择 ∩",
       "help": "填写已购买服务支持的模型名称，请以 https://platform.deepseek.com/ 或 https://platform.xiaomimimo.com/ 平台展示为准喵。"
+    }
+  },
+  "Watchdog": {
+    "_info": {
+      "name": "调度与看门狗",
+      "help": "看门狗和后台定时线程的检查节奏喵。"
+    },
+    "CheckInterval": {
+      "name": "看门狗检查间隔（秒）喵",
+      "help": "守护线程每隔多少秒看一眼任务跑得怎么样喵，任务超时的检测精度就看它喵。值越小反应越快、开销略增喵。\n默认 30 秒喵。"
+    },
+    "DailySummaryCheckInterval": {
+      "name": "日报检查间隔（秒）喵",
+      "help": "日报定时线程每隔多少秒核对一次触发时刻喵。值越小触发越准、开销略增喵。\n默认 1 秒喵。"
     }
   },
   "DailySummary": {

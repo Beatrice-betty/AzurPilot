@@ -36,6 +36,10 @@
       "name": "舰队管理",
       "help": ""
     },
+    "RunParams": {
+      "name": "运行参数",
+      "help": ""
+    },
     "Tool": {
       "name": "工具",
       "help": ""
@@ -385,6 +389,10 @@
     "FleetInfo": {
       "name": "舰队信息",
       "help": "查看最近一次舰队扫描结果"
+    },
+    "RunParams": {
+      "name": "运行参数",
+      "help": "调度器、看门狗、设备与各功能等待节奏的可调参数。普通使用保持默认即可。"
     },
     "FleetScan": {
       "name": "舰队扫描",
@@ -834,6 +842,20 @@
     "LlmModel": {
       "name": "LLM 模型",
       "help": "填写已购买服务支持的模型名称，请以 https://platform.deepseek.com/ 或 https://platform.xiaomimimo.com/ 平台展示为准。"
+    }
+  },
+  "Watchdog": {
+    "_info": {
+      "name": "调度与看门狗",
+      "help": "看门狗与后台定时线程的检查节奏。"
+    },
+    "CheckInterval": {
+      "name": "看门狗检查间隔（秒）",
+      "help": "守护线程每隔多少秒检查一次任务运行状态，任务超时判定的检测精度由它决定。值越小响应越快、开销略增。\n默认 30 秒。"
+    },
+    "DailySummaryCheckInterval": {
+      "name": "日报检查间隔（秒）",
+      "help": "日报定时线程每隔多少秒核对一次触发时刻。值越小触发越准、开销略增。\n默认 1 秒。"
     }
   },
   "DailySummary": {

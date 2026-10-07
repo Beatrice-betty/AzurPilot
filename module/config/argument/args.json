@@ -19061,6 +19061,34 @@
       }
     }
   },
+  "RunParams": {
+    "Watchdog": {
+      "CheckInterval": {
+        "type": "input",
+        "value": 30,
+        "validate": [
+          5,
+          600
+        ]
+      },
+      "DailySummaryCheckInterval": {
+        "type": "input",
+        "value": 1,
+        "validate": [
+          1,
+          60
+        ]
+      }
+    },
+    "Storage": {
+      "Storage": {
+        "type": "storage",
+        "value": {},
+        "valuetype": "ignore",
+        "display": "disabled"
+      }
+    }
+  },
   "FleetScan": {
     "Storage": {
       "Storage": {

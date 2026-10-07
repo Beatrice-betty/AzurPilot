@@ -470,6 +470,15 @@ FleetManagement:
     FleetInfo:
       - FleetInfo
 
+# ==================== Run Params ====================
+
+RunParams:
+  menu: collapse
+  page: setting
+  tasks:
+    RunParams:
+      - Watchdog
+
 # ==================== Tool ====================
 
 Tool:

@@ -36,6 +36,10 @@
       "name": "Fleet Management",
       "help": ""
     },
+    "RunParams": {
+      "name": "Run Params",
+      "help": ""
+    },
     "Tool": {
       "name": "Tools",
       "help": ""
@@ -385,6 +389,10 @@
     "FleetInfo": {
       "name": "Fleet Information",
       "help": "View the latest fleet scan result"
+    },
+    "RunParams": {
+      "name": "Run Params",
+      "help": "Tunable runtime parameters for scheduler, watchdog, devices and UI wait pacing. Keep defaults for normal use."
     },
     "FleetScan": {
       "name": "Fleet Scan",
@@ -834,6 +842,20 @@
     "LlmModel": {
       "name": "LLM model",
       "help": "Enter a model name supported by your purchased service, as shown on https://platform.deepseek.com/ or https://platform.xiaomimimo.com/."
+    }
+  },
+  "Watchdog": {
+    "_info": {
+      "name": "Scheduler & Watchdog",
+      "help": "Check pacing of the watchdog and background timer threads."
+    },
+    "CheckInterval": {
+      "name": "Watchdog check interval (seconds)",
+      "help": "How often the watchdog thread checks task status; determines the detection granularity of task timeouts. Smaller values react faster at slightly higher cost.\nDefault 30."
+    },
+    "DailySummaryCheckInterval": {
+      "name": "Daily summary check interval (seconds)",
+      "help": "How often the daily summary timer thread checks its trigger time. Smaller values trigger more precisely at slightly higher cost.\nDefault 1."
     }
   },
   "DailySummary": {

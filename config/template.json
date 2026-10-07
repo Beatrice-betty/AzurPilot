@@ -3609,6 +3609,15 @@
       "Storage": {}
     }
   },
+  "RunParams": {
+    "Watchdog": {
+      "CheckInterval": 30,
+      "DailySummaryCheckInterval": 1
+    },
+    "Storage": {
+      "Storage": {}
+    }
+  },
   "FleetScan": {
     "Storage": {
       "Storage": {}

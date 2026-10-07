@@ -14,6 +14,12 @@ from cached_property import cached_property
 import module.config.server as server_config
 from module.base.decorator import del_cached_property
 from module.base.api_client import ApiClient
+from module.base.runtime_params import (
+    WATCHDOG_CHECK_INTERVAL,
+    WATCHDOG_TASK_TIMEOUT_DEFAULT,
+    DAILY_SUMMARY_CHECK_INTERVAL,
+    EMULATOR_RESTART_INTERVAL_HOURS_DEFAULT,
+)
 from module.base.ssh import clear_ssh_host_key
 from module.config.config import AzurLaneConfig, TaskEnd
 from module.config.deep import deep_get, deep_set
@@ -27,21 +33,13 @@ from module.config.utils import (
     get_server_next_update,
     parse_config_name,
     read_file,
+    read_run_param,
 )
 from module.exception import *
 from module.logger import logger
 from module.notify import handle_notify, notify_webui
 
 
-# 看门狗配置
-# 守护线程每 N 秒检查一次任务运行状态；任务执行期间若超过配置的
-# 超时时间，则判定任务逻辑死循环，强制杀死模拟器进程以中断任务。
-# 看门狗仅在任务执行阶段（self.run() 期间）激活，空闲等待（wait_until、
-# 服务器维护检查）期间自动暂停，避免误触发。
-WATCHDOG_CHECK_INTERVAL = 30
-# 单个任务最长运行时间（分钟），仅作为配置读取失败的兜底默认值
-# 实际值从配置 Error.WatchdogTaskTimeout 读取，0 表示禁用
-WATCHDOG_TASK_TIMEOUT_DEFAULT = 120
 # 模拟器 stop/start 单次操作的硬超时秒数。
 # 必须覆盖 PlatformWindows.emulator_start() 的完整预算，一次调用最多：
 #   关闭 30 + 深度清场 90（关全部实例≤60 + 等进程退出≤30） + 等实例真正关闭 60
@@ -53,8 +51,6 @@ WATCHDOG_TASK_TIMEOUT_DEFAULT = 120
 # 残留线程由 PlatformWindows 的启停互斥锁兜底：它结束之前，任何新的
 # 启停操作都会抛 EmulatorOpBusy 被跳过，不会再打断正在进行的启动。
 RESTART_EMULATOR_OP_TIMEOUT = 600
-
-DAILY_SUMMARY_CHECK_INTERVAL = 1
 
 
 # 缓存 i18n 任务名查找
@@ -283,7 +279,11 @@ class AzurLaneAutoScript:
                     logger.info('[日报] 功能已关闭，停止独立定时检查')
                     return
                 self._check_daily_summary(config)
-                stop_event.wait(DAILY_SUMMARY_CHECK_INTERVAL)
+                stop_event.wait(read_run_param(
+                    self.config,
+                    'Watchdog_DailySummaryCheckInterval',
+                    DAILY_SUMMARY_CHECK_INTERVAL,
+                ))
         finally:
             if self._daily_summary_thread is threading.current_thread():
                 self._daily_summary_stop = None
@@ -636,7 +636,11 @@ class AzurLaneAutoScript:
         恢复方式：强制杀死模拟器进程，使主线程的下次 I/O 调用失败并抛出
         异常，触发正常的异常恢复流程。
         """
-        while not self._watchdog_stop.wait(WATCHDOG_CHECK_INTERVAL):
+        while not self._watchdog_stop.wait(read_run_param(
+                self.config,
+                'Watchdog_CheckInterval',
+                WATCHDOG_CHECK_INTERVAL,
+        )):
             if not self._watchdog_active:
                 continue
 
@@ -662,7 +666,7 @@ class AzurLaneAutoScript:
                     try:
                         interval = int(self.config.EmulatorManagement_RestartIntervalHours)
                     except Exception:
-                        interval = 4
+                        interval = EMULATOR_RESTART_INTERVAL_HOURS_DEFAULT
                     elapsed_hours = (time.monotonic() - self.last_emulator_restart_time) / 3600
                     if elapsed_hours >= interval:
                         logger.critical(
