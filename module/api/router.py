@@ -59,9 +59,9 @@ class Router:
             'config.get': Method(p.InstanceParams, lambda x: configs.get(x.instance)),
             'config.export': Method(p.InstanceParams, lambda x: configs.export(x.instance)),
             'config.patch': Method(p.PatchParams, lambda x: configs.patch(x.instance, x.revision, x.changes), True),
-            'shop_strategy.validate': Method(p.ShopStrategyValidateParams, self.validate_shop_strategy),
             'overview.get': Method(p.InstanceParams, lambda x: runtime.overview(x.instance)),
             'stock.status': Method(p.InstanceParams, lambda x: self.stock_exchange.status(x.instance)),
+            'stock.rebuild': Method(p.StockRebuildParams, lambda x: self.stock_exchange.rebuild(x.instance, x.confirm, x.scope), True),
             'stock.request': Method(p.StockRequestParams, lambda x: self.stock_exchange.request(x.instance, x.path, x.method, x.body, x.etag), True),
             'scheduler.start': Method(p.InstanceParams, lambda x: runtime.start(x.instance), True),
             'scheduler.stop': Method(p.InstanceParams, lambda x: runtime.stop(x.instance), True),
@@ -190,25 +190,6 @@ class Router:
         from module.api.statistics_service import refresh_loot
         return refresh_loot(self.configs, params.instance)
 
-    def validate_shop_strategy(self, params: p.ShopStrategyValidateParams):
-        """校验高级商店策略，禁止客户端指定任意执行上下文。
-
-        Args:
-            params: 商店策略校验参数。
-
-        Returns:
-            list[dict]: 策略语法或语义诊断结果列表。
-
-        Raises:
-            p.ApiError: 指定任务不支持高级商店策略时抛出 INVALID_PARAMS。
-        """
-        self.configs.path(params.instance)
-        if 'ShopAdvanced' not in self.configs.args.get(params.task, {}):
-            raise p.ApiError('INVALID_PARAMS', '不支持的商店任务')
-        from module.shop_strategy import validate_strategy
-
-        # 显式检查返回诊断而不是抛出参数错误，编辑器才能标出行列位置。
-        return validate_strategy(params.script)
 
     def statistics_report(self, params: p.StatisticsReportParams):
         """生成并获取指定维度的统计报表。
@@ -296,10 +277,8 @@ class Router:
                 raise p.ApiError('SIMULATOR_RUNNING', '请先中断大世界模拟器再删除实例')
             result = self.configs.delete(params.instance, params.revision)
             if self._stock_exchange is not None:
-                try:
-                    self._stock_exchange._refresh()
-                except p.ApiError as error:
-                    self._stock_exchange.storage_error = error
+                # 配置删除只撤销内存会话；交易文件检查留给茗交所自身。
+                with self._stock_exchange.lock:
                     self._stock_exchange.sessions.pop(params.instance, None)
                     self._stock_exchange.monitors.discard(params.instance)
             if self._opsi_simulator is not None:

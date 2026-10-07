@@ -70,48 +70,6 @@ class PQInteract(UI):
             retry_wait=1.5
         )
 
-    def _pq_target_appear(self):
-        """检测并确认目标舰船是否已就绪。
-
-        若视角偏离则执行微量上拖居中视角，若处于对话状态则调用对话处理。
-
-        Returns:
-            bool: 舰船已就绪返回 True，超时未出现返回 False。
-        """
-        settle_timer = Timer(1.5, count=3).start()
-        skip_first_screenshot = True
-        while 1:
-            if skip_first_screenshot:
-                skip_first_screenshot = False
-            else:
-                self.device.screenshot()
-
-            # 结束：成功检测到气泡标记
-            if self.appear(PRIVATE_QUARTERS_ROOM_TARGET_CHECK_1, offset=(100, 100)):
-                return True
-            if self.appear(PRIVATE_QUARTERS_ROOM_TARGET_CHECK_2, offset=(100, 100)):
-                return True
-            if self.appear(PRIVATE_QUARTERS_ROOM_TARGET_CHECK_3, offset=(100, 100)):
-                return True
-
-            # 结束：等待超时判定失败
-            if settle_timer.reached():
-                return False
-
-            if self.appear(PRIVATE_QUARTERS_ROOM_CHECK, offset=(20, 20)):
-                # 执行微量向上滑动以纠正默认视距与缩放
-                p1, p2 = random_rectangle_vector(
-                    (0, -30), box=PRIVATE_QUARTERS_ROOM_SAFE_CLICK_AREA.area,
-                    random_range=(-10, -10, 10, 10), padding=5)
-                self.device.drag(p1, p2, segments=2,
-                                 shake=(0, 25), point_random=(0, 0, 0, 0),
-                                 shake_random=(0, -5, 0, 5))
-                settle_timer.reset()
-            else:
-                # 未出现 ROOM_CHECK 通常表示正在进行对话
-                self._pq_handle_dialogue()
-                settle_timer.reset()
-
     def _pq_goto_room_seek(self, target_ship):
         """翻页寻找目标舰船所在的宿舍区域。
 

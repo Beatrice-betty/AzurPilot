@@ -364,7 +364,7 @@
     },
     "IslandAirDrop": {
       "name": "每日补给",
-      "help": "仅支持minitouch"
+      "help": "移动仅支持 minitouch / MaaTouch / uiautomator2 / azurpilot_android 控制方式。每日收取本岛空中补给，并可拜访其他玩家岛屿拿补给。"
     },
     "IslandCargoPreparation": {
       "name": "货物筹备",
@@ -376,11 +376,11 @@
     },
     "IslandDailyInteract": {
       "name": "每日/周任务",
-      "help": "仅支持minitouch。处理岛屿摸猫、JUU速运、商区外送服务与每周照相任务。相关按钮资源生成后可启用。"
+      "help": "移动仅支持 minitouch / MaaTouch / uiautomator2 / azurpilot_android 控制方式。处理岛屿摸猫、JUU速运、商区外送服务与每周照相任务。相关按钮资源生成后可启用。"
     },
     "IslandPearlSell": {
       "name": "每周珍珠采购与售卖",
-      "help": "仅支持minitouch。每周二 01:00 自动处理珍珠：先采购本周珍珠，再售卖已有珍珠。金币一定要够购买200x220个，这是最低要求，能一次买光本周珍珠，否则可能会报错。"
+      "help": "移动仅支持 minitouch / MaaTouch / uiautomator2 / azurpilot_android 控制方式。每周二 01:00 自动处理珍珠：先采购本周珍珠，再售卖已有珍珠。金币一定要够购买200x220个，这是最低要求，能一次买光本周珍珠，否则可能会报错。"
     },
     "FleetInfo": {
       "name": "舰队信息",
@@ -2230,22 +2230,6 @@
       "help": "使用自定义过滤器需将“活动商店过滤器”设置为“自定义”，并使用 https://filter.nanoda.work/ 生成过滤器，没有游戏理解和alas理解请勿使用自定义过滤器"
     }
   },
-  "ShopAdvanced": {
-    "_info": {
-      "name": "高级商店策略",
-      "help": "使用受限 Lua 风格规则生成商店购买计划。"
-    },
-    "Mode": {
-      "name": "策略模式",
-      "help": "简单模式继续使用现有过滤器；高级模式使用下方策略脚本。",
-      "legacy": "简单模式",
-      "advanced": "高级模式"
-    },
-    "Script": {
-      "name": "策略脚本",
-      "help": "仅支持受限 Lua 规则语法。校验失败时本轮不会购买任何物品。"
-    }
-  },
   "Commission": {
     "_info": {
       "name": "委托",
@@ -2325,6 +2309,30 @@
       "today": "今日",
       "week": "本周",
       "month": "本月"
+    },
+    "AutoPickShip": {
+      "name": "委托通用选船兜底（按稀有度/等级）",
+      "help": "新手船不够等级不够时，自动选取任务锁定船；会按委托的等级要求先选一艘达标的船，其余按下方偏好选取；没有可用船时，按「没有空闲的船」处理。"
+    },
+    "PickMinRarity": {
+      "name": "└ 选船兜底 · 派船的最低品质",
+      "help": "勾选「委托通用选船兜底」后生效。",
+      "common": "白色（普通）及以上",
+      "rare": "蓝色（稀有）及以上",
+      "elite": "紫色（精英）及以上",
+      "super_rare": "金色（超稀有）及以上"
+    },
+    "PickLevelOrder": {
+      "name": "└ 选船兜底 · 同品质内按等级",
+      "help": "勾选「委托通用选船兜底」后生效。",
+      "low_first": "等级低的优先",
+      "high_first": "等级高的优先"
+    },
+    "NoFreeShipPolicy": {
+      "name": "没有空闲的船时",
+      "help": "",
+      "skip": "跳过该委托",
+      "use_fleet": "用舰队中的船"
     }
   },
   "Tactical": {
@@ -3971,6 +3979,10 @@
       "name": "月末清理行动力保留",
       "help": "月末清理行动力模式下的行动力保留值。如果启用跨月每日任务，最低预留 200 行动力。当此值大于最低预留时使用此值。"
     },
+    "MonthEndMeowTargetZone": {
+      "name": "月末清理耄耋相接海域",
+      "help": "月末清理路由到耄耋相接时仅出击指定的海域，支持海域 ID 或名称。填 0 或留空时跟随耄耋相接任务自身的设置。填多个海域或无效海域会自动按 0 处理；是否循环驻留在该海域由耄耋相接的\"循环出击指定海域\"开关决定。"
+    },
     "MonthEndShopPurchase": {
       "name": "月末清理商店购买",
       "help": "月末清理行动力时是否执行大世界商店购买。关闭后月末清理循环将跳过商店购买步骤。",
@@ -5366,7 +5378,7 @@
   "IslandAirDrop": {
     "_info": {
       "name": "每日补给",
-      "help": ""
+      "help": "移动仅支持 minitouch / MaaTouch / uiautomator2 / azurpilot_android 控制方式。每日收取本岛空中补给，并可拜访其他玩家岛屿拿补给。"
     },
     "LastSteal": {
       "name": "上次运行时间",
@@ -5398,7 +5410,7 @@
   "IslandDailyInteract": {
     "_info": {
       "name": "每日/周任务",
-      "help": "仅支持minitouch。控制岛屿每日与每周互动任务，包含晨露农场摸猫、开发计划中的 JUU 速运、商区外送服务和每周照相任务。"
+      "help": "移动仅支持 minitouch / MaaTouch / uiautomator2 / azurpilot_android 控制方式。控制岛屿每日与每周互动任务，包含晨露农场摸猫、开发计划中的 JUU 速运、商区外送服务和每周照相任务。"
     },
     "WeeklyPhoto": {
       "name": "每周照相任务",
@@ -5410,7 +5422,7 @@
   "IslandPearlSell": {
     "_info": {
       "name": "每周珍珠采购与售卖",
-      "help": "仅支持minitouch。每周二 01:00 自动处理珍珠：先按最高采购价采购本周珍珠，再按最低售卖价售卖已有珍珠。其他未完成流程会延迟到次日 01:00 重试。金币一定要够购买200x220个，这是最低要求，能一次买光本周珍珠，否则可能会报错。"
+      "help": "移动仅支持 minitouch / MaaTouch / uiautomator2 / azurpilot_android 控制方式。每周二 01:00 自动处理珍珠：先按最高采购价采购本周珍珠，再按最低售卖价售卖已有珍珠。其他未完成流程会延迟到次日 01:00 重试。金币一定要够购买200x220个，这是最低要求，能一次买光本周珍珠，否则可能会报错。"
     },
     "BuyPrice": {
       "name": "最高采购价格",

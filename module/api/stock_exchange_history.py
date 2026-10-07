@@ -46,7 +46,7 @@ class ActionHistory:
     def __init__(self, root):
         self.root = Path(root).resolve()
         self.protection = GameDataProtector(root)
-        self.directory = self.root / 'cache' / 'stock-exchange' / 'history'
+        self.directory = self.protection.directory / 'history'
         self.connections, self.scanned, self.next_send, self.next_check, self.failures = {}, {}, {}, {}, {}
         self.paths, self.inodes = {}, {}
         self.pending = {}
@@ -202,7 +202,7 @@ class ActionHistory:
                 sealed = self.protection.has_anchor(identity + '/action-point-history')
                 # 接口传入的数据库路径不参与选择，来源始终由当前稳定实例身份确定。
                 # 交易所读取路径要求强校验：实例侧已降级跳过，这里损坏仍须报错。
-                with store.connection(instance, write=not sealed, protect=True,
+                with store.connection(instance, write=not sealed, strict_history=True,
                                       baseline=(row.get('Total'), row.get('Record')) if point and not sealed else None) as source:
                     if source.history_guard is None:
                         source.history_guard = source.history_factory()

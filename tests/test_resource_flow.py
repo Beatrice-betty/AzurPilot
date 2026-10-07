@@ -189,6 +189,101 @@ class ResourceFlowTests(unittest.TestCase):
             record_research_cost(self.config, project)
         self.assertEqual({'Coin': 1500, 'Cube': 2}, {row['resource']: row['expense'] for row in self.report()['flows']})
 
+    def test_shop_and_voucher_keep_confirmed_bulk_accounting_without_scripts(self):
+        from module.shop.clerk import ShopClerk
+        from module.shop.shop_voucher import VoucherShop
+        from module.ui.assets import BACK_ARROW, SHOP_BACK_ARROW
+
+        for shop_type, arrow in ((ShopClerk, SHOP_BACK_ARROW), (VoucherShop, BACK_ARROW)):
+            with self.subTest(shop=shop_type.__name__):
+                shop = object.__new__(shop_type)
+                shop.config, shop.device = self.config, Mock()
+                shop.shop_interval_clear = shop.interval_reset = Mock()
+                shop.appear = Mock(side_effect=lambda button, **kwargs: button is arrow and 'interval' not in kwargs)
+                shop.appear_then_click = shop.handle_retirement = shop.shop_obstruct_handle = Mock(return_value=False)
+                shop.info_bar_count = Mock(return_value=0)
+                shop.shop_purchase_result_handle = Mock(side_effect=[True, False])
+                item = SimpleNamespace(cost='Coins', price=20, amount=2, name='Cubes', is_known_item=lambda: True)
+                def handle_quantity(_item):
+                    _item._resource_purchase_quantity = 7
+                    shop.shop_buy_handle.return_value = False
+                    shop.shop_buy_handle.side_effect = None
+                    return True
+                shop.shop_buy_handle = Mock(side_effect=handle_quantity)
+                with flow.task_session('testpilot', 'ShopFrequent'):
+                    shop.shop_buy_execute(item)
+        result = self.report()
+        self.assertEqual(280, next(row for row in result['resources'] if row['key'] == 'Coin')['expense'])
+        self.assertEqual(28, next(row for row in result['resources'] if row['key'] == 'Cube')['income'])
+
+    def test_shop_and_voucher_information_bar_does_not_count_as_purchase(self):
+        from module.shop.clerk import ShopClerk
+        from module.shop.shop_voucher import VoucherShop
+        from module.ui.assets import BACK_ARROW, SHOP_BACK_ARROW
+
+        for shop_type, arrow in ((ShopClerk, SHOP_BACK_ARROW), (VoucherShop, BACK_ARROW)):
+            with self.subTest(shop=shop_type.__name__):
+                shop = object.__new__(shop_type)
+                shop.config, shop.device = self.config, Mock()
+                shop.shop_interval_clear = shop.interval_reset = Mock()
+                shop.appear = Mock(side_effect=lambda button, **kwargs: button is arrow and 'interval' not in kwargs)
+                shop.appear_then_click = shop.handle_retirement = shop.shop_buy_handle = Mock(return_value=False)
+                shop.shop_obstruct_handle = shop.shop_purchase_result_handle = Mock(return_value=False)
+                shop.info_bar_count = Mock(side_effect=[1, 0])
+                item = SimpleNamespace(cost='Coins', price=20, amount=2, name='Cubes', is_known_item=lambda: True)
+                with flow.task_session('testpilot', 'ShopFrequent'):
+                    shop.shop_buy_execute(item)
+        self.assertEqual(0, self.report()['total'])
+
+    def test_opsi_partial_batch_records_executed_quantity(self):
+        from module.os_shop.shop import OSShop
+
+        shop = object.__new__(OSShop)
+        shop.config, shop.device = self.config, Mock()
+        shop.get_currency_coins = Mock(return_value=300)
+        shop.get_coins_no_limit = Mock(return_value=1000)
+        shop.interval_clear = shop.ui_ensure_index = Mock()
+        item = SimpleNamespace(price=10, count=100)
+        with patch('module.os_shop.shop.OCR_SHOP_AMOUNT.ocr', return_value=1):
+            self.assertTrue(shop.shop_buy_amount_handler(item))
+        self.assertEqual(10, item._resource_purchase_quantity)
+
+    def test_shop_batch_accounting_uses_affordable_quantity(self):
+        from module.shop.clerk import ShopClerk
+
+        shop = object.__new__(ShopClerk)
+        shop.config, shop.device = self.config, Mock()
+        shop._currency = 100
+        shop.appear = shop.appear_then_click = Mock(return_value=False)
+        shop.ui_ensure_index = Mock()
+        item = SimpleNamespace(price=20)
+        with patch('module.shop.clerk.OCR_SHOP_AMOUNT.ocr', return_value=30):
+            self.assertTrue(shop.shop_buy_amount_execute(item))
+        self.assertEqual(5, item._resource_purchase_quantity)
+        self.assertEqual(5, shop.ui_ensure_index.call_args.args[0])
+
+    def test_opsi_confirmed_bulk_purchase_keeps_ledger(self):
+        from module.os_shop.shop import OSShop
+        from module.shop.assets import SHOP_BUY_CONFIRM_AMOUNT
+        from module.os_shop.assets import PORT_SUPPLY_CHECK
+
+        shop = object.__new__(OSShop)
+        shop.config, shop.device = self.config, Mock()
+        shop.interval_clear = shop.interval_reset = Mock()
+        shop.appear_then_click = shop.handle_popup_confirm = Mock(return_value=False)
+        shop.handle_map_get_items = Mock(side_effect=[False, True, False])
+        shop.appear = Mock(side_effect=lambda button, **kwargs: button is SHOP_BUY_CONFIRM_AMOUNT or button is PORT_SUPPLY_CHECK)
+        item = SimpleNamespace(cost='YellowCoins', price=20, amount=2, name='Cubes', is_known_item=lambda: True)
+        def handle_quantity(_item):
+            _item._resource_purchase_quantity = 7
+            return True
+        shop.shop_buy_amount_handler = Mock(side_effect=handle_quantity)
+        with flow.task_session('testpilot', 'OpsiShop'):
+            self.assertTrue(shop.os_shop_buy_execute(item))
+        result = self.report()
+        self.assertEqual(140, next(row for row in result['resources'] if row['key'] == 'YellowCoin')['expense'])
+        self.assertEqual(14, next(row for row in result['resources'] if row['key'] == 'Cube')['income'])
+
     def test_build_confirmed_orders_attribute_cube_and_coin_spending(self):
         from module.gacha.gacha_reward import RewardGacha
         gacha = RewardGacha.__new__(RewardGacha)

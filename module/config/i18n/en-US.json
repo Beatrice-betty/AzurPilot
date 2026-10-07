@@ -364,7 +364,7 @@
     },
     "IslandAirDrop": {
       "name": "Daily Supply",
-      "help": "Only supports minitouch."
+      "help": "Island movement only supports the minitouch / MaaTouch / uiautomator2 / azurpilot_android control methods. Collects your own island's daily airdrop and can visit other players' islands for supplies."
     },
     "IslandCargoPreparation": {
       "name": "Cargo Preparation",
@@ -376,11 +376,11 @@
     },
     "IslandDailyInteract": {
       "name": "Daily/Weekly Tasks",
-      "help": "Only supports minitouch. Handles island petting, JUU Express, Business Delivery, and weekly photo tasks. Enable after related button assets are generated."
+      "help": "Island movement only supports the minitouch / MaaTouch / uiautomator2 / azurpilot_android control methods. Handles island petting, JUU Express, Business Delivery, and weekly photo tasks. Enable after related button assets are generated."
     },
     "IslandPearlSell": {
       "name": "Weekly Pearl Trade",
-      "help": "Only supports minitouch. Process pearls every Tuesday at 01:00."
+      "help": "Island movement only supports the minitouch / MaaTouch / uiautomator2 / azurpilot_android control methods. Process pearls every Tuesday at 01:00."
     },
     "FleetInfo": {
       "name": "Fleet Information",
@@ -2230,22 +2230,6 @@
       "help": "To use a custom filter, set \"Event Shop Filter\" to \"Custom\" and read https://github.com/LmeSzinc/AzurLaneAutoScript/wiki/filter_string_cn"
     }
   },
-  "ShopAdvanced": {
-    "_info": {
-      "name": "Advanced shop strategy",
-      "help": "Generate a shop purchase plan with restricted Lua-style rules."
-    },
-    "Mode": {
-      "name": "Strategy mode",
-      "help": "Simple mode keeps the existing filter. Advanced mode uses the strategy script below.",
-      "legacy": "Simple",
-      "advanced": "Advanced"
-    },
-    "Script": {
-      "name": "Strategy script",
-      "help": "Only restricted Lua-style rules are supported. A validation error skips purchases for this run."
-    }
-  },
   "Commission": {
     "_info": {
       "name": "Commission",
@@ -2325,6 +2309,30 @@
       "today": "Today",
       "week": "This week",
       "month": "This month"
+    },
+    "AutoPickShip": {
+      "name": "Commission ship pick fallback (by rarity/level)",
+      "help": "When ships are short, locked ships are picked automatically; one ship meeting the commission's level requirement is picked first, then the rest follow the preferences below; when no ship is available, it follows the \"no free ship\" setting."
+    },
+    "PickMinRarity": {
+      "name": "└ Pick fallback - lowest rarity to send",
+      "help": "Active only when \"Commission ship pick fallback\" is on.",
+      "common": "White (common) and above",
+      "rare": "Blue (rare) and above",
+      "elite": "Purple (elite) and above",
+      "super_rare": "Gold (super rare) and above"
+    },
+    "PickLevelOrder": {
+      "name": "└ Pick fallback - level order within a rarity",
+      "help": "Active only when \"Commission ship pick fallback\" is on.",
+      "low_first": "Lowest level first",
+      "high_first": "Highest level first"
+    },
+    "NoFreeShipPolicy": {
+      "name": "When no free ship exists",
+      "help": "",
+      "skip": "Skip the commission",
+      "use_fleet": "Use ships in fleets"
     }
   },
   "Tactical": {
@@ -3971,6 +3979,10 @@
       "name": "Month-end action point preserve",
       "help": "Action Point preserve value in month-end cleanup mode. If the cross-month daily task is enabled, at least 200 Action Points are reserved. When this value is larger than the minimum reserve, this value is used."
     },
+    "MonthEndMeowTargetZone": {
+      "name": "Month-end meowfficer target zone",
+      "help": "When month-end cleanup delegates to Meowfficer farming, only sortie into the designated sea zone. Supports zone IDs and names. Use 0 or leave empty to follow the Meowfficer farming settings. Multiple zones or an invalid zone fall back to 0; whether the task keeps cycling in that zone follows the \"Planned operation in target zone\" option of Meowfficer farming."
+    },
     "MonthEndShopPurchase": {
       "name": "Month-end shop purchase",
       "help": "Whether to buy from the Operation Siren shop during month-end Action Point cleanup. When disabled, the cleanup loop skips the shop purchase step.",
@@ -5366,7 +5378,7 @@
   "IslandAirDrop": {
     "_info": {
       "name": "Daily Supply",
-      "help": ""
+      "help": "Island movement only supports the minitouch / MaaTouch / uiautomator2 / azurpilot_android control methods. Collects your own island's daily airdrop and can visit other players' islands for supplies."
     },
     "LastSteal": {
       "name": "Last run time",
@@ -5398,7 +5410,7 @@
   "IslandDailyInteract": {
     "_info": {
       "name": "Daily/Weekly Tasks",
-      "help": "Only supports minitouch. Controls island daily and weekly interactions, including Morningdew Farm petting, JUU Express, Business Delivery, and weekly photo tasks in Development Plan."
+      "help": "Island movement only supports the minitouch / MaaTouch / uiautomator2 / azurpilot_android control methods. Controls island daily and weekly interactions, including Morningdew Farm petting, JUU Express, Business Delivery, and weekly photo tasks in Development Plan."
     },
     "WeeklyPhoto": {
       "name": "Weekly photo task",
@@ -5410,7 +5422,7 @@
   "IslandPearlSell": {
     "_info": {
       "name": "Weekly Pearl Trade",
-      "help": "Only supports minitouch. Every Tuesday at 01:00, automatically handle pearls: first purchase this week's pearls at the highest purchase price, then sell existing pearls at the lowest selling price. Other incomplete processes will be delayed to 01:00 the next day for retry. Make sure you have enough coins to purchase 200x220 units, which is the minimum requirement to buy out all pearls for the week, otherwise errors may occur."
+      "help": "Island movement only supports the minitouch / MaaTouch / uiautomator2 / azurpilot_android control methods. Every Tuesday at 01:00, automatically handle pearls: first purchase this week's pearls at the highest purchase price, then sell existing pearls at the lowest selling price. Other incomplete processes will be delayed to 01:00 the next day for retry. Make sure you have enough coins to purchase 200x220 units, which is the minimum requirement to buy out all pearls for the week, otherwise errors may occur."
     },
     "BuyPrice": {
       "name": "Max purchase price",

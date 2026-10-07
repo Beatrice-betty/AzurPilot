@@ -277,45 +277,6 @@
         "type": "object"
       }
     },
-    "shop_strategy.validate": {
-      "mutates": false,
-      "params": {
-        "additionalProperties": false,
-        "description": "高级商店策略的只读语法校验请求。",
-        "properties": {
-          "instance": {
-            "maxLength": 64,
-            "minLength": 1,
-            "title": "Instance",
-            "type": "string"
-          },
-          "task": {
-            "enum": [
-              "EventShop",
-              "ShopFrequent",
-              "ShopOnce",
-              "PrivateQuarters",
-              "OpsiShop",
-              "OpsiVoucher"
-            ],
-            "title": "Task",
-            "type": "string"
-          },
-          "script": {
-            "maxLength": 20000,
-            "title": "Script",
-            "type": "string"
-          }
-        },
-        "required": [
-          "instance",
-          "task",
-          "script"
-        ],
-        "title": "ShopStrategyValidateParams",
-        "type": "object"
-      }
-    },
     "overview.get": {
       "mutates": false,
       "params": {
@@ -353,6 +314,40 @@
           "instance"
         ],
         "title": "InstanceParams",
+        "type": "object"
+      }
+    },
+    "stock.rebuild": {
+      "mutates": true,
+      "params": {
+        "additionalProperties": false,
+        "description": "先返回实际重建范围，用户确认后才重建本地交易账户。",
+        "properties": {
+          "instance": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Instance",
+            "type": "string"
+          },
+          "confirm": {
+            "default": false,
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "scope": {
+            "default": "instance",
+            "enum": [
+              "instance",
+              "all"
+            ],
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instance"
+        ],
+        "title": "StockRebuildParams",
         "type": "object"
       }
     },

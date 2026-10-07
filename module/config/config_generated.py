@@ -392,10 +392,6 @@ class GeneratedConfig:
     EventShop_PresetFilter = 'all'  # all, custom
     EventShop_CustomFilter = 'EquipUR > EquipSSR > Cube > GachaTicket\n> Array > Chip > CatT3 \n> Meta > SkinBox\n> Oil > Coin > Medal > ExpBookT1 > FoodT1\n> DR > PR\n> AugmentCore > AugmentEnhanceT2 > AugmentChangeT2 > AugmentChangeT1\n> CatT2 > CatT1 > PlateGeneralT3 > PlateT3 > BoxT4\n> ShipSSR'
 
-    # 配置组 `ShopAdvanced`
-    ShopAdvanced_Mode = 'legacy'  # legacy, advanced
-    ShopAdvanced_Script = ''
-
     # 配置组 `Commission`
     Commission_PresetFilter = 'cube'  # cube, cube_24h, chip, chip_24h, oil, custom
     Commission_DynamicProgramming = True
@@ -413,6 +409,10 @@ class GeneratedConfig:
     Commission_GemNotify = True
     Commission_GemStatistics = False
     Commission_GemStatisticsPeriod = 'month'  # today, week, month
+    Commission_AutoPickShip = False
+    Commission_PickMinRarity = 'rare'  # common, rare, elite, super_rare
+    Commission_PickLevelOrder = 'low_first'  # low_first, high_first
+    Commission_NoFreeShipPolicy = 'skip'  # skip, use_fleet
 
     # 配置组 `Tactical`
     Tactical_TacticalFilter = 'SameT4 > SameT3 > SameT2 > SameT1\n> BlueT2 > YellowT2 > RedT2\n> BlueT3 > YellowT3 > RedT3\n> BlueT4 > YellowT4 > RedT4\n> BlueT1 > YellowT1 > RedT1\n> first'
@@ -767,6 +767,7 @@ class GeneratedConfig:
     OpsiScheduling_MonthEndActionPointCleanupEnable = False  # True, False
     OpsiScheduling_MonthEndActionPointCleanupDays = 0
     OpsiScheduling_MonthEndActionPointPreserve = 0
+    OpsiScheduling_MonthEndMeowTargetZone = 0
     OpsiScheduling_MonthEndShopPurchase = True  # True, False
 
     # 配置组 `OpsiSmartExplore`
