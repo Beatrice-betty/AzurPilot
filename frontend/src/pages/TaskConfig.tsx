@@ -287,7 +287,13 @@ export function TaskConfig() {
     </div>
   </section>
 
-  const groupCardsBlock = <div className="config-groups">{startupPanel}{task === 'Alas' && !search && <AccountPanel key={instance} instance={instance}/>} {groupCards}</div>
+  /* 任务级说明（Task.<task>.help）：作为卡片列首卡，与参数卡同宽同层。 */
+  const taskHelp = t(`Task.${task}.help`)
+  const taskHelpBlock = taskHelp && taskHelp !== 'help' && !taskHelp.startsWith('Task.')
+    ? <section className="panel task-help-panel"><p className="task-help">{htmlToPlainText(taskHelp)}</p></section>
+    : null
+
+  const groupCardsBlock = <div className="config-groups">{taskHelpBlock}{startupPanel}{task === 'Alas' && !search && <AccountPanel key={instance} instance={instance}/>} {groupCards}</div>
   const groupNav = <nav className="group-nav">
     {visibleGroups.map(({group}) => (
       <a
@@ -344,25 +350,18 @@ export function TaskConfig() {
       </div>
     </div>
 
-  /* 任务级说明（Task.<task>.help）：以前只在 i18n 里存在、界面没渲染，这里补成独立卡片。 */
-  const taskHelp = t(`Task.${task}.help`)
-  const taskHelpBlock = taskHelp && taskHelp !== 'help' && !taskHelp.startsWith('Task.')
-    ? <section className="panel task-help-panel"><p className="task-help">{htmlToPlainText(taskHelp)}</p></section>
-    : null
-
   const head = <>
     {error && <ErrorBox message={error} retry={reload} />}
     {storageError && <ErrorBox message={storageError} />}
     {(!hasGroups || !condensed) && configToolbar}
-    {taskHelpBlock}
   </>
 
   const groupsSection = task === 'FleetInfo' ? (
     <FleetInfo value={config.values.FleetInfo?.FleetInfo?.Result} />
   ) : !hasGroups ? (
-    (search || !tool) && <Empty icon={<Settings2 size={30} />} title={ui(search ? 'task.noConfigFound' : 'task.noConfig')}>
+    <>{taskHelpBlock}{(search || !tool) && <Empty icon={<Settings2 size={30} />} title={ui(search ? 'task.noConfigFound' : 'task.noConfig')}>
       {search ? ui('task.tryOtherKeyword') : ui('task.viewRelated')}
-    </Empty>
+    </Empty>}</>
   ) : groupCardsBlock
 
   const toolPanel = task === 'OpsiSimulator'
