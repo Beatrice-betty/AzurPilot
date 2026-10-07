@@ -3621,6 +3621,13 @@
       "ObserveSeconds": 180,
       "ObserveInterval": 15
     },
+    "Device": {
+      "EmulatorStartProgressInterval": 30,
+      "EmulatorStartDialogCheckInterval": 2,
+      "Mumu12StatePollInterval": 2,
+      "Mumu12StopWaitTimeout": 60,
+      "Mumu12DeepWaitTimeout": 30
+    },
     "Storage": {
       "Storage": {}
     }

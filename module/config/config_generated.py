@@ -148,6 +148,13 @@ class GeneratedConfig:
     Reboot_ObserveSeconds = 180
     Reboot_ObserveInterval = 15
 
+    # 配置组 `Device`
+    Device_EmulatorStartProgressInterval = 30
+    Device_EmulatorStartDialogCheckInterval = 2
+    Device_Mumu12StatePollInterval = 2
+    Device_Mumu12StopWaitTimeout = 60
+    Device_Mumu12DeepWaitTimeout = 30
+
     # 配置组 `DailySummary`
     DailySummary_Enable = False  # True, False
     DailySummary_TriggerTime = '20:00'

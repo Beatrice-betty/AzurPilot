@@ -479,6 +479,7 @@ RunParams:
     RunParams:
       - Watchdog
       - Reboot
+      - Device
 
 # ==================== Tool ====================
 

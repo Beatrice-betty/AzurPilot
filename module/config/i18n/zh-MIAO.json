@@ -884,6 +884,32 @@
       "help": "观察阶段每隔多少秒看一眼应用有没有恢复喵。\n默认 15 秒喵。"
     }
   },
+  "Device": {
+    "_info": {
+      "name": "设备与模拟器",
+      "help": "模拟器启动监视和 MuMu12 状态等待的节奏喵。"
+    },
+    "EmulatorStartProgressInterval": {
+      "name": "启动进度打印间隔（秒）喵",
+      "help": "模拟器启动监视期间每隔多少秒喊一声进度喵，免得长时间没声音像卡死了喵。\n默认 30 秒喵。"
+    },
+    "EmulatorStartDialogCheckInterval": {
+      "name": "错误对话框检查间隔（秒）喵",
+      "help": "启动监视期间每隔多少秒看一眼 MuMu 错误对话框喵。看窗口挺费力的，别设太小喵。\n默认 2 秒喵。"
+    },
+    "Mumu12StatePollInterval": {
+      "name": "MuMu12 状态轮询间隔（秒）喵",
+      "help": "查询 MuMu12 实例状态的轮询间隔喵。\n默认 2 秒喵。"
+    },
+    "Mumu12StopWaitTimeout": {
+      "name": "MuMu12 关闭确认等待（秒）喵",
+      "help": "发出关闭命令后等实例真正退出的最长时间喵，等不到就急着启动会失败的喵。\n默认 60 秒喵。"
+    },
+    "Mumu12DeepWaitTimeout": {
+      "name": "MuMu12 深度重启等待（秒）喵",
+      "help": "深度重启后等全部 MuMu 进程退出的最长时间喵（实测 5 秒内就干净了喵）。\n默认 30 秒喵。"
+    }
+  },
   "DailySummary": {
     "_info": {
       "name": "每日总结喵",

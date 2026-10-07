@@ -45,3 +45,28 @@ RESTART_OBSERVE_INTERVAL = 15
 # 避免 u2 调用无限挂起导致 LoginWaitTimeout / GameStuckRestart 等保护机制
 # （依赖 screenshot() 中的 stuck_record_check）均无法触发的死锁。
 RESTART_OPERATION_TIMEOUT = 120
+
+# ==================== 配置兜底：设备与模拟器（RunParams.Device） ====================
+
+# 启动监视期间打印进度的间隔（秒）。监视最长可达 480 秒且期间日志是静默的，
+# 不打印进度的话，用户无法判断 ALAS 是在耐心等待还是已经卡死。
+EMULATOR_START_PROGRESS_INTERVAL = 30
+# 启动监视期间检查 MuMu 错误对话框的间隔（秒）。枚举窗口开销较大，不每次循环都做。
+EMULATOR_START_DIALOG_CHECK_INTERVAL = 2
+# 查询 MuMu12 实例状态的轮询间隔（秒）。同时用作无法查询状态时的兜底等待，
+# 与旧版“等待2秒让进程状态稳定”保持一致。
+MUMU12_STATE_POLL_INTERVAL = 2
+# 确认 MuMu12 实例真正关闭的最长等待（秒）。
+MUMU12_STOP_WAIT_TIMEOUT = 60
+# 深度重启后等待全部 MuMu 进程退出的最长秒数（实测 5 秒内就干净了，留足余量）。
+MUMU12_DEEP_WAIT_TIMEOUT = 30
+
+# ==================== 进程级：设备连接重试 ====================
+
+# ADB/u2 调用的重试次数与基础重试延迟（秒）。位于设备连接层装饰器与
+# 独立工具函数内，不存在 config 读取上下文，且改动直接影响连接稳定性，
+# 不开放到 WebUI 配置。
+RETRY_TRIES = 5
+RETRY_DELAY = 3
+# 图像截断连续出现多少次后尝试恢复连接。
+IMAGE_TRUNCATED_THRESHOLD = 3

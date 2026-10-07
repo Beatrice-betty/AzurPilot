@@ -19122,6 +19122,48 @@
         ]
       }
     },
+    "Device": {
+      "EmulatorStartProgressInterval": {
+        "type": "input",
+        "value": 30,
+        "validate": [
+          10,
+          300
+        ]
+      },
+      "EmulatorStartDialogCheckInterval": {
+        "type": "input",
+        "value": 2,
+        "validate": [
+          1,
+          30
+        ]
+      },
+      "Mumu12StatePollInterval": {
+        "type": "input",
+        "value": 2,
+        "validate": [
+          1,
+          30
+        ]
+      },
+      "Mumu12StopWaitTimeout": {
+        "type": "input",
+        "value": 60,
+        "validate": [
+          10,
+          300
+        ]
+      },
+      "Mumu12DeepWaitTimeout": {
+        "type": "input",
+        "value": 30,
+        "validate": [
+          10,
+          120
+        ]
+      }
+    },
     "Storage": {
       "Storage": {
         "type": "storage",

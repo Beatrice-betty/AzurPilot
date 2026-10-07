@@ -255,6 +255,22 @@ Reboot:
   ObserveInterval:
     value: 15
     validate: [1, 60]
+Device:
+  EmulatorStartProgressInterval:
+    value: 30
+    validate: [10, 300]
+  EmulatorStartDialogCheckInterval:
+    value: 2
+    validate: [1, 30]
+  Mumu12StatePollInterval:
+    value: 2
+    validate: [1, 30]
+  Mumu12StopWaitTimeout:
+    value: 60
+    validate: [10, 300]
+  Mumu12DeepWaitTimeout:
+    value: 30
+    validate: [10, 120]
 DailySummary:
   Enable:
     type: checkbox

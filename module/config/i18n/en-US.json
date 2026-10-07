@@ -884,6 +884,32 @@
       "help": "How often to check whether the app has recovered during the observe phase.\nDefault 15."
     }
   },
+  "Device": {
+    "_info": {
+      "name": "Devices & Emulator",
+      "help": "Pacing of emulator start watch and MuMu12 state waits."
+    },
+    "EmulatorStartProgressInterval": {
+      "name": "Start progress log interval (seconds)",
+      "help": "How often to log progress while watching the emulator start, so long silent waits do not look like a hang.\nDefault 30."
+    },
+    "EmulatorStartDialogCheckInterval": {
+      "name": "Error dialog check interval (seconds)",
+      "help": "How often to check for MuMu error dialogs while watching the start. Enumerating windows is costly; avoid very small values.\nDefault 2."
+    },
+    "Mumu12StatePollInterval": {
+      "name": "MuMu12 state poll interval (seconds)",
+      "help": "Polling interval for querying MuMu12 instance state (stopped/started).\nDefault 2."
+    },
+    "Mumu12StopWaitTimeout": {
+      "name": "MuMu12 stop confirm wait (seconds)",
+      "help": "After issuing shutdown, the longest wait for the MuMu12 instance to really exit. Shutdown is async; launching too early fails.\nDefault 60."
+    },
+    "Mumu12DeepWaitTimeout": {
+      "name": "MuMu12 deep restart wait (seconds)",
+      "help": "Longest wait for all MuMu processes to exit after a deep restart (observed to finish within 5 seconds).\nDefault 30."
+    }
+  },
   "DailySummary": {
     "_info": {
       "name": "Daily summary",
