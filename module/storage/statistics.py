@@ -190,9 +190,15 @@ class StorageStatistics(StorageUI):
                 not same_row(a, b) for a, b in zip(first.rows, second.rows)
             ):
                 raise StorageRecognitionError('两次完整扫描不一致，可能仍在滚动或物品数量已变化')
-            save_snapshot(self.config.config_name, server.server, catalog.snapshot_items(second.rows),
+            items = catalog.snapshot_items(second.rows)
+            save_snapshot(self.config.config_name, server.server, items,
                           started_at=started_at, pages=first.pages + second.pages,
                           catalog_version=catalog.version)
+            from module.statistics.resource_flow import observe, session_for
+            if session_for(self.config) is not None:
+                for item in items:
+                    if item['amount'] is not None:
+                        observe(self.config, item['id'], item['amount'])
         except (ValueError, sqlite3.Error, OSError) as error:
             self.config.task_delay(success=False)
             raise StorageStatisticsError(f'仓库统计未更新，保留上次完整快照：{error}') from error

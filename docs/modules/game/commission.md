@@ -121,7 +121,7 @@ flowchart TD
 
 run() 先处理一个已知 bug：卡在战术课堂界面（`TACTICAL_CLASS_START` 误检测）时先点取消，否则 A* 导航无法到达 `page_reward`。
 
-**领奖**（`commission_receive`，最多重试 3 次）：在奖励页与委托页之间循环，点击 `REWARD_1`/`REWARD_1_WHITE` 小红点、`REWARD_GOTO_COMMISSION` 跳转、`EXP_INFO_S_REWARD`（经验弹窗，一次代表一条委托完成）与 `GET_ITEMS_1/2/3`（物品弹窗）。物品弹窗出现时复制截图到本地队列；下一次经验弹窗出现即认为上一组物品弹窗结束，触发收入识别与持久化。CN 服遇到 `OIL_MAXED` 抛 `OilMaxed`，外层转宿舍喂食消耗石油后重试。每次经验弹窗计数会进入 `finally` 块更新 T 类科研剩余委托数。
+**领奖**（`commission_receive`）：在奖励页与委托页之间循环，点击 `REWARD_1`/`REWARD_1_WHITE` 小红点、`REWARD_GOTO_COMMISSION` 跳转、`EXP_INFO_S_REWARD`（经验弹窗，一次代表一条委托完成）与 `GET_ITEMS_1/2/3`（物品弹窗）。物品弹窗出现时复制截图到本地队列；下一次经验弹窗出现即认为上一组物品弹窗结束，触发收入识别与持久化。CN 服遇到 `OIL_MAXED` 抛 `OilMaxed`：原调度开启石油控制时安全关闭提示、退出本轮并提交清油请求，受阻领取保留待恢复；先刷可运行的图，图冷却时购粮。实际油量下降后重试，最多三次清理仍受阻则将委托延后五分钟，让其他可运行任务继续。关闭石油控制或自定义调度保留原先最多三次固定后宅购粮重试。每次经验弹窗计数会进入 `finally` 块更新 T 类科研剩余委托数。独立资源账本旁路解析这些已有奖励画面，详见 [资源管理](../webui/resource-management.md)。
 
 **扫描**（`_commission_scan_all`）：紧急列表是懒加载的，先切到 urgent 强制刷新；再分别切到 daily/urgent，滚动条翻页（上限 15 页）逐屏 `commission_detect`。检测用 `lines_detect` 找委托卡片底部白色分割线（scipy `find_peaks`），对每条分割线裁剪出 `(188, y-119, 1199, y)` 区域交给 `Commission` 解析；发现无效委托（通常 info_bar 未消失）时重试。紧急列表中的 `extra_*` 委托统一 `convert_to_night` 归类为 `night_*`，与 21:00~次日 02:00 生效的 `_night` 过滤预设对应。
 
@@ -211,14 +211,14 @@ stateDiagram-v2
 
 | 异常 | 原因 | 处理 |
 | --- | --- | --- |
-| `OilMaxed` | CN 服石油溢出（`OIL_MAXED`） | `commission_receive` 捕获后调用宿舍喂食消耗石油，重试 3 次；仍失败抛 `RequestHumanTakeover` 请求人工接管 |
+| `OilMaxed` | CN 服石油溢出（`OIL_MAXED`） | 原调度启用石油控制时关闭弹窗并通过 `TaskEnd` 让出领取，调度器优先清油后恢复；最多三轮清理，仍受阻或无有效消耗则延后五分钟。关闭控制或自定义调度保留固定购粮重试三次、失败请求人工接管的旧兜底 |
 | `GameStuckError` | 委托推荐后舰船列表闪烁 bug（连续 3 次校验不通过） | 主动抛出，交给调度器按卡死恢复（重启游戏） |
 | 委托校验失败 | 启动时发现所选委托与目标不一致 | 返回 False，重置列表模式后重试或放弃，不抛异常 |
 | 收入识别/持久化失败 | 模板缺失、数据库异常等 | 捕获并警告；`income_recorded` 为 False 时跳过本轮「到期未获钻石」的失败结算，避免把实际成功误记为失败 |
 | 通知失败 | OnePush/WebUI 推送异常 | 仅告警，不影响已提交的收益数据 |
 | 跨数据库异常 | 统计库写入失败 | 全部 try/except 包裹并告警；委托主流程不因统计失败中断 |
 
-自动恢复的边界：本模块抛出的 `GameStuckError`、`RequestHumanTakeover` 由调度器统一分级处理（见[调度器](../entry/alas.md)）；`OilMaxed` 是唯一在模块内自处理的业务异常。
+自动恢复的边界：本模块抛出的 `GameStuckError`、`RequestHumanTakeover` 由调度器统一分级处理（见[调度器](../entry/alas.md)）。`OilMaxed` 根据原调度石油控制开关选择让出业务执行或使用旧购粮兜底；让出不是任务失败，委托保持待恢复，次数与清理结果由当前 worker 的清油状态记录。
 
 ## 13. 缓存与持久化
 

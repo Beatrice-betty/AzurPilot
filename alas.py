@@ -1070,6 +1070,12 @@ class AzurLaneAutoScript:
             self._channel_float_done = True
 
     def run(self, command, skip_first_screenshot=False):
+        """任务调用边界同时隔离资源归因，恢复和清油调用各自拥有独立记录。"""
+        from module.statistics.resource_flow import task_session
+        with task_session(self.config_name, inflection.camelize(inflection.underscore(command))):
+            return self._run(command, skip_first_screenshot)
+
+    def _run(self, command, skip_first_screenshot=False):
         """
         执行指定任务命令，捕获异常并决定后续行为。
 
@@ -2114,6 +2120,10 @@ class AzurLaneAutoScript:
         runtime = self.__dict__['_program_runtime']
         runtime.refresh_result = refresh_resources(self.config, self.device, runtime.refresh_names)
 
+    def oil_control(self):
+        """原调度在已有任务边界观察石油，必要时进入后宅购粮。"""
+        self.__dict__['_program_runtime'].oil_control.run_action()
+
     def _record_task_restart(self, task, success):
         """重复恢复达到上限时，延后故障任务并发送错误推送。"""
         if task == 'Restart':
@@ -2160,6 +2170,22 @@ class AzurLaneAutoScript:
         return True
 
     def get_next_task(self):
+        """在已有任务就绪后应用清油优先级，覆盖预热和正常等待路径。"""
+        from module.config.config import name_to_function
+        while True:
+            task = self._get_next_task()
+            runtime = self.__dict__['_program_runtime']
+            if runtime.mode == 'native' and runtime.oil_control.running_task is None:
+                selected = runtime.oil_control.select(task)
+                if selected is None:
+                    continue
+                if selected != task:
+                    self.config.task = name_to_function(selected)
+                    self.config.bind(self.config.task)
+                return selected
+            return task
+
+    def _get_next_task(self):
         """
         获取下一个待执行的任务。
 

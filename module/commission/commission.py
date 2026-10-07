@@ -1311,6 +1311,17 @@ class RewardCommission(UI, InfoHandler):
             try:
                 return self._commission_receive()
             except OilMaxed:
+                runtime = self.config.__dict__.get('_scheduler_runtime')
+                if runtime is not None and runtime.oil_control.enabled:
+                    for _ in self.loop(skip_first=False):
+                        if self.handle_popup_confirm('COMMISSION_OIL_MAXED'):
+                            continue
+                        if self.ui_page_appear(page_reward) or self.ui_page_appear(page_commission):
+                            break
+                        if self.ui_additional():
+                            continue
+                    runtime.oil_control.request_blocked(self.config.task.command)
+                    self.config.task_stop('石油溢出，交回调度器优先清理')
                 logger.info("[委托-石油] 石油溢出，购买食物消耗石油")
                 RewardDorm(self.config, self.device).dorm_food_run(amount=10)
                 self.ui_ensure(page_reward)

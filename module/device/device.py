@@ -349,6 +349,8 @@ class Device(Screenshot, Control, AppControl, Input):
             super().screenshot()
 
         self._check_image_stuck()
+        from module.statistics.resource_flow import reward_frame
+        reward_frame(self.config, self.image)
         return self.image
 
     def dump_hierarchy(self) -> etree._Element:

@@ -2477,6 +2477,20 @@
       "help": "To use a custom filter, you need to set \"Research Filter\" to \"Custom\" and read https://github.com/LmeSzinc/AzurLaneAutoScript/wiki/filter_string_cn"
     }
   },
+  "OilControl": {
+    "_info": {
+      "name": "Automatic oil control",
+      "help": "Native scheduling only, checked alongside existing tasks. Runs enabled and due farming tasks first, then buys dorm food during cooldown. Oil cleanup temporarily takes priority over commissions and other tasks."
+    },
+    "Enable": {
+      "name": "Enable automatic oil control",
+      "help": "Independent of dorm feeding and collection. Does not wake the game on a timer."
+    },
+    "Target": {
+      "name": "Oil target",
+      "help": "Cleanup starts above this value and stops below it. Default: 24000, leaving 1000 room below the 25000 cap. Range: 1000–24999."
+    }
+  },
   "Dorm": {
     "_info": {
       "name": "Dorm",

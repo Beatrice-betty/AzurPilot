@@ -317,6 +317,8 @@ class ShopClerk(ShopBase, Retirement):
         """
         success = False
         confirmed_purchase = False
+        from module.statistics.resource_tracking import receipt_totals
+        receipts = receipt_totals(self.config)
         if self.shop_strategy_enabled():
             # 无数量选择框的商品默认只会确认一次；有数量框时由对应处理器覆盖。
             item._shop_strategy_executed_quantity = min(
@@ -358,6 +360,9 @@ class ShopClerk(ShopBase, Retirement):
 
             # 结束条件
             if success and self.appear(SHOP_BACK_ARROW, offset=(30, 30)):
+                if confirmed_purchase:
+                    from module.statistics.resource_tracking import record_purchase
+                    record_purchase(self.config, item, getattr(item, '_shop_strategy_executed_quantity', 1), receipts)
                 return confirmed_purchase if self.shop_strategy_enabled() else True
 
     def shop_buy(self):

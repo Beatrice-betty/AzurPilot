@@ -4,6 +4,7 @@ import Ajv from 'ajv'
 import {spawnSync} from 'node:child_process'
 import {fileURLToPath} from 'node:url'
 import {createStockProxy} from './stock.mjs'
+import {resourceFlows} from './resource-flows.mjs'
 
 // 只读取公开的模板、元数据和翻译，绝不读取用户实例或部署文件。
 const read = path => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'))
@@ -697,6 +698,7 @@ export function createMockState({ empty = false } = {}) {
         }]
         return { instance: name, generatedAt: timestamp(new Date()), count: cats.length, cats: cats.slice(-(params.limit ?? 100)) }
       }
+      case 'statistics.resourceFlows': return resourceFlows(params, snapshot(name), storageCatalog, name === 'demo-alt')
       case 'statistics.report': {
         const makePoints = (res, days = 7) => {
           if (name === 'demo-alt') return []

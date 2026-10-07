@@ -1104,6 +1104,20 @@
         "value": false
       }
     },
+    "OilControl": {
+      "Enable": {
+        "type": "checkbox",
+        "value": true
+      },
+      "Target": {
+        "type": "input",
+        "value": 24000,
+        "validate": [
+          1000,
+          24999
+        ]
+      }
+    },
     "YukikazeTaskManager": {
       "TaskPriorityAdjustment": {
         "type": "task_priority",

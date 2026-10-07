@@ -275,3 +275,6 @@ return shop.plan { candidates = candidates:take(0) }
 - [日常维护模块合集](daily-maintenance.md) —— 商店任务在每日/每周任务流中的位置。
 - [UI 导航](../ui.md) —— 页面图谱、`Switch`/`Navbar`/`Scroll` 组件。
 - [OCR 系统](../ocr.md) —— 价格、库存与货币数字识别。
+### 资源收支记录
+
+普通、凭证与大世界商店在确认购买且返回商店后，按已识别单价和实际执行数量记录支出与已知商品数量；同一次购买已由奖励画面入账的物品不重复累计。活动商店可靠 PT 读数在同次任务内的减少记作支出，不当成活动重置。未知价格或数量不补成零，完整数据语义见 [资源管理](../webui/resource-management.md)。
