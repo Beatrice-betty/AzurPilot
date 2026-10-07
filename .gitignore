@@ -68,8 +68,7 @@ docs/*
 .zcode/
 .cursor/
 .graphflow-cache/
-
-AGENTS.md
+.zcodeignore
 RTK.md
 
 # Frontend
