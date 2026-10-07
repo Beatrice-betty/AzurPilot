@@ -4,6 +4,10 @@
 
 # 此文件处理建造（Gacha/Build）相关的操作。
 # 包括多级建造页面的导航、资源消耗预计算、提交建造订单以及自动化收菜和队列清理逻辑。
+from module.base.runtime_params import (
+    GACHA_PREP_SUBMIT_WAIT, GACHA_PREP_SUBMIT_WAIT_FRAMES, GACHA_PREP_TIMEOUT, GACHA_PREP_TIMEOUT_FRAMES,
+)
+from module.config.utils import read_run_param
 from module.base.timer import Timer
 from module.campaign.campaign_status import CampaignStatus
 from module.combat.assets import GET_SHIP
@@ -23,10 +27,8 @@ RECORD_GACHA_SINCE = (0,)
 # 点击「开始建造/提交订单」后立刻再点一次，会点到面板外面（等同于点遮罩）
 # 把面板关掉，形成「开面板 → 关面板」的交替，永远等不到 +/-。
 # 因此重新点击必须同时满足秒数和帧数两个下限，整个等待另有超时兜底。
-GACHA_PREP_SUBMIT_WAIT = 10  # 秒
-GACHA_PREP_SUBMIT_WAIT_FRAMES = 2  # 帧
-GACHA_PREP_TIMEOUT = 90  # 秒
-GACHA_PREP_TIMEOUT_FRAMES = 20  # 帧
+# 等待秒数走 WebUI「运行参数」页（RunParams.UiWait），帧数下限与默认值集中在
+# module/base/runtime_params.py（界面等待域）。
 OCR_BUILD_CUBE_COUNT = Digit(BUILD_CUBE_COUNT, letter=(255, 247, 247), threshold=64)
 OCR_BUILD_TICKET_COUNT = Digit(BUILD_TICKET_COUNT, letter=(255, 247, 247), threshold=64)
 OCR_BUILD_SUBMIT_COUNT = Digit(BUILD_SUBMIT_COUNT, letter=(255, 247, 247), threshold=64)
@@ -78,10 +80,14 @@ class RewardGacha(GachaUI, Retirement, CampaignStatus):
             return False
 
         index_offset = (60, 20)
-        submit_wait = Timer(GACHA_PREP_SUBMIT_WAIT, count=GACHA_PREP_SUBMIT_WAIT_FRAMES)
+        submit_wait = Timer(read_run_param(
+            self.config, 'UiWait_GachaPrepSubmitWait', GACHA_PREP_SUBMIT_WAIT, 2, 120),
+            count=GACHA_PREP_SUBMIT_WAIT_FRAMES)
         for _ in self.loop(
                 skip_first=skip_first_screenshot,
-                timeout=Timer(GACHA_PREP_TIMEOUT, count=GACHA_PREP_TIMEOUT_FRAMES)):
+                timeout=Timer(read_run_param(
+                    self.config, 'UiWait_GachaPrepTimeout', GACHA_PREP_TIMEOUT, 10, 600),
+                    count=GACHA_PREP_TIMEOUT_FRAMES)):
             # 结束——建造数量面板已经打开
             if self.appear(BUILD_PLUS, offset=index_offset) \
                     and self.appear(BUILD_MINUS, offset=index_offset):

@@ -19206,6 +19206,202 @@
         ]
       }
     },
+    "UiWait": {
+      "IslandMapConfirmWait": {
+        "type": "input",
+        "value": 3,
+        "validate": [
+          1,
+          60
+        ]
+      },
+      "IslandMapDestinationWait": {
+        "type": "input",
+        "value": 45,
+        "validate": [
+          10,
+          600
+        ]
+      },
+      "IslandMapConfirmRetryWait": {
+        "type": "input",
+        "value": 10,
+        "validate": [
+          1,
+          60
+        ]
+      },
+      "IslandCharacterConfirmRetryWait": {
+        "type": "input",
+        "value": 3,
+        "validate": [
+          1,
+          60
+        ]
+      },
+      "IslandEntryRetryWait": {
+        "type": "input",
+        "value": 3,
+        "validate": [
+          1,
+          60
+        ]
+      },
+      "PqInteractButtonTimeout": {
+        "type": "input",
+        "value": 24,
+        "validate": [
+          5,
+          120
+        ]
+      },
+      "PqInteractClickWait": {
+        "type": "input",
+        "value": 8,
+        "validate": [
+          2,
+          60
+        ]
+      },
+      "PqInteractStartTimeout": {
+        "type": "input",
+        "value": 24,
+        "validate": [
+          5,
+          120
+        ]
+      },
+      "PqInteractEndTimeout": {
+        "type": "input",
+        "value": 40,
+        "validate": [
+          10,
+          300
+        ]
+      },
+      "PqInteractExitTimeout": {
+        "type": "input",
+        "value": 24,
+        "validate": [
+          5,
+          120
+        ]
+      },
+      "GachaPrepSubmitWait": {
+        "type": "input",
+        "value": 10,
+        "validate": [
+          2,
+          120
+        ]
+      },
+      "GachaPrepTimeout": {
+        "type": "input",
+        "value": 90,
+        "validate": [
+          10,
+          600
+        ]
+      },
+      "ChannelFloatHoldDuration": {
+        "type": "input",
+        "value": 0.2,
+        "validate": [
+          0.05,
+          5
+        ]
+      },
+      "ChannelFloatMaxAttempts": {
+        "type": "input",
+        "value": 4,
+        "validate": [
+          1,
+          20
+        ]
+      },
+      "GuildSupplyMaxRetry": {
+        "type": "input",
+        "value": 2,
+        "validate": [
+          1,
+          10
+        ]
+      },
+      "GuildExchangeBugRetry": {
+        "type": "input",
+        "value": 5,
+        "validate": [
+          1,
+          20
+        ]
+      },
+      "BuyFurnitureCheckIntervalDays": {
+        "type": "input",
+        "value": 6,
+        "validate": [
+          1,
+          30
+        ]
+      },
+      "AutoEquipAfterEquipWait": {
+        "type": "input",
+        "value": 3,
+        "validate": [
+          1,
+          30
+        ]
+      },
+      "CommissionSkipTimeout": {
+        "type": "input",
+        "value": 90,
+        "validate": [
+          10,
+          600
+        ]
+      },
+      "CommissionRewardScreenshotKeep": {
+        "type": "input",
+        "value": 50,
+        "validate": [
+          5,
+          500
+        ]
+      }
+    },
+    "Handover": {
+      "ConsumeRetryMinutes": {
+        "type": "input",
+        "value": 30,
+        "validate": [
+          5,
+          240
+        ]
+      },
+      "MaintainLeadMinutes": {
+        "type": "input",
+        "value": 10,
+        "validate": [
+          2,
+          60
+        ]
+      },
+      "MaintainCheckMinutes": {
+        "type": "input",
+        "value": 120,
+        "validate": [
+          15,
+          720
+        ]
+      },
+      "ConflictRetryMinutes": {
+        "type": "input",
+        "value": 15,
+        "validate": [
+          5,
+          120
+        ]
+      }
+    },
     "Storage": {
       "Storage": {
         "type": "storage",

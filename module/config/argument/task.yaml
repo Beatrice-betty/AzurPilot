@@ -481,6 +481,8 @@ RunParams:
       - Reboot
       - Device
       - ScreenRecord
+      - UiWait
+      - Handover
 
 # ==================== Tool ====================
 

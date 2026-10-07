@@ -3635,6 +3635,34 @@
       "TranscodeBaseTimeout": 60.0,
       "TranscodeMaxTimeout": 600.0
     },
+    "UiWait": {
+      "IslandMapConfirmWait": 3,
+      "IslandMapDestinationWait": 45,
+      "IslandMapConfirmRetryWait": 10,
+      "IslandCharacterConfirmRetryWait": 3,
+      "IslandEntryRetryWait": 3,
+      "PqInteractButtonTimeout": 24,
+      "PqInteractClickWait": 8,
+      "PqInteractStartTimeout": 24,
+      "PqInteractEndTimeout": 40,
+      "PqInteractExitTimeout": 24,
+      "GachaPrepSubmitWait": 10,
+      "GachaPrepTimeout": 90,
+      "ChannelFloatHoldDuration": 0.2,
+      "ChannelFloatMaxAttempts": 4,
+      "GuildSupplyMaxRetry": 2,
+      "GuildExchangeBugRetry": 5,
+      "BuyFurnitureCheckIntervalDays": 6,
+      "AutoEquipAfterEquipWait": 3,
+      "CommissionSkipTimeout": 90,
+      "CommissionRewardScreenshotKeep": 50
+    },
+    "Handover": {
+      "ConsumeRetryMinutes": 30,
+      "MaintainLeadMinutes": 10,
+      "MaintainCheckMinutes": 120,
+      "ConflictRetryMinutes": 15
+    },
     "Storage": {
       "Storage": {}
     }

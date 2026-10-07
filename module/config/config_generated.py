@@ -162,6 +162,34 @@ class GeneratedConfig:
     ScreenRecord_TranscodeBaseTimeout = 60.0
     ScreenRecord_TranscodeMaxTimeout = 600.0
 
+    # 配置组 `UiWait`
+    UiWait_IslandMapConfirmWait = 3
+    UiWait_IslandMapDestinationWait = 45
+    UiWait_IslandMapConfirmRetryWait = 10
+    UiWait_IslandCharacterConfirmRetryWait = 3
+    UiWait_IslandEntryRetryWait = 3
+    UiWait_PqInteractButtonTimeout = 24
+    UiWait_PqInteractClickWait = 8
+    UiWait_PqInteractStartTimeout = 24
+    UiWait_PqInteractEndTimeout = 40
+    UiWait_PqInteractExitTimeout = 24
+    UiWait_GachaPrepSubmitWait = 10
+    UiWait_GachaPrepTimeout = 90
+    UiWait_ChannelFloatHoldDuration = 0.2
+    UiWait_ChannelFloatMaxAttempts = 4
+    UiWait_GuildSupplyMaxRetry = 2
+    UiWait_GuildExchangeBugRetry = 5
+    UiWait_BuyFurnitureCheckIntervalDays = 6
+    UiWait_AutoEquipAfterEquipWait = 3
+    UiWait_CommissionSkipTimeout = 90
+    UiWait_CommissionRewardScreenshotKeep = 50
+
+    # 配置组 `Handover`
+    Handover_ConsumeRetryMinutes = 30
+    Handover_MaintainLeadMinutes = 10
+    Handover_MaintainCheckMinutes = 120
+    Handover_ConflictRetryMinutes = 15
+
     # 配置组 `DailySummary`
     DailySummary_Enable = False  # True, False
     DailySummary_TriggerTime = '20:00'

@@ -94,3 +94,67 @@ SCREEN_RECORD_TMP_MAX_AGE = 3600
 SCREEN_RECORD_CLEANUP_INTERVAL = 3600
 # 单条 adb 命令的超时（秒）
 ADB_TIMEOUT = 20
+
+# ==================== 配置兜底：界面等待（RunParams.UiWait） ====================
+
+# 岛屿地图跳转目的地的确认等待（秒）
+ISLAND_MAP_CONFIRM_WAIT = 3
+# 低端设备从岛屿地图跳转目的地时，场景加载可能明显超过 20 秒，
+# 放宽进入目的地前的等待上限，避免加载稍慢即被误判为失败。
+ISLAND_MAP_DESTINATION_WAIT = 45
+# 目的地确认按钮只允许在点击后前 10 秒内补点重试，
+# 防止地图一直停留在确认弹窗时反复点击同一按钮触发 GameTooManyClickError。
+ISLAND_MAP_CONFIRM_RETRY_WAIT = 10
+# 角色确认（选人页确认按钮）补点的最小间隔。必须大于云手机上「选人页→选餐页」的
+# 转场时间，否则上一次点击已经生效、页面正在切换时仍会补点一次确认按钮，
+# 而选餐页的确认按钮与角色页确认按钮坐标重叠，会把默认餐品直接下单。
+ISLAND_CHARACTER_CONFIRM_RETRY_WAIT = 3
+# 岛屿入口重试等待（秒）
+ISLAND_ENTRY_RETRY_WAIT = 3
+# 私人小屋交互各阶段的超时与点击间隔（秒）
+PQ_INTERACT_BUTTON_TIMEOUT = 24
+PQ_INTERACT_CLICK_WAIT = 8
+PQ_INTERACT_START_TIMEOUT = 24
+PQ_INTERACT_END_TIMEOUT = 40
+PQ_INTERACT_EXIT_TIMEOUT = 24
+# 建造数量面板的等待参数（秒）。帧数下限见下方 *_FRAMES：
+# 云手机等慢设备上一帧截图要 2~4 秒，面板淡入本身也要几秒：
+# 点击「开始建造/提交订单」后立刻再点一次，会点到面板外面（等同于点遮罩）
+# 把面板关掉，形成「开面板 → 关面板」的交替，永远等不到 +/-。
+# 因此重新点击必须同时满足秒数和帧数两个下限，整个等待另有超时兜底。
+GACHA_PREP_SUBMIT_WAIT = 10
+GACHA_PREP_TIMEOUT = 90
+# 渠道服悬浮球拖拽的终点停留（秒）与最大尝试次数
+CHANNEL_FLOAT_HOLD_DURATION = 0.2
+CHANNEL_FLOAT_MAX_ATTEMPTS = 4
+# 公会后勤：补给点击与兑换 BUG 处理的重试上限
+GUILD_SUPPLY_MAX_RETRY = 2
+GUILD_EXCHANGE_BUG_RETRY = 5
+# 家具店检查间隔（天）
+CHECK_INTERVAL = 6
+# 换装完成后等待画面稳定的时间（秒）
+AUTO_EQUIP_AFTER_EQUIP_WAIT = 3
+# 委托：单个委托收到的绝对超时（秒）与奖励截图保留数量
+COMMISSION_SKIP_TIMEOUT = 90
+COMMISSION_REWARD_SCREENSHOT_KEEP = 50
+
+# ==================== 配置兜底：作战交接（RunParams.Handover） ====================
+
+# 消耗类作战委托执行失败后，推迟多少分钟重试。每次重试都要重新进一次
+# 游戏，间隔过短会反复进游戏失败、白耗时间。
+HANDOVER_CONSUME_RETRY_MINUTES = 30
+# 维护开始前多少分钟做最后一次交接运行
+HANDOVER_MAINTAIN_LEAD_MINUTES = 10
+# 维护时间无法确认时，按多少分钟一轮反复核对
+HANDOVER_MAINTAIN_CHECK_MINUTES = 120
+# 交接冲突时推迟多少分钟重试，避免把任务排到过去
+HANDOVER_CONFLICT_RETRY_MINUTES = 15
+
+# ==================== 进程级：界面等待帧数下限 ====================
+
+# 以下帧数与对应的秒数参数成对使用（Timer(sec, count=frames)）：
+# 重新点击必须同时满足秒数和帧数两个下限，防止慢设备上截图太慢
+# 导致「秒数还没到但画面早已变化」的误点击。帧数是截图节奏的内部
+# 语义，与秒数强耦合，不开放配置。
+GACHA_PREP_SUBMIT_WAIT_FRAMES = 2
+GACHA_PREP_TIMEOUT_FRAMES = 20

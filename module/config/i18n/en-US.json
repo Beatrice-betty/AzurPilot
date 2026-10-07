@@ -936,6 +936,114 @@
       "help": "Hard cap of the transcoding timeout.\nDefault 600."
     }
   },
+  "UiWait": {
+    "_info": {
+      "name": "UI Wait",
+      "help": "Wait and retry pacing of UI interactions. Relax for slow devices or emulators on cloud phones."
+    },
+    "IslandMapConfirmWait": {
+      "name": "Island map confirm wait (seconds)",
+      "help": "Budget for the confirm button to appear in the island map popup.\nDefault 3."
+    },
+    "IslandMapDestinationWait": {
+      "name": "Island destination load limit (seconds)",
+      "help": "Upper limit waiting for the scene to load when jumping from the island map; relax on slow devices.\nDefault 45."
+    },
+    "IslandMapConfirmRetryWait": {
+      "name": "Destination confirm re-click interval (seconds)",
+      "help": "Minimum interval before re-clicking the destination confirm popup, preventing repeated clicks on the same button from tripping the click guard.\nDefault 10."
+    },
+    "IslandCharacterConfirmRetryWait": {
+      "name": "Character confirm re-click interval (seconds)",
+      "help": "Minimum interval between re-clicks of the character confirm button; must exceed the cloud-phone page transition, otherwise the same slot on the next page gets clicked.\nDefault 3."
+    },
+    "IslandEntryRetryWait": {
+      "name": "Island entry click interval (seconds)",
+      "help": "Minimum interval between clicks of the island management entry button while the scene transitions.\nDefault 3."
+    },
+    "PqInteractButtonTimeout": {
+      "name": "Interact button wait (seconds)",
+      "help": "Timeout waiting for the interact button in private quarters; it never appears when daily stamina is exhausted.\nDefault 24."
+    },
+    "PqInteractClickWait": {
+      "name": "Interact click interval (seconds)",
+      "help": "Minimum interval between clicks within a private-quarters interaction loop.\nDefault 8."
+    },
+    "PqInteractStartTimeout": {
+      "name": "Interact start wait (seconds)",
+      "help": "Timeout waiting for the interaction scene to begin after clicking Interact.\nDefault 24."
+    },
+    "PqInteractEndTimeout": {
+      "name": "Interact end wait (seconds)",
+      "help": "Timeout waiting for one interaction round to finish (interact button reappears).\nDefault 40."
+    },
+    "PqInteractExitTimeout": {
+      "name": "Interact exit wait (seconds)",
+      "help": "Timeout when leaving the ship-room interaction scene.\nDefault 24."
+    },
+    "GachaPrepSubmitWait": {
+      "name": "Build submit re-click interval (seconds)",
+      "help": "Minimum interval before re-clicking after starting a build; too short closes the panel by clicking outside it.\nDefault 10."
+    },
+    "GachaPrepTimeout": {
+      "name": "Build panel timeout (seconds)",
+      "help": "Timeout waiting for the build quantity panel (plus/minus buttons) to appear.\nDefault 90."
+    },
+    "ChannelFloatHoldDuration": {
+      "name": "Float ball hold duration (seconds)",
+      "help": "How long to hold the channel float ball at the drag end; a brief hold before release triggers the hide dialog.\nDefault 0.2."
+    },
+    "ChannelFloatMaxAttempts": {
+      "name": "Float ball max attempts",
+      "help": "Max attempts to handle the channel float ball before skipping.\nDefault 4."
+    },
+    "GuildSupplyMaxRetry": {
+      "name": "Supply retry count",
+      "help": "Retry limit when guild supply clicks get no response before skipping.\nDefault 2."
+    },
+    "GuildExchangeBugRetry": {
+      "name": "Exchange no-response threshold",
+      "help": "Consecutive unresponsive guild exchanges before concluding an in-game bug.\nDefault 5."
+    },
+    "BuyFurnitureCheckIntervalDays": {
+      "name": "Furniture shop check interval (days)",
+      "help": "How often the furniture shop task runs its check.\nDefault 6."
+    },
+    "AutoEquipAfterEquipWait": {
+      "name": "After-equip wait (seconds)",
+      "help": "Fixed wait after auto-equipping to let the UI settle.\nDefault 3."
+    },
+    "CommissionSkipTimeout": {
+      "name": "Per-commission timeout (seconds)",
+      "help": "Absolute timeout for a single commission collection; give up after it elapses.\nDefault 90."
+    },
+    "CommissionRewardScreenshotKeep": {
+      "name": "Commission screenshots to keep",
+      "help": "Upper limit of kept commission reward screenshots; only active when day-based cleanup is off.\nDefault 50."
+    }
+  },
+  "Handover": {
+    "_info": {
+      "name": "Operation Handover",
+      "help": "Handover pacing between commissions and server maintenance."
+    },
+    "ConsumeRetryMinutes": {
+      "name": "Book consume retry interval (min)",
+      "help": "When the one-click commission book consume has not triggered today, retry after this many minutes. Each retry re-enters the game; keep it not too short.\nDefault 30."
+    },
+    "MaintainLeadMinutes": {
+      "name": "Run before maintenance (min)",
+      "help": "How many minutes before server maintenance to run the last commission with sorties maxed.\nDefault 10."
+    },
+    "MaintainCheckMinutes": {
+      "name": "Maintenance re-check interval (min)",
+      "help": "While only waiting for maintenance, re-check the maintenance notice after this many minutes.\nDefault 120."
+    },
+    "ConflictRetryMinutes": {
+      "name": "Task conflict retry interval (min)",
+      "help": "When the commission end time cannot be read, postpone the conflicting task by this many minutes.\nDefault 15."
+    }
+  },
   "DailySummary": {
     "_info": {
       "name": "Daily summary",

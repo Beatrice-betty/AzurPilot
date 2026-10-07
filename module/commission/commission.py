@@ -30,8 +30,13 @@ from scipy import signal
 from scipy.ndimage import uniform_filter1d
 
 from module.base.button import Button, ButtonGrid
+from module.base.runtime_params import (
+    COMMISSION_REWARD_SCREENSHOT_KEEP,
+    COMMISSION_SKIP_TIMEOUT,
+)
 from module.base.timer import Timer
 from module.base.utils import *
+from module.config.utils import read_run_param
 from module.combat.assets import *
 from module.commission.assets import *
 from module.commission.planner import (
@@ -70,9 +75,8 @@ COMMISSION_SWITCH.add_state('daily', COMMISSION_DAILY)
 COMMISSION_SWITCH.add_state('urgent', COMMISSION_URGENT)
 COMMISSION_SCROLL = Scroll(COMMISSION_SCROLL_AREA, color=(247, 211, 66), name='COMMISSION_SCROLL')
 
-# 委托收益截图保留张数：与统计页「最近委托记录」的 50 条上限保持一致。
-# 仅在「掉落记录 - 截图保留天数」为 0 时生效，填了天数就改按天数清理。
-COMMISSION_REWARD_SCREENSHOT_KEEP = 50
+# 委托收益截图保留张数走 WebUI「运行参数」页（RunParams.UiWait），
+# 默认值集中在 module/base/runtime_params.py（界面等待域）。
 # 委托详情面板的 6 个舰船槽位（1280x720 国服实机截图标定，2026-10-07），
 # 第一格中心 (270,347) 与「推荐」按钮左下按固定距离对齐。
 # 点击已有舰船的槽位不会打开船坞，只有点空槽位（'+'）才会，
@@ -87,9 +91,9 @@ _SLOT_CENTER_INSET = 20
 _SLOT_EMPTY_LUMINANCE = 130
 
 # 无法开始的委托（如等级不足）在短暂等待后放弃，而不是循环到
-# GameStuckError 重启游戏。
+# GameStuckError 重启游戏。单个委托的绝对超时走 WebUI「运行参数」页
+# （RunParams.UiWait），默认值集中在 module/base/runtime_params.py。
 COMMISSION_SKIP_AFTER_RECOMMEND = 3   # 推荐后开始按钮仍灰多久算失败（秒）。
-COMMISSION_SKIP_TIMEOUT = 90          # 单个委托的绝对超时（秒）。
 COMMISSION_SKIP_MAX_RECOMMEND = 3     # 触发闪烁 bug 前的推荐点击上限。
 
 # 舰队询问弹窗（"舰船在已有舰队编成中，是否移出编队？"）的红色关闭按钮区域，
@@ -1459,7 +1463,8 @@ class RewardCommission(Dock, UI, InfoHandler):
         self.interval_clear(COMMISSION_ADVICE)
         self.interval_clear(COMMISSION_START)
         comm_timer = Timer(7)
-        skip_timer = Timer(COMMISSION_SKIP_TIMEOUT)
+        skip_timer = Timer(read_run_param(
+            self.config, 'UiWait_CommissionSkipTimeout', COMMISSION_SKIP_TIMEOUT, 10, 600))
         skip_timer.reset()
         # 点击推荐后设置，倒计时至开始按钮应点亮的时间点。未用过推荐时为 None。
         recommend_timer = None
@@ -1946,7 +1951,9 @@ class RewardCommission(Dock, UI, InfoHandler):
         from module.statistics.drop_cleanup import BAK_FOLDER
 
         if max_keep is None:
-            max_keep = COMMISSION_REWARD_SCREENSHOT_KEEP
+            max_keep = int(read_run_param(
+                self.config, 'UiWait_CommissionRewardScreenshotKeep',
+                COMMISSION_REWARD_SCREENSHOT_KEEP, 5, 500))
 
         if base is None:
             base = os.path.join('.', 'log', 'commission_rewards', instance)

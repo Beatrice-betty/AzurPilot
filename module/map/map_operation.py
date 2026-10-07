@@ -18,8 +18,10 @@ from datetime import datetime, timedelta
 
 import cv2
 
+from module.base.runtime_params import HANDOVER_CONFLICT_RETRY_MINUTES
 from module.base.timer import Timer
 from module.config.time_source import now as current_time
+from module.config.utils import read_run_param
 from module.exception import CampaignEnd, RequestHumanTakeover, ScriptEnd
 from module.handler.fast_forward import FastForwardHandler
 from module.handler.mystery import MysteryHandler
@@ -30,8 +32,8 @@ from module.notify import handle_notify
 from module.retire.retirement import Retirement
 from module.ui.assets import BACK_ARROW, DAILY_CHECK
 
-# 读不到作战委托结束时间时的兜底重试间隔（分钟）
-HANDOVER_CONFLICT_RETRY_MINUTES = 15
+# 读不到作战委托结束时间时的兜底重试间隔走 WebUI「运行参数」页
+# （RunParams.Handover），默认值集中在 module/base/runtime_params.py。
 
 
 class MapOperation(MysteryHandler, FleetPreparation, Retirement, FastForwardHandler):
@@ -227,10 +229,13 @@ class MapOperation(MysteryHandler, FleetPreparation, Retirement, FastForwardHand
             target = (end + timedelta(minutes=1)).replace(microsecond=0)
             logger.info(f'[功能冲突] 作战委托预计 {end} 结束，推迟到 {target}')
         else:
-            target = (now + timedelta(minutes=HANDOVER_CONFLICT_RETRY_MINUTES)).replace(microsecond=0)
+            conflict_retry = int(read_run_param(
+                self.config, 'Handover_ConflictRetryMinutes',
+                HANDOVER_CONFLICT_RETRY_MINUTES, 5, 120))
+            target = (now + timedelta(minutes=conflict_retry)).replace(microsecond=0)
             logger.warning(f'[功能冲突] 读不到作战委托的结束时间'
                            f'（{commission_end} / {next_run}），'
-                           f'{HANDOVER_CONFLICT_RETRY_MINUTES} 分钟后再试')
+                           f'{conflict_retry} 分钟后再试')
 
         self.config.task_delay(target=target)
         return target

@@ -936,6 +936,114 @@
       "help": "轉碼逾時的硬上限。\n預設 600 秒。"
     }
   },
+  "UiWait": {
+    "_info": {
+      "name": "介面等待",
+      "help": "各功能介面互動的等待與重試節奏。慢裝置/雲手機可適當放寬。"
+    },
+    "IslandMapConfirmWait": {
+      "name": "島嶼地圖確認等待（秒）",
+      "help": "島嶼地圖彈窗內確認按鈕出現前的等待預算。\n預設 3 秒。"
+    },
+    "IslandMapDestinationWait": {
+      "name": "島嶼目的地載入上限（秒）",
+      "help": "從島嶼地圖跳轉目的地時等待場景載入的上限，慢裝置可放寬。\n預設 45 秒。"
+    },
+    "IslandMapConfirmRetryWait": {
+      "name": "目的地確認補點間隔（秒）",
+      "help": "目的地確認彈窗內補點重試的最小間隔，防止反覆點擊同一按鈕觸發點擊保護。\n預設 10 秒。"
+    },
+    "IslandCharacterConfirmRetryWait": {
+      "name": "角色確認補點間隔（秒）",
+      "help": "選人頁確認按鈕補點的最小間隔，須大於雲手機頁面轉場時間，否則會誤點選餐頁的同位按鈕。\n預設 3 秒。"
+    },
+    "IslandEntryRetryWait": {
+      "name": "島嶼入口點擊間隔（秒）",
+      "help": "進入島嶼管理頁的入口按鈕兩次點擊的最小間隔，等待場景轉場。\n預設 3 秒。"
+    },
+    "PqInteractButtonTimeout": {
+      "name": "互動按鈕等待（秒）",
+      "help": "私人小屋等待互動按鈕出現的逾時；今日精力耗盡時按鈕不會出現。\n預設 24 秒。"
+    },
+    "PqInteractClickWait": {
+      "name": "互動點擊間隔（秒）",
+      "help": "私人小屋互動循環中兩次點擊的最小間隔。\n預設 8 秒。"
+    },
+    "PqInteractStartTimeout": {
+      "name": "互動開始等待（秒）",
+      "help": "點擊互動後等待互動畫面開始的逾時。\n預設 24 秒。"
+    },
+    "PqInteractEndTimeout": {
+      "name": "互動結束等待（秒）",
+      "help": "等待一輪互動結束（互動按鈕重新出現）的逾時。\n預設 40 秒。"
+    },
+    "PqInteractExitTimeout": {
+      "name": "互動退出等待（秒）",
+      "help": "退出艦船房間互動畫面時的逾時。\n預設 24 秒。"
+    },
+    "GachaPrepSubmitWait": {
+      "name": "建造提交重擊間隔（秒）",
+      "help": "點擊開始建造後重新點擊的最小間隔，過短會點到面板外把面板關掉。\n預設 10 秒。"
+    },
+    "GachaPrepTimeout": {
+      "name": "建造面板逾時（秒）",
+      "help": "等待建造數量面板打開（出現 +/- 按鈕）的逾時。\n預設 90 秒。"
+    },
+    "ChannelFloatHoldDuration": {
+      "name": "懸浮球按住時長（秒）",
+      "help": "拖曳渠道服懸浮球到終點後的按住停留時長，停留片刻再鬆手才會觸發隱藏。\n預設 0.2 秒。"
+    },
+    "ChannelFloatMaxAttempts": {
+      "name": "懸浮球嘗試次數",
+      "help": "處理渠道服懸浮球的最大嘗試次數，超過即跳過。\n預設 4 次。"
+    },
+    "GuildSupplyMaxRetry": {
+      "name": "補給重試次數",
+      "help": "大艦隊補給點擊無回應時的重試上限，超過即跳過。\n預設 2 次。"
+    },
+    "GuildExchangeBugRetry": {
+      "name": "兌換無回應判定次數",
+      "help": "大艦隊兌換連續無回應多少次後判定觸發遊戲 Bug。\n預設 5 次。"
+    },
+    "BuyFurnitureCheckIntervalDays": {
+      "name": "家具店檢查間隔（天）",
+      "help": "家具店購買任務每多少天執行一次檢查。\n預設 6 天。"
+    },
+    "AutoEquipAfterEquipWait": {
+      "name": "換裝後等待（秒）",
+      "help": "自動裝備完成後的固定等待，給畫面變化留時間。\n預設 3 秒。"
+    },
+    "CommissionSkipTimeout": {
+      "name": "單個委託逾時（秒）",
+      "help": "單個委託收發的絕對逾時，逾時即放棄該委託。\n預設 90 秒。"
+    },
+    "CommissionRewardScreenshotKeep": {
+      "name": "委託截圖保留張數",
+      "help": "委託收益截圖的保留張數上限，僅在按天數清理關閉時生效。\n預設 50 張。"
+    }
+  },
+  "Handover": {
+    "_info": {
+      "name": "作戰交接",
+      "help": "作戰委託與停服維護的交接節奏。"
+    },
+    "ConsumeRetryMinutes": {
+      "name": "一鍵消耗重試間隔（分）",
+      "help": "一鍵消耗委託書當天還沒觸發時，隔多少分鐘重試。每次重試都要重新進遊戲，不宜過短。\n預設 30 分鐘。"
+    },
+    "MaintainLeadMinutes": {
+      "name": "維護前提前執行（分）",
+      "help": "停服維護前多少分鐘跑最後一次作戰委託（出擊次數拉滿）。\n預設 10 分鐘。"
+    },
+    "MaintainCheckMinutes": {
+      "name": "維護核對間隔（分）",
+      "help": "只等維護時沒查到維護公告，隔多少分鐘再查一次。\n預設 120 分鐘。"
+    },
+    "ConflictRetryMinutes": {
+      "name": "功能衝突重試間隔（分）",
+      "help": "讀不到作戰委託結束時間時，功能衝突推遲多少分鐘重試。\n預設 15 分鐘。"
+    }
+  },
   "DailySummary": {
     "_info": {
       "name": "每日總結",

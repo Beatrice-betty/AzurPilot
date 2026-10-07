@@ -7,6 +7,10 @@
 
 页面s: in: PRIVATE_QUARTERS
 """
+from module.base.runtime_params import (
+    PQ_INTERACT_BUTTON_TIMEOUT, PQ_INTERACT_CLICK_WAIT, PQ_INTERACT_END_TIMEOUT, PQ_INTERACT_EXIT_TIMEOUT, PQ_INTERACT_START_TIMEOUT,
+)
+from module.config.utils import read_run_param
 from module.base.timer import Timer
 from module.base.utils import random_rectangle_vector
 from module.handler.assets import POPUP_CANCEL
@@ -15,19 +19,13 @@ from module.private_quarters.assets import *
 from module.ui.page import page_private_quarters
 from module.ui.ui import UI
 
-# 互动流程的等待与超时参数。
-# 云手机等慢设备上一帧截图要 2~4 秒：点击「互动」后画面要几秒才切过去，
-# 期间重复点击会点在切入过程中（还会白白消耗今日精力），因此
-# 重新点击必须同时满足秒数和帧数两个下限，所有等待都带超时。
-PQ_INTERACT_BUTTON_TIMEOUT = 24  # 秒
+# 等待与超时的秒数走 WebUI「运行参数」页（RunParams.UiWait），默认值集中在
+# module/base/runtime_params.py（界面等待域）；帧数下限是与秒数成对使用的
+# 内部语义（慢设备上重新点击须同时满足秒数和帧数两个下限），不开放配置。
 PQ_INTERACT_BUTTON_FRAMES = 6  # 帧
-PQ_INTERACT_CLICK_WAIT = 8  # 秒
 PQ_INTERACT_CLICK_FRAMES = 2  # 帧
-PQ_INTERACT_START_TIMEOUT = 24  # 秒
 PQ_INTERACT_START_FRAMES = 6  # 帧
-PQ_INTERACT_END_TIMEOUT = 40  # 秒
 PQ_INTERACT_END_FRAMES = 10  # 帧
-PQ_INTERACT_EXIT_TIMEOUT = 24  # 秒
 PQ_INTERACT_EXIT_FRAMES = 6  # 帧
 
 
@@ -177,8 +175,9 @@ class PQInteract(UI):
     def _pq_goto_room_exit(self):
         """退出当前舰船房间返回私人休息室主界面。"""
         # 互动画面还没结束时，返回键会被互动画面吃掉，先按住返回把互动结束掉
-        for _ in self.loop(timeout=Timer(PQ_INTERACT_EXIT_TIMEOUT,
-                                        count=PQ_INTERACT_EXIT_FRAMES)):
+        for _ in self.loop(timeout=Timer(read_run_param(
+                self.config, 'UiWait_PqInteractExitTimeout',
+                PQ_INTERACT_EXIT_TIMEOUT, 5, 120), count=PQ_INTERACT_EXIT_FRAMES)):
             if self.appear(PRIVATE_QUARTERS_INTERACT_CHECK, offset=(20, 20), interval=2):
                 self.device.click(PRIVATE_QUARTERS_ROOM_BACK)
                 continue
@@ -210,8 +209,9 @@ class PQInteract(UI):
         target_timer = Timer(2.5, count=1)
 
         # 点舰娘直到出现互动按钮；精力用完后按钮不会出现，必须有超时
-        for _ in self.loop(timeout=Timer(PQ_INTERACT_BUTTON_TIMEOUT,
-                                        count=PQ_INTERACT_BUTTON_FRAMES)):
+        for _ in self.loop(timeout=Timer(read_run_param(
+                self.config, 'UiWait_PqInteractButtonTimeout',
+                PQ_INTERACT_BUTTON_TIMEOUT, 5, 120), count=PQ_INTERACT_BUTTON_FRAMES)):
             if self.appear(PRIVATE_QUARTERS_INTERACT, offset=interact_offset):
                 break
 
@@ -230,9 +230,12 @@ class PQInteract(UI):
             self.interval_clear([PRIVATE_QUARTERS_INTERACT_CHECK,
                                  PRIVATE_QUARTERS_INTERACT])
 
-            click_timer = Timer(PQ_INTERACT_CLICK_WAIT, count=PQ_INTERACT_CLICK_FRAMES)
-            for _ in self.loop(timeout=Timer(PQ_INTERACT_START_TIMEOUT,
-                                            count=PQ_INTERACT_START_FRAMES)):
+            click_wait = read_run_param(
+                self.config, 'UiWait_PqInteractClickWait', PQ_INTERACT_CLICK_WAIT, 2, 60)
+            click_timer = Timer(click_wait, count=PQ_INTERACT_CLICK_FRAMES)
+            for _ in self.loop(timeout=Timer(read_run_param(
+                    self.config, 'UiWait_PqInteractStartTimeout',
+                    PQ_INTERACT_START_TIMEOUT, 5, 120), count=PQ_INTERACT_START_FRAMES)):
                 if self.appear(PRIVATE_QUARTERS_INTERACT_CHECK, offset=(20, 20)):
                     break
 
@@ -246,8 +249,9 @@ class PQInteract(UI):
                 break
 
             # 等互动结束：互动按钮重新出现；互动画面用返回结束
-            for _ in self.loop(timeout=Timer(PQ_INTERACT_END_TIMEOUT,
-                                            count=PQ_INTERACT_END_FRAMES)):
+            for _ in self.loop(timeout=Timer(read_run_param(
+                    self.config, 'UiWait_PqInteractEndTimeout',
+                    PQ_INTERACT_END_TIMEOUT, 10, 300), count=PQ_INTERACT_END_FRAMES)):
                 if self.appear(PRIVATE_QUARTERS_INTERACT, offset=interact_offset):
                     break
 
