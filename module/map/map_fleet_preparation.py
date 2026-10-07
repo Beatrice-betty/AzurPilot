@@ -122,7 +122,7 @@ class FleetOperator:
         if self.is_hard_satisfied() is False:
             stage = self.main.config.Campaign_Name
             logger.critical(f'[Map] 关卡 "{stage}" 是困难模式，'
-                            f'请在运行 Alas 之前在游戏中准备好您的舰队 "{str(self)}"，'
+                            f'请在运行 AzurPilot 之前在游戏中准备好您的舰队 "{str(self)}"，'
                             f'或在战斗设置中开启「自动配队」')
             raise HardNotSatisfied
 

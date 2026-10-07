@@ -952,7 +952,7 @@ class ProcessManager:
             instances: 需要重启的实例列表，元素为 ProcessManager 或配置名称字符串。
             ev: 用于通知子进程执行更新的事件对象。
         """
-        logger.hr("[WebUI-进程管理] 重启 Alas")
+        logger.hr("[WebUI-进程管理] 重启 AzurPilot")
 
         # 加载 MOD_CONFIG_DICT
         list_mod_instance()
@@ -998,4 +998,4 @@ class ProcessManager:
             os.remove("./config/reloadalas")
         except:
             pass
-        logger.info("[WebUI-进程管理] 启动 Alas 完成")
+        logger.info("[WebUI-进程管理] 启动 AzurPilot 完成")

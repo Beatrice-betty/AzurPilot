@@ -96,7 +96,7 @@ class CampaignRun(CampaignEvent, ShopStatus):
                 logger.warning(f'[战役-运行] 现有文件: {files}')
 
             logger.critical(f'[战役] 可能的原因1: 这个活动 ({folder}) 没有 {name}')
-            logger.critical(f'[战役] 可能的原因2: 你使用的Alas版本太旧，请检查更新，或者使用dev_tools/map_extractor.py自行制作地图文件')
+            logger.critical(f'[战役] 可能的原因2: 你使用的AzurPilot版本太旧，请检查更新，或者使用dev_tools/map_extractor.py自行制作地图文件')
             raise RequestHumanTakeover
 
         config = copy.deepcopy(self.config).merge(self.module.Config())

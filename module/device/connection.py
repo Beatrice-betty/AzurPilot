@@ -1097,7 +1097,7 @@ class Connection(ConnectionAttr):
             logger.error(e)
             if '强迫关闭' in str(e):
                 logger.critical('[Device] 无法连接至ADB服务，请关闭UU加速器、原神私服、以及一些劣质代理软件。'
-                                '它们会劫持电脑上所有的网络连接，包括Alas与模拟器之间的本地连接。')
+                                '它们会劫持电脑上所有的网络连接，包括AzurPilot与模拟器之间的本地连接。')
         return SelectedGrids(devices)
 
     def detect_device(self):

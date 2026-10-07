@@ -84,7 +84,7 @@ AUTO-MAS 一类外部调度器把 AzurPilot 当黑箱驱动，只用以下四个
 | --- | --- |
 | 启动 | `uv run python alas.py <实例名>`（或在已配置的环境中 `python alas.py <实例名>`），在 AzurPilot 根目录下创建且已配置的实例 |
 | 配置 | 读写 `./config/<实例名>.json`，字段语义归配置系统所有 |
-| 日志 | `get_log_file_path(实例名)` → `./log/{日期}_{实例名}.txt`，当天追加；`[Alas] 调度器: 开始任务/结束任务` 可作任务边界标记 |
+| 日志 | `get_log_file_path(实例名)` → `./log/{日期}_{实例名}.txt`，当天追加；`[AzurPilot] 调度器: 开始任务/结束任务` 可作任务边界标记 |
 | 停止 | 外部工具终止进程树。调度器不主动退出，也没有停止文件；长跑与卡死恢复由自身机制负责 |
 
 `module/logger.py` 在导入时把工作目录切到项目根，因此外部工具无需设置工作目录，但一个实例必须独占一个进程。
@@ -439,7 +439,7 @@ get_next() 选中 MyFeature（Enable=true，NextRun 已过期）
 
 ## 19. 调试方法
 
-- **日志文件**：`loop()` 启动即按实例名设置文件日志；任务边界用 `logger.hr(task)` 分隔，全文检索 `[Alas]` 可看到调度决策链（等待、注入 Restart、重启模拟器、运行监护触发）。
+- **日志文件**：`loop()` 启动即按实例名设置文件日志；任务边界用 `logger.hr(task)` 分隔，全文检索 `[AzurPilot]` 可看到调度决策链（等待、注入 Restart、重启模拟器、运行监护触发）。
 - **错误现场**：`./log/error/<config_name>/<时间戳>/` 内含最近截图与裁剪后的 `log.txt`，已做敏感信息遮罩；保留天数由 `Error_SaveErrorRetentionDays` 控制（0 = 不清理），过期现场按 `Error_SaveErrorBackUpMethod` 删除、拷贝备份或压缩备份到 `log/error/<实例名>/bak/`。
 - **常见问题排查顺序**：模拟器反复离线先看 `连续次数 X/阈值` 与 `_try_restart_emulator` 的退避日志；任务反复失败看 `failure_record` 相关的「连续失败 N 次」日志；任务卡住但日志还在动，怀疑逻辑死循环，开 `Error.WatchdogEnable` + `WatchdogTaskEnable` 验证；服务器相关看 `[服务器检查]` 前缀日志。
 - **WebUI 侧**：worker 通过日志队列与 `set_task()` 向父进程发布实时日志与当前任务名，前端「日志」页即来源于此。
