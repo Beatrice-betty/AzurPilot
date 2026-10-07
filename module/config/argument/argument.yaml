@@ -786,15 +786,6 @@ EventShop:
     > CatT2 > CatT1 > PlateGeneralT3 > PlateT3 > BoxT4
     > ShipSSR
 
-ShopAdvanced:
-  Mode:
-    value: legacy
-    option: [legacy, advanced]
-  Script:
-    type: textarea
-    mode: restricted_lua
-    preserve_empty: true
-    value: ""
 
 # ==================== Reward ====================
 
@@ -864,6 +855,16 @@ Commission:
   GemStatisticsPeriod:
     value: month
     option: [today, week, month]
+  AutoPickShip: false
+  PickMinRarity:
+    value: rare
+    option: [ common, rare, elite, super_rare ]
+  PickLevelOrder:
+    value: low_first
+    option: [ low_first, high_first ]
+  NoFreeShipPolicy:
+    value: skip
+    option: [ skip, use_fleet ]
 Tactical:
   TacticalFilter: |-
     SameT4 > SameT3 > SameT2 > SameT1
@@ -1469,6 +1470,11 @@ OpsiScheduling:
     value: 0
   MonthEndActionPointPreserve:
     value: 0
+  MonthEndMeowTargetZone:
+    # 月末清理路由到短猫相接时的指定海域；填 0 或留空时跟随短猫相接自身设置。
+    # 文本模式便于输入逗号列表，多个海域或无效海域会自动按 0 处理。
+    mode: text
+    value: '0'
   MonthEndShopPurchase:
     value: true
     option: [true, false]

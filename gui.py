@@ -209,15 +209,11 @@ def func(
     Raises:
         Exception: WebUI 启动失败时向外抛出。
     """
-    # 子进程的 stdout/stderr 落到独立日志。
-    from module.logger import get_log_file_path
+    # WebUI 子进程的日志只落独立文件；stdout/stderr 保持原样，任务子进程照常继承控制台。
+    from module.logger import set_console_logger, set_file_logger
     try:
-        webui_log = get_log_file_path('webui')
-        webui_log.parent.mkdir(parents=True, exist_ok=True)
-        stream = open(webui_log, 'a', encoding='utf-8', buffering=1)
-        os.dup2(stream.fileno(), 1)
-        os.dup2(stream.fileno(), 2)
-        sys.stdout = sys.stderr = stream
+        set_file_logger('webui')
+        set_console_logger(False)
     except OSError:
         pass
 
@@ -298,8 +294,8 @@ def func(
     if State.electron:
         # https://github.com/LmeSzinc/AzurLaneAutoScript/issues/2051
         logger.info("[GUI] 检测到 Electron，移除标准输出日志处理器")
-        from module.logger import console_hdlr
-        logger.removeHandler(console_hdlr)
+        from module.logger import set_console_logger
+        set_console_logger(False)
 
     # 验证SSL配置
     if ssl_cert is None and ssl_key is not None:

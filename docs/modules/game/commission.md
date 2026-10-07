@@ -132,6 +132,15 @@ run() 先处理一个已知 bug：卡在战术课堂界面（`TACTICAL_CLASS_STA
 
 **启动**（`commission_start`）：对每个选中委托，切到对应列表模式、回到顶部后进入 `_commission_find_and_start`（最多 3 轮，每轮重新翻页扫描并用 `__eq__` 找到同一条委托——不同扫描中同一条委托位置可能不同）。`_commission_start_click` 是点击状态循环：点委托卡片 → `COMMISSION_START` → 弹确认框 → 出现推荐界面 `COMMISSION_ADVICE` 时先重新识别顶部委托并校验与目标一致（不一致直接放弃本次启动），再点推荐确认。启动成功后本地 `convert_to_running`；若是钻石委托（`genre == 'urgent_gem'`）则写入数据库运行列表并按 `Commission_GemNotify` 推送。
 
+**船坞选船兜底**（`Commission_AutoPickShip` 开启时）：推荐后「开始」仍灰（推荐舰船不满足等级要求等）时进船坞手动补船。先从详情面板的空槽位进入船坞（6 格全满则先取消最后一艘腾出空槽；首次点击只展开面板时再点一次），随后 `_commission_dock_pick_ships` 按以下流程填充：
+
+1. 按 `Commission_PickMinRarity` 从低到高遍历稀有度档位，每档用游戏筛选面板设为「仅该档稀有度 + 按等级排序」（`required >= 100` 或 `PickLevelOrder=high_first` 时降序）。选中数用「已选中 N/M」OCR 读取，点击后按计数变化判断选中还是被游戏拒绝。
+2. `_commission_dock_fill_stage` 逐屏扫描：每屏只读顶部两行卡片（等级 OCR + 舰队徽标 + 红色占用横幅），跳过已选、占用中、等级不符的船；不允许拆舰队时（第一遍）还跳过带舰队徽标的卡。`NoFreeShipPolicy=use_fleet` 时加跑第二遍，允许确认弹窗把船拆出舰队（受其他已启用任务使用的舰队除外）。
+3. 翻页全部拖右侧滚动条完成（不得在卡片区做手势：落点不可控且会误触卡片），翻页后把行间缝拖回 OCR 网格线再扫描；列表末端读第三行（末行）补足，末行舰队徽标被底栏遮挡，只在第一遍读取。
+4. 结束仍未选满：一艘都没选到时按「没有空闲的船」跳过该委托；选到但不足则照常点确认开始。
+
+翻页几何按 1280×720 国服实机截图（2026-10-07）校准：行距 227、行间缝网格线 y=292、视口约 2.85 行；每屏向下翻约 1.7 行（不超过 2 行，否则图像扫描会整行漏读）。行间缝用亮度剖面定位（17px 平滑，滤掉比缝更暗的卡片顶边细线，窗口取网格线上下各半行折算）。拖动必须用 `device.drag`（到点按住再松手）：swipe 的小位移会被游戏回弹，且实测游戏会吃掉手势起手约 10px 位移，拖拽终点需按方向外扩补偿。
+
 ## 7. 调用关系
 
 ### 上游
@@ -200,6 +209,10 @@ stateDiagram-v2
 | `Commission_DoMajorCommission` | checkbox | `false` | 是否做 major 委托（1200/1000 油委托，收益低默认关闭） |
 | `Commission_CommissionNotifyReward` / `...RewardStatistics` | checkbox | `false` / `true` | 委托奖励推送及其统计附件 |
 | `Commission_DetectShipDrop` | checkbox | `false` | 领奖时检测并关闭「获得舰船」画面；不做掉船委托可关闭避免误识别 |
+| `Commission_AutoPickShip` | checkbox | `false` | 推荐后开始仍灰时进船坞按稀有度/等级手动补船（见「船坞选船兜底」） |
+| `Commission_PickMinRarity` | option | `rare` | 选船兜底遍历的最低稀有度档位，从该档向上（common/rare/elite/super_rare） |
+| `Commission_PickLevelOrder` | option | `low_first` | 同品质内按等级升序还是降序取船 |
+| `Commission_NoFreeShipPolicy` | option | `skip` | 空闲船不足时：`skip` 只用空闲船，`use_fleet` 允许拆舰队中的船 |
 | `Commission_GemNotify` / `GemStatistics` / `GemStatisticsPeriod` | checkbox/option | `true` / `false` / `month` | 钻石委托执行推送与统计详情 |
 
 关联配置：
@@ -246,6 +259,7 @@ stateDiagram-v2
 - **`__eq__` 的 120 秒阈值**是跨截图 OCR 误差的容忍度，收紧会导致扫描去重失败、同一条委托被重复计数；放宽会让不同委托互相混淆。
 - **列表切换后必须等滚动动画结束**：`_commission_ensure_mode` 通过对比两次 `lines_detect` 的首个峰值确认列表静止；跳过该步骤会系统性漏检顶部委托。
 - **启动后校验**：`_commission_start_click` 在推荐界面重新检测并比较委托对象，防止点错行；`count >= 3` 触发的 `GameStuckError` 是有意为之（触发游戏闪烁 bug 时重启游戏是唯一恢复手段），不要改成静默重试。
+- **船坞选船翻页只走滚动条**：几何常量（行距 227、缝 292、视口 2.85 行、起手死区补偿 `_DOCK_DRAG_SLOP`）由实机截图校准，重新校准前不要改动；列表被筛选缩短后滑块会变长，行数只能按滑块占轨道比例估算（`_commission_dock_pixels_per_position`），不能用船坞总容量推算。内容区手势与 swipe 均已被实机验证不可靠，不要回退。
 
 ## 17. 已知限制
 

@@ -93,6 +93,12 @@ class StockRequestParams(InstanceParams):
     etag: StrictStr = Field(default='', max_length=128)
 
 
+class StockRebuildParams(InstanceParams):
+    """先返回实际重建范围，用户确认后才重建本地交易账户。"""
+    confirm: StrictBool = False
+    scope: Literal['instance', 'all'] = 'instance'
+
+
 class CreateParams(Params):
     """新建实例请求参数模型。"""
     name: StrictStr = Field(min_length=1, max_length=64)
@@ -110,13 +116,6 @@ class ImportParams(Params):
 class TaskParams(InstanceParams):
     """单任务控制请求参数模型。"""
     task: StrictStr = Field(min_length=1, max_length=80)
-
-
-class ShopStrategyValidateParams(InstanceParams):
-    """高级商店策略的只读语法校验请求。"""
-
-    task: Literal['EventShop', 'ShopFrequent', 'ShopOnce', 'PrivateQuarters', 'OpsiShop', 'OpsiVoucher']
-    script: StrictStr = Field(max_length=20000)
 
 
 class ProgramValidateParams(InstanceParams):

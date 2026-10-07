@@ -8,12 +8,13 @@ from contextlib import contextmanager, closing
 from pathlib import Path
 from uuid import uuid4
 
-from module.api.protocol import ApiError
 from module.config.transaction import config_transaction
-from module.logger import logger
 from module.scheduler.templates import default_program
 from module.scheduler.action_history import ActionPointChain, HistoryConnection
 from module.runtime.game_data import GameDataProtector, damaged
+from module.api.protocol import ApiError
+
+HISTORY_ERRORS = (ApiError, OSError, ValueError, TypeError, KeyError, AttributeError, sqlite3.Error)
 
 
 class ConflictError(Exception):
@@ -39,44 +40,26 @@ class ProgramStore:
         return path
 
     @contextmanager
-    def connection(self, instance, write=False, baseline=None, protect=False):
-        """打开实例的调度数据库连接。
-
-        交易所的行动力记账不是实例运行的前置条件。``protect=False``（实例侧默认）
-        时保护存储不可用只会跳过记账并告警，调度存储照常读写；交易所自身的读取
-        路径传入 ``protect=True``，损坏仍抛出 ApiError。
+    def connection(self, instance, write=False, baseline=None, strict_history=False):
+        """打开调度数据库，普通资源事务不因交易所认证失败而中断。
 
         Args:
             instance: 实例名。
             write: 是否以可写方式打开。
             baseline: 迁移行动力历史时使用的初始值。
-            protect: 为交易所数据保留强校验语义。
+            strict_history: 交易所读取时启用历史强校验，损坏时抛出异常。
         """
         path = self.path(instance)
         protection = GameDataProtector(self.directory.parent.parent)
+        for suffix in ('', '-wal', '-shm', '-journal'):
+            protection._safe(path.with_name(path.name + suffix))
         identity = None
-        if protection.initialized() and (self.directory.parent / (instance + '.json')).is_file():
-            try:
-                for suffix in ('', '-wal', '-shm', '-journal'):
-                    protection._safe(path.with_name(path.name + suffix))
-                identity = protection.resolve(instance)
-                protection.relocate_scheduler(instance, identity)
-            except ApiError:
-                if protect:
-                    raise
-                logger.warning(f'交易游戏保护存储不可用，本次跳过交易所记账：{instance}')
-                identity = None
+        if strict_history and protection.initialized() and (self.directory.parent / (instance + '.json')).is_file():
+            identity = protection.resolve(instance)
+            protection.relocate_scheduler(instance, identity)
         legacy = self.directory / 'programs' / f'{instance}.json'
         if not path.exists() and not write and not legacy.exists():
-            anchored = False
-            if identity:
-                try:
-                    anchored = protection.has_anchor(identity + '/action-point-history')
-                except ApiError:
-                    if protect:
-                        raise
-                    identity = None
-            if anchored and protect:
+            if identity and protection.has_anchor(identity + '/action-point-history'):
                 raise damaged('行动力历史数据库丢失，已停止同步')
             yield None
             return
@@ -86,29 +69,16 @@ class ProgramStore:
         with config_transaction(path):
             connection = sqlite3.connect(path, timeout=10, factory=HistoryConnection) if write else sqlite3.connect(f'{path.as_uri()}?mode=ro', uri=True, timeout=10, factory=HistoryConnection)
             connection.row_factory = sqlite3.Row
+            connection.history_strict = strict_history
             try:
                 if connection.execute('PRAGMA user_version').fetchone()[0] > 1:
                     raise ValueError('调度数据库版本高于当前程序支持版本')
-                anchored = False
-                if identity:
-                    try:
-                        anchored = protection.has_anchor(identity + '/action-point-history')
-                    except ApiError:
-                        if protect:
-                            raise
-                        identity = None
+                anchored = identity and protection.has_anchor(identity + '/action-point-history')
                 if anchored:
                     # 先验证再执行建表或写入，损坏的历史不能被升级逻辑覆盖。
-                    try:
-                        connection.execute('BEGIN')
-                        connection.history_guard = ActionPointChain(connection, protection, identity)
-                        connection.commit()
-                    except ApiError:
-                        if protect:
-                            raise
-                        connection.rollback()
-                        connection.history_guard = None
-                        identity = None
+                    connection.execute('BEGIN')
+                    connection.history_guard = ActionPointChain(connection, protection, identity)
+                    connection.commit()
                 if write:
                     connection.execute('PRAGMA journal_mode=WAL')
                     connection.execute('PRAGMA synchronous=FULL')
@@ -131,30 +101,31 @@ class ProgramStore:
                 connection.execute('BEGIN IMMEDIATE' if write else 'BEGIN')
                 def history_factory():
                     nonlocal identity
-                    try:
-                        if identity is None:
-                            identity = protection.resolve(instance)
-                        return ActionPointChain(connection, protection, identity, write, baseline)
-                    except ApiError:
-                        if protect:
-                            raise
-                        connection.history_factory = None
-                        logger.warning(f'行动力历史校验不可用，本次跳过交易所记账：{instance}')
-                        return None
-                connection.history_factory = history_factory if (identity or protect) else None
+                    if identity is None:
+                        identity = protection.resolve(instance)
+                    return ActionPointChain(connection, protection, identity, write, baseline)
+                connection.history_factory = history_factory
                 chained = connection.execute("SELECT 1 FROM sqlite_master WHERE name='action_point_chain'").fetchone()
                 historical = connection.execute("SELECT 1 FROM sqlite_master WHERE name='action_point_history'").fetchone()
-                if (not connection.history_guard and connection.history_factory is not None
-                        and (chained or write and historical and connection.execute('SELECT 1 FROM action_point_history LIMIT 1').fetchone() or baseline)):
+                if strict_history and not connection.history_guard and (chained or write and historical and connection.execute('SELECT 1 FROM action_point_history LIMIT 1').fetchone() or baseline):
                     connection.history_guard = history_factory()
                 if write and legacy.exists() and not connection.execute('SELECT 1 FROM programs').fetchone():
                     self._migrate(connection, instance)
                 yield connection
                 if connection.history_guard:
-                    connection.history_guard.prepare()
+                    try:
+                        connection.history_guard.prepare()
+                    except HISTORY_ERRORS:
+                        if strict_history:
+                            raise
+                        # 茗交所认证失败只停止交易同步，不回滚普通调度或资源记录。
                 connection.commit()
                 if connection.history_guard:
-                    connection.history_guard.finish()
+                    try:
+                        connection.history_guard.finish()
+                    except HISTORY_ERRORS:
+                        if strict_history:
+                            raise
             except BaseException:
                 connection.rollback()
                 raise
@@ -278,10 +249,32 @@ class ProgramStore:
         # 在覆盖最新值之前保留实际采集的总行动力；同一时间的修正产生新游标。
         total = values.get('Total')
         if name == 'ActionPoint' and type(total) in (int, float) and 0 <= total <= 1_000_000 and int(total) == total:
-            if connection.history_guard is None and connection.history_factory is not None:
-                connection.history_guard = connection.history_factory()
-            if connection.history_guard is not None:
-                connection.history_guard.append(timestamp, int(total))
+            if not connection.history_disabled:
+                connection.execute('SAVEPOINT stock_history')
+                try:
+                    if connection.history_guard is None:
+                        connection.history_guard = connection.history_factory()
+                    if connection.history_guard:
+                        connection.history_guard.append(timestamp, int(total))
+                except HISTORY_ERRORS:
+                    connection.execute('ROLLBACK TO stock_history')
+                    if connection.history_strict:
+                        raise
+                    if connection.history_guard:
+                        connection.history_guard.close()
+                        connection.history_guard = None
+                    connection.history_disabled = True
+                finally:
+                    connection.execute('RELEASE stock_history')
+            if connection.history_guard is None:
+                try:
+                    connection.execute('''INSERT INTO action_point_history(observed_at,total) VALUES(?,?)
+                        ON CONFLICT(observed_at) DO UPDATE SET seq=excluded.seq,total=excluded.total
+                        WHERE action_point_history.total!=excluded.total''', (timestamp, int(total)))
+                except sqlite3.Error:
+                    if connection.history_strict:
+                        raise
+                    # 可选历史表损坏也不能阻断普通资源记录；茗交所读取时仍会报错。
         connection.execute('''INSERT INTO observations VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(resource) DO UPDATE SET value=excluded.value,
             resource_limit=COALESCE(excluded.resource_limit,observations.resource_limit),

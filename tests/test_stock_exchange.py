@@ -484,7 +484,8 @@ class StockExchangeTests(unittest.TestCase):
         store.observe('testpilot', 'ActionPoint', {'Total': 8000}, datetime.now().isoformat(), 'fixture')
         self.assertNotIn('_stockInstance', configs.export('testpilot'))
         configs.create('copied', source='testpilot')
-        self.assertNotEqual(identity, configs.read('copied')[0]['_stockInstance'])
+        self.assertIsNone(configs.read('copied')[0]['_stockInstance'])
+        self.assertNotEqual(identity, load_identity(root, 'copied')[0])
         updated = configs.patch('testpilot', '', [ConfigChange(path='Alas.Emulator.Serial', value='fixture-emulator')])
         self.assertNotIn('_stockInstance', updated['values'])
         self.assertEqual(identity, configs.read('testpilot')[0]['_stockInstance'])
@@ -510,7 +511,7 @@ class StockExchangeTests(unittest.TestCase):
         self.assertEqual(5000, store.observations('test')['Oil']['Value'])
         self.assertEqual({}, store.persistent('test'))
         with self.assertRaises(ApiError):
-            with store.connection('test', protect=True):
+            with store.connection('test', strict_history=True):
                 pass
         with self.assertRaises(ApiError):
             self.service.status('test')
