@@ -56,19 +56,19 @@
     },
     "Main": {
       "name": "Main Campaign-1",
-      "help": ""
+      "help": "This task requires at least four unlocked fleet formations. Enable \"Skip formation check\" to satisfy the requirement temporarily."
     },
     "Main2": {
       "name": "Main Campaign-2",
-      "help": ""
+      "help": "This task requires at least four unlocked fleet formations. Enable \"Skip formation check\" to satisfy the requirement temporarily."
     },
     "Main3": {
       "name": "Main Campaign-3",
-      "help": ""
+      "help": "This task requires at least four unlocked fleet formations. Enable \"Skip formation check\" to satisfy the requirement temporarily."
     },
     "GemsFarming": {
       "name": "Urgent Commission",
-      "help": ""
+      "help": "Urgent Commission and 3-oil low-cost farming cannot be enabled at the same time."
     },
     "ThreeOilLowCost": {
       "name": "3-Oil Low Cost",
@@ -84,15 +84,15 @@
     },
     "Event": {
       "name": "Event Map-1",
-      "help": ""
+      "help": "This function is designed for regular events; co-op raid events usually have a dedicated settings page."
     },
     "Event2": {
       "name": "Event Map-2",
-      "help": ""
+      "help": "This function is designed for regular events; co-op raid events usually have a dedicated settings page."
     },
     "Event3": {
       "name": "Event Map-3",
-      "help": ""
+      "help": "This function is designed for regular events; co-op raid events usually have a dedicated settings page."
     },
     "Raid": {
       "name": "Raid Event",
@@ -300,7 +300,7 @@
     },
     "OpsiScheduling": {
       "name": "Smart Scheduling",
-      "help": "Operation Siren smart scheduling function, used to coordinate switching between Corrosion 1 leveling and gold coin replenishment tasks.\nOnce enabled, it will automatically switch between different tasks and send push notifications based on gold coins and action points."
+      "help": "Operation Siren smart scheduling. It can take over these tasks: Corrosion 1 Leveling (on by default), Meowfficer Farming, Obscured Zone, Abyssal Zone, Siren Stronghold.\nAfter taking over, settings other than the ones on this page follow the corresponding task's own page.\n*Unless it is necessary and you understand how AzurPilot works, avoid running smart scheduling together with its sub-tasks."
     },
     "OpsiPreventActionPointOverflow": {
       "name": "Prevent AP Overflow",
@@ -512,11 +512,11 @@
     },
     "Serial": {
       "name": "Emulator serial",
-      "help": "Common emulator Serial can be found in the list below\nFill in \"auto\" to automatically detect the emulator. \"auto\" cannot be used when multiple emulators are running or an emulator that does not support automatic detection is used and must be filled in manually.\n\nEmulator default Serial:\n- BlueStacks 127.0.0.1:5555\n- BlueStacks 4 Hyper-v version, fill in \"bluestacks4-hyperv\" to automatically connect, fill in \"bluestacks4-hyperv-2\" for more options, and so on.\n- BlueStacks 5 Hyper-v version, fill in \"bluestacks5-hyperv\" to automatically connect, fill in \"bluestacks5-hyperv-1\" for more options, and so on.\n- NoxPlayer 127.0.0.1:62001\n- NoxPlayer 64-bit 127.0.0.1:59865\n- MuMu Player/MuMu Player X 127.0.0.1:7555\n- MuMu Player 12 127.0.0.1:16384\n- MuMu Pro (macOS) 127.0.0.1:16384, the order of opening is 127.0.0.1:16416, 127.0.0.1:16448...\n- MEmu 127.0.0.1:21503\n- LDPlayer emulator-5554 or 127.0.0.1:5555\nIf you use the multi-instance function of the emulator, their Serial will not be the default. You can execute `adb devices` query in console.bat, or fill it in according to the official tutorial of the emulator."
+      "help": "*The emulator port AzurPilot listens on; required.\nCommon emulator serials are listed below. If you are unsure, enter \"auto\" to detect the emulator automatically; \"auto\" does not work when several emulators are running or when the emulator does not support auto-detection, so fill it in manually.\n\nDefault emulator serials:\n- BlueStacks 127.0.0.1:5555\n- BlueStacks 4 Hyper-V: enter \"bluestacks4-hyperv\" to connect automatically; for multiple instances enter \"bluestacks4-hyperv-2\" and so on\n- BlueStacks 5 Hyper-V: enter \"bluestacks5-hyperv\" to connect automatically; for multiple instances enter \"bluestacks5-hyperv-1\" and so on\n- Nox 127.0.0.1:62001\n- Nox 64-bit 127.0.0.1:59865\n- MuMu / MuMu X 127.0.0.1:7555\n- MuMu 12 127.0.0.1:16384\n- MuMu Pro (macOS) 127.0.0.1:16384; further instances 127.0.0.1:16416, 127.0.0.1:16448 ...\n- MEmu 127.0.0.1:21503\n- LDPlayer emulator-5554 or 127.0.0.1:5555\nIf you use multiple instances, their serials are not the defaults; run `adb devices` in console.bat to look them up, or follow the emulator's own guide."
     },
     "PackageName": {
       "name": "Game Server",
-      "help": "When multiple game clients are installed on the emulator, you need to manually select the server",
+      "help": "When several game clients are installed on the emulator, select the server manually (Bilibili, channel versions, ...)\n*This field is optional",
       "auto": "Automatic detection",
       "com.bilibili.azurlane": "National service",
       "com.YoStarEN.AzurLane": "International server",
@@ -542,7 +542,7 @@
     },
     "ServerName": {
       "name": "In-game server",
-      "help": "Select the server where the game is located to enable server status detection\nSuspend until resumed during server maintenance or network unavailability",
+      "help": "Select the in-game server to enable server status detection.\nWhen the server is under maintenance or the network is unavailable, the task suspends until it recovers, so AzurPilot will not keep restarting the emulator during maintenance.\n*This field is optional. Disable it if the server status API is unreachable.",
       "disabled": "Don't use detection",
       "cn_android-0": "[国服] 莱茵演习",
       "cn_android-1": "[国服] 巴巴罗萨",
@@ -624,7 +624,7 @@
     },
     "ScreenshotMethod": {
       "name": "Select screenshot method",
-      "help": "When using auto-select, a performance test will be performed and automatically changed to the fastest screenshot method\nGeneral speed: DroidCast_raw >> aScreenCap_nc > ADB_nc >>> aScreenCap > uiautomator2 ~= ADB\nRun Tools - Performance Test to find the fastest method",
+      "help": "With auto-select, a benchmark runs once and the fastest screenshot method is applied automatically.\nTypical speed: DroidCast_raw >> aScreenCap_nc > ADB_nc >>> aScreenCap > uiautomator2 ~= ADB;\nMuMu and LDPlayer have dedicated methods: nemu_ipc and ldopengl;\nAzurPilot for Android users must use the Android virtual display;\nRun Tools - Benchmark to find the fastest method;\n*In some cases a method cannot pass the automatic benchmark, so select it manually.",
       "auto": "Auto-select fastest",
       "ADB": "ADB",
       "ADB_nc": "ADB_nc",
@@ -670,7 +670,7 @@
     },
     "Emulator": {
       "name": "Select emulator type",
-      "help": "",
+      "help": "Auto-detection is usually enough; with several emulators, fill it in manually.",
       "auto": "Automatic detection",
       "NoxPlayer": "NoxPlayer",
       "NoxPlayer64": "NoxPlayer 64-bit",
@@ -692,7 +692,7 @@
     },
     "name": {
       "name": "Emulator instance name",
-      "help": ""
+      "help": "*Leave it empty to auto-detect; the automatic emulator restart works only when the instance name and path are correct."
     },
     "path": {
       "name": "Emulator installation path",
@@ -744,7 +744,7 @@
     },
     "StrictRestart": {
       "name": "Prohibit restarting when errors occur in sensitive tasks",
-      "help": "When an error occurs, directly terminate AzurPilot without restarting the game. Use for debugging, commission tasks, research tasks, Obscured Zones, Abyssal Zones, and other critical timing tasks"
+      "help": "When a sensitive task fails, AzurPilot stops instead of restarting the game;\nSensitive tasks can be enabled on each task's settings page."
     },
     "TaskRestartLimit": {
       "name": "Consecutive restart limit per task",
@@ -1766,7 +1766,7 @@
     },
     "Mode": {
       "name": "Morale mode",
-      "help": "",
+      "help": "AzurPilot uses a built-in morale calculator and does not read morale values through OCR in real time, so please apply the correct morale settings.",
       "calculate": "Calculate morale consumption",
       "ignore": "Ignore low morale warning",
       "calculate_ignore": "Calculate morale + ignore low morale warning"
