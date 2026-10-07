@@ -18,6 +18,7 @@ Alas:
       - Enhance
       - OldRetire
       - PublicEmotion
+      - OilControl
       - YukikazeTaskManager
     Restart:
       - Scheduler

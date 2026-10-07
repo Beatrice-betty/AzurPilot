@@ -197,6 +197,18 @@ class StatisticsReportParams(InstanceParams):
     task: StrictStr | None = Field(default=None, pattern=r'^[a-z][a-z0-9_]{0,40}$')
 
 
+class ResourceFlowsParams(InstanceParams):
+    """资源管理只读区间与明细分页，不触发设备操作。"""
+    days: StrictInt = Field(default=7, ge=1, le=365)
+    start: StrictStr | None = Field(default=None, max_length=32)
+    end: StrictStr | None = Field(default=None, max_length=32)
+    resource: StrictStr | None = Field(default=None, pattern=r'^[A-Za-z][A-Za-z0-9_]{0,100}$')
+    task: StrictStr | None = Field(default=None, pattern=r'^[A-Za-z][A-Za-z0-9_]{0,100}$')
+    offset: StrictInt = Field(default=0, ge=0)
+    limit: StrictInt = Field(default=100, ge=1, le=1000)
+    through_id: StrictInt | None = Field(default=None, ge=0)
+
+
 class MeowfficerScoreReportParams(InstanceParams):
     """指挥喵评分报告的只读查询。"""
 

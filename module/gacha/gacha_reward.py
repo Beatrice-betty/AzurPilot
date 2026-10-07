@@ -343,6 +343,7 @@ class RewardGacha(GachaUI, Retirement, CampaignStatus):
 
         # OCR 识别建造券数量，决定是否使用魔方/金币
         # buy = [使用建造券的次数, 使用魔方的次数]
+        self.build_ticket_count = 0
         buy = [self.config.Gacha_Amount, 0]
         if actual_pool == "event" and self.config.Gacha_UseTicket:
             if self.appear(BUILD_TICKET_CHECK, offset=(30, 30)):
@@ -360,9 +361,14 @@ class RewardGacha(GachaUI, Retirement, CampaignStatus):
         # 提交 buy_count 并执行
         # 不能使用 handle_popup_confirm，因为该窗口没有 POPUP_CANCEL
         result = False
-        for buy_count in buy:
+        for payment, buy_count in enumerate(buy):
             if self.gacha_prep(buy_count):
                 self.gacha_submit()
+                # 数量已在准备阶段核对，提交成功后才记录实际使用的支付资源。
+                from module.statistics.resource_flow import record
+                changes = ({'GachaTicket': -buy_count} if payment == 0 else
+                           {'Coin': -gold_cost * buy_count, 'Cube': -cube_cost * buy_count})
+                record(self.config, changes, f'建造 {actual_pool} × {buy_count}')
 
                 # 如果配置了建造后使用心智魔方
                 if self.config.Gacha_UseDrill:

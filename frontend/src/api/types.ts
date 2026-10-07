@@ -132,6 +132,7 @@ export interface BackgroundGalleryEntry {
 }
 
 export interface Results {
+  'statistics.resourceFlows': ResourceFlowReport
   'stock.status': StockExchangeStatus
   'stock.request': {status:number;data:unknown;etag:string;serverTime:number}
   'opsi.simulator.status': OpsiSimulatorStatus
@@ -188,6 +189,19 @@ export interface Results {
   'settings.patch': {updated: string[]}
   'startup.get': {enabled: boolean; remember: boolean}
   'startup.set': {enabled: boolean; remember: boolean}
+}
+
+export interface ResourceFlowEntry {
+  id: number; ts: string; resource: string; amount: number; task: string; operation: string
+  evidence: 'confirmed' | 'recognition' | 'observed' | 'adjustment'; run_id: string | null
+}
+export interface ResourceFlowReport {
+  instance: string; start: string; end: string; offset: number; limit: number; total: number; throughId: number
+  resources: {key: string; label: string; group: string; current: number | null; observedAt: string | null; income: number; expense: number; adjustment: number; count: number}[]
+  tasks: string[]
+  flows: {resource: string; task: string; operation: string; evidence: ResourceFlowEntry['evidence']; income: number; expense: number; count: number}[]
+  entries: ResourceFlowEntry[]
+  oilControl: {enable: boolean; target: number}
 }
 
 export interface StockExchangeStatus {url: string; instance:string; instanceId:string; bindingKey:string; bound: boolean; boundUsername:string; authenticated:boolean; message: string; lastObservedAt: number; snapshot: {instance: string; actionPoints: number; observedAt: number} | null}

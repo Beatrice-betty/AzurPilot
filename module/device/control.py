@@ -60,6 +60,8 @@ class Control(Hermit, Minitouch, Scrcpy, MaaTouch, NemuIpc):
         """
         if control_check:
             self.handle_control_check(button)
+        from module.statistics.resource_flow import reward_frame
+        reward_frame(self.config, getattr(self, 'image', None), clicked=True)
         x, y = random_rectangle_point(button.button)
         x, y = ensure_int(x, y)
         logger.info(

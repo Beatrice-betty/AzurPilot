@@ -89,6 +89,8 @@ module/device/
 
 ### Device（device.py）
 
+现有截图完成卡死检查后，`resource_flow.reward_frame()` 旁路解析当前任务已知奖励；点击前也复核当前奖励画面以覆盖快速领取。它不额外截图、点击或导航，重复弹窗只入账一次，任务身份由 `alas.py::run()` 的归因范围提供；解析或账本故障记录原因后保留原游戏控制流程。详见 [资源管理](webui/resource-management.md)。
+
 | 成员 | 类型 | 说明 |
 | --- | --- | --- |
 | `image` | `np.ndarray` | 最近一次截图（RGB numpy 数组），业务识别的唯一数据源 |
