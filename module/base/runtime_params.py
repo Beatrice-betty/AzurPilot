@@ -70,3 +70,27 @@ RETRY_TRIES = 5
 RETRY_DELAY = 3
 # 图像截断连续出现多少次后尝试恢复连接。
 IMAGE_TRUNCATED_THRESHOLD = 3
+
+# ==================== 配置兜底：录屏调试（RunParams.ScreenRecord） ====================
+
+# 启动后等待录制进程存活的时间（秒）：立刻退出说明设备上根本跑不起来。
+# 这里只拦「一行命令都跑不起来」的情况（例如设备没有 nohup），编码器起不来
+# 会在收尾时通过设备端 stderr 报出来，所以不必在这里等太久。
+SCREEN_RECORD_START_TIMEOUT = 0.6
+# SIGINT 后等待 recorder 写完文件并退出的上限（秒）
+SCREEN_RECORD_STOP_TIMEOUT = 6.0
+# 轮询录制进程状态的间隔（秒）
+SCREEN_RECORD_POLL_INTERVAL = 0.2
+# 转码超时：按片段长度放宽（base + 时长×2），但不超过上限（秒）
+TRANSCODE_BASE_TIMEOUT = 60.0
+TRANSCODE_MAX_TIMEOUT = 600.0
+
+# ==================== 进程级：录屏清理安全阀 ====================
+
+# 残留临时文件（本地）的保留秒数；配小了会误删正在生成的录像，
+# 清理节流同理，二者作为防误删安全阀不开放配置。
+SCREEN_RECORD_TMP_MAX_AGE = 3600
+# 清理节流：两次扫描目录至少间隔这么久
+SCREEN_RECORD_CLEANUP_INTERVAL = 3600
+# 单条 adb 命令的超时（秒）
+ADB_TIMEOUT = 20

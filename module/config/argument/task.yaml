@@ -480,6 +480,7 @@ RunParams:
       - Watchdog
       - Reboot
       - Device
+      - ScreenRecord
 
 # ==================== Tool ====================
 

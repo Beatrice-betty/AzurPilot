@@ -271,6 +271,22 @@ Device:
   Mumu12DeepWaitTimeout:
     value: 30
     validate: [10, 120]
+ScreenRecord:
+  StartTimeout:
+    value: 0.6
+    validate: [0.1, 60]
+  StopTimeout:
+    value: 6.0
+    validate: [1, 120]
+  PollInterval:
+    value: 0.2
+    validate: [0.05, 5]
+  TranscodeBaseTimeout:
+    value: 60.0
+    validate: [10, 3600]
+  TranscodeMaxTimeout:
+    value: 600.0
+    validate: [60, 7200]
 DailySummary:
   Enable:
     type: checkbox

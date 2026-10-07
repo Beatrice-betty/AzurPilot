@@ -155,6 +155,13 @@ class GeneratedConfig:
     Device_Mumu12StopWaitTimeout = 60
     Device_Mumu12DeepWaitTimeout = 30
 
+    # 配置组 `ScreenRecord`
+    ScreenRecord_StartTimeout = 0.6
+    ScreenRecord_StopTimeout = 6.0
+    ScreenRecord_PollInterval = 0.2
+    ScreenRecord_TranscodeBaseTimeout = 60.0
+    ScreenRecord_TranscodeMaxTimeout = 600.0
+
     # 配置组 `DailySummary`
     DailySummary_Enable = False  # True, False
     DailySummary_TriggerTime = '20:00'

@@ -3628,6 +3628,13 @@
       "Mumu12StopWaitTimeout": 60,
       "Mumu12DeepWaitTimeout": 30
     },
+    "ScreenRecord": {
+      "StartTimeout": 0.6,
+      "StopTimeout": 6.0,
+      "PollInterval": 0.2,
+      "TranscodeBaseTimeout": 60.0,
+      "TranscodeMaxTimeout": 600.0
+    },
     "Storage": {
       "Storage": {}
     }

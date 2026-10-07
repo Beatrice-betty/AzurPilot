@@ -19164,6 +19164,48 @@
         ]
       }
     },
+    "ScreenRecord": {
+      "StartTimeout": {
+        "type": "input",
+        "value": 0.6,
+        "validate": [
+          0.1,
+          60
+        ]
+      },
+      "StopTimeout": {
+        "type": "input",
+        "value": 6.0,
+        "validate": [
+          1,
+          120
+        ]
+      },
+      "PollInterval": {
+        "type": "input",
+        "value": 0.2,
+        "validate": [
+          0.05,
+          5
+        ]
+      },
+      "TranscodeBaseTimeout": {
+        "type": "input",
+        "value": 60.0,
+        "validate": [
+          10,
+          3600
+        ]
+      },
+      "TranscodeMaxTimeout": {
+        "type": "input",
+        "value": 600.0,
+        "validate": [
+          60,
+          7200
+        ]
+      }
+    },
     "Storage": {
       "Storage": {
         "type": "storage",

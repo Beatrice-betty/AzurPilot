@@ -910,6 +910,32 @@
       "help": "Longest wait for all MuMu processes to exit after a deep restart (observed to finish within 5 seconds).\nDefault 30."
     }
   },
+  "ScreenRecord": {
+    "_info": {
+      "name": "Screen Record Debug",
+      "help": "Wait pacing of screen recording and transcoding."
+    },
+    "StartTimeout": {
+      "name": "Start confirm wait (seconds)",
+      "help": "Longest wait for the recorder process to confirm it is alive after starting screenrecord. An immediate exit means it cannot run on the device.\nDefault 0.6."
+    },
+    "StopTimeout": {
+      "name": "Stop confirm wait (seconds)",
+      "help": "Longest wait for the recorder to finish writing and exit after the stop signal; on timeout the clip may be incomplete.\nDefault 6."
+    },
+    "PollInterval": {
+      "name": "Status poll interval (seconds)",
+      "help": "Interval for polling whether the recorder process has exited.\nDefault 0.2."
+    },
+    "TranscodeBaseTimeout": {
+      "name": "Transcode base timeout (seconds)",
+      "help": "Base transcoding timeout; scaled linearly with clip length (base + length×2).\nDefault 60."
+    },
+    "TranscodeMaxTimeout": {
+      "name": "Transcode max timeout (seconds)",
+      "help": "Hard cap of the transcoding timeout.\nDefault 600."
+    }
+  },
   "DailySummary": {
     "_info": {
       "name": "Daily summary",
