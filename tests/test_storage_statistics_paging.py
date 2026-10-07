@@ -138,6 +138,37 @@ class ThreeRowPagingTests(unittest.TestCase):
         with self.assertRaisesRegex(StorageRecognitionError, '同页材料列数变化'):
             verify_targets(rows, previous, self.catalog)
 
+    def test_same_page_horizontal_contour_jitter_preserves_native_counts(self):
+        image = load_image(str(FIXTURES / 'page_3.png'))
+        previous = recognize_rows(image, self.catalog, target_only=True)
+        for offset in (-2, -1, 1, 2):
+            with self.subTest(offset=offset):
+                rows = detect_rows(image)
+                for row in rows:
+                    for card in row:
+                        x0, y0, x1, y1 = card.area
+                        card.area = (x0 + offset, y0, x1 + offset, y1)
+                        card.image = image[y0:y1, x0 + offset:x1 + offset].copy()
+                        card.context = image[y0 - 2:y1 + 4, x0 + offset - 2:x1 + offset + 4].copy()
+                confirmed = verify_targets(rows, previous, self.catalog)
+                self.assertTrue(all(same_targets(a, b) for a, b in zip(confirmed, previous)))
+
+    def test_same_page_actual_movement_or_empty_slot_change_stops_immediately(self):
+        image = load_image(str(FIXTURES / 'page_3.png'))
+        previous = recognize_rows(image, self.catalog, target_only=True)
+        for dx, dy, present in ((-3, 0, True), (3, 0, True), (0, -1, True),
+                                (0, 1, True), (0, 0, False)):
+            with self.subTest(dx=dx, dy=dy, present=present):
+                rows = detect_rows(image)
+                card = rows[0][0]
+                x0, y0, x1, y1 = card.area
+                card.area = (x0 + dx, y0 + dy, x1 + dx, y1 + dy)
+                card.present = present
+                with patch.object(self.catalog, 'verify', wraps=self.catalog.verify) as verifier:
+                    with self.assertRaisesRegex(StorageRecognitionError, '同页材料位置或空格变化：第 1 行第 1 列'):
+                        verify_targets(rows, previous, self.catalog)
+                verifier.assert_not_called()
+
     def test_native_rainbow_plan_phase_preserves_identity_and_complete_counts(self):
         image = load_image(str(FIXTURES / 'live_rainbow_plan_phase.png'))
         rows = recognize_rows(image, self.catalog, target_only=True)

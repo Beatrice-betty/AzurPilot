@@ -47,7 +47,7 @@ class StorageStatistics(StorageUI):
         goal_bottom = False
         attempts = 0
         layout = previous = None
-        settle = Timer(.6, count=2)
+        settle = Timer(1.5, count=2)
         stable = Timer(.8)
         action = Timer(2, count=2)
         timeout = Timer(30, count=2).start()

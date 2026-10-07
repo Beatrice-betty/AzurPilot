@@ -443,15 +443,20 @@ def recognize_rows(image, catalog, *, rows=None, target_only=False):
 
 
 def verify_targets(rows, reference, catalog):
-    """物理位置不变的后续帧，只复核目标；任何矛盾立即拒绝整次快照。"""
+    """稳定页面的后续帧只复核目标，横向轮廓允许 2px 抖动。"""
     if len(rows) != len(reference):
         raise StorageRecognitionError('同页完整行数变化')
-    for row, previous in zip(rows, reference):
+    for row_index, (row, previous) in enumerate(zip(rows, reference), 1):
         if len(row) != len(previous):
             raise StorageRecognitionError('同页材料列数变化')
-        for card, old in zip(row, previous):
-            if card.area != old.area or card.present != old.present:
-                raise StorageRecognitionError('同页材料位置或空格变化')
+        for column_index, (card, old) in enumerate(zip(row, previous), 1):
+            # 动画亮点会让边框横坐标波动；纵向位置仍必须完全一致，避免接受滚动中的画面。
+            position_changed = (card.area[1::2] != old.area[1::2]
+                                or any(abs(card.area[index] - old.area[index]) > 2 for index in (0, 2)))
+            if position_changed or card.present != old.present:
+                raise StorageRecognitionError(
+                    f'同页材料位置或空格变化：第 {row_index} 行第 {column_index} 列，'
+                    f'位置 {old.area} → {card.area}，存在 {old.present} → {card.present}')
             if old.identifier is not None:
                 catalog.verify(card, old)
     return rows
