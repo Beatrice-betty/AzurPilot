@@ -99,7 +99,7 @@ class NativeOilControl:
         self.goal = None
 
     def perform(self, action):
-        """观察和购粮复用任务异常出口与看门狗，不新建定时任务。"""
+        """观察和购粮复用任务异常出口与运行监护，不新建定时任务。"""
         script = self.runtime.script
         self.action, self.result = action, None
         previous = (getattr(script, '_watchdog_active', False), getattr(script, '_watchdog_task_start', 0),

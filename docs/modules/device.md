@@ -372,7 +372,7 @@ image = device.screenshot()
 
 ## 20. 相关模块
 
-- [调度器（alas.py）](entry/alas.md)——异常恢复决策方：`_try_restart_emulator`、失败阶梯、看门狗强杀。
+- [调度器（alas.py）](entry/alas.md)——异常恢复决策方：`_try_restart_emulator`、失败阶梯、运行监护强杀。
 - [基础层 module/base](base/index.md)——消费 `Device.screenshot()/click()` 的上层原语；`appear()` 每次检测都会登记卡死记录。
 - [OCR 系统](ocr.md)——`Optimization_OcrDevice` 基准决定 OCR 跑在 GPU 还是 CPU。
 - [WebUI 总览](webui/index.md)——手动停止后的 `close_game`/`close_emulator` 收尾与实时截图预览都走设备层。

@@ -19,6 +19,7 @@ from module.base.runtime_params import (
     WATCHDOG_TASK_TIMEOUT_DEFAULT,
     DAILY_SUMMARY_CHECK_INTERVAL,
     EMULATOR_RESTART_INTERVAL_HOURS_DEFAULT,
+    RESTART_EMULATOR_OP_TIMEOUT,
 )
 from module.base.ssh import clear_ssh_host_key
 from module.config.config import AzurLaneConfig, TaskEnd
@@ -38,19 +39,6 @@ from module.config.utils import (
 from module.exception import *
 from module.logger import logger
 from module.notify import handle_notify, notify_webui
-
-
-# 模拟器 stop/start 单次操作的硬超时秒数。
-# 必须覆盖 PlatformWindows.emulator_start() 的完整预算，一次调用最多：
-#   关闭 30 + 深度清场 90（关全部实例≤60 + 等进程退出≤30） + 等实例真正关闭 60
-#   + 启动监视 300（阶梯上限） = 480 秒
-# 普通路径没有深度清场那 90 秒（实测 390 秒封顶），但按最坏情况取。
-# 取 600 秒：宁可慢，也不能在模拟器正在启动时放弃——超时被放弃的
-# worker 线程仍会继续对模拟器执行关/开操作，是历史上"模拟器永远起不来"
-# 的根因（原值 120 秒 < 内层 180 秒监视超时，必然超时、必然残留）。
-# 残留线程由 PlatformWindows 的启停互斥锁兜底：它结束之前，任何新的
-# 启停操作都会抛 EmulatorOpBusy 被跳过，不会再打断正在进行的启动。
-RESTART_EMULATOR_OP_TIMEOUT = 600
 
 
 # 缓存 i18n 任务名查找
@@ -97,7 +85,7 @@ def _get_task_display_name(task_command):
 class AzurLaneAutoScript:
     """碧蓝航线自动化脚本调度器核心类。
 
-    负责任务调度、异常捕获与恢复、看门狗监控及设备管理。
+    负责任务调度、异常捕获与恢复、运行监护及设备管理。
     """
     stop_event: threading.Event = None
 
@@ -127,7 +115,7 @@ class AzurLaneAutoScript:
         self.last_emulator_restart_time = time.monotonic()
         # 渠道服悬浮球会话标志：调度器启动/游戏重启后仅处理一次
         self._channel_float_done = False
-        # 看门狗状态
+        # 运行监护状态
         self._watchdog_stop = threading.Event()
         self._watchdog_active = False  # 仅在任务执行期间激活
         self._watchdog_thread = None
@@ -580,7 +568,7 @@ class AzurLaneAutoScript:
         return result[0]
 
     def _start_watchdog(self):
-        """启动看门狗守护线程。
+        """启动运行监护线程。
 
         以下任一条件满足时启动：
         1. Error.WatchdogEnable 为 True（任务超时检测）
@@ -589,7 +577,7 @@ class AzurLaneAutoScript:
 
         启动后各检测由对应子开关单独控制。
         """
-        # 检查是否需要启动看门狗
+        # 检查是否需要启动运行监护
         try:
             master_enable = bool(self.config.Error_WatchdogEnable)
         except Exception:
@@ -603,11 +591,11 @@ class AzurLaneAutoScript:
             force_restart = False
 
         if not master_enable and not force_restart:
-            logger.info('[Alas][看门狗] 无需启动看门狗（总开关和强制定时重启均未开启）')
+            logger.info('[Alas][监护] 无需启动运行监护（总开关和强制定时重启均未开启）')
             return
 
         if self._watchdog_thread is not None and self._watchdog_thread.is_alive():
-            logger.warning('[Alas][看门狗] 看门狗已在运行，跳过启动')
+            logger.warning('[Alas][监护] 运行监护已在运行，跳过启动')
             return
         self._watchdog_stop.clear()
         self._watchdog_thread = threading.Thread(
@@ -615,20 +603,20 @@ class AzurLaneAutoScript:
         )
         self._watchdog_thread.start()
         logger.info(
-            f'[Alas][看门狗] 看门狗已启动'
+            f'[Alas][监护] 运行监护已启动'
             f'（任务超时: {master_enable}, 强制定时重启: {force_restart}）'
         )
 
     def _stop_watchdog(self):
-        """停止看门狗守护线程。"""
+        """停止运行监护线程。"""
         self._watchdog_stop.set()
         if self._watchdog_thread is not None:
             self._watchdog_thread.join(timeout=5)
             self._watchdog_thread = None
-        logger.info('[Alas][看门狗] 看门狗已停止')
+        logger.info('[Alas][监护] 运行监护已停止')
 
     def _watchdog_interval(self):
-        """看门狗检查间隔（秒）。
+        """运行监护检查间隔（秒）。
 
         与 _daily_summary_interval 相同，通过 __dict__ 读取 config，
         不触发懒加载；未加载时回退兜底默认值。
@@ -639,9 +627,9 @@ class AzurLaneAutoScript:
         return read_run_param(config, 'Watchdog_CheckInterval', WATCHDOG_CHECK_INTERVAL)
 
     def _watchdog_loop(self):
-        """看门狗主循环：检测任务运行时间超时和强制定时重启。
+        """运行监护主循环：检测任务运行时间超时和强制定时重启。
 
-        看门狗在 _start_watchdog 判断是否启动（任一检测开启即启动）。
+        运行监护在 _start_watchdog 判断是否启动（任一检测开启即启动）。
         各检测由对应开关单独控制：
 
         1. 任务运行时间超时：Error.WatchdogEnable + Error.WatchdogTaskEnable
@@ -687,7 +675,7 @@ class AzurLaneAutoScript:
                     elapsed_hours = (time.monotonic() - self.last_emulator_restart_time) / 3600
                     if elapsed_hours >= interval:
                         logger.critical(
-                            f'[Alas][看门狗] 模拟器已运行 {elapsed_hours:.1f} 小时'
+                            f'[Alas][监护] 模拟器已运行 {elapsed_hours:.1f} 小时'
                             f'（超过 {interval} 小时），开启强制定时重启，'
                             f'当前任务 `{self._watchdog_task_name}` 为非敏感任务，'
                             f'强制杀死模拟器进程以中断任务'
@@ -724,7 +712,7 @@ class AzurLaneAutoScript:
                         )
 
     def _watchdog_recover(self, elapsed, reason='task_timeout', task_name=''):
-        """看门狗恢复动作：强制杀死模拟器进程以中断任务。
+        """运行监护恢复动作：强制杀死模拟器进程以中断任务。
 
         任务陷入逻辑死循环（如 story_skip 不断点击但剧情无法跳过），
         日志仍在更新但任务无法自然退出。杀死模拟器进程会同时杀死
@@ -747,20 +735,20 @@ class AzurLaneAutoScript:
             except Exception:
                 timeout_min = WATCHDOG_TASK_TIMEOUT_DEFAULT
             logger.critical(
-                f'[Alas][看门狗] 任务 `{task_name}` 已运行 {int(elapsed)} 秒'
+                f'[Alas][监护] 任务 `{task_name}` 已运行 {int(elapsed)} 秒'
                 f'（超过 {timeout_min} 分钟），判定逻辑死循环，'
                 f'强制杀死模拟器进程以中断任务'
             )
         elif reason == 'force_scheduled_restart':
             logger.critical(
-                f'[Alas][看门狗] 任务 `{task_name}` 执行期间触发强制定时重启，'
+                f'[Alas][监护] 任务 `{task_name}` 执行期间触发强制定时重启，'
                 f'强制杀死模拟器进程以中断任务'
             )
             # 更新重启时间戳，避免恢复后立即重复触发
             self.last_emulator_restart_time = time.monotonic()
         else:
             logger.critical(
-                f'[Alas][看门狗] 检测到异常（reason={reason}），'
+                f'[Alas][监护] 检测到异常（reason={reason}），'
                 f'强制杀死模拟器进程以中断任务'
             )
 
@@ -770,21 +758,21 @@ class AzurLaneAutoScript:
             self._emulator_op_with_timeout(
                 platform.emulator_stop,
                 timeout=RESTART_EMULATOR_OP_TIMEOUT,
-                operation_name='[看门狗] 强制停止模拟器',
+                operation_name='[监护] 强制停止模拟器',
             )
             logger.info(
-                '[Alas][看门狗] 已强制停止模拟器，主线程的下次 I/O 调用将失败并触发恢复'
+                '[Alas][监护] 已强制停止模拟器，主线程的下次 I/O 调用将失败并触发恢复'
             )
         except EmulatorOpBusy as e:
             logger.warning(
-                f'[Alas][看门狗] 上一轮模拟器重启仍在进行，本次不再插手：{e}'
+                f'[Alas][监护] 上一轮模拟器重启仍在进行，本次不再插手：{e}'
             )
         except TimeoutError:
             logger.warning(
-                '[Alas][看门狗] 强制停止模拟器超时，等待下个周期重试'
+                '[Alas][监护] 强制停止模拟器超时，等待下个周期重试'
             )
         except Exception as e:
-            logger.warning(f'[Alas][看门狗] 强制停止模拟器失败: {e}')
+            logger.warning(f'[Alas][监护] 强制停止模拟器失败: {e}')
 
     def _start_emulator_after_long_wait(self):
         """
@@ -2395,7 +2383,7 @@ class AzurLaneAutoScript:
     def loop(self):
         """调度器主事件循环。
 
-        负责任务提取、看门狗生命周期管理、日常维护检查、异常恢复与重试逻辑。
+        负责任务提取、运行监护生命周期管理、日常维护检查、异常恢复与重试逻辑。
         """
         logger.set_file_logger(self.config_name)
         logger.info(f'[Alas] 启动调度器循环: {self.config_name}')
@@ -2407,7 +2395,7 @@ class AzurLaneAutoScript:
         if config.DailySummary_Enable:
             self._start_daily_summary_scheduler(config)
 
-        # 启动看门狗：守护线程在任务执行期间监测日志心跳，若主线程长时间
+        # 启动运行监护：守护线程在任务执行期间监测日志心跳，若主线程长时间
         # 无日志输出（如卡死在 u2 HTTP 调用或 ADB shell 中），则强制杀死
         # 模拟器进程以解除阻塞，使主线程的下次 I/O 失败并触发异常恢复。
         self._start_watchdog()
@@ -2518,7 +2506,7 @@ class AzurLaneAutoScript:
                 self.device.stuck_record_clear()
                 self.device.click_record_clear()
                 logger.hr(task, level=0)
-                # 激活看门狗：任务执行期间监测日志心跳和运行时间
+                # 激活运行监护：任务执行期间监测日志心跳和运行时间
                 # 防止主线程卡死在 I/O 调用中或陷入逻辑死循环
                 self._watchdog_active = True
                 self._watchdog_task_start = time.monotonic()
@@ -2735,7 +2723,7 @@ class AzurLaneAutoScript:
                     f"调度器将在 {wait_seconds} 秒后从头重试（第 {consecutive_global_failures} 次重试，"
                     f"永不放弃）。"
                 )
-                # 退避等待期间暂停看门狗，避免误触发（此为主动 sleep）
+                # 退避等待期间暂停运行监护，避免误触发（此为主动 sleep）
                 self._watchdog_active = False
                 time.sleep(wait_seconds)
 
