@@ -210,7 +210,7 @@
       "FleetOnsen": false
     },
     "OilControl": {
-      "Enable": true,
+      "Enable": false,
       "Target": 24000
     },
     "YukikazeTaskManager": {

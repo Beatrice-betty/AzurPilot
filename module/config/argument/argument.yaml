@@ -1079,7 +1079,8 @@ Research:
     > S9-PRY8 > Q4 > G4 > 4 > S9-C6 > DR5 > PRY5 > 5 > C6 > 6 > S9-C8
     > S9-C12 > DR8 > PRY8 > C8 > 8 > C12 > 12
 OilControl:
-  Enable: true
+  # 清理会临时抢占用户任务优先级并自动后宅购粮，属侵入性行为，默认关闭，由用户显式开启
+  Enable: false
   Target:
     value: 24000
     validate: [1000, 24999]
