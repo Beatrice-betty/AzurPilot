@@ -134,7 +134,9 @@ module/
 
 ### 私人休息室（module/private_quarters）
 
-`PrivateQuarters(PQInteract, PQShop)`：进入宿舍菜单 → 私人休息室；按配置购买每周玫瑰（金币）与蛋糕（钻石，商店复用 `module/shop` 的 `ShopClerk` 框架），再检查每日互动剩余次数（OCR），进入目标舰娘房间执行对话与触摸互动。`available_targets` 定义 7 位可用舰娘及其所在场景；`not_supported_filter` 声明服务器差异（JP 缺纳希莫夫，TW 缺大凤与纳希莫夫），TW 服无商店。
+`PrivateQuarters(PQInteract, PQShop)`：进入宿舍菜单 → 私人休息室；按配置购买每周玫瑰（金币）与蛋糕（钻石，商店复用 `module/shop` 的 `ShopClerk` 框架），再检查每日互动剩余次数（OCR），进入目标舰娘房间执行对话与触摸互动。可选舰娘及所在场景以 `PQInteract.available_targets` 为准；服务器差异以 `PrivateQuarters.not_supported_filter` 为准，TW 服无商店。
+
+进房及对话处理后，`pq_goto_room()` 调用 `_pq_target_appear()`，以三种头顶气泡模板在 `(100, 100)` 偏移范围内确认舰娘就绪。每次检测最多向上微调一次视角，在 `Timer(1.5, count=3)` 窗口内持续截图；超时后退出房间，最多尝试三次。确认就绪才执行最多三次互动，精力耗尽导致互动按钮不出现时按现有超时退出；点击等待及互动阶段超时由 `RunParams.UiWait` 控制。
 
 ### 船坞蓝图（module/shipyard）
 
