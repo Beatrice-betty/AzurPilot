@@ -11,7 +11,7 @@ from campaign.event_20240912_cn.a1 import Campaign as CrimsonCampaign, Config as
 from campaign.event_20240912_cn.sp import Config as CrimsonSpConfig
 from campaign.event_20250227_cn.a1 import Campaign as LightCampaign, Config as LightConfig
 from module.base.utils import load_image
-from module.campaign.assets import SWITCH_1_HARD, SWITCH_20241219_COMBAT
+from module.campaign.assets import CHAPTER_20241219_EX, SWITCH_1_HARD, SWITCH_20241219_COMBAT, SWITCH_20241219_STORY
 from module.campaign.campaign_ui import ASIDE_SWITCH_20241219, MODE_SWITCH_1, MODE_SWITCH_20241219
 from module.campaign.run import CampaignRun
 from module.config.config import AzurLaneConfig
@@ -54,6 +54,9 @@ def make_campaign(campaign_type=CrimsonCampaign, map_config=None, image='crimson
 
     def read_chapter():
         # 本测试验证模板和导航，关卡 OCR 单独用完整原图回放。
+        if campaign.config.MAP_CHAPTER_SWITCH_20241219:
+            assert MODE_SWITCH_20241219.get(main=campaign) == 'combat', '读关卡前须选中作战模式'
+            assert ASIDE_SWITCH_20241219.get(main=campaign) == 'part1', '读 A1 前须选中上篇'
         campaign.campaign_chapter = 'a'
         campaign.stage_entrance = {'a1': SimpleNamespace(name='a1')}
         return 1
@@ -89,6 +92,39 @@ class CampaignEventNavigationTests(unittest.TestCase):
         old_mode.assert_not_called()
         campaign.device.click.assert_not_called()
         self.assertEqual(campaign.ENTRANCE.name, 'a1')
+
+    def test_story_and_ex_switch_to_combat_and_part1_before_stage_read(self):
+        for campaign_type, map_config, fixture in (
+            (CrimsonCampaign, CrimsonConfig(), 'crimson.png'),
+            (LightCampaign, LightConfig(), 'light.png'),
+        ):
+            with self.subTest(fixture=fixture):
+                selected = load_image(str(FIXTURES / fixture))
+                image = selected.copy()
+                image[:, :110] = 0
+                image[635:715, :400] = 0
+                image = np.maximum(image, load_image(CHAPTER_20241219_EX.file))
+                image = np.maximum(image, load_image(SWITCH_20241219_STORY.file))
+                campaign = make_campaign(campaign_type, map_config, image=image)
+                self.assertEqual(MODE_SWITCH_20241219.get(main=campaign), 'story')
+                self.assertEqual(ASIDE_SWITCH_20241219.get(main=campaign), 'ex')
+                clicks = []
+
+                def click(button):
+                    clicks.append(button.name)
+                    if button.name == 'SWITCH_20241219_COMBAT':
+                        campaign.device.image[635:715, :400] = selected[635:715, :400]
+                    elif button.name == 'CHAPTER_20241219_PART1':
+                        self.assertEqual(MODE_SWITCH_20241219.get(main=campaign), 'combat')
+                        campaign.device.image[:, :110] = selected[:, :110]
+                    else:
+                        self.fail(f'出现非预期导航点击：{button.name}')
+
+                campaign.device.click.side_effect = click
+                self.assertTrue(campaign.ensure_campaign_ui('a1'))
+                self.assertEqual(clicks, ['SWITCH_20241219_COMBAT', 'CHAPTER_20241219_PART1'])
+                campaign.get_chapter_index.assert_called_once_with()
+                self.assertEqual(campaign.ENTRANCE.name, 'a1')
 
     def test_original_layout_keeps_classic_navigation(self):
         for server in ('cn', 'en', 'jp', 'tw'):
