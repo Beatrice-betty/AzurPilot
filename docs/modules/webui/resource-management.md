@@ -61,7 +61,7 @@
 
 ## 10. 配置
 
-`General.OilControl.Enable` 默认开启，`General.OilControl.Target` 默认 24000，可设为 1000 至 24999 的整数。页面使用现有配置事务保存，原调度之外显示配置但不触发自动清油；统计采集本身无需开启额外任务。
+`General.OilControl.Enable` 默认关闭，`General.OilControl.Target` 默认 24000，可设为 1000 至 24999 的整数。页面使用现有配置事务保存，原调度之外显示配置但不触发自动清油；统计采集本身无需开启额外任务。
 
 ## 11. 异常与错误处理
 
