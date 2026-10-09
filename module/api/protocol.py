@@ -194,6 +194,8 @@ class StatisticsReportParams(InstanceParams):
     scope: Literal['series', 'consumable'] = 'series'
     # 大世界掉落专用：只看某个大世界任务（任务名转下划线，如 opsi_abyssal）；空表示全部
     task: StrictStr | None = Field(default=None, pattern=r'^[a-z][a-z0-9_]{0,40}$')
+    # 图表与原始记录都被隐藏时前端传 false，后端跳过序列的查询与构造
+    include_series: StrictBool = True
 
 
 class ResourceFlowsParams(InstanceParams):
