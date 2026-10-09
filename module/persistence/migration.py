@@ -30,6 +30,10 @@ class MigrationError(RuntimeError):
     """源数据仍保留，用户恢复环境后可重试。"""
 
 
+class UnreadableCiphertext(MigrationError):
+    """旧密文不可读时仅跳过所属记录，原件及迁移备份继续保留。"""
+
+
 def source_files(database):
     directory, root = database.directory, database.directory.parent
     result = {directory / name: kind for name, kind in DATABASE_KINDS.items()}
@@ -47,6 +51,9 @@ def source_files(database):
         result[path] = 'archives'
     for path in (root / 'log').glob('azurstat_meowofficer_farming*.csv'):
         result[path] = 'farming'
+    for path in (root / 'log' / 'device_id.json', root / 'log' / 'device_id.json.bak',
+                 root / 'log' / 'cl1' / 'cl1_monthly.json', root / 'log' / 'cl1' / 'cl1_monthly.json.bak'):
+        result[path] = 'preserved'
     for kind, paths in database.legacy_sources.items():
         for path in paths:
             result[path] = kind
@@ -197,10 +204,47 @@ class LegacyDecoder:
         existing = opsi_secure._STORE
         self.store = existing if existing and existing.root == root.resolve() else opsi_secure.StatsStore(root)
         self._legacy_keys = None
+        self._legacy_ids = None
+        self.unmigrated = []
+        self.unmigrated_months = set()
+
+    def legacy_device_ids(self):
+        """只读旧设备 ID 并计算当前硬件 ID，不调用覆写文件或启动定时器的初始化。"""
+        if self._legacy_ids is None:
+            from module.base import device_id
+
+            candidates = []
+            paths = (self.root / 'log' / 'device_id.json', self.root / 'log' / 'device_id.json.bak',
+                     self.root / 'log' / 'cl1' / 'cl1_monthly.json',
+                     self.root / 'log' / 'cl1' / 'cl1_monthly.json.bak')
+            for path in paths:
+                try:
+                    data = json.loads(path.read_text(encoding='utf-8'))
+                except (OSError, ValueError):
+                    continue
+                if isinstance(data, dict):
+                    candidates.append(data.get('device_id'))
+            candidates.extend((device_id._device_id, device_id.get_old_device_id(), device_id.generate_device_id()))
+            self._legacy_ids = tuple(dict.fromkeys(value for value in candidates if isinstance(value, str) and value))
+        return self._legacy_ids
+
+    def legacy_keys(self):
+        if self._legacy_keys is None:
+            from module.statistics.cl1_legacy import derive_legacy_key
+            self._legacy_keys = [derive_legacy_key(value) for value in self.legacy_device_ids()]
+        return self._legacy_keys
+
+    def record_unmigrated(self, source, kind, identity, error):
+        relative = str(source.relative_to(self.root)) if source.is_relative_to(self.root) else str(source)
+        self.unmigrated.append(dict(source=relative, kind=kind, identity=identity, reason=str(error)))
+        if kind == 'cl1':
+            self.unmigrated_months.add((identity['instance'], identity['month']))
 
     def payload(self, kind, raw, context):
         if self.secure.is_ciphertext(raw):
             result = self.store.vault_keys().decrypt_record(kind, raw, context)
+            if result is None:
+                raise UnreadableCiphertext(f'旧 {kind} 密文无法解码')
         else:
             result = json.loads(raw)
         if not isinstance(result, dict):
@@ -215,19 +259,20 @@ class LegacyDecoder:
             except (ValueError, TypeError):
                 pass
         if not isinstance(data, dict) and row.get('encrypted_blob'):
-            if self._legacy_keys is None:
-                from module.base.device_id import get_device_id, get_old_device_id
-                from module.statistics.cl1_legacy import derive_legacy_key
-                self._legacy_keys = [derive_legacy_key(item) for item in {get_device_id(), get_old_device_id()} if item]
             from module.statistics.cl1_legacy import decrypt_legacy_payload
-            for key in self._legacy_keys:
+            decoded = False
+            for key in self.legacy_keys():
                 try:
                     data = decrypt_legacy_payload(row['encrypted_blob'], key)
-                    break
                 except (ValueError, TypeError, UnicodeError):
                     continue
+                decoded = True
+                break
+            if not decoded:
+                raise UnreadableCiphertext('旧整行 AES 密文未通过现有设备 ID 的完整性校验')
         if not isinstance(data, dict):
-            raise MigrationError('旧月度快照无法解码')
+            raise MigrationError(f'旧月度快照无法解码（instance={row.get("instance")!r}, '
+                                 f'month={row.get("month")!r}）：快照不是有效对象')
         if row.get('secure_json'):
             data.update(self.payload('cl1', row['secure_json'], self.secure.row_context('cl1', row)))
         return data
@@ -272,28 +317,40 @@ def import_database(connection, path, kind, original, decoder):
         if unknown or not tables.intersection(expected_tables[kind]):
             raise MigrationError(f'旧 {kind} 数据库的表结构不符合迁移约定')
         if kind == 'cl1' and 'cl1_data' in tables:
+            seen = set()
             for row in source.execute('SELECT * FROM cl1_data ORDER BY rowid'):
                 row = dict(row)
-                if read_month(connection, row['instance'], row['month']) is not None:
+                key = (row['instance'], row['month'])
+                if key in seen or read_month(connection, *key) is not None:
                     raise MigrationError('旧数据库存在重复月份，请先明确数据来源')
-                decoded = decoder.cl1(row)
+                seen.add(key)
+                try:
+                    decoded = decoder.cl1(row)
+                except UnreadableCiphertext as error:
+                    decoder.record_unmigrated(original, kind, dict(instance=row['instance'], month=row['month']), error)
+                    continue
                 save_month(connection, row['instance'], row['month'], decoded)
                 verify_snapshot(decoded, read_month(connection, row['instance'], row['month']))
         for table in COPY_TABLES:
             if table not in tables:
                 continue
             columns = {row[1] for row in connection.execute(f'PRAGMA table_info({table})')}
-            for row in source.execute(f'SELECT * FROM {table} ORDER BY rowid'):
+            for row in source.execute(f'SELECT rowid AS __migration_rowid, * FROM {table} ORDER BY rowid'):
                 values = dict(row)
-                for column, payload_kind in (('opsi_payload', 'res'), ('secure_payload', 'loot' if table == 'opsi_items' else 'daily')):
-                    raw = values.pop(column, None)
-                    if raw:
-                        values.update(decoder.payload(payload_kind, raw, decoder.secure.row_context(payload_kind, values)))
-                if table == 'daily_summary_periods' and decoder.secure.is_ciphertext(values.get('report_text')):
-                    payload = decoder.payload('reports', values['report_text'], decoder.secure.report_context(values['instance'], values['period_key']))
-                    if not isinstance(payload.get('text'), str):
-                        raise MigrationError('旧日报正文无法解码')
-                    values['report_text'] = payload['text']
+                rowid = values.pop('__migration_rowid')
+                try:
+                    for column, payload_kind in (('opsi_payload', 'res'), ('secure_payload', 'loot' if table == 'opsi_items' else 'daily')):
+                        raw = values.pop(column, None)
+                        if raw:
+                            values.update(decoder.payload(payload_kind, raw, decoder.secure.row_context(payload_kind, values)))
+                    if table == 'daily_summary_periods' and decoder.secure.is_ciphertext(values.get('report_text')):
+                        payload = decoder.payload('reports', values['report_text'], decoder.secure.report_context(values['instance'], values['period_key']))
+                        if not isinstance(payload.get('text'), str):
+                            raise MigrationError('旧日报正文无法解码')
+                        values['report_text'] = payload['text']
+                except UnreadableCiphertext as error:
+                    decoder.record_unmigrated(original, kind, dict(table=table, rowid=rowid), error)
+                    continue
                 register_instance(connection, values.get('instance'))
                 if set(values) - columns:
                     raise MigrationError(f'旧 {table} 含无法投影的业务列，未切换总库')
@@ -367,7 +424,7 @@ def import_archive(connection, original, copy, decoder):
     data = decoder.file('archives', original, copy)
     instance = original.parent.name
     for month in sorted(key for key in data if re.fullmatch(r'\d{4}-\d{2}', key)):
-        if read_month(connection, instance, month) is not None:
+        if (instance, month) in decoder.unmigrated_months or read_month(connection, instance, month) is not None:
             continue
         record = data[month]
         if isinstance(record, dict):
@@ -397,9 +454,8 @@ def import_farming(connection, original, copy, decoder):
     scope = 'instance-' + match[1] if match else 'global'
     instance = device = None
     if match:
-        from module.base.device_id import get_device_id, get_old_device_id
         known = [path.stem for path in (decoder.root / 'config').glob('*.json') if not path.name.startswith('template')]
-        for candidate_device in {get_device_id(), get_old_device_id()} - {None, ''}:
+        for candidate_device in decoder.legacy_device_ids():
             for candidate in known:
                 if hashlib.sha256(f'{candidate_device}\0{candidate}'.encode()).hexdigest() == match[1]:
                     instance, device = candidate, candidate_device
@@ -451,18 +507,23 @@ def migrate(database):
                 ordered = sorted(sources.items(), key=lambda pair: (pair[1] not in ('statistics', 'cl1', 'storage', 'daily', 'scheduler'), str(pair[0])))
                 for original, kind in ordered:
                     copy = copies[original]
+                    if kind in ('ships', 'archives', 'farming'):
+                        try:
+                            if kind == 'ships':
+                                instance = original.parent.name
+                                if read_ship(connection, instance) is None:
+                                    decoded = decoder.file('ships', original, copy)
+                                    save_ship(connection, instance, decoded)
+                                    verify_snapshot(decoded, read_ship(connection, instance))
+                            elif kind == 'archives':
+                                import_archive(connection, original, copy, decoder)
+                            else:
+                                import_farming(connection, original, copy, decoder)
+                        except UnreadableCiphertext as error:
+                            decoder.record_unmigrated(original, kind, dict(file=original.name), error)
+                        continue
                     if kind in ('statistics', 'cl1', 'storage', 'daily', 'scheduler'):
                         import_database(connection, copy, kind, original, decoder)
-                    elif kind == 'ships':
-                        instance = original.parent.name
-                        if read_ship(connection, instance) is None:
-                            decoded = decoder.file('ships', original, copy)
-                            save_ship(connection, instance, decoded)
-                            verify_snapshot(decoded, read_ship(connection, instance))
-                    elif kind == 'archives':
-                        import_archive(connection, original, copy, decoder)
-                    elif kind == 'farming':
-                        import_farming(connection, original, copy, decoder)
                     elif kind.startswith('scheduler_'):
                         instance, section = original.stem, kind.removeprefix('scheduler_')
                         data = json.loads(copy.read_text(encoding='utf-8'))
@@ -486,8 +547,14 @@ def migrate(database):
                     raise MigrationError('转换期间源数据发生变化，未切换总库')
             if source_files(database) != sources:
                 raise MigrationError('转换期间旧来源发生变化，未切换总库')
+            if decoder.unmigrated:
+                (backup / 'unmigrated.json').write_text(json.dumps(decoder.unmigrated, ensure_ascii=False, indent=2), encoding='utf-8')
             os.replace(temporary, database.path)
             database._write_marker(digest)
+            if decoder.unmigrated:
+                from module.logger import logger
+                logger.warning(f'[存储迁移] 已跳过 {len(decoder.unmigrated)} 条无法解码的旧密文，'
+                               f'原件及备份保留，启动继续；未迁移清单：{backup / "unmigrated.json"}')
     except BaseException:
         for suffix in ('', '-wal', '-shm'):
             temporary.with_name(temporary.name + suffix).unlink(missing_ok=True)
