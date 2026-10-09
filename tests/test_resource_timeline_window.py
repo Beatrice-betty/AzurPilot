@@ -4,6 +4,7 @@ import sqlite3
 import tempfile
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 from tests.opsi_test_support import install_store
 from pathlib import Path
 
@@ -88,6 +89,39 @@ def test_report_month_window_excludes_snapshots_after_the_month():
         oil = next(item for item in result['series'] if item['key'] == 'oil')
 
         assert [point['v'] for point in oil['points']] == [float(day) for day in range(1, 11)]
+    finally:
+        resource_stats._LOCAL_DB, resource_stats._table_ensured = original_db, original_ensured
+        case.doCleanups()
+        shutil.rmtree(directory, ignore_errors=True)
+
+
+def test_report_skips_series_for_hidden_charts():
+    """图表与原始记录都隐藏时，后端不再查询也不再构造序列数据。"""
+    directory = tempfile.mkdtemp(prefix='azurpilot-resource-')
+    case = unittest.TestCase()
+    install_store(case, directory)
+    database = Path(directory) / 'config' / 'azurstats_local.db'
+    original_db, original_ensured = resource_stats._LOCAL_DB, resource_stats._table_ensured
+    resource_stats._LOCAL_DB, resource_stats._table_ensured = str(database), False
+    try:
+        resource_stats._ensure_table()
+        with sqlite3.connect(database) as conn:
+            conn.executemany(
+                "INSERT INTO resource_snapshots (instance, ts, oil) VALUES ('default', ?, ?)",
+                [(f'2026-01-{day:02d}T00:00:00', day) for day in range(1, 6)],
+            )
+
+        from module.api.statistics_service import report
+        configs = SimpleNamespace(path=lambda instance: database.parent / f'{instance}.json')
+
+        full = report(configs, 'default', 'resources', '2026-01', 7, 'month')
+        with patch.object(resource_stats, 'get_resource_timeline', return_value=[]) as spy:
+            lean = report(configs, 'default', 'resources', '2026-01', 7, 'month', include_series=False)
+
+        assert full['series']
+        assert lean['series'] == []
+        assert lean['metrics'] == full['metrics']
+        assert spy.call_count == 0
     finally:
         resource_stats._LOCAL_DB, resource_stats._table_ensured = original_db, original_ensured
         case.doCleanups()

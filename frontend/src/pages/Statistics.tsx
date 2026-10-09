@@ -56,7 +56,7 @@ import { StatisticsEditConsole } from '../components/StatisticsEditConsole'
 import { buildSeriesView, downloadCsv } from '../components/statisticsData'
 import type { UiKey } from '../i18n'
 import { readStatisticsPrefs, updateStatisticsPrefs } from '../app/statisticsPrefs'
-import {applySlots, cardKey, cardSpace, DEFAULT_TABLE_ROWS, defaultStatisticsLayout, foldCard, hasStatisticsLayout, hideCard, isCardFolded, isCardHidden, isChartCompact, isLinked, isMetricsTable, isPageEnabled, isPickerHidden, isStackedRise, linkChains, movePageBeside, orderCards, orderPages, placeCard, readChains, readStatisticsEditMode, readStatisticsLayout, rechain, resetStatisticsLayout, setChartCompact, setMetricsTable, setPageEnabled, setPickerHidden, setStackedRise, setTableDisplay, showCard, splitChains, tableDisplay, toggleSeriesFilter, unfoldCard, writeStatisticsEditMode, writeStatisticsLayout} from '../app/statisticsLayout'
+import {applySlots, cardKey, cardSpace, DEFAULT_TABLE_ROWS, defaultStatisticsLayout, foldCard, hasStatisticsLayout, hideCard, pageNeedsSeries, isCardFolded, isCardHidden, isChartCompact, isLinked, isMetricsTable, isPageEnabled, isPickerHidden, isStackedRise, linkChains, movePageBeside, orderCards, orderPages, placeCard, readChains, readStatisticsEditMode, readStatisticsLayout, rechain, resetStatisticsLayout, setChartCompact, setMetricsTable, setPageEnabled, setPickerHidden, setStackedRise, setTableDisplay, showCard, splitChains, tableDisplay, toggleSeriesFilter, unfoldCard, writeStatisticsEditMode, writeStatisticsLayout} from '../app/statisticsLayout'
 import type {StatisticsLayout} from '../app/statisticsLayout'
 
 const metricIcons: Record<string, LucideIcon> = {
@@ -619,7 +619,7 @@ export function Statistics() {
           return report ? renderCard(page, pageView(page, report), report, key, view.ordered.indexOf(key), next) : null
         }
         return <Fragment key={head}>
-          {space.map(page => <CategorySection key={page} params={{instance, category: page, days, month, period, researchSeries, lootTask}} revision={revision}
+          {space.map(page => <CategorySection key={page} params={{instance, category: page, days, month, period, researchSeries, lootTask, includeSeries: pageNeedsSeries(layout, page)}} revision={revision}
             onState={state => reportOf(page, state.data, state.error)} render={() => null}/>)}
           <section className="statistics-page-section">
             {error ? <ErrorBox message={error} retry={() => setRevision(value => value + 1)}/>
