@@ -18,6 +18,7 @@
 首次使用及更换恢复条件后需填写实测心情建立基准。
 """
 
+from datetime import timedelta
 from time import sleep
 
 import numpy as np
@@ -199,6 +200,34 @@ class FleetEmotion:
         self.state = state
         self.current = state.value
 
+    def _migrate_config(self):
+        """兼容旧版心情配置：只有数值与时间时补建恢复起点。
+
+        升级后首次运行会走这里，把旧配置按单一区间重建并立即回写，
+        后续运行不再重复迁移。已有校准而失效的情况仍交给人工介入。
+
+        Returns:
+            bool: 是否已完成迁移；不适用或不可信时为 False。
+        """
+        value = self.value
+        if type(value) is not int or not 0 <= value <= 150:
+            return False
+        bound = getattr(self.config, 'bound', None)
+        if isinstance(bound, dict) and self.state_name not in bound:
+            # 未绑定则赋值不会回写配置，迁移结果会丢失，不如此处不做迁移。
+            return False
+        try:
+            state = EmotionRecoveryState.migrate(getattr(self.config, self.state_name, None),
+                                                 value, self.record, self.recover, self.oath, self.onsen)
+            # 留出最小时间跨度，避免记录时刻晚于当前时刻时 advance 报错。
+            state.advance(current_time() + timedelta(seconds=1))
+        except (ValueError, TypeError):
+            return False
+        setattr(self.config, self.state_name, state.export())
+        self.state = state
+        self.calibration_error = ''
+        return True
+
     def consume(self, amount):
         self.require_calibration()
         self.state.consume(amount)
@@ -216,7 +245,10 @@ class FleetEmotion:
         Raises:
             RequestHumanTakeover: 控制策略与恢复地点冲突时抛出，请求人工接管。
         """
-        self.require_calibration()
+        if self.state is None:
+            # 升级前的配置只有数值与时间：在需要恢复时间时补建起点，不阻断任务。
+            if not self._migrate_config():
+                self.require_calibration()
         if self.control == 'keep_exp_bonus' and self.recover == 'not_in_dormitory' and not self.onsen:
             logger.critical(f'[战斗] 舰队 {self.fleet} 的情绪控制设置为"保持开心加成"，且恢复地点设置为"港区"，两者不能同时使用，请检查情绪设置')
             raise RequestHumanTakeover

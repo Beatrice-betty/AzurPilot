@@ -91,13 +91,29 @@ class EmotionIntegrationTests(unittest.TestCase):
         self.enterContext(patch.object(config_source, 'logger', QuietLogger()))
         return clock, config, production.Emotion(config)
 
-    def test_uncalibrated_active_fleet_stops_but_standby_does_not(self):
+    def test_uncalibrated_standby_does_not_stop_and_legacy_config_migrates(self):
         _, config, emotion = self.setup_tracker()
         config.Emotion_Fleet2RecoveryState = None
         emotion.check_reduce(1)
         self.assertEqual(70, config.Emotion_Fleet2Value)
         self.assertIsNone(config.Emotion_Fleet2RecoveryState)
+        # 升级前的配置只有数值与时间：不能因为缺少相位记录而中断任务。
         config.Emotion_Fleet1RecoveryState = None
+        with self.assertRaises(ScriptEnd):
+            emotion.check_reduce(1)
+        # 迁移回写版本 1；无需等恢复即可确认不再要求人工接管。
+        self.assertIn(config.Emotion_Fleet1RecoveryState['version'], (1, 2))
+
+    def test_broken_recovery_state_still_requires_human_takeover(self):
+        _, config, emotion = self.setup_tracker()
+        # 已有存档但版本无效：不得当作旧配置迁移，避免静默重置相位。
+        config.Emotion_Fleet1RecoveryState = {'version': 3}
+        with self.assertRaises(RequestHumanTakeover):
+            emotion.check_reduce(1)
+
+    def test_condition_change_blocks_before_any_battle(self):
+        _, config, emotion = self.setup_tracker()
+        config.Emotion_Fleet1Recover = 'dormitory_floor_1'
         with self.assertRaises(RequestHumanTakeover):
             emotion.check_reduce(1)
 
@@ -284,6 +300,54 @@ class EmotionIntegrationTests(unittest.TestCase):
                 reloaded = production.Emotion(real)
                 reloaded.check_reduce(1)
                 self.assertGreaterEqual(reloaded.public_fleet.lower, 42)
+
+    def test_legacy_config_migrates_and_persists_on_first_run(self):
+        clock, _, _ = self.setup_tracker(initial=119)
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / 'anonymous.json')
+            # 升级前的存档：只有数值与时间，没有恢复相位记录。
+            disk = {'Main': {'Scheduler': {'Enable': False, 'Command': 'Main', 'NextRun': clock.now()},
+                             'Emotion': {
+                                 'Fleet1Value': 119, 'Fleet1Record': clock.now(),
+                                 'Fleet1Control': 'prevent_green_face', 'Fleet1Recover': 'not_in_dormitory',
+                                 'Fleet1Oath': False, 'Fleet1Onsen': False, 'Fleet1RecoveryState': None,
+                                 'Fleet2Value': 119, 'Fleet2Record': clock.now(),
+                                 'Fleet2Control': 'prevent_green_face', 'Fleet2Recover': 'not_in_dormitory',
+                                 'Fleet2Oath': False, 'Fleet2Onsen': False, 'Fleet2RecoveryState': None}},
+                    'Alas': {'PublicEmotion': {'Enable': False, 'Tasks': ''}}}
+            write_file(path, disk)
+            real = AzurLaneConfig.__new__(AzurLaneConfig)
+            real.bound, real.modified, real.overridden = {}, {}, {}
+            real.config_name = 'anonymous'
+            real.data = copy.deepcopy(disk)
+            real._loaded_data = copy.deepcopy(disk)
+            real.auto_update = True
+            real.task = Function(disk['Main'])
+
+            def read_config(name):
+                data = read_file(path)
+                for key in list(data['Main']['Emotion']):
+                    if key.endswith('Record'):
+                        data['Main']['Emotion'][key] = datetime.fromisoformat(data['Main']['Emotion'][key])
+                data['Main']['Scheduler']['NextRun'] = datetime.fromisoformat(data['Main']['Scheduler']['NextRun'])
+                return data
+
+            real.read_file = read_config
+            real.write_file = lambda name, data: write_file(path, data)
+            real.bind('Main')
+            with patch.object(config_source, 'filepath_config', return_value=path):
+                emotion = production.Emotion(real)
+                # 旧配置不再要求人工接管；要么直接可出击，要么按恢复时间延迟。
+                with self.assertRaises(ScriptEnd):
+                    emotion.check_reduce(1)
+                saved = json.loads(Path(path).read_text(encoding='utf-8'))['Main']['Emotion']
+                self.assertIsNotNone(saved.get('Fleet1RecoveryState') or saved.get('Fleet2RecoveryState'))
+                self.assertEqual(2, saved['Fleet2RecoveryState']['version'])
+                # 重新加载后状态可恢复，不会陷入重复迁移。
+                real.data = read_config('anonymous')
+                real._loaded_data = copy.deepcopy(real.data)
+                real.bind('Main')
+                self.assertIsNotNone(real.Emotion_Fleet2RecoveryState)
 
     def test_real_atomic_json_matches_memory_through_restarts(self):
         clock, fake, left = self.setup_tracker()
