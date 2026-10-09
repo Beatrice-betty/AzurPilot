@@ -1,19 +1,141 @@
 """总库首次转换与恢复验证，所有旧源、密钥和安全材料均为临时夹具。"""
 import json
+import os
+import shutil
 import sqlite3
+import subprocess
 import tempfile
 import unittest
 from contextlib import closing
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from module.persistence.database import BusinessDatabase, register_instance
-from module.persistence.migration import MigrationError
+from module.persistence.migration import MigrationError, assert_no_workers
 from module.persistence.snapshots import read_month, read_ship, save_month
 from module.scheduler.store import ProgramStore, ConflictError
 from module.statistics import opsi_secure
 from tests.opsi_test_support import install_store
 from tests.test_opsi_secure import copy_fixture, legacy_blob, legacy_ring, make_cl1_db
+
+
+class MigrationProcessTests(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
+        self.interpreter = self.root / '.venv' / 'Scripts' / 'python.exe'
+        self.base_interpreter = self.root / 'python' / 'python.exe'
+
+    def process(self, pid, executable, arguments, *, cwd=None):
+        command = [str(executable), *arguments]
+        process = Mock()
+        process.pid = pid
+        process.info = {'pid': pid, 'cmdline': command}
+        process.cmdline.return_value = command
+        process.exe.return_value = str(executable)
+        process.cwd.return_value = str(cwd or self.root)
+        process.parents.return_value = []
+        return process
+
+    def scan(self, current, processes):
+        with patch('psutil.Process', return_value=current), \
+                patch('psutil.process_iter', return_value=processes), \
+                patch('module.persistence.migration.sys.platform', 'win32'), \
+                patch('module.persistence.migration.sys.executable', str(self.interpreter)):
+            assert_no_workers(self.root)
+
+    def test_uv_and_windows_redirector_do_not_block_current_entry(self):
+        for entry in ('gui.py', 'alas.py', 'tui.py', 'mcp_server_sse.py'):
+            for explicit_python in (False, True):
+                with self.subTest(entry=entry, explicit_python=explicit_python):
+                    current = self.process(os.getpid(), self.base_interpreter, [entry])
+                    redirector = self.process(1000001, self.interpreter, [entry])
+                    uv = self.process(1000002, self.root / 'uv.exe',
+                                      ['run', *(['python'] if explicit_python else []), entry])
+                    shell = self.process(1000003, self.root / 'powershell.exe', [])
+                    current.parents.return_value = [redirector, uv, shell]
+                    self.scan(current, [uv, redirector, current, shell])
+
+    def test_another_entry_still_blocks_with_the_same_command(self):
+        current = self.process(os.getpid(), self.base_interpreter, ['gui.py'])
+        redirector = self.process(1000001, self.interpreter, ['gui.py'])
+        old = self.process(1000002, self.base_interpreter, ['gui.py'])
+        current.parents.return_value = [redirector]
+        with self.assertRaisesRegex(MigrationError, 'PID 1000002'):
+            self.scan(current, [redirector, old])
+
+    def test_python_ancestor_running_an_entry_is_not_exempt(self):
+        current = self.process(os.getpid(), self.base_interpreter, ['gui.py'])
+        parent = self.process(1000001, self.base_interpreter, ['gui.py'])
+        current.parents.return_value = [parent]
+        with self.assertRaisesRegex(MigrationError, 'PID 1000001'):
+            self.scan(current, [parent])
+
+    def test_matching_interpreter_with_different_arguments_is_not_a_redirector(self):
+        current = self.process(os.getpid(), self.base_interpreter, ['gui.py'])
+        parent = self.process(1000001, self.interpreter, ['alas.py'])
+        current.parents.return_value = [parent]
+        with self.assertRaisesRegex(MigrationError, 'PID 1000001'):
+            self.scan(current, [parent])
+
+    def test_registered_worker_is_checked_before_launcher_exemptions(self):
+        current = self.process(os.getpid(), self.base_interpreter, ['gui.py'])
+        redirector = self.process(1000001, self.interpreter, ['gui.py'])
+        current.parents.return_value = [redirector]
+        registry = self.root / 'cache' / 'webui-workers.json'
+        registry.parent.mkdir()
+        registry.write_text(json.dumps({'workers': {'inst': {'pid': redirector.pid}}}), encoding='utf-8')
+        with patch('module.runtime.process_control.process_matches', return_value=True):
+            with self.assertRaisesRegex(MigrationError, '旧业务 worker.*PID 1000001'):
+                self.scan(current, [redirector])
+
+    def test_unverified_parent_is_not_exempt(self):
+        import psutil
+        current = self.process(os.getpid(), self.base_interpreter, ['gui.py'])
+        parent = self.process(1000001, self.interpreter, ['gui.py'])
+        parent.exe.side_effect = psutil.AccessDenied(parent.pid)
+        current.parents.return_value = [parent]
+        with self.assertRaisesRegex(MigrationError, 'PID 1000001'):
+            self.scan(current, [parent])
+
+    def test_entry_from_another_installation_does_not_block(self):
+        current = self.process(os.getpid(), self.base_interpreter, ['gui.py'])
+        other = self.process(1000001, self.base_interpreter, ['gui.py'], cwd=self.root / 'other')
+        self.scan(current, [other])
+
+    def test_uv_startup_migrates_temp_data_with_both_command_forms(self):
+        uv = shutil.which('uv')
+        if uv is None:
+            self.skipTest('未安装 uv，无法验证实际启动链')
+        project = Path(__file__).resolve().parents[1]
+        script = (
+            "import sys\nfrom pathlib import Path\n"
+            f"sys.path.insert(0, {str(project)!r})\n"
+            "from module.persistence.database import initialize\n"
+            "database = initialize(Path(__file__).parent / 'config')\n"
+            "print('migration-ready')\n"
+        )
+        for arguments in (['gui.py'], ['python', 'gui.py']):
+            with self.subTest(arguments=arguments):
+                root = self.root / ('direct' if len(arguments) == 1 else 'python')
+                config = root / 'config'
+                config.mkdir(parents=True)
+                (root / 'gui.py').write_text(script, encoding='utf-8')
+                source = config / 'cl1_data.db'
+                with closing(sqlite3.connect(source)) as connection, connection:
+                    connection.execute('CREATE TABLE cl1_data(instance TEXT,month TEXT,data_json TEXT)')
+                    connection.execute('INSERT INTO cl1_data VALUES(?,?,?)',
+                                       ('inst', '2026-09', '{"battle_count":7}'))
+                original = source.read_bytes()
+                result = subprocess.run([uv, 'run', '--no-sync', '--project', str(project), *arguments],
+                                        cwd=root, capture_output=True, encoding='utf-8', errors='replace', timeout=60)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn('migration-ready', result.stdout)
+                self.assertTrue((config / 'azurpilot.migrated').is_file())
+                self.assertEqual(source.read_bytes(), original)
+                with closing(sqlite3.connect(config / 'azurpilot.db')) as connection:
+                    self.assertEqual(connection.execute('SELECT battle_count FROM cl1_months').fetchone()[0], 7)
+                    self.assertEqual(connection.execute('PRAGMA foreign_key_check').fetchall(), [])
+                    self.assertEqual(connection.execute('PRAGMA integrity_check').fetchone()[0], 'ok')
 
 
 class MigrationTests(unittest.TestCase):

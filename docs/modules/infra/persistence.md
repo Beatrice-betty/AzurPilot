@@ -65,6 +65,8 @@ module/scheduler/history_store.py
 
 WebUI、TUI、终端调度器、MCP lifespan、父进程启动和 worker 初始化都经过同一迁移入口。API 服务把 `ConfigService.database` 注入调度、运行与统计调用，避免自定义配置目录落回默认目录。
 
+首次迁移会检查已登记的 worker 和同一安装目录的旧运行入口。当前入口启动链中的 `uv run` 进程，以及 Windows 虚拟环境转发同一命令的 Python 启动进程不属于旧写入者；只有确认这些进程的身份后才排除它们。其他 Python 祖先进程、并列的旧入口和已登记的 worker 仍阻止迁移，检测器不会终止任何进程。
+
 ## 5. 核心组件
 
 | 表组 | 张数 | 保存内容 |

@@ -22,6 +22,8 @@ gui.py 是用户进入系统的第一个进程。用户执行 `uv run python gui
 
 所有运行入口在业务 worker 启动前执行 `module.persistence.database.initialize()`。首次迁移先备份、转换与检查，失败停止启动并保留旧源；总库完成标记存在而数据库丢失时必须恢复备份。模块导入不创建总库，详见 [普通业务数据存储](../infra/persistence.md)。
 
+`uv run gui.py` 与 `uv run python gui.py` 均可启动。迁移检测会识别当前入口的 `uv` 和 Windows 虚拟环境 Python 转发进程，避免把启动链误判为旧运行入口；其他旧入口或已登记的业务 worker 仍需先停止。
+
 ## 2. 模块职责
 
 ### 负责

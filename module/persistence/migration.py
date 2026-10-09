@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import sqlite3
+import sys
 from contextlib import ExitStack, closing, contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -55,6 +56,38 @@ def source_files(database):
     return {path.absolute(): kind for path, kind in result.items() if path.is_file()}
 
 
+def _startup_process_ids():
+    """识别当前入口的启动转发进程，不豁免可能写数据的 Python 祖先进程。"""
+    import psutil
+
+    current = psutil.Process()
+    result = {current.pid}
+    try:
+        command = current.cmdline()
+        executable = os.path.normcase(str(Path(current.exe()).resolve()))
+        interpreter = os.path.normcase(str(Path(sys.executable).resolve()))
+        for parent in current.parents():
+            parent_path = Path(parent.exe()).resolve()
+            parent_executable = os.path.normcase(str(parent_path))
+            parent_command = parent.cmdline()
+            uv_launcher = parent_path.name.lower() in ('uv', 'uv.exe') and 'run' in parent_command[1:]
+            # Windows 虚拟环境的 python.exe 只转发同一命令，实际解释器是其子进程。
+            python_redirector = (
+                sys.platform == 'win32'
+                and parent_executable == interpreter
+                and parent_executable != executable
+                and parent_command[1:] == command[1:]
+            )
+            if not (uv_launcher or python_redirector):
+                break
+            result.add(parent.pid)
+            command, executable = parent_command, parent_executable
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        # 无法确认身份时不豁免；后续扫描仍按原规则检查该进程。
+        pass
+    return result
+
+
 def assert_no_workers(root):
     """迁移不终止进程；可写源数据的旧运行进程存在时拒绝切换。"""
     import psutil
@@ -66,9 +99,10 @@ def assert_no_workers(root):
         for record in registry.get('workers', {}).values():
             if isinstance(record, dict) and record.get('pid') != os.getpid() and process_matches(record):
                 raise MigrationError(f'旧业务 worker 仍在运行（PID {record["pid"]}），请停止后重新启动')
+    startup_ids = _startup_process_ids()
     root_key = os.path.normcase(str(root.resolve()))
     for process in psutil.process_iter(['pid', 'cmdline']):
-        if process.pid == os.getpid():
+        if process.pid in startup_ids:
             continue
         command = process.info.get('cmdline') or []
         if not any(Path(part).name.lower() in ('alas.py', 'gui.py', 'tui.py', 'mcp_server_sse.py') for part in command):
