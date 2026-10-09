@@ -13,7 +13,7 @@ from unittest.mock import Mock, patch
 from Crypto.Cipher import AES
 
 from module.persistence.database import BusinessDatabase, register_instance
-from module.persistence.migration import MigrationError, assert_no_workers
+from module.persistence.migration import DATABASE_KINDS, MigrationError, assert_no_workers
 from module.persistence.snapshots import read_month, read_ship, save_month
 from module.scheduler.store import ProgramStore, ConflictError
 from module.statistics import opsi_secure
@@ -263,6 +263,41 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(source.read_bytes(), original)
         report = json.loads(next((self.config / 'storage-backups').glob('*/unmigrated.json')).read_text(encoding='utf-8'))
         self.assertEqual(report[0]['identity'], {'table': 'opsi_items', 'rowid': 19})
+
+    def test_empty_legacy_databases_preserve_sources_and_complete_migration(self):
+        for filename in DATABASE_KINDS:
+            for internal_tables in (False, True):
+                with self.subTest(filename=filename, internal_tables=internal_tables):
+                    directory = self.root / f'{filename}-{internal_tables}' / 'config'
+                    directory.mkdir(parents=True)
+                    source = directory / filename
+                    with closing(sqlite3.connect(source)) as connection:
+                        if internal_tables:
+                            connection.executescript('''
+                                CREATE TABLE retired_record(id INTEGER PRIMARY KEY AUTOINCREMENT);
+                                DROP TABLE retired_record;
+                            ''')
+                    original = source.read_bytes()
+                    database = BusinessDatabase(directory)
+                    database.ensure_ready()
+                    self.assertTrue(database.marker.exists())
+                    self.assertEqual(source.read_bytes(), original)
+                    with database.transaction(write=False) as connection:
+                        self.assertEqual(connection.execute('PRAGMA integrity_check').fetchone()[0], 'ok')
+                        self.assertEqual(connection.execute('PRAGMA foreign_key_check').fetchall(), [])
+                        self.assertEqual(connection.execute('SELECT COUNT(*) FROM storage_migrations').fetchone()[0], 1)
+
+    def test_unknown_business_table_still_rejects_migration_and_preserves_source(self):
+        path = self.config / 'daily_summary.db'
+        with closing(sqlite3.connect(path)) as connection, connection:
+            connection.execute('CREATE TABLE unknown_records(value TEXT)')
+            connection.execute("INSERT INTO unknown_records VALUES('keep')")
+        original = path.read_bytes()
+        with self.assertRaises(MigrationError):
+            self.database.ensure_ready()
+        self.assertFalse(self.database.path.exists())
+        self.assertFalse(self.database.marker.exists())
+        self.assertEqual(path.read_bytes(), original)
 
     def test_plain_sources_preserve_fields_ids_watermarks_and_database_priority(self):
         expected = {'battle_count': 7, 'commission_income_entries': [{'keep': True}],

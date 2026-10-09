@@ -1065,10 +1065,23 @@ def run_webui_supervisor() -> int:
     return fatal_error.exit_code if fatal_error is not None else EXIT_SUCCESS
 
 
-if __name__ == "__main__":
-    # 迁移成功后才能启动业务，失败保留旧源并退出。
-    from module.persistence.database import initialize
-    initialize()
+def main() -> int:
+    """初始化普通业务数据并启动 WebUI，失败原因写入 GUI 日志。"""
+    # Windows 主进程默认不绑定 GUI 文件日志，迁移前需显式绑定。
+    logger.set_file_logger('gui')
+    try:
+        from module.persistence.database import initialize
+        initialize()
+    except Exception as exc:
+        logger.error_context(
+            title='普通业务数据初始化失败',
+            reason=str(exc),
+            exc=exc,
+            impact='WebUI 尚未启动，旧数据与迁移备份保留。',
+            action='查看 GUI 日志中的异常原因，修复后重试；不要删除旧数据库或迁移标记。',
+            level=50,
+        )
+        return EXIT_STARTUP_FAILURE
 
     # 设置multiprocessing启动方式为spawn（macOS兼容性要求）
     try:
@@ -1080,7 +1093,12 @@ if __name__ == "__main__":
         logger.warning("[GUI] 无法设置spawn启动方式，可能使用fork（macOS上不推荐）")
 
     if State.deploy_config.EnableReload:
-        sys.exit(run_webui_supervisor())
+        return run_webui_supervisor()
     else:
         # 非重载模式：直接运行
         func(None, None)
+        return EXIT_SUCCESS
+
+
+if __name__ == "__main__":
+    sys.exit(main())

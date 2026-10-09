@@ -314,7 +314,8 @@ def import_database(connection, path, kind, original, decoder):
                            'daily': {name for name in COPY_TABLES if name.startswith('daily_summary_')}}
         unknown = tables - expected_tables[kind] - {'sqlite_sequence', 'sqlite_stat1', 'sqlite_stat4'}
         unknown = {name for name in unknown if not name.startswith('__opsi_')}
-        if unknown or not tables.intersection(expected_tables[kind]):
+        # 旧功能可能从未建表或已移除业务表，只剩 SQLite 内部表的空库也可迁移。
+        if unknown:
             raise MigrationError(f'旧 {kind} 数据库的表结构不符合迁移约定')
         if kind == 'cl1' and 'cl1_data' in tables:
             seen = set()
