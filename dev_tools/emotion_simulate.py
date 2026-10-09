@@ -21,11 +21,16 @@ import module.config.config as config_source
 from module.combat.emotion_state import EmotionRecoveryState
 from module.config.config import AzurLaneConfig
 from module.exception import ScriptEnd
+from module.retire.fleet_emotion import learn_fleet_emotion
 
 
 US = 1_000_000
 PERIOD = 360_000_000
 BASE = datetime(2026, 10, 9)
+SOURCE_FILES = ('module/combat/emotion.py', 'module/combat/emotion_state.py', 'module/retire/fleet_emotion.py',
+                'module/retire/fleet_management.py', 'module/config/config.py', 'dev_tools/emotion_simulate.py')
+# 开始时固定源码指纹；长跑期间文件变化不能把新文件哈希冒充被测版本。
+SOURCE_SHA256 = {file: hashlib.sha256(Path(file).read_bytes()).hexdigest() for file in SOURCE_FILES}
 
 
 class QuietLogger:
@@ -174,7 +179,8 @@ class Clock:
 
 
 def simulate(spec, *, battles=10_000, cost=2, phase=179 * US, pattern='jitter90',
-             control='prevent_green_face', public=False, dual=False, alternate=False, initial=None):
+             control='prevent_green_face', public=False, dual=False, alternate=False, initial=None,
+             measurement_us=None):
     start = spec.cap if initial is None else initial
     oracle = LuaOracle(spec, start, 500_000, phase)
     clock = Clock(500_000, oracle)
@@ -191,21 +197,35 @@ def simulate(spec, *, battles=10_000, cost=2, phase=179 * US, pattern='jitter90'
     active = emotions[0]
     completed = maps = delays = checks = max_over = max_under = max_segments = 0
     duration_us = wait_us = idle_us = 0
+    scan_us = observed = learned = absolute_error = zero_error = 0
+    baseline_error = baseline_zero = baseline_over = baseline_under = 0
+    reference = [EmotionRecoveryState.calibrate(start, clock.now(), spec.recover, spec.oath, False) for _ in range(2)]
     ledger = [0, 0]
     worst = None
     rng = random.Random(20261009)
+    scan_rng = random.Random(1092026)
 
     def observe():
         nonlocal checks, max_over, max_under, max_segments, worst
+        nonlocal absolute_error, zero_error, baseline_error, baseline_zero, baseline_over, baseline_under
         active.update()
         fleets = [active.public_fleet] if public else active.fleets
         for i, fleet in enumerate(fleets):
             truth = oracle.values[i]
             error = fleet.current - truth
+            if measurement_us is not None:
+                reference[i].advance(clock.now())
+                other = reference[i].value - truth
+                assert reference[i].lower <= truth <= reference[i].upper
+                baseline_error += abs(other)
+                baseline_zero += other == 0
+                baseline_over, baseline_under = max(baseline_over, other), max(baseline_under, -other)
+            absolute_error += abs(error)
+            zero_error += error == 0
             assert fleet.lower <= truth <= fleet.upper, (completed, clock.us, fleet.lower, truth, fleet.upper)
             assert abs(error) <= 3, (completed, clock.us, error)
             assert fleet.upper - fleet.lower <= fleet.speed
-            assert len(fleet.state.segments) <= fleet.speed + 2
+            assert len(fleet.state.segments) <= 64
             max_segments = max(max_segments, len(fleet.state.segments))
             if worst is None or abs(error) > abs(worst['error']):
                 worst = {'battle': completed, 'microseconds': clock.us, 'fleet': i + 1,
@@ -246,6 +266,9 @@ def simulate(spec, *, battles=10_000, cost=2, phase=179 * US, pattern='jitter90'
                 assert active.total_reduced - before == cost
                 oracle_index = 0 if public else fleet_index - 1
                 oracle.consume(oracle_index, cost)
+                if measurement_us is not None:
+                    reference[oracle_index].advance(clock.now())
+                    reference[oracle_index].consume(cost)
                 ledger[oracle_index] += cost
                 completed += 1
                 observe()
@@ -266,6 +289,31 @@ def simulate(spec, *, battles=10_000, cost=2, phase=179 * US, pattern='jitter90'
                 duration_us += duration
                 clock.advance(duration)
             maps += 1
+            if measurement_us is not None and maps % 25 == 0:
+                # 每 25 张图提供一次“本来就有”的完整扫描机会，两个窗口与真实相位无关。
+                # 独立对照只输出画面整数读数；相位、批次时刻不传入生产学习函数。
+                windows, result = {}, {}
+                for category, ids in (('vanguard', range(3)), ('main', range(3, 6))):
+                    begin = clock.now()
+                    offset = scan_rng.randrange(measurement_us + 1)
+                    clock.advance(offset)
+                    points = oracle.values[0]
+                    clock.advance(measurement_us - offset)
+                    windows[category] = (begin, clock.now())
+                    result[category] = {'1': [{'name': f'ship{i}', 'emotion': points} for i in ids]}
+                    scan_us += measurement_us
+                fields = {key.removeprefix('Emotion_'): value for key, value in config.fields.items()
+                          if key.startswith('Emotion_')}
+                view = SimpleNamespace(data={'Main': {'Emotion': fields, 'Campaign': {'Mode': 'normal'},
+                                                      'Fleet': {'Fleet1': 1, 'Fleet2': 2,
+                                                                'FleetOrder': 'fleet1_all_fleet2_standby'}}}, modified={})
+                learned += learn_fleet_emotion(view, result, windows, {f'ship{i}' for i in range(6)})
+                observed += 1
+                # 对应 FleetInfo 原有一次保存。参考状态也经历相同扫描时间与保存次数。
+                with config.multi_set():
+                    for path, value in view.modified.items():
+                        setattr(config, 'Emotion_' + path.split('.')[-1], value)
+                observe()
             if pattern == 'full_rest' and maps % 30 == 0:
                 rest = 6 * 3600 * US
                 idle_us += rest
@@ -275,19 +323,27 @@ def simulate(spec, *, battles=10_000, cost=2, phase=179 * US, pattern='jitter90'
                 active.map_is_2x_book = cost == 4
         observe()
     assert completed == battles
-    assert clock.us - clock.origin == clock.advanced == duration_us + wait_us + idle_us
+    assert clock.us - clock.origin == clock.advanced == duration_us + wait_us + idle_us + scan_us
     assert oracle.last == clock.us
     assert ledger == oracle.used and sum(ledger) == battles * cost
     assert oracle.values == [start + gain - used for gain, used in zip(oracle.gains, oracle.used)]
-    return {'configuration': spec.label, 'cost': cost, 'phase_us': phase, 'pattern': pattern,
+    report = {'configuration': spec.label, 'cost': cost, 'phase_us': phase, 'pattern': pattern,
             'control': control, 'public': public, 'dual': dual, 'alternate': alternate,
             'battles': completed, 'checks': checks, 'max_overestimate': max_over,
             'max_underestimate': max_under, 'worst': worst, 'max_segments': max_segments,
             'delays': delays, 'saves': sum(c.saves for c in configs), 'hours': (clock.us - clock.origin) / (3600 * US),
+            'mean_absolute_error': absolute_error / checks, 'zero_error_ratio': zero_error / checks,
+            'observation_count': observed, 'accepted_count': learned, 'scan_microseconds': scan_us,
+            'measurement_us': measurement_us,
             'invariants': '场次、扣减、整数微秒、恢复收支、相位范围和JSON重载一致'}
+    if measurement_us is not None:
+        report['paired_baseline'] = {'mean_absolute_error': baseline_error / checks,
+                                     'zero_error_ratio': baseline_zero / checks,
+                                     'max_overestimate': baseline_over, 'max_underestimate': baseline_under}
+    return report
 
 
-def run_suite(battles=10_000):
+def run_suite(battles=10_000, passive=False):
     results = []
     for recover in ('not_in_dormitory', 'dormitory_floor_1', 'dormitory_floor_2'):
         for oath in (False, True):
@@ -301,12 +357,26 @@ def run_suite(battles=10_000):
                     {'pattern': 'balanced', 'initial': 70}, {'pattern': 'full_rest'},
                     {'control': 'keep_exp_bonus'}, {'pattern': 'fast30'}, {'pattern': 'slow600'}):
         results.append(simulate(spec, battles=battles, phase=PERIOD - 1, **options))
-    files = ('module/combat/emotion.py', 'module/combat/emotion_state.py')
+    if passive:
+        for recover in ('not_in_dormitory', 'dormitory_floor_1', 'dormitory_floor_2'):
+            for oath in (False, True):
+                spec = ShipSpec(recover, oath)
+                for cost in (2, 4):
+                    for width in (100_000, US, 30 * US):
+                        result = simulate(spec, battles=battles, cost=cost, phase=179 * US, measurement_us=width)
+                        if battles >= 10_000:
+                            assert result['accepted_count'] > 0
+                            assert result['mean_absolute_error'] < result['paired_baseline']['mean_absolute_error']
+                            assert result['zero_error_ratio'] > result['paired_baseline']['zero_error_ratio']
+                        results.append(result)
+                print(f'{spec.label}: 6 组被动观测配对，每组 {battles} 场通过', flush=True)
+    if SOURCE_SHA256 != {file: hashlib.sha256(Path(file).read_bytes()).hexdigest() for file in SOURCE_FILES}:
+        raise RuntimeError('模拟期间源码发生变化，结果不能作为最终版本验收')
     report = {'case_count': len(results), 'battle_count': sum(r['battles'] for r in results),
               'max_absolute_error': max(max(r['max_overestimate'], r['max_underestimate']) for r in results),
               'checks': sum(r['checks'] for r in results),
-              'source_sha256': {file: hashlib.sha256(Path(file).read_bytes()).hexdigest() for file in files},
-              'scope': '全S胜、准确起点、固定且一致的恢复条件；不包含温泉、饮料、识别延迟或实机验收',
+              'source_sha256': SOURCE_SHA256,
+              'scope': '全S胜、准确起点、固定且一致的恢复条件；观测组每25图提供一次准确读数；不含温泉、饮料或实机验收',
               'results': results}
     return report
 
@@ -315,10 +385,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--battles', type=int, default=10_000)
     parser.add_argument('--output', type=Path)
+    parser.add_argument('--passive', action='store_true', help='增加36组被动观测配对验收，总计80组')
     args = parser.parse_args()
     if args.battles <= 0:
         parser.error('--battles 必须大于零')
-    report = run_suite(args.battles)
+    report = run_suite(args.battles, passive=args.passive)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')

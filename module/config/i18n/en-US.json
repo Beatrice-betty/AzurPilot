@@ -1388,7 +1388,7 @@
     },
     "FleetValue": {
       "name": "Morale value",
-      "help": "Pause sorties, confirm recovery settings, then enter the lowest measured fleet morale (an integer from 0 to 150). Saving establishes a new baseline immediately. The value and timestamp must describe the same observed state; recheck if recovery occurs while entering it. Displays an estimate; sortie decisions use the conservative lower bound. Even if the value is unchanged, clear and re-enter it, then press Enter; also save in the TUI."
+      "help": "Pause sorties, confirm recovery settings, then enter the lowest measured fleet morale (an integer from 0 to 150). Saving establishes a new baseline immediately. The value and timestamp must describe the same observed state; recheck if recovery occurs while entering it. Displays an estimate; sortie decisions use the conservative lower bound. Even if the value is unchanged, clear and re-enter it, then press Enter; also save in the TUI. Reliable complete readings from existing fleet scans can narrow recovery timing uncertainty without extra screenshots or waits. Accuracy is unchanged when no valid observations are available."
     },
     "FleetRecord": {
       "name": "Morale record time",
@@ -1989,7 +1989,7 @@
     },
     "Fleet1Value": {
       "name": "Fleet 1 morale value",
-      "help": "Pause sorties, confirm recovery settings, then enter the lowest measured fleet morale (an integer from 0 to 150). Saving establishes a new baseline immediately. The value and timestamp must describe the same observed state; recheck if recovery occurs while entering it. Displays an estimate; sortie decisions use the conservative lower bound. Even if the value is unchanged, clear and re-enter it, then press Enter; also save in the TUI."
+      "help": "Pause sorties, confirm recovery settings, then enter the lowest measured fleet morale (an integer from 0 to 150). Saving establishes a new baseline immediately. The value and timestamp must describe the same observed state; recheck if recovery occurs while entering it. Displays an estimate; sortie decisions use the conservative lower bound. Even if the value is unchanged, clear and re-enter it, then press Enter; also save in the TUI. Reliable complete readings from existing fleet scans can narrow recovery timing uncertainty without extra screenshots or waits. Accuracy is unchanged when no valid observations are available."
     },
     "Fleet1Record": {
       "name": "Fleet 1 morale record time",
@@ -2024,7 +2024,7 @@
     },
     "Fleet2Value": {
       "name": "Fleet 2 morale value",
-      "help": "Pause sorties, confirm recovery settings, then enter the lowest measured fleet morale (an integer from 0 to 150). Saving establishes a new baseline immediately. The value and timestamp must describe the same observed state; recheck if recovery occurs while entering it. Displays an estimate; sortie decisions use the conservative lower bound. Even if the value is unchanged, clear and re-enter it, then press Enter; also save in the TUI."
+      "help": "Pause sorties, confirm recovery settings, then enter the lowest measured fleet morale (an integer from 0 to 150). Saving establishes a new baseline immediately. The value and timestamp must describe the same observed state; recheck if recovery occurs while entering it. Displays an estimate; sortie decisions use the conservative lower bound. Even if the value is unchanged, clear and re-enter it, then press Enter; also save in the TUI. Reliable complete readings from existing fleet scans can narrow recovery timing uncertainty without extra screenshots or waits. Accuracy is unchanged when no valid observations are available."
     },
     "Fleet2Record": {
       "name": "Fleet 2 morale record time",
@@ -6506,7 +6506,7 @@
   "FleetInfo": {
     "_info": {
       "name": "Fleet information",
-      "help": "Stores fleet scan results"
+      "help": "Stores fleet scan results. Existing reliable readings can passively reduce uncertainty in calibrated morale without additional scans or waits."
     },
     "Result": {
       "name": "Scan result",

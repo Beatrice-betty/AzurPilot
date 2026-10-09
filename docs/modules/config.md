@@ -269,6 +269,10 @@ stateDiagram-v2
 | `Alas.Optimization.TaskHoardingDuration` | 调度器空闲时的「囤积」时长，影响 `get_next` 的等待策略 |
 | `OpsiScheduling.OperationCoinsPreserve` / `OpsiHazard1Leveling.OperationCoinsPreserve` | 两个配置独立保存；智能调度两种模式均读取自身配置，侵蚀 1 独立运行时读取自身配置。`UseSmartSchedulingOperationCoinsPreserve` 只切换黄币目标调度与体力调度（见第 15 节的联动说明） |
 | `<Task>.Emotion.*Value / *Record / *RecoveryState` | 心情手动校准：API 在同一事务中按最终恢复条件保存实测值、完整微秒时间和隐藏相位；PublicEmotion 同样处理。仅修改恢复条件会使基准失效，需重新填写实测值。旧任务不能分别覆盖三字段。 |
+
+心情 RecoveryState 版本 2 保存允许间隙的相位片段，兼容版本 1；手动 Value 校准仍重新建立完全未知相位。舰队扫描只过滤可信观测不符的相位，不为旧配置自动建立准确基准。学习结果附带内存中的舰队映射／共享设置核对条件，随 FleetInfo 原有保存事务写入；磁盘上任一条件改变时，三字段整体丢弃，扫描结果仍正常保存。没有新增 API 或轮询。
+
+内部 `set_record(Emotion_Fleet*Value=...)` 同样原子更新完整时间和恢复状态，兼容 GemsFarming、Ambush11 等换船调用，不追加识别。此入口保留调用方原有读数语义；换船时的局部读数或启发式最低值不自动满足准确初值前提，不属于标准固定舰队的 3 点保证。
 | `Dashboard.*`（Oil/Coin/Gem 等） | 仪表盘资源，由 dashboard.yaml 定义、任务运行时写回 Value/Record |
 | `Storage.Storage` | 生成器给每个任务附加的 `storage` 类型组，WebUI 禁止编辑，运行时当作键值状态区使用 |
 

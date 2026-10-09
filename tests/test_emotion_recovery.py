@@ -58,7 +58,7 @@ class RecoveryStateTests(unittest.TestCase):
         state = EmotionRecoveryState.calibrate(80, datetime(2026, 10, 9), 'dormitory_floor_2', True, False)
         valid = state.export()
         for field, value in [('version', True), ('record', 'invalid'), ('signature', ['dormitory_floor_1', True, False]),
-                             ('segments', [[1, PERIOD_US, 80]]), ('segments', [[0, PERIOD_US, 81]]),
+                             ('segments', [[PERIOD_US, PERIOD_US, 80]]), ('segments', [[0, PERIOD_US, 81]]),
                              ('segments', [[0, PERIOD_US, True]])]:
             bad = {**valid, field: value}
             with self.subTest(field=field, value=value), self.assertRaises(ValueError):

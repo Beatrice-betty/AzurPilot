@@ -62,7 +62,7 @@ test('实测心情重新输入同值会校准，浏览页面和普通字段不�
     const fields = (await reread()).values[task][group]
     expect(fields[arg]).toBe(Number(old))
     expect(fields[`${prefix}Record`]).not.toBe(before.values[task][group][`${prefix}Record`])
-    expect(fields[`${prefix}RecoveryState`]).toEqual({version: 1,
+    expect(fields[`${prefix}RecoveryState`]).toEqual({version: 2,
       record: String(fields[`${prefix}Record`]).replace(' ', 'T'),
       signature: [fields[`${prefix}Recover`], fields[`${prefix}Oath`], fields[`${prefix}Onsen`]],
       segments: [[0, 360000000, Number(old)]]})
