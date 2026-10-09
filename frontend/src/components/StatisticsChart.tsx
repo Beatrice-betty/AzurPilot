@@ -310,14 +310,6 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
         return sessionPeak > 0 && peakOf(item) >= sessionPeak * BIG_AXIS_RATIO ? 1 : 0
       }
 
-      if (zeroBase) {
-        /* 纵轴固定：两端都按该轴全量数据的峰值钉住，放大视图下轴范围不变。 */
-        const peakFor = (axisIndex: number) => shownData
-          .filter(item => axisIndexFor(item) === axisIndex)
-          .reduce((max, item) => Math.max(max, peakOf(item)), 0)
-        yAxes = yAxes.map((axis, index) => ({...axis, min: 0, max: peakFor(index) || undefined}))
-      }
-
       /* 叠涨时该曲线按涨跌配色：折线分成两段，蜡烛线用涨跌色。 */
       const echartsSeries = shownData.map(item => {
         const color = colorFor(item)
@@ -381,10 +373,11 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
         },
         xAxis: isCandlestick ? {type: 'category', data: categoryTimes, axisLabel: {hideOverlap: true}} : {type: 'time', axisLabel: {hideOverlap: true}},
         yAxis: yAxes,
+        /* 纵轴固定：缩放不过滤数据，纵轴始终按全量数据自动取值，与全图视角用同一套算法。 */
         dataZoom: [
-          {type: 'inside', zoomOnMouseWheel: 'ctrl'},
+          {type: 'inside', zoomOnMouseWheel: 'ctrl', filterMode: zeroBase ? 'none' : 'filter'},
           {
-            type: 'slider', bottom: 16, height: 26,
+            type: 'slider', bottom: 16, height: 26, filterMode: zeroBase ? 'none' : 'filter',
             ...(minimal ? {
               backgroundColor: surface, fillerColor: colors.getPropertyValue('--accent-soft').trim(), borderColor: border,
               dataBackground: {lineStyle: {color: secondary, opacity: 1}, areaStyle: {color: surface, opacity: 1}},
