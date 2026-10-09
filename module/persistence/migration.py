@@ -318,6 +318,27 @@ class LegacyDecoder:
         return data
 
     def file(self, kind, original, copy):
+        """主快照无法解析时尝试同批冻结的 .bak，不改写或重新读取旧源。"""
+        try:
+            return self._file(kind, original, copy)
+        except UnreadableSnapshotFile as error:
+            backup = copy.with_name(copy.name + '.bak')
+            if not backup.is_file():
+                raise
+            original_backup = original.with_name(original.name + '.bak')
+            try:
+                # 旧 .bak 是主文件的字节拷贝，V2 身份仍绑定主文件路径。
+                data = self._file(kind, original, backup)
+            except MigrationError as backup_error:
+                self.record_unmigrated(original_backup, kind, dict(file=original_backup.name), backup_error)
+                raise error from backup_error
+            self.record_unmigrated(original, kind, dict(file=original.name), error)
+            relative = original_backup.relative_to(self.root) if original_backup.is_relative_to(self.root) else original_backup
+            self.unmigrated[-1]['recovered_from'] = str(relative)
+            _log_progress('已从旧快照备份恢复：%s（%s）；主文件及备份均保留', relative, kind)
+            return data
+
+    def _file(self, kind, original, copy):
         try:
             raw = copy.read_text(encoding='utf-8-sig')
         except UnicodeDecodeError as error:
