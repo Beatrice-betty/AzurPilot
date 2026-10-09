@@ -292,7 +292,6 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
         ]
       }
 
-      if (zeroBase) yAxes = yAxes.map(axis => ({...axis, min: 0}))
 
       /* 每条曲线落在哪个 Y 轴上：单页与统一轴都用左轴。 */
       /* 大小轴归属：左轴小值、右轴大值。 */
@@ -309,6 +308,14 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
         if (isSingle || axisMode === 'unified' || SMALL_AXIS_KEYS.has(item.series.key)) return 0
         if (BIG_AXIS_KEYS.has(item.series.key)) return 1
         return sessionPeak > 0 && peakOf(item) >= sessionPeak * BIG_AXIS_RATIO ? 1 : 0
+      }
+
+      if (zeroBase) {
+        /* 纵轴固定：两端都按该轴全量数据的峰值钉住，放大视图下轴范围不变。 */
+        const peakFor = (axisIndex: number) => shownData
+          .filter(item => axisIndexFor(item) === axisIndex)
+          .reduce((max, item) => Math.max(max, peakOf(item)), 0)
+        yAxes = yAxes.map((axis, index) => ({...axis, min: 0, max: peakFor(index) || undefined}))
       }
 
       /* 叠涨时该曲线按涨跌配色：折线分成两段，蜡烛线用涨跌色。 */
