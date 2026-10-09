@@ -353,7 +353,7 @@ class Session:
                 self.topic_seen['statistics'] = time.monotonic()
                 try:
                     from module.api.statistics_service import get_statistics_fingerprint
-                    stats_fp = await asyncio.to_thread(get_statistics_fingerprint, subscription.instance)
+                    stats_fp = await asyncio.to_thread(get_statistics_fingerprint, subscription.instance, self.gateway.router.configs.directory)
                     if subscription is self.subscription:
                         old_fp = self.cache.get('statistics')
                         if old_fp is not None and old_fp != stats_fp:

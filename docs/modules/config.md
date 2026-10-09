@@ -303,7 +303,8 @@ stateDiagram-v2
 
 | 数据 | 位置 | 生命周期 |
 | --- | --- | --- |
-| 用户配置 | `config/<name>.json` | 持久；`save()` 事务内原子替换；删除实例时移入 `config/backup/` |
+| 用户配置 | `config/<name>.json` | 持久；`save()` 事务内原子替换；删除前完成配置、调度切片及安全历史归档 |
+| 普通业务数据 | 实际配置目录 `azurpilot.db` | 统计与调度共用；复制只带方案，删除保留统计，见 [普通业务数据存储](infra/persistence.md) |
 | 配置锁文件 | `config/<name>.json.lock` | 1 字节占位文件，随配置文件存在 |
 | 全新实例模板 | `config/template.json` | 生成器产物；`ConfigService.create` 的默认来源 |
 | 选项树/菜单 | `module/config/argument/args.json`、`menu.json` | 生成；调度器取优先级默认值、WebUI 取 schema 时实时读取 |

@@ -19,6 +19,7 @@ from Crypto.Cipher import AES, ChaCha20_Poly1305
 
 from module.statistics.opsi_keys import KeyProvider, ProviderUnavailable
 from module.statistics import opsi_secure
+from module.persistence.migration import MigrationError
 
 NOW = 1_800_000_000.0
 FIXTURE = Path(__file__).resolve().parent / 'fixtures' / 'opsi_encrypted_env'
@@ -118,11 +119,32 @@ def seal_v2(key, kind, obj, context, installation_id):
     return opsi_secure.BLOB_PREFIX + base64.b64encode(cipher.nonce + raw + tag).decode()
 
 
+def complete_file_fixture(root):
+    """运行目录下生成旧格式文件夹具，避免把 log/ 运行数据加入仓库。"""
+    state = json.loads((root / 'config' / 'opsi_secure' / 'state.json').read_bytes())['state']
+    key = base64.b64decode(state['key'])
+    installation = state['installation_id']
+    records = {
+        'log/cl1/alpha/ship_exp_data.json': ('ships', {'battle_times': [22.1, 24.5]}),
+        'log/cl1/alpha/cl1_monthly.json': ('archives', {'2026-08': 96, '2026-08-akashi': 2}),
+        'log/azurstat_meowofficer_farming.csv': ('loot', {'rows': [[level, 1800000000, 1, 20, 2, 0, 0] for level in range(1, 7)], 'header': ['hazard', 'timestamp', 'rounds', 'coin', 'plate', 'abyssal', 'obscure']}),
+    }
+    for name, (kind, data) in records.items():
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        blob = seal_v2(key, kind, data, opsi_secure.file_context(root, kind, path), installation)
+        value = blob if kind == 'loot' else json.dumps({opsi_secure.WRAPPER_KEY: True, 'payload': blob})
+        path.write_text(value, encoding='utf-8')
+        if kind != 'loot':
+            path.with_name(path.name + '.bak').write_text(value, encoding='utf-8')
+
+
 def copy_fixture(case):
     directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
     case.addCleanup(directory.cleanup)
     root = Path(directory.name) / 'env'
     shutil.copytree(FIXTURE, root)
+    complete_file_fixture(root)
     return root
 
 
@@ -197,6 +219,7 @@ class FixtureMigrationTests(StoreCase):
         super().setUp()
         shutil.rmtree(self.root)
         shutil.copytree(FIXTURE, self.root)
+        complete_file_fixture(self.root)
 
     def secure(self, instance='alpha', month='2026-09'):
         with closing(sqlite3.connect(self.root / 'config' / 'cl1_data.db')) as conn:
@@ -263,10 +286,9 @@ class FixtureMigrationTests(StoreCase):
         database.increment_battle_count('alpha')
         from datetime import datetime
         month = datetime.now().strftime('%Y-%m')
-        with closing(sqlite3.connect(self.root / 'config' / 'cl1_data.db')) as conn:
-            raw = conn.execute("SELECT secure_json FROM cl1_data WHERE instance='alpha' AND month=?",
-                               (month,)).fetchone()[0]
-        self.assertEqual(json.loads(raw)['battle_count'], 1)
+        with database.store.transaction(write=False) as conn:
+            raw = conn.execute("SELECT battle_count FROM cl1_months WHERE instance='alpha' AND month=?", (month,)).fetchone()[0]
+        self.assertEqual(raw, 1)
         from module.statistics.daily_summary_store import DailySummaryStore
         store = DailySummaryStore(self.root / 'config' / 'daily_summary.db')
         self.assertEqual(store.get_period('alpha', '2026-09-03')['report_text'],
@@ -299,6 +321,7 @@ class QuarantineTests(StoreCase):
         super().setUp()
         shutil.rmtree(self.root)
         shutil.copytree(FIXTURE, self.root)
+        complete_file_fixture(self.root)
         with db(self.root / 'config' / 'cl1_data.db') as conn:
             good = conn.execute("SELECT secure_json FROM cl1_data WHERE instance='beta'").fetchone()[0]
             self.broken = good[:30] + ('A' if good[30] != 'A' else 'B') + good[31:]
@@ -317,21 +340,16 @@ class QuarantineTests(StoreCase):
         self.assertEqual(opsi_secure.decrypt_all(), {'pending': True, 'decrypted': 0, 'quarantined': 1})
 
     def test_unrecoverable_row_is_backed_up_and_stats_resume(self):
-        """确认解不开的旧行：另存旁路备份后按现状继续写入，单月统计不再被冻结。"""
+        """不可解码的旧普通记录阻止切换，不能用空统计替换。"""
         from module.statistics.cl1_database import Cl1Database
         database = Cl1Database(self.root / 'config' / 'cl1_data.db')
-        database.increment_akashi_encounter('beta', '2026-09')
-        with closing(sqlite3.connect(self.root / 'config' / 'cl1_data.db')) as conn:
-            stored = conn.execute(
-                "SELECT secure_json FROM cl1_data WHERE instance='beta'").fetchone()[0]
-        self.assertEqual(json.loads(stored)['akashi_encounters'], 1)
-        self.assertFalse(stored.startswith('OPSIV'))
-        backups = list((self.root / 'config' / 'opsi_secure').glob('unreadable-*.json'))
-        self.assertEqual(len(backups), 1)
-        payload = json.loads(backups[0].read_bytes())
-        self.assertEqual(payload['payload'], self.broken)
-        self.assertEqual(payload['kind'], 'cl1_data')
-        self.assertIn('2026-09', payload['identity'])
+        original = (self.root / 'config' / 'cl1_data.db').read_bytes()
+        with self.assertRaises(MigrationError):
+            database.increment_akashi_encounter('beta', '2026-09')
+        self.assertFalse(database.db_path.exists())
+        self.assertEqual((self.root / 'config' / 'cl1_data.db').read_bytes(), original)
+        self.assertTrue(list((self.root / 'config' / 'storage-backups').glob('*/sources.json')))
+        self.assertTrue((self.root / 'config' / 'opsi_secure' / 'keyring.json').exists())
 
     def test_transient_key_outage_keeps_original_row(self):
         """凭据服务报错的暂时性不可用：保持原样等重试，绝不另存替换。"""
@@ -340,7 +358,7 @@ class QuarantineTests(StoreCase):
         database = Cl1Database(self.root / 'config' / 'cl1_data.db')
         with patch.object(opsi_keys.ContainerFileProvider, 'load',
                           side_effect=opsi_keys.ProviderUnavailable('locked')):
-            with self.assertRaises(opsi_secure.StoreUnavailable):
+            with self.assertRaises(MigrationError):
                 database.increment_akashi_encounter('beta', '2026-09')
         with closing(sqlite3.connect(self.root / 'config' / 'cl1_data.db')) as conn:
             self.assertEqual(conn.execute(
@@ -362,7 +380,7 @@ class V1MigrationTests(StoreCase):
             conn.execute('UPDATE cl1_data SET data_json=?, secure_json=?',
                          (json.dumps(public), legacy_blob(self.key, 'cl1', secure)))
         self.csv = self.root / 'log' / 'azurstat_meowofficer_farming.csv'
-        self.csv.write_text(legacy_blob(self.key, 'loot', {'header': ['a', 'b'], 'rows': [['1', '2']]}),
+        self.csv.write_text(legacy_blob(self.key, 'loot', {'header': ['hazard', 'timestamp', 'rounds', 'coin', 'plate', 'abyssal', 'obscure'], 'rows': [[level, 2, 1, 0, 0, 0, 0] for level in range(1, 7)]}),
                             encoding='utf-8')
 
     def test_v1_environment_decrypts_to_plaintext(self):
@@ -371,7 +389,7 @@ class V1MigrationTests(StoreCase):
         with closing(sqlite3.connect(self.root / 'config' / 'cl1_data.db')) as conn:
             secure = json.loads(conn.execute('SELECT secure_json FROM cl1_data').fetchone()[0])
         self.assertEqual(secure['battle_count'], 120)
-        self.assertEqual(self.csv.read_text(encoding='utf-8'), 'a,b\n1,2\n')
+        self.assertEqual(self.csv.read_text(encoding='utf-8'), 'hazard,timestamp,rounds,coin,plate,abyssal,obscure\n' + ''.join(f'{level},2,1,0,0,0,0\n' for level in range(1, 7)))
         self.assertFalse((self.root / 'config' / 'opsi_secure' / 'keyring.json').exists())
 
     def test_v1_blob_read_before_migration(self):
@@ -409,24 +427,16 @@ class WrapperTransitionTests(StoreCase):
 
     def test_ship_stats_backs_up_undecryptable_wrapper_and_restarts(self):
         from module.statistics.ship_exp_stats import ShipExpStats
-        secure_dir = self.root / 'config' / 'opsi_secure'
-        secure_dir.mkdir(parents=True)
-        (secure_dir / 'keyring.json').write_bytes(json.dumps(
-            {'version': 2, 'algorithm': opsi_secure.ALGORITHM, 'installation_id': 'inst',
-             'provider': 'container-file'}).encode())
         path = self.root / 'log' / 'cl1' / 'inst' / 'ship_exp_data.json'
         path.parent.mkdir(parents=True)
         blob = opsi_secure.BLOB_PREFIX + base64.b64encode(b'x' * 60).decode()
         path.write_bytes(json.dumps({opsi_secure.WRAPPER_KEY: True, 'payload': blob}).encode())
-        stats = ShipExpStats(path=path, instance_name='inst')
-        self.assertEqual(stats.data, {})
-        backups = list((self.root / 'config' / 'opsi_secure').glob('unreadable-*.json'))
-        self.assertEqual(len(backups), 1)
-        payload = json.loads(backups[0].read_bytes())
-        self.assertEqual(json.loads(payload['payload'])['payload'], blob)
-        stats.data['battle_times'] = {'samples': [1.0], 'average': 1.0}
-        stats._save()
-        self.assertIn('battle_times', json.loads(path.read_text(encoding='utf-8')))
+        original = path.read_bytes()
+        with self.assertRaises(MigrationError):
+            ShipExpStats(path=path, instance_name='inst')
+        self.assertEqual(path.read_bytes(), original)
+        self.assertFalse((self.root / 'config' / 'azurpilot.db').exists())
+        self.assertTrue(list((self.root / 'config' / 'storage-backups').glob('*/sources.json')))
 
 
 class InitializeTests(StoreCase):

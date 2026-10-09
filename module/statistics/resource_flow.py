@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from module.config.time_source import now
 from module.logger import logger
+from module.persistence.database import register_instance
 from module.statistics import resource_stats
 
 _session = ContextVar('resource_session', default=None)
@@ -33,26 +34,8 @@ def canonical(name):
 
 
 def connect():
-    """跟随现有统计库路径，测试可隔离替换；连接在事务结束时释放。"""
-    Path(resource_stats._LOCAL_DB).parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(resource_stats._LOCAL_DB, timeout=30,
-                                 factory=resource_stats._ClosingConnection)
-    connection.row_factory = sqlite3.Row
-    connection.executescript('''
-        CREATE TABLE IF NOT EXISTS resource_flows (
-            id INTEGER PRIMARY KEY, instance TEXT NOT NULL, ts TEXT NOT NULL,
-            resource TEXT NOT NULL, amount INTEGER NOT NULL, task TEXT NOT NULL,
-            operation TEXT NOT NULL, evidence TEXT NOT NULL, run_id TEXT,
-            event_key TEXT NOT NULL, UNIQUE(instance, event_key, resource)
-        );
-        CREATE INDEX IF NOT EXISTS resource_flows_window ON resource_flows(instance, ts, id);
-        CREATE TABLE IF NOT EXISTS resource_balances (
-            instance TEXT NOT NULL, resource TEXT NOT NULL, value INTEGER NOT NULL,
-            ts TEXT NOT NULL, run_id TEXT, cursor INTEGER NOT NULL,
-            PRIMARY KEY(instance, resource)
-        );
-    ''')
-    return connection
+    """共享总库连接；进入上下文时开始 IMMEDIATE 事务。"""
+    return resource_stats._database().connect()
 
 
 @contextmanager
@@ -87,6 +70,7 @@ def record(config, changes, operation, *, evidence='confirmed', event_key=None, 
         return False
     try:
         with connect() as connection:
+            register_instance(connection, instance)
             connection.executemany('''INSERT OR IGNORE INTO resource_flows
                 (instance, ts, resource, amount, task, operation, evidence, run_id, event_key)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', rows)
@@ -107,7 +91,7 @@ def observe(config, resource, value, source=None):
     stamp = now().isoformat(sep=' ')
     try:
         with connect() as connection:
-            connection.execute('BEGIN IMMEDIATE')
+            register_instance(connection, instance)
             baseline = connection.execute('SELECT * FROM resource_balances WHERE instance=? AND resource=?',
                                           (instance, resource)).fetchone()
             if baseline:

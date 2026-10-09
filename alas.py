@@ -2744,10 +2744,8 @@ if __name__ == '__main__':
         exit(2)
 
     alas = AzurLaneAutoScript(config_name=config_name)
-    # 先完成统计数据准备（旧加密数据自动解密，有界等待，异常环境不阻塞启动），再启动业务任务。
-    try:
-        from module.statistics.opsi_secure import initialize
-        initialize()
-    except Exception:
-        logger.exception('[统计-运行] 启动时初始化未完成（稍后自动重试）')
+    # 迁移成功后才能启动业务，失败保留旧源并退出。
+    from module.persistence.database import initialize
+    initialize()
+
     alas.loop()

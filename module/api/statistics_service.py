@@ -6,70 +6,26 @@ import calendar
 from datetime import datetime, timedelta
 
 from module.api.protocol import ApiError
+from module.persistence.database import configured_database, get_database
 
 _loot_lock = threading.Lock()
 
 
-def get_statistics_fingerprint(instance: str) -> str:
-    """获取当前实例统计数据的轻量级指纹。
-
-    检测 SQLite 本地快照库、CL1 记录库、舰船统计文件以及配置文件修改时间，
-    用于 WebSocket 会话高效判断后端统计数据是否有更新。
-
-    Args:
-        instance: 实例名称。
-
-    Returns:
-        str: 由各文件修改时间及文件大小拼接而成的指纹字符串。
-    """
+def get_statistics_fingerprint(instance: str, directory=None) -> str:
+    """检测总库、已提交 WAL 和实例配置的修改时间与大小。"""
+    database = get_database(directory)
     parts = []
-    # 1. 资源快照数据库 (azurstats_local.db)
-    res_db = './config/azurstats_local.db'
-    try:
-        stat = os.stat(res_db)
-        parts.append(f"res:{stat.st_mtime_ns}:{stat.st_size}")
-    except OSError:
-        parts.append("res:none")
-
-    # 2. 实例配置文件 (config/<instance>.json)
-    cfg_file = f'./config/{instance}.json'
-    try:
-        stat = os.stat(cfg_file)
-        parts.append(f"cfg:{stat.st_mtime_ns}")
-    except OSError:
-        parts.append("cfg:none")
-
-    # 3. 大世界与委托记录库 (cl1_data.db)
-    cl1_db = './config/cl1_data.db'
-    try:
-        stat = os.stat(cl1_db)
-        parts.append(f"cl1:{stat.st_mtime_ns}")
-    except OSError:
-        parts.append("cl1:none")
-
-    # 4. 舰船经验统计文件（按实例隔离）
-    ship_file = f'./log/cl1/{instance}/ship_exp_data.json'
-    try:
-        stat = os.stat(ship_file)
-        parts.append(f"ship:{stat.st_mtime_ns}")
-    except OSError:
-        parts.append("ship:none")
-
-    # 5. 仓库统计库
-    try:
-        stat = os.stat('./config/storage_statistics.db')
-        parts.append(f'storage:{stat.st_mtime_ns}:{stat.st_size}')
-    except OSError:
-        parts.append('storage:none')
-    for database in ('azurstats_local.db', 'cl1_data.db', 'storage_statistics.db'):
+    for label, path in (('business', database.path), ('wal', database.path.with_name(database.path.name + '-wal')),
+                        ('config', database.directory / (instance + '.json'))):
         try:
-            stat = os.stat('./config/' + database + '-wal')
-            parts.append(f'{database}-wal:{stat.st_mtime_ns}:{stat.st_size}')
+            stat = path.stat()
+            parts.append(f'{label}:{stat.st_mtime_ns}:{stat.st_size}')
         except OSError:
-            parts.append(database + '-wal:none')
+            parts.append(label + ':none')
     return ';'.join(parts)
 
 
+@configured_database
 def refresh_loot(configs, instance: str) -> dict:
     """重新计算已有本地掉落记录，复用旧界面刷新操作。
 
@@ -240,6 +196,7 @@ def _trend_window(selected: datetime, now: datetime, period: str, days: int) -> 
     return now - timedelta(days=days), now
 
 
+@configured_database
 def report(configs, instance: str, category: str, month: str, days: int, period: str,
            research_series: int = 0, research_scope: str = 'series', loot_task: str = None) -> dict:
     """生成并获取指定维度的统计报表。"""
@@ -294,7 +251,7 @@ def _report(configs, instance: str, category: str, month: str, days: int, period
         from module.statistics.storage_snapshot import get_storage_timeline, latest_snapshot
         from module.storage.statistics_recognition import StorageCatalog
         catalog = StorageCatalog()
-        database = Path(configs.path(instance)).parent / 'storage_statistics.db'
+        database = getattr(configs, 'database', None) or get_database(Path(configs.path(instance)).parent)
         snapshot = latest_snapshot(instance, database=database)
         icons = {item['id']: 'storage:' + item['templates'][0].removeprefix('assets/stats/').removesuffix('.png')
                  for item in catalog.items}

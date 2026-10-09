@@ -102,6 +102,8 @@ class ConfigService:
         """
         self.root = root
         self.directory = root / 'config'
+        from module.persistence.database import get_database
+        self.database = get_database(self.directory)
         # 导入源单独一个目录：config/ 下的 *.json 都算实例，导入源不能与实例列表混在一起。
         self.import_directory = self.directory / 'import'
         self.lock = threading.RLock()
@@ -330,7 +332,7 @@ class ConfigService:
         data, _ = self.read(name)
         from module.runtime.game_data import INSTANCE_FIELD
         data.pop(INSTANCE_FIELD, None)
-        store = ProgramStore(self.directory)
+        store = ProgramStore(self.directory, store=self.database)
         if store.exists(name):
             data['_schedulerProgram'] = store.export(name)
         return data
@@ -363,7 +365,7 @@ class ConfigService:
             # 空占位表示新实例，首次使用时登记 UUID，禁止把复制的仪表盘当迁移来源。
             data[INSTANCE_FIELD] = None
             from module.scheduler.store import ProgramStore
-            store = ProgramStore(self.directory)
+            store = ProgramStore(self.directory, store=self.database)
             if bundle is not None:
                 try:
                     bundle = store.import_bundle(bundle)
@@ -540,7 +542,9 @@ class ConfigService:
             backup = self.directory / 'backup'
             backup.mkdir(exist_ok=True)
             target = backup / f'{name}-{datetime.now():%Y%m%d-%H%M%S-%f}.json'
-            self.path(name).replace(target)
+            import shutil
+            shutil.copy2(self.path(name), target)
             from module.scheduler.store import ProgramStore
-            ProgramStore(self.directory).archive(name, backup / target.stem)
+            ProgramStore(self.directory, store=self.database).archive(name, backup / target.stem)
+            self.path(name).unlink()
             return {'deleted': name}

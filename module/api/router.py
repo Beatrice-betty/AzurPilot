@@ -5,6 +5,7 @@ import threading
 from dataclasses import dataclass
 from typing import Callable
 
+from module.persistence.database import configured_database
 from module.api import background_service as background
 from module.api import protocol as p
 from module.api import search_service as search
@@ -235,6 +236,7 @@ class Router:
         from module.api.meowfficer_service import clear
         return clear(self.configs, params.instance)
 
+    @configured_database
     def dispatch(self, method: str, params: dict):
         """分发并执行指定的 API 方法。
 

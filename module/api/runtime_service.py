@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from rich.console import Console
 
 from module.api.protocol import ApiError
+from module.persistence.database import configured_database, get_database
 from module.logger import logger
 from module.runtime.process_manager import ProcessManager
 
@@ -80,16 +81,15 @@ class RuntimeService:
         self.configs = configs
         self.logs_cache = {}
         self.lock = threading.RLock()
-        # 启动时补齐凭证历史；按版本号与进程内缓存只执行一次。
-        try:
-            from module.config.utils import alas_instance
-            from module.statistics.cl1_database import db as cl1_db
-            for name in alas_instance():
+        self.database = get_database(getattr(configs, 'directory', None))
+        # 入口迁移完成后才回填；首次采集同样会检查版本标记。
+        if hasattr(configs, 'names') and self.database.path.is_file():
+            from module.statistics.cl1_database import Cl1Database
+            cl1_db = Cl1Database(store=self.database)
+            for name in configs.names():
                 with cl1_db._stats_transaction() as conn:
                     cl1_db.ensure_coins_history(name, conn)
                     cl1_db.ensure_coins_cleanup(name, conn)
-        except Exception as error:
-            logger.warning(f'[统计] 启动时补齐凭证历史失败，写入快照时会再试: {error}')
 
     def _record_running_now(self) -> None:
         """把当前的运行集合立刻落盘。
@@ -136,6 +136,7 @@ class RuntimeService:
                            'serial': emulator.get('Serial', 'auto'), 'server': emulator.get('ServerName', 'cn')})
         return result
 
+    @configured_database
     def overview(self, instance: str) -> dict:
         """获取指定实例的总览信息。
 
@@ -278,6 +279,7 @@ class RuntimeService:
         from module.runtime.preview import hub
         return hub.get(instance)
 
+    @configured_database
     def statistics(self, instance: str, days: int, resource: str) -> dict:
         """获取指定时间范围内的资源趋势历史数据。
 

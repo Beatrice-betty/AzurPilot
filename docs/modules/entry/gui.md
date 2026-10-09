@@ -20,6 +20,8 @@ gui.py 是用户进入系统的第一个进程。用户执行 `uv run python gui
 | 服务层 | 名为 `gui` 的子进程 | 父进程 `multiprocessing.Process(target=func)` | uvicorn + `module.api` 的全部 HTTP/WS 服务 |
 | 工作层 | 每个配置实例一个 worker | 服务层内的 `ProcessManager` | 运行 `AzurLaneAutoScript`，控制设备 |
 
+所有运行入口在业务 worker 启动前执行 `module.persistence.database.initialize()`。首次迁移先备份、转换与检查，失败停止启动并保留旧源；总库完成标记存在而数据库丢失时必须恢复备份。模块导入不创建总库，详见 [普通业务数据存储](../infra/persistence.md)。
+
 ## 2. 模块职责
 
 ### 负责

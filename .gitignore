@@ -29,6 +29,11 @@ config/stock-exchange/
 config/opsi_secure/
 
 config/*.db
+config/*.db-wal
+config/*.db-shm
+/config/azurpilot.migrated*
+/config/azurpilot.*.tmp*
+/config/storage-backups/
 config/*/config.db*
 config/*/account.destroyed
 config/tmp*
