@@ -39,7 +39,7 @@ from deploy.uv import (
     log_command_output,
     redact_sensitive_text,
 )
-from module.logger import logger
+from module.logger import get_log_file_path, logger
 from module.runtime import worker_registry
 from module.runtime.process_control import pid_exists, stop_process, stop_process_tree
 from module.runtime.setting import (
@@ -218,9 +218,10 @@ def func(
     from module.logger import set_console_logger, set_file_logger
     try:
         set_file_logger('webui')
+        logger.info('[GUI] WebUI 服务开始初始化，后续详细日志：%s', logger.log_file)
         set_console_logger(False)
     except OSError:
-        pass
+        logger.warning('[GUI] WebUI 文件日志不可用，继续输出到控制台')
 
     import argparse
     import asyncio
@@ -829,6 +830,7 @@ def run_webui_supervisor() -> int:
     startup_failures = 0
     runtime_failures = 0
     force_dependency_sync = False
+    logger.info('[GUI] 检查并回收上次异常退出的 worker')
     if not _recover_orphaned_workers():
         fatal_error = FatalStartupError(
             "残留 worker 未能回收，无法保证设备控制任务唯一",
@@ -842,6 +844,8 @@ def run_webui_supervisor() -> int:
         return fatal_error.exit_code
     try:
         while not should_exit:
+            logger.info('[GUI] 检查依赖同步状态，准备 WebUI 启动环境')
+            stage_started = time.perf_counter()
             (
                 ready_to_start,
                 service,
@@ -859,11 +863,15 @@ def run_webui_supervisor() -> int:
                     exit_code=EXIT_DEPENDENCY_SYNC_FAILURE,
                 )
             force_dependency_sync = False
+            logger.info('[GUI] 依赖已就绪，耗时 %.2f 秒', time.perf_counter() - stage_started)
 
             # 首次安装前端依赖可能较慢，必须在子进程监听计时开始前完成。
+            logger.info('[GUI] 检查前端静态资源，必要时安装依赖并构建')
+            stage_started = time.perf_counter()
             from deploy.frontend import ensure_frontend
             try:
                 ensure_frontend()
+                logger.info('[GUI] 前端静态资源已就绪，耗时 %.2f 秒', time.perf_counter() - stage_started)
             except Exception as exc:
                 logger.exception_context(
                     title='React 前端构建失败',
@@ -906,6 +914,8 @@ def run_webui_supervisor() -> int:
                 time.sleep(startup_failures)
                 continue
             logger.info(f"[GUI] 启动AzurPilot Web服务 (PID: {process.pid})")
+            logger.info('[GUI] 等待 WebUI 服务完成监听（超时 %s 秒）；服务日志：%s',
+                        WEBUI_READY_TIMEOUT, get_log_file_path('webui').resolve())
 
             try:
                 ready = _wait_for_webui_ready(process, ready_event)
@@ -1066,9 +1076,17 @@ def run_webui_supervisor() -> int:
 
 
 if __name__ == "__main__":
+    # 启动与迁移日志在 Windows 父进程中也保留，子进程另写对应日期的 webui 日志。
+    from module.logger import set_file_logger
+    try:
+        set_file_logger('gui-launcher')
+    except OSError:
+        logger.warning('[GUI] 启动文件日志不可用，继续输出到控制台')
+    logger.info('[GUI] 开始检查普通业务存储；启动日志：%s', logger.log_file or '控制台')
     # 迁移成功后才能启动业务，失败保留旧源并退出。
     from module.persistence.database import initialize
     initialize()
+    logger.info('[GUI] 存储已就绪，继续初始化 WebUI')
 
     # 设置multiprocessing启动方式为spawn（macOS兼容性要求）
     try:
@@ -1080,7 +1098,9 @@ if __name__ == "__main__":
         logger.warning("[GUI] 无法设置spawn启动方式，可能使用fork（macOS上不推荐）")
 
     if State.deploy_config.EnableReload:
+        logger.info('[GUI] 进入热重载监督模式')
         sys.exit(run_webui_supervisor())
     else:
         # 非重载模式：直接运行
+        logger.info('[GUI] 进入直接运行模式')
         func(None, None)

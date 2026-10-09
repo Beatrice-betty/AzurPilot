@@ -137,6 +137,8 @@ class MigrationProcessTests(unittest.TestCase):
                                         cwd=root, capture_output=True, encoding='utf-8', errors='replace', timeout=60)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertIn('migration-ready', result.stdout)
+                self.assertIn('[存储迁移]', result.stdout)
+                self.assertIn('总库已就绪', result.stdout)
                 self.assertTrue((config / 'azurpilot.migrated').is_file())
                 self.assertEqual(source.read_bytes(), original)
                 report = json.loads(next((config / 'storage-backups').glob('*/unmigrated.json')).read_text(encoding='utf-8'))
@@ -173,6 +175,50 @@ class MigrationTests(unittest.TestCase):
             connection.execute('UPDATE cl1_data SET data_json=NULL,encrypted_blob=?', (blob,))
         return source
 
+    def test_migration_logs_stages_and_existing_database_without_snapshot_contents(self):
+        sensitive_value = 'private-snapshot-fixture'
+        self.old_cl1({'extra': sensitive_value})
+        with self.assertLogs('alas', level='INFO') as captured:
+            self.database.ensure_ready()
+        messages = '\n'.join(captured.output)
+        stages = ('等待总库初始化锁', '首次初始化总库', '检查旧运行入口',
+                  '[备份 1/1]', '[转换 1/1]', '开始处理表 cl1_data：共 1 条',
+                  '表 cl1_data 处理完成', '检查临时总库的外键与完整性',
+                  '切换正式总库', '迁移完成', '总库已就绪')
+        positions = [messages.index(stage) for stage in stages]
+        self.assertEqual(positions, sorted(positions))
+        self.assertNotIn(sensitive_value, messages)
+        self.assertIn('耗时', messages)
+        with self.assertLogs('alas', level='INFO') as captured:
+            BusinessDatabase(self.config).ensure_ready()
+        self.assertIn('已完成迁移，无需再次解密旧数据', '\n'.join(captured.output))
+        with self.assertNoLogs('alas', level='INFO'):
+            self.database.ensure_ready()
+
+    def test_waiting_for_install_lock_is_logged_before_acquiring_it(self):
+        with self.assertLogs('alas', level='INFO') as captured:
+            with patch('module.persistence.database.config_transaction', side_effect=TimeoutError('fixture lock')):
+                with self.assertRaises(TimeoutError):
+                    self.database.ensure_ready()
+        self.assertIn('等待总库初始化锁', '\n'.join(captured.output))
+        self.assertFalse(self.database.path.exists())
+
+    def test_large_table_reports_progress_without_logging_values(self):
+        from module.persistence.migration import _source_rows
+        with closing(sqlite3.connect(':memory:')) as source:
+            source.execute('CREATE TABLE records(value TEXT)')
+            source.executemany('INSERT INTO records VALUES(?)', [('private-row-fixture',)] * 3)
+            with self.assertLogs('alas', level='INFO') as captured, \
+                    patch('module.persistence.migration.time.perf_counter', side_effect=[0, 2, 2.5, 5, 5]):
+                rows = list(_source_rows(source, 'records', 'SELECT * FROM records'))
+        self.assertEqual(len(rows), 3)
+        messages = '\n'.join(captured.output)
+        self.assertIn('已处理 1/3 条', messages)
+        self.assertNotIn('已处理 2/3 条', messages)
+        self.assertIn('已处理 3/3 条', messages)
+        self.assertIn('处理完成：3 条', messages)
+        self.assertNotIn('private-row-fixture', messages)
+
     def test_entire_aes_snapshot_uses_saved_device_id_without_refreshing_it(self):
         expected = {'battle_count': 7, 'commission_income_entries': [{'keep': True}], 'extra': [None, 2 ** 80]}
         source = self.encrypted_cl1(expected, 'old-device')
@@ -204,9 +250,18 @@ class MigrationTests(unittest.TestCase):
         identity = self.root / 'log' / 'device_id.json'
         identity.write_text('{"device_id":"current-device"}', encoding='utf-8')
         original, material = source.read_bytes(), identity.read_bytes()
-        with patch('module.base.device_id.get_device_id', side_effect=AssertionError('不得刷新设备 ID')), \
+        with self.assertLogs('alas', level='INFO') as captured, \
+                patch('module.base.device_id.get_device_id', side_effect=AssertionError('不得刷新设备 ID')), \
                 patch('module.base.device_id.generate_device_id', return_value='current-device'):
             self.database.ensure_ready()
+        messages = '\n'.join(captured.output)
+        self.assertIn('开始解密整行 AES 月度快照', messages)
+        self.assertIn('跳过不可读旧密文', messages)
+        self.assertIn('已跳过 1 条', messages)
+        self.assertIn('unmigrated.json', messages)
+        self.assertIn('迁移完成', messages)
+        self.assertNotIn('current-device', messages)
+        self.assertNotIn('lost-device', messages)
         with self.database.transaction(write=False) as connection:
             self.assertIsNone(read_month(connection, 'inst', '2026-09'))
             self.assertEqual(read_month(connection, 'inst', '2026-08'), expected)
@@ -303,8 +358,14 @@ class MigrationTests(unittest.TestCase):
         with closing(sqlite3.connect(path)) as connection, connection:
             connection.execute("UPDATE cl1_data SET data_json='broken'")
         original = path.read_bytes()
-        with self.assertRaises(MigrationError):
-            self.database.ensure_ready()
+        with self.assertLogs('alas', level='INFO') as captured:
+            with self.assertRaises(MigrationError):
+                self.database.ensure_ready()
+        messages = '\n'.join(captured.output)
+        self.assertIn('阶段未完成：[转换 1/1]', messages)
+        self.assertIn('cl1_data.db', messages)
+        self.assertIn('原件保留', messages)
+        self.assertNotIn('迁移完成：', messages)
         self.assertFalse(self.database.path.exists())
         self.assertFalse(self.database.marker.exists())
         self.assertEqual(path.read_bytes(), original)

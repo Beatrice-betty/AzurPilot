@@ -2,6 +2,7 @@
 import os
 import sqlite3
 import threading
+import time
 from contextlib import contextmanager, closing
 from contextvars import ContextVar
 from functools import wraps
@@ -73,10 +74,15 @@ class BusinessDatabase:
     def ensure_ready(self):
         if self._ready and self.path.is_file():
             return
+        from module.logger import logger
+        started = time.perf_counter()
+        logger.info('[存储] 等待总库初始化锁：%s', self.path)
         with self._lock, config_transaction(self.directory / '.azurpilot-install'):
+            logger.info('[存储] 已取得安装锁，等待 %.2f 秒', time.perf_counter() - started)
             if self.path.is_symlink():
                 raise ValueError('总库路径不能是符号链接')
             if self.path.is_file():
+                logger.info('[存储] 检查已有总库的版本与迁移记录：%s', self.path)
                 with closing(sqlite3.connect(self.path.as_uri() + '?mode=ro', uri=True)) as connection:
                     version = connection.execute('PRAGMA user_version').fetchone()[0]
                     if version != VERSION:
@@ -85,13 +91,16 @@ class BusinessDatabase:
                     if row is None or connection.execute('SELECT MAX(version) FROM storage_migrations').fetchone()[0] != version:
                         raise ValueError('总库缺少迁移完成记录')
                     if not self.marker.exists():
+                        logger.info('[存储] 补齐迁移完成标记')
                         self._write_marker(row[0])
+                logger.info('[存储] 总库 v%s 已完成迁移，无需再次解密旧数据', VERSION)
             else:
                 if self.marker.exists():
                     raise FileNotFoundError('已迁移的普通总库丢失，请从备份恢复，不能重新导入旧数据')
                 from module.persistence.migration import migrate
                 migrate(self)
             self._ready = True
+            logger.info('[存储] 总库已就绪，耗时 %.2f 秒：%s', time.perf_counter() - started, self.path)
 
     def _write_marker(self, digest):
         temporary = self.marker.with_suffix('.migrated.tmp')
