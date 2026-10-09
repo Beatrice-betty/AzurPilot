@@ -1075,17 +1075,27 @@ def run_webui_supervisor() -> int:
     return fatal_error.exit_code if fatal_error is not None else EXIT_SUCCESS
 
 
-if __name__ == "__main__":
-    # 启动与迁移日志在 Windows 父进程中也保留，子进程另写对应日期的 webui 日志。
-    from module.logger import set_file_logger
+def main() -> int:
+    """初始化普通业务数据并启动 WebUI，失败原因写入 GUI 日志。"""
+    # Windows 父进程保留启动日志；文件不可写时继续输出到控制台。
     try:
-        set_file_logger('gui-launcher')
+        logger.set_file_logger('gui-launcher')
     except OSError:
         logger.warning('[GUI] 启动文件日志不可用，继续输出到控制台')
     logger.info('[GUI] 开始检查普通业务存储；启动日志：%s', logger.log_file or '控制台')
-    # 迁移成功后才能启动业务，失败保留旧源并退出。
-    from module.persistence.database import initialize
-    initialize()
+    try:
+        from module.persistence.database import initialize
+        initialize()
+    except Exception as exc:
+        logger.error_context(
+            title='普通业务数据初始化失败',
+            reason=str(exc),
+            exc=exc,
+            impact='WebUI 尚未启动，旧数据与迁移备份保留。',
+            action='查看 GUI 日志中的异常原因，修复后重试；不要删除旧数据库或迁移标记。',
+            level=50,
+        )
+        return EXIT_STARTUP_FAILURE
     logger.info('[GUI] 存储已就绪，继续初始化 WebUI')
 
     # 设置multiprocessing启动方式为spawn（macOS兼容性要求）
@@ -1099,8 +1109,13 @@ if __name__ == "__main__":
 
     if State.deploy_config.EnableReload:
         logger.info('[GUI] 进入热重载监督模式')
-        sys.exit(run_webui_supervisor())
+        return run_webui_supervisor()
     else:
         # 非重载模式：直接运行
         logger.info('[GUI] 进入直接运行模式')
         func(None, None)
+        return EXIT_SUCCESS
+
+
+if __name__ == "__main__":
+    sys.exit(main())
