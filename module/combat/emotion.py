@@ -513,16 +513,9 @@ class Emotion:
     def emergency_reset(self):
         """心情清零保底。计算模式下出现红脸弹窗时调用。
 
-        将所有舰队的心情值重置为0，强制下次任务等待心情恢复。
-        这是计算模式下的异常保底措施，正常情况下不应被调用——
-        计算模式会在进入战役前预检心情并延迟任务，红脸弹窗仅在
-        ALAS计算错误或用户手动操作后才可能出现。
-
-        重置内容：
-        - FleetEmotion.current 设为 0
-        - config 中的 Value 设为 0
-        - config 中的 Record 设为当前时间（从0开始恢复计时）
-        - 恢复存档失效，需重新填写实测值；弹窗不能证明每支舰队均为 0
+        将受管理舰队的账本从当前时刻按 0 重新计算，保留全部未知恢复相位。
+        0 是保守起点，不代表每艘船的实测心情；在恢复条件正确且无额外消耗时，
+        下限恢复到出击要求后即可自动继续，无需人工校准或重启模拟器。
         """
         if self.using_public:
             fleets = [self.public_fleet]
@@ -532,14 +525,16 @@ class Emotion:
         with self.config.multi_set():
             record_time = current_time()
             for fleet in fleets:
+                state = EmotionRecoveryState.calibrate(
+                    0, record_time, fleet.recover, fleet.oath, fleet.onsen)
                 fleet.current = 0
-                fleet.state = None
-                fleet.calibration_error = '红脸保底后需重新校准'
+                fleet.state = state
+                fleet.calibration_error = ''
                 setattr(self.config, fleet.value_name, 0)
                 setattr(self.config, fleet.value_name.replace('Value', 'Record'),
                         record_time)
-                setattr(self.config, fleet.state_name, None)
-        logger.info('[心情-保底] 已将所有舰队心情清零并使恢复基准失效，请重新填写实测心情')
+                setattr(self.config, fleet.state_name, state.export())
+        logger.info('[心情-保底] 已将受管理舰队心情按0重新计时，恢复到出击要求后自动继续')
 
     @cached_property
     def bug_threshold(self):

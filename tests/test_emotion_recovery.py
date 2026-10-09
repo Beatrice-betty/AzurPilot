@@ -7,6 +7,7 @@ import unittest
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from dev_tools.emotion_simulate import Clock, LuaOracle, MemoryConfig, QuietLogger, ShipSpec, simulate
@@ -15,7 +16,8 @@ import module.config.config as config_source
 from module.combat.emotion_state import EmotionRecoveryState, PERIOD_US
 from module.config.config import AzurLaneConfig, Function
 from module.config.utils import read_file, write_file
-from module.exception import RequestHumanTakeover, ScriptEnd
+from module.exception import CampaignEnd, RequestHumanTakeover, ScriptEnd
+from module.handler.info_handler import InfoHandler
 
 
 class RecoveryStateTests(unittest.TestCase):
@@ -132,16 +134,69 @@ class EmotionIntegrationTests(unittest.TestCase):
         self.assertLessEqual(abs(emotion.fleet_1.current - clock.oracle.values[0]), 3)
         self.assertEqual(clock.now(), emotion.fleet_1.state.record)
 
-    def test_recovery_condition_change_and_red_fallback_require_calibration(self):
+    def test_recovery_condition_change_requires_calibration(self):
         _, config, emotion = self.setup_tracker(public=True)
         config.PublicEmotion_FleetOath = False
         with self.assertRaises(RequestHumanTakeover):
             emotion.check_reduce(1)
-        emotion.emergency_reset()
-        self.assertEqual(0, config.PublicEmotion_FleetValue)
-        self.assertIsNone(config.PublicEmotion_FleetRecoveryState)
-        with self.assertRaises(RequestHumanTakeover):
-            emotion.check_reduce(1)
+
+    def test_red_fallback_recovers_automatically_after_json_reload(self):
+        for public in (False, True):
+            with self.subTest(public=public):
+                clock, config, emotion = self.setup_tracker(public=public)
+                prefixes = ['PublicEmotion_Fleet'] if public else ['Emotion_Fleet1', 'Emotion_Fleet2']
+                for prefix in prefixes:
+                    setattr(config, prefix + 'RecoveryState', None)
+                reset_at = clock.now()
+                emotion.emergency_reset()
+                for prefix in prefixes:
+                    self.assertEqual(0, getattr(config, prefix + 'Value'))
+                    self.assertEqual(reset_at, getattr(config, prefix + 'Record'))
+                    self.assertEqual([[0, PERIOD_US, 0]],
+                                     getattr(config, prefix + 'RecoveryState')['segments'])
+                if public:
+                    self.assertEqual(70, config.Emotion_Fleet1Value)
+                    config.task.command = 'Event'
+
+                # 每批6点，防绿脸40加一场2点，需要完整恢复7批，即42分钟。
+                reloaded = production.Emotion(config)
+                with self.assertRaises(ScriptEnd):
+                    reloaded.check_reduce(1)
+                target_key = f'{config.task.command}.Scheduler.NextRun'
+                recovered = config.fields[target_key]
+                self.assertEqual(reset_at.replace(microsecond=0) + timedelta(minutes=42, seconds=1),
+                                 recovered)
+                clock.advance(7 * PERIOD_US - 1)
+                with self.assertRaises(ScriptEnd):
+                    reloaded.check_reduce(1)
+                clock.advance((recovered - clock.now()) // timedelta(microseconds=1))
+                reloaded = production.Emotion(config)
+                reloaded.check_reduce(1)
+                fleet = reloaded.public_fleet if public else reloaded.fleet_1
+                self.assertGreaterEqual(fleet.lower, 42)
+                reloaded.reduce(1)
+                self.assertGreaterEqual(fleet.lower, 40)
+
+    def test_red_popup_delays_until_full_map_can_run(self):
+        clock, config, emotion = self.setup_tracker()
+        reset_at = clock.now()
+
+        def withdraw():
+            raise CampaignEnd
+
+        handler = SimpleNamespace(
+            emotion=emotion, config=config, _map_battle=6,
+            handle_use_data_key=lambda: False, handle_popup_cancel=lambda name: True,
+            _emotion_emergency_exit=withdraw)
+        with self.assertRaisesRegex(ScriptEnd, '心情清零并延时'):
+            InfoHandler.handle_combat_low_emotion(handler)
+        recovered = config.fields['Main.Scheduler.NextRun']
+        # 防绿脸40加下一轮6场的12点，需要9批，每批6分钟。
+        self.assertEqual(reset_at.replace(microsecond=0) + timedelta(minutes=54, seconds=1), recovered)
+        clock.advance((recovered - clock.now()) // timedelta(microseconds=1))
+        reloaded = production.Emotion(config)
+        reloaded.check_reduce(6)
+        self.assertGreaterEqual(reloaded.fleet_1.lower, 52)
 
     def test_clock_rollback_cannot_authorize_sortie(self):
         clock, _, emotion = self.setup_tracker()
@@ -219,6 +274,17 @@ class EmotionIntegrationTests(unittest.TestCase):
                 fields = service.read('testpilot')[0]['General']['PublicEmotion']
                 self.assertEqual(81, fields['FleetValue'])
                 self.assertEqual([[0, PERIOD_US, 81]], fields['FleetRecoveryState']['segments'])
+
+                emotion.emergency_reset()
+                fields = service.read('testpilot')[0]['General']['PublicEmotion']
+                self.assertEqual(0, fields['FleetValue'])
+                self.assertEqual([[0, PERIOD_US, 0]], fields['FleetRecoveryState']['segments'])
+                clock.advance(42 * 60_000_000)
+                real.bind('Main')
+                real.task = Function(real.data['Main'])
+                reloaded = production.Emotion(real)
+                reloaded.check_reduce(1)
+                self.assertGreaterEqual(reloaded.public_fleet.lower, 42)
 
     def test_real_atomic_json_matches_memory_through_restarts(self):
         clock, fake, left = self.setup_tracker()
