@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from module.logger import logger
+
 
 PERIOD_US = 360_000_000
 MAX_SEGMENTS = 64
@@ -74,6 +76,43 @@ class EmotionRecoveryState:
             raise ValueError('心情恢复条件无效')
         time_us(record)
         return cls(record, recover, oath, onsen, [(0, PERIOD_US, value)])
+
+    @classmethod
+    def migrate(cls, data, value, record, recover, oath, onsen):
+        """把只有数值与时间的旧配置并入单一区间的粗模型。
+
+        升级前的心情配置没有记录恢复相位，仅有一个实测值与一个时间戳，
+        无法还原相位，因此按其原本的「一个区间、区间内数值恒定」语义
+        写入单一区间状态；这与版本 1 的粗模型等价，只是沿用当前格式。
+
+        恢复条件、时间戳与数值本身仍然走完整校验，不会被当作新校准值。
+        仅当数据缺失时可用；任何已存在的存档（含未知版本）都会被拒，
+        避免覆盖或重置已经学到的相位。
+
+        Args:
+            data: 已有任何形式的存档时一律拒绝迁移。
+            record: 实测值与恢复相位所依据的时刻。
+
+        Returns:
+            EmotionRecoveryState: 可参与推进的恢复状态。
+
+        Raises:
+            ValueError: 数据已是有效存档，或旧字段本身不可信。
+        """
+        try:
+            cls.restore(data, value, record, recover, oath, onsen)
+        except ValueError:
+            pass
+        else:
+            raise ValueError('已有恢复存档，无需迁移')
+        if data is not None:
+            # 已有任何形式的存档（含未知版本）都不迁移，避免覆盖或重置相位。
+            raise ValueError('恢复存档存在但已失效，需实测校准')
+        state = cls.calibrate(value, record, recover, oath, onsen)
+        logger.info('[心情-兼容] 配置缺少恢复相位记录，已按单一区间建立恢复起点：'
+                    f'心情 {value} @ {record.isoformat(timespec="seconds")}；'
+                    '要获得相位精度，可在任务页重新填写该舰队的实测最低心情值')
+        return state
 
     @classmethod
     def restore(cls, data, value, record, recover, oath, onsen):
