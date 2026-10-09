@@ -9,6 +9,7 @@ import re
 import shutil
 import sqlite3
 import sys
+import time
 from contextlib import ExitStack, closing, contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -32,6 +33,12 @@ class MigrationError(RuntimeError):
 
 class UnreadableCiphertext(MigrationError):
     """旧密文不可读时仅跳过所属记录，原件及迁移备份继续保留。"""
+
+
+def _log_progress(message, *args):
+    """只记录阶段、来源和数量，不输出快照、密文或密钥内容。"""
+    from module.logger import logger
+    logger.info('[存储迁移] ' + message, *args)
 
 
 def source_files(database):
@@ -123,8 +130,18 @@ def assert_no_workers(root):
 
 def snapshot_database(source, target):
     target.parent.mkdir(parents=True, exist_ok=True)
+    last_log = time.perf_counter()
+
+    def progress(_status, remaining, total):
+        nonlocal last_log
+        now = time.perf_counter()
+        if total > 0 and now - last_log >= 2:
+            _log_progress('数据库备份 %s：%s/%s 页（%.1f%%）', source.name, total - remaining, total,
+                          100 * (total - remaining) / total)
+            last_log = now
+
     with closing(sqlite3.connect(source.as_uri() + '?mode=ro', uri=True, timeout=10)) as original, closing(sqlite3.connect(target)) as copy:
-        original.backup(copy)
+        original.backup(copy, pages=256, progress=progress)
 
 
 
@@ -152,12 +169,14 @@ def fingerprint(path):
 def backup_sources(database, sources, target):
     root = database.directory.parent
     copies, manifest = {}, []
-    for path, kind in sorted(sources.items(), key=lambda pair: str(pair[0])):
+    for ordinal, (path, kind) in enumerate(sorted(sources.items(), key=lambda pair: str(pair[0])), 1):
         if path.is_symlink():
             raise MigrationError('迁移源不能是符号链接')
         relative = path.relative_to(root) if path.is_relative_to(root) else Path('external') / hashlib.sha256(str(path).encode()).hexdigest()[:16] / path.name
         copy = target / relative
         copy.parent.mkdir(parents=True, exist_ok=True)
+        started = time.perf_counter()
+        _log_progress('[备份 %s/%s] %s（%s）', ordinal, len(sources), relative, kind)
         before = fingerprint(path)
         if kind in ('statistics', 'cl1', 'storage', 'daily', 'scheduler'):
             snapshot_database(path, copy)
@@ -167,11 +186,13 @@ def backup_sources(database, sources, target):
             raise MigrationError('迁移源在备份期间发生变化，请停止旧写入者后重试')
         copies[path] = copy
         manifest.append({'path': str(relative), 'kind': kind, 'digest': before})
+        _log_progress('[备份 %s/%s] 完成，耗时 %.2f 秒', ordinal, len(sources), time.perf_counter() - started)
     # 安全恢复材料只原样备份；不读取外部密钥，也不改变认证身份。
     for folder in ('opsi_secure', 'stock-exchange'):
         source = database.directory / folder
         if not source.exists():
             continue
+        _log_progress('备份专用安全存储：%s', folder)
         for path in source.rglob('*'):
             if path.is_symlink():
                 raise MigrationError('安全恢复材料包含符号链接')
@@ -184,7 +205,9 @@ def backup_sources(database, sources, target):
             else:
                 shutil.copy2(path, copy)
     for path in database.directory.glob('*/config.db'):
+        _log_progress('备份实例安全数据库：%s', path.relative_to(database.directory))
         snapshot_database(path, target / 'config' / path.relative_to(database.directory))
+    _log_progress('备份实例配置与源清单')
     for path in database.directory.glob('*.json'):
         if not path.name.startswith('template'):
             copy = target / 'config' / path.name
@@ -207,10 +230,12 @@ class LegacyDecoder:
         self._legacy_ids = None
         self.unmigrated = []
         self.unmigrated_months = set()
+        self._decoding_kinds = set()
 
     def legacy_device_ids(self):
         """只读旧设备 ID 并计算当前硬件 ID，不调用覆写文件或启动定时器的初始化。"""
         if self._legacy_ids is None:
+            _log_progress('读取已有设备 ID，并只读计算当前硬件指纹')
             from module.base import device_id
 
             candidates = []
@@ -226,6 +251,7 @@ class LegacyDecoder:
                     candidates.append(data.get('device_id'))
             candidates.extend((device_id._device_id, device_id.get_old_device_id(), device_id.generate_device_id()))
             self._legacy_ids = tuple(dict.fromkeys(value for value in candidates if isinstance(value, str) and value))
+            _log_progress('设备 ID 读取完成，候选数量：%s', len(self._legacy_ids))
         return self._legacy_ids
 
     def legacy_keys(self):
@@ -237,11 +263,19 @@ class LegacyDecoder:
     def record_unmigrated(self, source, kind, identity, error):
         relative = str(source.relative_to(self.root)) if source.is_relative_to(self.root) else str(source)
         self.unmigrated.append(dict(source=relative, kind=kind, identity=identity, reason=str(error)))
+        if len(self.unmigrated) <= 10 or len(self.unmigrated) % 1000 == 0:
+            from module.logger import logger
+            logger.warning('[存储迁移] 跳过不可读旧密文：%s %s %s；%s（累计 %s 条）',
+                           relative, kind, identity, error, len(self.unmigrated))
         if kind == 'cl1':
             self.unmigrated_months.add((identity['instance'], identity['month']))
 
     def payload(self, kind, raw, context):
         if self.secure.is_ciphertext(raw):
+            encoding = 'V2' if raw.startswith(self.secure.BLOB_PREFIX) else 'V1'
+            if (kind, encoding) not in self._decoding_kinds:
+                _log_progress('开始解密 %s 旧载荷（%s），只读现有密钥', kind, encoding)
+                self._decoding_kinds.add((kind, encoding))
             result = self.store.vault_keys().decrypt_record(kind, raw, context)
             if result is None:
                 raise UnreadableCiphertext(f'旧 {kind} 密文无法解码')
@@ -260,6 +294,7 @@ class LegacyDecoder:
                 pass
         if not isinstance(data, dict) and row.get('encrypted_blob'):
             from module.statistics.cl1_legacy import decrypt_legacy_payload
+            _log_progress('开始解密整行 AES 月度快照：%s / %s', row.get('instance'), row.get('month'))
             decoded = False
             for key in self.legacy_keys():
                 try:
@@ -302,6 +337,21 @@ def verify_snapshot(expected, actual):
         raise MigrationError('转换后的快照与原业务结果不一致，未切换总库')
     return True
 
+
+def _source_rows(source, table, query):
+    """按表记录处理进度，较大的表每两秒输出一次，不输出业务内容。"""
+    total = source.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0]
+    started = last_log = time.perf_counter()
+    _log_progress('开始处理表 %s：共 %s 条记录', table, total)
+    for ordinal, row in enumerate(source.execute(query), 1):
+        yield row
+        now = time.perf_counter()
+        if now - last_log >= 2:
+            _log_progress('表 %s：已处理 %s/%s 条，耗时 %.2f 秒', table, ordinal, total, now - started)
+            last_log = now
+    _log_progress('表 %s 处理完成：%s 条，耗时 %.2f 秒', table, total, time.perf_counter() - started)
+
+
 def import_database(connection, path, kind, original, decoder):
     with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)) as source:
         source.row_factory = sqlite3.Row
@@ -319,7 +369,7 @@ def import_database(connection, path, kind, original, decoder):
             raise MigrationError(f'旧 {kind} 数据库的表结构不符合迁移约定')
         if kind == 'cl1' and 'cl1_data' in tables:
             seen = set()
-            for row in source.execute('SELECT * FROM cl1_data ORDER BY rowid'):
+            for row in _source_rows(source, 'cl1_data', 'SELECT * FROM cl1_data ORDER BY rowid'):
                 row = dict(row)
                 key = (row['instance'], row['month'])
                 if key in seen or read_month(connection, *key) is not None:
@@ -336,7 +386,7 @@ def import_database(connection, path, kind, original, decoder):
             if table not in tables:
                 continue
             columns = {row[1] for row in connection.execute(f'PRAGMA table_info({table})')}
-            for row in source.execute(f'SELECT rowid AS __migration_rowid, * FROM {table} ORDER BY rowid'):
+            for row in _source_rows(source, table, f'SELECT rowid AS __migration_rowid, * FROM {table} ORDER BY rowid'):
                 values = dict(row)
                 rowid = values.pop('__migration_rowid')
                 try:
@@ -475,29 +525,50 @@ def import_farming(connection, original, copy, decoder):
 
 
 def migrate(database):
+    started = time.perf_counter()
     directory = database.directory
-    directory.mkdir(parents=True, exist_ok=True)
-    sources = source_files(database)
-    assert_no_workers(directory.parent)
     temporary = directory / ('azurpilot.' + uuid4().hex + '.tmp')
     backup = directory / 'storage-backups' / ('pre-v1-' + datetime.now().strftime('%Y%m%d-%H%M%S') + '-' + uuid4().hex[:8])
-    decoder = LegacyDecoder(directory.parent)
+
+    def phase(message, *args):
+        nonlocal stage
+        stage = message % args if args else message
+        _log_progress('%s', stage)
+
+    stage = '清点旧存储'
     try:
+        phase('首次初始化总库 v%s，清点旧存储：%s', VERSION, directory)
+        directory.mkdir(parents=True, exist_ok=True)
+        sources = source_files(database)
+        _log_progress('发现 %s 个旧来源，备份目录：%s', len(sources), backup)
+        phase('检查旧运行入口与业务 worker 是否已停止')
+        assert_no_workers(directory.parent)
+        phase('准备只读旧数据解码器')
+        decoder = LegacyDecoder(directory.parent)
         with ExitStack() as locks:
+            phase('取得旧来源及安全恢复材料的文件锁')
             for path in sorted(sources, key=str):
+                _log_progress('等待旧来源文件锁：%s', path)
                 locks.enter_context(config_transaction(path))
             for path in directory.glob('*/config.db'):
+                _log_progress('等待实例安全数据库文件锁：%s', path)
                 locks.enter_context(config_transaction(path))
             for path in (directory / 'stock-exchange', directory / 'stock-exchange' / 'registry.json'):
+                _log_progress('等待安全恢复材料文件锁：%s', path)
                 locks.enter_context(config_transaction(path))
             for path in sorted(directory.glob('*.json'), key=str):
+                _log_progress('等待实例配置文件锁：%s', path)
                 locks.enter_context(config_transaction(path))
+            phase('取得旧 SQLite 数据库写锁，冻结源数据')
             for path, kind in sorted(sources.items(), key=lambda pair: str(pair[0])):
                 if kind in ('statistics', 'cl1', 'storage', 'daily', 'scheduler'):
+                    _log_progress('等待旧数据库写锁：%s', path)
                     locks.enter_context(freeze_database(path))
+            phase('备份旧普通存储与安全恢复材料：%s', backup)
             backup.mkdir(parents=True)
             copies, manifest = backup_sources(database, sources, backup)
             digest = hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()
+            phase('创建临时总库及 v%s 表结构', VERSION)
             with closing(sqlite3.connect(temporary)) as connection:
                 connection.row_factory = sqlite3.Row
                 connection.execute('PRAGMA foreign_keys=ON')
@@ -506,8 +577,12 @@ def migrate(database):
                 create_schema(connection)
                 connection.execute('BEGIN IMMEDIATE')
                 ordered = sorted(sources.items(), key=lambda pair: (pair[1] not in ('statistics', 'cl1', 'storage', 'daily', 'scheduler'), str(pair[0])))
-                for original, kind in ordered:
+                for ordinal, (original, kind) in enumerate(ordered, 1):
                     copy = copies[original]
+                    relative = original.relative_to(directory.parent) if original.is_relative_to(directory.parent) else original
+                    phase('[转换 %s/%s] %s（%s）', ordinal, len(ordered), relative, kind)
+                    source_started = time.perf_counter()
+                    skipped_before = len(decoder.unmigrated)
                     if kind in ('ships', 'archives', 'farming'):
                         try:
                             if kind == 'ships':
@@ -522,8 +597,7 @@ def migrate(database):
                                 import_farming(connection, original, copy, decoder)
                         except UnreadableCiphertext as error:
                             decoder.record_unmigrated(original, kind, dict(file=original.name), error)
-                        continue
-                    if kind in ('statistics', 'cl1', 'storage', 'daily', 'scheduler'):
+                    elif kind in ('statistics', 'cl1', 'storage', 'daily', 'scheduler'):
                         import_database(connection, copy, kind, original, decoder)
                     elif kind.startswith('scheduler_'):
                         instance, section = original.stem, kind.removeprefix('scheduler_')
@@ -538,25 +612,41 @@ def migrate(database):
                             for name, value in data.items():
                                 if not connection.execute('SELECT 1 FROM scheduler_observations WHERE instance=? AND resource=?', (instance, name)).fetchone():
                                     write_observation(connection, instance, name, value, value['observedAt'], value['source'])
+                    else:
+                        _log_progress('该来源仅保留备份，无需转换')
+                    _log_progress('[转换 %s/%s] 完成，跳过 %s 条不可读密文，耗时 %.2f 秒',
+                                  ordinal, len(ordered), len(decoder.unmigrated) - skipped_before,
+                                  time.perf_counter() - source_started)
+                phase('写入迁移记录并检查临时总库的外键与完整性')
                 insert(connection, 'storage_migrations', dict(version=VERSION, applied_at=datetime.now().isoformat(), source_digest=digest))
                 if connection.execute('PRAGMA foreign_key_check').fetchone() or connection.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
                     raise MigrationError('临时总库未通过完整性检查')
+                phase('验证通过，提交临时总库并执行 WAL 检查点')
                 connection.commit()
                 connection.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+            phase('再次检查源文件摘要与来源清单')
             for row, original in zip(manifest, sorted(sources, key=str)):
                 if fingerprint(original) != row['digest']:
                     raise MigrationError('转换期间源数据发生变化，未切换总库')
             if source_files(database) != sources:
                 raise MigrationError('转换期间旧来源发生变化，未切换总库')
             if decoder.unmigrated:
+                phase('保存 %s 条未迁移记录的清单', len(decoder.unmigrated))
                 (backup / 'unmigrated.json').write_text(json.dumps(decoder.unmigrated, ensure_ascii=False, indent=2), encoding='utf-8')
+            phase('切换正式总库：%s', database.path)
             os.replace(temporary, database.path)
+            phase('保存迁移完成标记')
             database._write_marker(digest)
             if decoder.unmigrated:
                 from module.logger import logger
                 logger.warning(f'[存储迁移] 已跳过 {len(decoder.unmigrated)} 条无法解码的旧密文，'
                                f'原件及备份保留，启动继续；未迁移清单：{backup / "unmigrated.json"}')
+            _log_progress('迁移完成：旧来源 %s 个，跳过 %s 条不可读密文，总耗时 %.2f 秒；备份：%s',
+                          len(sources), len(decoder.unmigrated), time.perf_counter() - started, backup)
     except BaseException:
+        from module.logger import logger
+        logger.error('[存储迁移] 阶段未完成：%s；耗时 %.2f 秒。原件保留，已有备份请查看：%s',
+                     stage, time.perf_counter() - started, backup)
         for suffix in ('', '-wal', '-shm'):
             temporary.with_name(temporary.name + suffix).unlink(missing_ok=True)
         raise

@@ -1,5 +1,6 @@
 import logging
 import tempfile
+import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,6 +12,7 @@ from gui import (
     EXIT_STARTUP_FAILURE,
     EXIT_WORKER_CLEANUP_FAILURE,
     main,
+    func,
     run_webui_supervisor,
 )
 from module.logger import logger
@@ -30,7 +32,7 @@ class TestGuiStartup(unittest.TestCase):
                     side_effect=MigrationError('旧 daily 数据库的表结构不符合迁移约定'),
                 ), patch('gui.run_webui_supervisor') as supervisor, patch('gui.func') as service:
                     self.assertEqual(main(), EXIT_STARTUP_FAILURE)
-                    bind.assert_called_once_with('gui')
+                    bind.assert_called_once_with('gui-launcher')
                     supervisor.assert_not_called()
                     service.assert_not_called()
             finally:
@@ -64,11 +66,15 @@ class TestSupervisorExitCode(unittest.TestCase):
             self.assertEqual(run_webui_supervisor(), EXIT_WORKER_CLEANUP_FAILURE)
 
     def test_frontend_build_failure_returns_failure_code(self):
-        with patch("gui._recover_orphaned_workers", return_value=True), patch(
+        with self.assertLogs('alas', level='INFO') as captured, patch("gui._recover_orphaned_workers", return_value=True), patch(
             "gui._prepare_dependency_sync_before_webui_start",
             return_value=(True, None, None, None),
         ), patch("deploy.frontend.ensure_frontend", side_effect=RuntimeError("npm 不可用")):
             self.assertEqual(run_webui_supervisor(), EXIT_FRONTEND_BUILD_FAILURE)
+        messages = '\n'.join(captured.output)
+        stages = ('检查并回收', '检查依赖同步状态', '依赖已就绪', '检查前端静态资源', 'React 前端构建失败')
+        positions = [messages.index(stage) for stage in stages]
+        self.assertEqual(positions, sorted(positions))
 
     def test_dependency_sync_not_ready_returns_failure_code(self):
         with patch("gui._recover_orphaned_workers", return_value=True), patch(
@@ -89,6 +95,24 @@ class TestSupervisorExitCode(unittest.TestCase):
             "gui._stop_webui_process_tree", return_value=True
         ):
             self.assertEqual(run_webui_supervisor(), 0)
+
+    def test_service_log_path_is_visible_before_console_logging_is_disabled(self):
+        from module.logger import logger
+        logfile = 'fixture/2026-10-09_webui.txt'
+        with self.assertLogs('alas', level='INFO') as captured, \
+                patch('module.logger.set_file_logger') as file_logger, \
+                patch('module.logger.set_console_logger') as console_logger, \
+                patch.object(logger, 'log_file', logfile), \
+                patch.dict(sys.modules, {'uvicorn': None}):
+            def disable_console(enabled):
+                self.assertFalse(enabled)
+                self.assertIn('后续详细日志：' + logfile, '\n'.join(captured.output))
+            console_logger.side_effect = disable_console
+            # 阻止后续服务导入与启动，只验证日志交接顺序。
+            with self.assertRaises(ModuleNotFoundError):
+                func(None)
+        file_logger.assert_called_once_with('webui')
+        console_logger.assert_called_once_with(False)
 
 
 if __name__ == "__main__":
