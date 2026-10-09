@@ -12,13 +12,13 @@ from unittest.mock import Mock, patch
 
 from Crypto.Cipher import AES
 
-from module.persistence.database import BusinessDatabase, register_instance
+from module.persistence.database import BusinessDatabase
 from module.persistence.migration import MigrationError, assert_no_workers
 from module.persistence.snapshots import read_month, read_ship, save_month
 from module.scheduler.store import ProgramStore, ConflictError
 from module.statistics import opsi_secure
 from tests.opsi_test_support import install_store
-from tests.test_opsi_secure import copy_fixture, legacy_blob, legacy_ring, make_cl1_db
+from tests.test_opsi_secure import copy_fixture, legacy_blob, legacy_ring, seal_v2
 
 
 class MigrationProcessTests(unittest.TestCase):
@@ -218,6 +218,109 @@ class MigrationTests(unittest.TestCase):
         self.assertIn('已处理 3/3 条', messages)
         self.assertIn('处理完成：3 条', messages)
         self.assertNotIn('private-row-fixture', messages)
+
+    def test_unreadable_snapshot_files_are_backed_up_and_skipped_without_empty_projections(self):
+        cases = (b'', b' \r\n\t', b'{"private":', b'\xff\xfeinvalid',
+                 b'{"__opsi_secure_v2__":true}',
+                 b'{"__opsi_secure_v1__":true,"payload":"broken"}')
+        for index, raw in enumerate(cases):
+            for kind, filename in (('ships', 'ship_exp_data.json'), ('archives', 'cl1_monthly.json')):
+                with self.subTest(index=index, kind=kind):
+                    root = self.root / f'{kind}-{index}'
+                    root.mkdir()
+                    install_store(self, root)
+                    database = BusinessDatabase(root / 'config')
+                    source = root / 'log' / 'cl1' / 'broken' / filename
+                    source.parent.mkdir(parents=True)
+                    source.write_bytes(raw)
+                    valid = root / 'log' / 'cl1' / 'readable' / filename
+                    valid.parent.mkdir()
+                    expected = {'target_level': 120} if kind == 'ships' else {'2026-09': {'battle_count': 7}}
+                    valid.write_text(json.dumps(expected), encoding='utf-8')
+                    with self.assertLogs('alas', level='INFO') as captured:
+                        database.ensure_ready()
+                    self.assertEqual(source.read_bytes(), raw)
+                    backup = next((database.directory / 'storage-backups').iterdir())
+                    self.assertEqual((backup / source.relative_to(root)).read_bytes(), raw)
+                    report = json.loads((backup / 'unmigrated.json').read_text(encoding='utf-8'))
+                    self.assertEqual(len(report), 1)
+                    self.assertEqual(report[0]['kind'], kind)
+                    self.assertEqual(report[0]['identity'], {'file': filename})
+                    messages = '\n'.join(captured.output)
+                    self.assertIn('跳过不可读旧快照文件', messages)
+                    self.assertIn('迁移完成', messages)
+                    self.assertNotIn('"private":', messages)
+                    with database.transaction(write=False) as connection:
+                        if kind == 'ships':
+                            self.assertIsNone(read_ship(connection, 'broken'))
+                            self.assertEqual(read_ship(connection, 'readable'), expected)
+                        else:
+                            self.assertIsNone(read_month(connection, 'broken', '2026-09'))
+                            self.assertEqual(read_month(connection, 'readable', '2026-09'), expected['2026-09'])
+                    with patch('module.persistence.migration.LegacyDecoder.file', side_effect=AssertionError('不能重复导入')):
+                        BusinessDatabase(database.directory).ensure_ready()
+
+    def test_snapshot_file_supports_bom_and_direct_v1_v2_ciphertext_read_only(self):
+        from module.persistence.migration import LegacyDecoder
+        key = b'x' * 32
+        legacy_ring(self.root, key)
+        fixture = copy_fixture(self)
+        state = json.loads((fixture / 'config' / 'opsi_secure' / 'state.json').read_bytes())['state']
+        import base64
+        v2_key = base64.b64decode(state['key'])
+        for version in ('plain', 'v1', 'v2'):
+            for kind, filename in (('ships', 'ship_exp_data.json'), ('archives', 'cl1_monthly.json')):
+                for quoted in (False, True):
+                    with self.subTest(version=version, kind=kind, quoted=quoted):
+                        root = fixture if version == 'v2' else self.root
+                        install_store(self, root)
+                        source = root / 'log' / 'cl1' / 'direct' / filename
+                        source.parent.mkdir(parents=True, exist_ok=True)
+                        expected = {'keep': [None, {}, [], 2 ** 80]}
+                        if version == 'plain':
+                            text = json.dumps(expected)
+                        elif version == 'v1':
+                            text = legacy_blob(key, kind, expected)
+                        else:
+                            text = seal_v2(v2_key, kind, expected, opsi_secure.file_context(root, kind, source),
+                                           state['installation_id'])
+                        if quoted and version != 'plain':
+                            text = json.dumps(text)
+                        raw = ('\ufeff' + text + '\r\n').encode('utf-8')
+                        source.write_bytes(raw)
+                        ring = root / 'config' / 'opsi_secure' / ('state.json' if version == 'v2' else 'keyring.json')
+                        material = ring.read_bytes()
+                        with patch.object(opsi_secure, '_dpapi', side_effect=lambda value, decrypt=False: value), \
+                                patch.object(opsi_secure, 'decrypt_all', side_effect=AssertionError('不能改写旧文件')):
+                            decoded = LegacyDecoder(root).file(kind, source, source)
+                        self.assertEqual(decoded, expected)
+                        self.assertEqual(source.read_bytes(), raw)
+                        self.assertEqual(ring.read_bytes(), material)
+                        self.assertFalse((root / 'config' / 'azurpilot.db').exists())
+
+    def test_unreadable_direct_ciphertext_is_reported_and_other_data_migrates(self):
+        self.old_cl1({'battle_count': 7})
+        source = self.root / 'log' / 'cl1' / 'inst' / 'ship_exp_data.json'
+        source.parent.mkdir(parents=True)
+        source.write_text(legacy_blob(b'x' * 32, 'ships', {'target_level': 120}), encoding='utf-8')
+        original = source.read_bytes()
+        self.database.ensure_ready()
+        with self.database.transaction(write=False) as connection:
+            self.assertIsNone(read_ship(connection, 'inst'))
+            self.assertEqual(read_month(connection, 'inst', '2026-09'), {'battle_count': 7})
+        self.assertEqual(source.read_bytes(), original)
+        report = json.loads(next((self.config / 'storage-backups').glob('*/unmigrated.json')).read_text(encoding='utf-8'))
+        self.assertEqual(report[0]['kind'], 'ships')
+        self.assertIn('密文无法解码', report[0]['reason'])
+
+    def test_readable_snapshot_with_invalid_structure_still_blocks_cutover(self):
+        source = self.root / 'log' / 'cl1' / 'inst' / 'ship_exp_data.json'
+        source.parent.mkdir(parents=True)
+        source.write_text('[]', encoding='utf-8')
+        with self.assertRaisesRegex(MigrationError, '旧文件快照不是字典'):
+            self.database.ensure_ready()
+        self.assertFalse(self.database.path.exists())
+        self.assertEqual(source.read_text(encoding='utf-8'), '[]')
 
     def test_entire_aes_snapshot_uses_saved_device_id_without_refreshing_it(self):
         expected = {'battle_count': 7, 'commission_income_entries': [{'keep': True}], 'extra': [None, 2 ** 80]}

@@ -35,6 +35,10 @@ class UnreadableCiphertext(MigrationError):
     """旧密文不可读时仅跳过所属记录，原件及迁移备份继续保留。"""
 
 
+class UnreadableSnapshotFile(MigrationError):
+    """旧快照文件为空或无法解析时保留整份文件并记录跳过原因。"""
+
+
 def _log_progress(message, *args):
     """只记录阶段、来源和数量，不输出快照、密文或密钥内容。"""
     from module.logger import logger
@@ -265,8 +269,9 @@ class LegacyDecoder:
         self.unmigrated.append(dict(source=relative, kind=kind, identity=identity, reason=str(error)))
         if len(self.unmigrated) <= 10 or len(self.unmigrated) % 1000 == 0:
             from module.logger import logger
-            logger.warning('[存储迁移] 跳过不可读旧密文：%s %s %s；%s（累计 %s 条）',
-                           relative, kind, identity, error, len(self.unmigrated))
+            category = '旧密文' if isinstance(error, UnreadableCiphertext) else '旧快照文件'
+            logger.warning('[存储迁移] 跳过不可读%s：%s %s %s；%s（累计 %s 条）',
+                           category, relative, kind, identity, error, len(self.unmigrated))
         if kind == 'cl1':
             self.unmigrated_months.add((identity['instance'], identity['month']))
 
@@ -313,10 +318,33 @@ class LegacyDecoder:
         return data
 
     def file(self, kind, original, copy):
-        data = json.loads(copy.read_text(encoding='utf-8'))
+        try:
+            raw = copy.read_text(encoding='utf-8-sig')
+        except UnicodeDecodeError as error:
+            raise UnreadableSnapshotFile('旧快照文件不是有效 UTF-8 文本') from error
+        text = raw.strip()
+        if self.secure.is_ciphertext(text):
+            return self.payload(kind, text, self.secure.file_context(self.root, kind, original))
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as error:
+            reason = ('旧快照文件为空' if not text else
+                      f'旧快照文件不是有效 JSON（第 {error.lineno} 行，第 {error.colno} 列）')
+            raise UnreadableSnapshotFile(reason) from error
+        # 某些旧文件只给密文加了 JSON 字符串引号，没有对象包装。
+        if isinstance(data, str) and self.secure.is_ciphertext(data):
+            return self.payload(kind, data, self.secure.file_context(self.root, kind, original))
         if isinstance(data, dict) and (data.get(self.secure.WRAPPER_KEY) or data.get(self.secure.LEGACY_WRAPPER_KEY)):
             payload = data.get('payload')
-            data = payload if isinstance(payload, dict) else self.payload(kind, payload, self.secure.file_context(self.root, kind, original))
+            if isinstance(payload, dict):
+                data = payload
+            elif isinstance(payload, str):
+                try:
+                    data = self.payload(kind, payload, self.secure.file_context(self.root, kind, original))
+                except json.JSONDecodeError as error:
+                    raise UnreadableSnapshotFile('旧包装快照的载荷不是有效 JSON 或已知密文') from error
+            else:
+                raise UnreadableSnapshotFile('旧包装快照缺少有效字典或密文载荷')
         if not isinstance(data, dict):
             raise MigrationError('旧文件快照不是字典')
         return data
@@ -448,7 +476,7 @@ def import_scheduler(connection, source, tables, instance):
         if row:
             save_program(connection, instance, dict(mode=row['mode'], draft=json.loads(row['draft']),
                 active=json.loads(row['active']) if row['active'] else None, generation=row['generation']), row['revision'])
-    from module.persistence.scheduler import read_program, read_persistent, read_observations
+    from module.persistence.scheduler import read_program, read_persistent
     program = read_program(connection, instance)
     if program:
         from module.scheduler.models import ProgramDocument
@@ -594,7 +622,7 @@ def migrate(database):
                                 import_archive(connection, original, copy, decoder)
                             else:
                                 import_farming(connection, original, copy, decoder)
-                        except UnreadableCiphertext as error:
+                        except (UnreadableCiphertext, UnreadableSnapshotFile) as error:
                             decoder.record_unmigrated(original, kind, dict(file=original.name), error)
                     elif kind in ('statistics', 'cl1', 'storage', 'daily', 'scheduler'):
                         import_database(connection, copy, kind, original, decoder)
@@ -613,7 +641,7 @@ def migrate(database):
                                     write_observation(connection, instance, name, value, value['observedAt'], value['source'])
                     else:
                         _log_progress('该来源仅保留备份，无需转换')
-                    _log_progress('[转换 %s/%s] 完成，跳过 %s 条不可读密文，耗时 %.2f 秒',
+                    _log_progress('[转换 %s/%s] 完成，跳过 %s 条不可读旧记录，耗时 %.2f 秒',
                                   ordinal, len(ordered), len(decoder.unmigrated) - skipped_before,
                                   time.perf_counter() - source_started)
                 phase('写入迁移记录并检查临时总库的外键与完整性')
@@ -638,9 +666,9 @@ def migrate(database):
             database._write_marker(digest)
             if decoder.unmigrated:
                 from module.logger import logger
-                logger.warning(f'[存储迁移] 已跳过 {len(decoder.unmigrated)} 条无法解码的旧密文，'
+                logger.warning(f'[存储迁移] 已跳过 {len(decoder.unmigrated)} 条不可读旧记录，'
                                f'原件及备份保留，启动继续；未迁移清单：{backup / "unmigrated.json"}')
-            _log_progress('迁移完成：旧来源 %s 个，跳过 %s 条不可读密文，总耗时 %.2f 秒；备份：%s',
+            _log_progress('迁移完成：旧来源 %s 个，跳过 %s 条不可读旧记录，总耗时 %.2f 秒；备份：%s',
                           len(sources), len(decoder.unmigrated), time.perf_counter() - started, backup)
     except BaseException:
         from module.logger import logger
