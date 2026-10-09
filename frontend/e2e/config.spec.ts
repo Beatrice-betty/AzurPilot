@@ -175,3 +175,18 @@ test('清空数字字段回落到参数默认值，不再提示格式错误', as
   await page.reload()
   await expect(value).toHaveValue('119')
 })
+
+test('清空文本字段回落到参数默认值，便于后续修改', async ({page}) => {
+  await page.goto('/#/i/testpilot/task/Alas')
+  const serial = page.locator(serialSelector)
+  const status = page.locator(serialStatus)
+  await serial.fill('custom-serial-for-test')
+  await serial.blur()
+  await expect(status).toHaveText('已保存')
+  await serial.fill('')
+  await serial.blur()
+  await expect(serial).toHaveValue('auto')
+  await expect(status).toHaveText('已保存')
+  await page.reload()
+  await expect(serial).toHaveValue('auto')
+})
