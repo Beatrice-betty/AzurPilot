@@ -110,7 +110,6 @@ class EmotionIntegrationTests(unittest.TestCase):
         emotion.reduce(1)
         emotion.reduce(1, shipwreck=True)
         self.assertEqual(before, config.fields)
-        self.assertEqual(0, emotion.total_reduced)
 
     def test_display_midpoint_does_not_authorize_unsafe_battle(self):
         clock, config, emotion = self.setup_tracker(initial=40)

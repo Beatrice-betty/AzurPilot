@@ -22,8 +22,6 @@ from time import sleep
 
 import numpy as np
 
-from module.base.decorator import cached_property
-from module.base.utils import random_normal_distribution_int
 from module.combat.emotion_state import (DIC_RECOVER, DIC_RECOVER_MAX, OATH_RECOVER,
                                         ONSEN_RECOVER, EmotionRecoveryState)
 from module.config.config import AzurLaneConfig
@@ -244,13 +242,11 @@ class Emotion:
     并在情绪不足时延迟任务执行。
 
     Attributes:
-        total_reduced (int): 本轮运行中累计扣减的情绪值，用于触发客户端 bug 重启。
         map_is_2x_book (bool): 是否使用二倍经验书（影响情绪扣减量）。
         fleet_1 (FleetEmotion): 第一舰队的情绪追踪器。
         fleet_2 (FleetEmotion): 第二舰队的情绪追踪器。
         using_public (bool): 是否使用公海舰队统一情绪管理。
     """
-    total_reduced = 0
     map_is_2x_book = False
 
     def __init__(self, config):
@@ -488,7 +484,6 @@ class Emotion:
             return
         # 无视沉船心情惩罚：沉船的额外扣减发生在结算阶段，而进入战斗时
         # 已扣过基础扣减（reduce_per_battle），因此这里直接返回即可。
-        # 同时不累加 total_reduced，让"无视"在情绪模型中完全等价于一场 S 评价。
         if shipwreck and self.config.Emotion_IgnoreShipwreck:
             logger.info('[情绪-忽略] 已开启无视沉船心情惩罚，本次不额外扣减沉船心情')
             return
@@ -503,10 +498,8 @@ class Emotion:
 
         if not shipwreck:
             fleet.consume(self.reduce_per_battle)
-            self.total_reduced += self.reduce_per_battle
         else:
             fleet.consume(self.reduce_shipwreck)
-            self.total_reduced += self.reduce_shipwreck
         self.record()
         self.show()
 
@@ -535,34 +528,3 @@ class Emotion:
                         record_time)
                 setattr(self.config, fleet.state_name, state.export())
         logger.info('[心情-保底] 已将受管理舰队心情按0重新计时，恢复到出击要求后自动继续')
-
-    @cached_property
-    def bug_threshold(self):
-        """获取情绪 bug 触发阈值。
-
-        Returns:
-            int: 随机生成的情绪 bug 触发阈值。
-        """
-        return random_normal_distribution_int(55, 105, n=2)
-
-    def bug_threshold_reset(self):
-        """情绪 bug 触发后调用此方法重置阈值。"""
-        del self.__dict__['bug_threshold']
-
-    def triggered_bug(self):
-        """检测碧蓝航线客户端情绪计算 bug。
-
-        客户端在长时间运行后无法正确计算情绪，累计扣减达到阈值后需重启游戏客户端使其更新。
-
-        Returns:
-            bool: 是否触发了情绪 bug。
-        """
-        logger.attr('情绪Bug', f'{self.total_reduced}/{self.bug_threshold}')
-        if self.total_reduced >= self.bug_threshold:
-            logger.info('[情绪-Bug] 碧蓝航线客户端未正确计算情绪，这是一个Bug。'
-                        '长时间运行后，需要重启游戏客户端让客户端更新情绪。')
-            self.total_reduced = 0
-            self.bug_threshold_reset()
-            return True
-        else:
-            return False

@@ -261,9 +261,10 @@ def simulate(spec, *, battles=10_000, cost=2, phase=179 * US, pattern='jitter90'
             order = [1] * count if not dual else [1] * (count - 1) + [2]
             for fleet_index in order:
                 observe()
-                before = active.total_reduced
+                fleet = active.public_fleet if public else active.fleets[fleet_index - 1]
+                before = fleet.current
                 active.reduce(fleet_index)
-                assert active.total_reduced - before == cost
+                assert fleet.current == fleet.value == before - cost
                 oracle_index = 0 if public else fleet_index - 1
                 oracle.consume(oracle_index, cost)
                 if measurement_us is not None:
