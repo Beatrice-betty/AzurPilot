@@ -1068,13 +1068,22 @@
       },
       "FleetValue": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "FleetRecord": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "FleetRecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "FleetControl": {
         "type": "select",
@@ -1538,13 +1547,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -1575,13 +1593,22 @@
       },
       "Fleet2Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet2Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet2Control": {
         "type": "select",
@@ -1977,13 +2004,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -2014,13 +2050,22 @@
       },
       "Fleet2Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet2Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet2Control": {
         "type": "select",
@@ -2416,13 +2461,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -2453,13 +2507,22 @@
       },
       "Fleet2Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet2Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet2Control": {
         "type": "select",
@@ -3021,13 +3084,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -3061,13 +3133,22 @@
       },
       "Fleet2Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet2Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet2Control": {
         "type": "select",
@@ -3598,13 +3679,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -3638,13 +3728,22 @@
       },
       "Fleet2Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet2Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet2Control": {
         "type": "select",
@@ -4131,13 +4230,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -4168,13 +4276,22 @@
       },
       "Fleet2Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet2Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet2Control": {
         "type": "select",
@@ -4615,13 +4732,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -4652,13 +4778,22 @@
       },
       "Fleet2Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet2Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet2Control": {
         "type": "select",
@@ -5102,13 +5237,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -5139,13 +5283,22 @@
       },
       "Fleet2Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet2Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet2Control": {
         "type": "select",
@@ -5588,13 +5741,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -5625,13 +5787,22 @@
       },
       "Fleet2Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet2Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet2Control": {
         "type": "select",
@@ -5921,13 +6092,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -5960,12 +6140,21 @@
       "Fleet2Value": {
         "type": "stored",
         "value": 119,
+        "validate": [
+          0,
+          150
+        ],
         "display": "hide"
       },
       "Fleet2Record": {
         "type": "stored",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
+        "display": "hide"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
         "display": "hide"
       },
       "Fleet2Control": {
@@ -6352,13 +6541,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -6389,13 +6587,22 @@
       },
       "Fleet2Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet2Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet2Control": {
         "type": "select",
@@ -6555,13 +6762,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -6597,12 +6813,21 @@
       "Fleet2Value": {
         "type": "stored",
         "value": 119,
+        "validate": [
+          0,
+          150
+        ],
         "display": "hide"
       },
       "Fleet2Record": {
         "type": "stored",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
+        "display": "hide"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
         "display": "hide"
       },
       "Fleet2Control": {
@@ -6857,13 +7082,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -6895,12 +7129,21 @@
       "Fleet2Value": {
         "type": "stored",
         "value": 119,
+        "validate": [
+          0,
+          150
+        ],
         "display": "hide"
       },
       "Fleet2Record": {
         "type": "stored",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
+        "display": "hide"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
         "display": "hide"
       },
       "Fleet2Control": {
@@ -7165,13 +7408,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -7202,13 +7454,22 @@
       },
       "Fleet2Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet2Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet2Control": {
         "type": "select",
@@ -8056,13 +8317,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -8093,13 +8363,22 @@
       },
       "Fleet2Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet2Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet2Control": {
         "type": "select",
@@ -8560,13 +8839,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -8597,13 +8885,22 @@
       },
       "Fleet2Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet2Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet2Control": {
         "type": "select",
@@ -9064,13 +9361,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -9101,13 +9407,22 @@
       },
       "Fleet2Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet2Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet2Control": {
         "type": "select",
@@ -9568,13 +9883,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -9605,13 +9929,22 @@
       },
       "Fleet2Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet2Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet2Control": {
         "type": "select",
@@ -10072,13 +10405,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -10109,13 +10451,22 @@
       },
       "Fleet2Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet2Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet2Control": {
         "type": "select",
@@ -10567,13 +10918,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -10604,13 +10964,22 @@
       },
       "Fleet2Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet2Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet2Control": {
         "type": "select",
@@ -10891,13 +11260,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -10929,12 +11307,21 @@
       "Fleet2Value": {
         "type": "stored",
         "value": 119,
+        "validate": [
+          0,
+          150
+        ],
         "display": "hide"
       },
       "Fleet2Record": {
         "type": "stored",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
+        "display": "hide"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
         "display": "hide"
       },
       "Fleet2Control": {
@@ -11190,13 +11577,22 @@
       },
       "Fleet1Value": {
         "type": "input",
-        "value": 119
+        "value": 119,
+        "validate": [
+          0,
+          150
+        ]
       },
       "Fleet1Record": {
         "type": "datetime",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
         "display": "disabled"
+      },
+      "Fleet1RecoveryState": {
+        "type": "stored",
+        "value": null,
+        "display": "hide"
       },
       "Fleet1Control": {
         "type": "select",
@@ -11228,12 +11624,21 @@
       "Fleet2Value": {
         "type": "stored",
         "value": 119,
+        "validate": [
+          0,
+          150
+        ],
         "display": "hide"
       },
       "Fleet2Record": {
         "type": "stored",
         "value": "2020-01-01 00:00:00",
         "validate": "datetime",
+        "display": "hide"
+      },
+      "Fleet2RecoveryState": {
+        "type": "stored",
+        "value": null,
         "display": "hide"
       },
       "Fleet2Control": {

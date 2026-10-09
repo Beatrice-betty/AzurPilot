@@ -1388,10 +1388,14 @@
     },
     "FleetValue": {
       "name": "Morale value",
-      "help": ""
+      "help": "Pause sorties, confirm recovery settings, then enter the lowest measured fleet morale (an integer from 0 to 150). Saving establishes a new baseline immediately. The value and timestamp must describe the same observed state; recheck if recovery occurs while entering it. Displays an estimate; sortie decisions use the conservative lower bound. Even if the value is unchanged, clear and re-enter it, then press Enter; also save in the TUI. Reliable complete readings from existing fleet scans can narrow recovery timing uncertainty without extra screenshots or waits. Accuracy is unchanged when no valid observations are available."
     },
     "FleetRecord": {
       "name": "Morale record time",
+      "help": ""
+    },
+    "FleetRecoveryState": {
+      "name": "Shared fleet morale recovery record",
       "help": ""
     },
     "FleetControl": {
@@ -1974,7 +1978,7 @@
     },
     "Mode": {
       "name": "Morale mode",
-      "help": "AzurPilot uses a built-in morale calculator and does not read morale values through OCR in real time, so please apply the correct morale settings.",
+      "help": "Displays estimated morale; sortie decisions use the conservative lower bound. Before first use, after changing ships or recovery settings, pause sorties and enter the lowest measured morale in the fleet to calibrate. With an accurate baseline, fixed uniform dorm/oath conditions and no extra recovery bonuses, estimation error is at most 3 points. Mixed recovery rates, hot springs and drinks need separate verification.",
       "calculate": "Calculate morale consumption",
       "ignore": "Ignore low morale warning",
       "calculate_ignore": "Calculate morale + ignore low morale warning"
@@ -1985,10 +1989,14 @@
     },
     "Fleet1Value": {
       "name": "Fleet 1 morale value",
-      "help": ""
+      "help": "Pause sorties, confirm recovery settings, then enter the lowest measured fleet morale (an integer from 0 to 150). Saving establishes a new baseline immediately. The value and timestamp must describe the same observed state; recheck if recovery occurs while entering it. Displays an estimate; sortie decisions use the conservative lower bound. Even if the value is unchanged, clear and re-enter it, then press Enter; also save in the TUI. Reliable complete readings from existing fleet scans can narrow recovery timing uncertainty without extra screenshots or waits. Accuracy is unchanged when no valid observations are available."
     },
     "Fleet1Record": {
       "name": "Fleet 1 morale record time",
+      "help": ""
+    },
+    "Fleet1RecoveryState": {
+      "name": "Fleet 1 morale recovery record",
       "help": ""
     },
     "Fleet1Control": {
@@ -2016,10 +2024,14 @@
     },
     "Fleet2Value": {
       "name": "Fleet 2 morale value",
-      "help": ""
+      "help": "Pause sorties, confirm recovery settings, then enter the lowest measured fleet morale (an integer from 0 to 150). Saving establishes a new baseline immediately. The value and timestamp must describe the same observed state; recheck if recovery occurs while entering it. Displays an estimate; sortie decisions use the conservative lower bound. Even if the value is unchanged, clear and re-enter it, then press Enter; also save in the TUI. Reliable complete readings from existing fleet scans can narrow recovery timing uncertainty without extra screenshots or waits. Accuracy is unchanged when no valid observations are available."
     },
     "Fleet2Record": {
       "name": "Fleet 2 morale record time",
+      "help": ""
+    },
+    "Fleet2RecoveryState": {
+      "name": "Fleet 2 morale recovery record",
       "help": ""
     },
     "Fleet2Control": {
@@ -6494,7 +6506,7 @@
   "FleetInfo": {
     "_info": {
       "name": "Fleet information",
-      "help": "Stores fleet scan results"
+      "help": "Stores fleet scan results. Existing reliable readings can passively reduce uncertainty in calibrated morale without additional scans or waits."
     },
     "Result": {
       "name": "Scan result",

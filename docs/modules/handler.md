@@ -231,7 +231,7 @@ device.screenshot()
 | 异常 | 原因 | 处理 |
 | --- | --- | --- |
 | `CampaignEnd` | `handle_in_stage` 确认回到关卡页面（含短暂页面切换的计时器防误判） | 由战役流程捕获，结束当前关卡；`_emotion_emergency_exit` 内部会捕获 |
-| `ScriptEnd` | calculate 模式出现红脸弹窗的保底（清心情、延时任务）；达到地图成就停止条件 | 上层调度器结束当前任务 |
+| `ScriptEnd` | calculate 模式出现红脸弹窗的保底（从 0 建立有效恢复起点，按出击需求延时任务，恢复后自动重试）；达到地图成就停止条件 | 上层调度器结束当前任务 |
 | `GameTooManyClickError` | 剧情选项连续点击超限、登录中模拟器无响应累计 | 设备层记录，`alas.run` 决定重启 |
 | `GameNotRunningError` | 紧急委托点击后 3–6 秒热更新检测发现进程退出；重启流程 | 调度器触发 Restart 任务 |
 | `EmulatorNotRunningError` | 应用重启 3 次失败且观察期未恢复；重启操作硬超时 | 调度器 `_try_restart_emulator` 重启模拟器 |

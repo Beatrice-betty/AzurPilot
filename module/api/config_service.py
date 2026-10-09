@@ -16,6 +16,8 @@ import yaml
 
 from deploy.atomic import atomic_write
 from module.api.protocol import ApiError
+from module.combat.emotion_state import EmotionRecoveryState
+from module.config.time_source import now as current_time
 from module.config.transaction import config_transaction
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -481,6 +483,7 @@ class ConfigService:
             # 无关字段的运行状态更新不应拒绝用户输入；同字段按事务顺序生效。
             data, _ = self.read(name)
             seen = set()
+            edited_groups = {}
             for change in changes:
                 task, group, arg = self.validate(change.path, change.value)
                 if change.path in seen:
@@ -489,7 +492,24 @@ class ConfigService:
                 data.setdefault(task, {}).setdefault(group, {})[arg] = change.value
                 if change.path in OPSI_EXPLORE_PROGRESS:
                     self._reset_opsi_explore_progress(data, change.path)
-                self._sync_record_time(data[task][group], arg)
+                edited_groups.setdefault((task, group), set()).add(arg)
+            # 按最终配置校准；同一批先改心情再改恢复条件，也使用最终条件。
+            now = current_time() if any(group in ('Emotion', 'PublicEmotion') and
+                                        any(arg.endswith('Value') for arg in args)
+                                        for (_, group), args in edited_groups.items()) else None
+            for (task, group), args in edited_groups.items():
+                fields = data[task][group]
+                for arg in args:
+                    self._sync_record_time(fields, arg, now if group in ('Emotion', 'PublicEmotion') else None)
+                if group in ('Emotion', 'PublicEmotion'):
+                    prefixes = ('Fleet1', 'Fleet2') if group == 'Emotion' else ('Fleet',)
+                    for prefix in prefixes:
+                        if prefix + 'Value' in args:
+                            fields[prefix + 'RecoveryState'] = EmotionRecoveryState.calibrate(
+                                fields[prefix + 'Value'], now, fields[prefix + 'Recover'],
+                                fields[prefix + 'Oath'], fields[prefix + 'Onsen']).export()
+                        elif any(prefix + suffix in args for suffix in ('Recover', 'Oath', 'Onsen')):
+                            fields[prefix + 'RecoveryState'] = None
             atomic_write(str(self.path(name)), json.dumps(data, ensure_ascii=False, indent=2))
             return self.get(name)
 
@@ -506,7 +526,7 @@ class ConfigService:
                 storage.pop('SmartExplore', None)
 
     @staticmethod
-    def _sync_record_time(fields, arg):
+    def _sync_record_time(fields, arg, now=None):
         """把 Value 参数对应的时间戳重置为当前时间。
 
         情绪等参数由“值 + 记录时间”两个字段推算实时状态，改值不刷新时间戳时，
@@ -515,12 +535,14 @@ class ConfigService:
         Args:
             fields (dict): 当前分组配置字典。
             arg (str): 当前修改的参数名。
+            now (datetime, optional): 心情校准使用的统一精确时间，其他成对字段沿用原格式。
         """
         if not arg.endswith('Value'):
             return
         record = arg[:-len('Value')] + 'Record'
         if record in fields:
-            fields[record] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            fields[record] = (datetime.now().strftime('%Y-%m-%d %H:%M:%S') if now is None
+                              else now.isoformat(sep=' ', timespec='microseconds'))
 
     def delete(self, name, revision):
         """删除指定实例并自动创建备份。
