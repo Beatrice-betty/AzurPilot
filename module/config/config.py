@@ -388,8 +388,24 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
             return
         missing = object()
         discarded = set()
+        # 心情的值、时间和相位必须作为整体保护。即使用户校准的值恰好等于
+        # 旧值，只要时间、相位或恢复条件变了，也不能只丢弃其中两个字段。
+        emotion_prefixes = set()
+        for path in self.modified:
+            parts = path.split('.')
+            if len(parts) != 3 or parts[1] not in ('Emotion', 'PublicEmotion'):
+                continue
+            for suffix in ('RecoveryState', 'Record', 'Value'):
+                if parts[2].endswith(suffix):
+                    emotion_prefixes.add('.'.join(parts[:2]) + '.' + parts[2][:-len(suffix)])
+                    break
+        for prefix in emotion_prefixes:
+            if any(deep_get(current, keys=prefix + suffix, default=missing) !=
+                   deep_get(baseline, keys=prefix + suffix, default=missing)
+                   for suffix in ('Value', 'Record', 'RecoveryState', 'Recover', 'Oath', 'Onsen')):
+                discarded.update(prefix + suffix for suffix in ('Value', 'Record', 'RecoveryState'))
         for path in list(self.modified):
-            if deep_get(current, keys=path, default=missing) != deep_get(baseline, keys=path, default=missing):
+            if path in discarded or deep_get(current, keys=path, default=missing) != deep_get(baseline, keys=path, default=missing):
                 self.modified.pop(path)
                 discarded.add(path)
         # 保存也可能发生在 bind() 之后；同步被拒绝的属性，避免继续使用旧值。

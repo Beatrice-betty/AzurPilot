@@ -252,6 +252,7 @@ class GeneratedConfig:
     PublicEmotion_Tasks = None
     PublicEmotion_FleetValue = 119
     PublicEmotion_FleetRecord = datetime.datetime(2020, 1, 1, 0, 0)
+    PublicEmotion_FleetRecoveryState = None
     PublicEmotion_FleetControl = 'prevent_yellow_face'  # keep_exp_bonus, prevent_green_face, prevent_yellow_face, prevent_red_face
     PublicEmotion_FleetRecover = 'not_in_dormitory'  # not_in_dormitory, dormitory_floor_1, dormitory_floor_2
     PublicEmotion_FleetOath = False
@@ -344,12 +345,14 @@ class GeneratedConfig:
     Emotion_IgnoreShipwreck = False
     Emotion_Fleet1Value = 119
     Emotion_Fleet1Record = datetime.datetime(2020, 1, 1, 0, 0)
+    Emotion_Fleet1RecoveryState = None
     Emotion_Fleet1Control = 'prevent_green_face'  # keep_exp_bonus, prevent_green_face, prevent_yellow_face, prevent_red_face
     Emotion_Fleet1Recover = 'not_in_dormitory'  # not_in_dormitory, dormitory_floor_1, dormitory_floor_2
     Emotion_Fleet1Oath = False
     Emotion_Fleet1Onsen = False
     Emotion_Fleet2Value = 119
     Emotion_Fleet2Record = datetime.datetime(2020, 1, 1, 0, 0)
+    Emotion_Fleet2RecoveryState = None
     Emotion_Fleet2Control = 'prevent_green_face'  # keep_exp_bonus, prevent_green_face, prevent_yellow_face, prevent_red_face
     Emotion_Fleet2Recover = 'not_in_dormitory'  # not_in_dormitory, dormitory_floor_1, dormitory_floor_2
     Emotion_Fleet2Oath = False

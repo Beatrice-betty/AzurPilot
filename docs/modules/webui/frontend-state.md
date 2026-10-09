@@ -82,6 +82,8 @@ queued ──drain 取最旧──▶ saving ──成功──▶ saved（ready
 
 `prepareValue` 把「原始文本」与「提交值」分离：负号、小数点是合法的输入中间态，不触发提交错误；数值被清空时回落到参数默认值并改写输入框（与后端 `config_update()` 的空值还原一致）。`preserve_empty` 字段例外——空值本身有意义，照旧提交。
 
+文本／数值输入先在 `useDraftInput` 保留草稿，失焦或回车后才进入保存队列。心情的 `Fleet1Value`、`Fleet2Value` 和 `PublicEmotion.FleetValue` 开启 `resubmitOnEdit`：明确重新输入同一值也提交，以便建立新的实测基准；仅聚焦后失焦不提交。恢复条件及完整存档规则见 [战斗模块](../combat.md)。
+
 ### 连接状态迁移
 
 ```
@@ -99,7 +101,7 @@ disconnect()：stopped=true，不再自动重连（登出语义）
 ### 一次字段编辑的全链路
 
 ```
-输入框 onChange ─▶ prepareValue（文本/提交值分离、默认值回落、格式校验）
+输入框草稿 ─▶ 失焦／回车 ─▶ prepareValue（文本/提交值分离、默认值回落、格式校验）
   ─▶ queue.change(path, value, payload)
       ├─ 立即入队（sequence++），草稿写入 sessionStorage（仅未确认条目）
       └─ flush → drain：取 sequence 最小的 queued → saving → config.patch
