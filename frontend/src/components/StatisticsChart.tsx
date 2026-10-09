@@ -293,6 +293,9 @@ export function StatisticsChart({series, heading = true, expanded = false, onTog
       }
 
 
+      /* 纵轴固定：下界钉在 0，上界仍由 ECharts 按全量数据算，与「从 0 开始的自适应」同解。 */
+      if (zeroBase) yAxes = yAxes.map(axis => ({...axis, min: 0}))
+
       /* 每条曲线落在哪个 Y 轴上：单页与统一轴都用左轴。 */
       /* 大小轴归属：左轴小值、右轴大值。 */
       const BIG_AXIS_KEYS = new Set(['asset', 'yellow_coins', 'distance'])
