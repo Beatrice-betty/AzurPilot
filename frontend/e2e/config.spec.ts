@@ -4,6 +4,29 @@ const serialSelector = '[id="Alas.Emulator.Serial"]'
 const serialStatus = '[id="Alas.Emulator.Serial-status"]'
 // 字段为草稿式提交：键入期间不写配置，失焦或回车才提交，故断言保存前先 blur。
 
+for (const [task, stage] of [['EventA', 'a3'], ['EventB', 'B3'], ['EventC', 'c3'], ['EventD', 'D3']]) {
+  test(`${task} 活动日常断点从旧数字 0 改成关卡名，刷新后保留并可重置`, async ({page}) => {
+    await page.goto(`/#/i/testpilot/task/${task}`)
+    const value = page.locator(`[id="${task}.EventDaily.LastStage"]`)
+    const status = page.locator(`[id="${task}.EventDaily.LastStage-status"]`)
+    await expect(value).toBeVisible({timeout: 15000})
+    await expect(value).toHaveValue('0')
+    await expect(value).toHaveAttribute('type', 'text')
+    await expect(value).not.toHaveAttribute('inputmode', 'decimal')
+    await value.fill(stage)
+    await value.blur()
+    await expect(status).toHaveText('已保存')
+    await expect(value).not.toHaveAttribute('aria-invalid', 'true')
+    await page.reload()
+    await expect(value).toHaveValue(stage)
+    await value.fill('0')
+    await value.press('Enter')
+    await expect(status).toHaveText('已保存')
+    await page.reload()
+    await expect(value).toHaveValue('0')
+  })
+}
+
 test('两个页面的旧快照均能保存，字段更新互不覆盖', async ({page, context}) => {
   const second = await context.newPage()
   await page.goto('/#/i/testpilot/task/Alas')
