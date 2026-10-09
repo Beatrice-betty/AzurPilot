@@ -163,10 +163,11 @@ class TestTUIApp(IsolatedTUIFixture, unittest.IsolatedAsyncioTestCase):
         """测试配置弹窗挂载与表单控件初始化，确保内部 Select 不会导致表单清空消失。"""
         backend = TUIBackend(root=self.root)
         modal = ConfigModal(backend=backend, initial_task="Commission")
-        app = AzurPilotTUI()
+        app = AzurPilotTUI(root=self.root)
         async with app.run_test() as pilot:
             await app.push_screen(modal)
             await pilot.pause()
+            app.tick_clock()
             # 验证当前任务未被冒泡事件覆盖
             self.assertEqual(modal.current_task, "Commission")
             # 验证表单中已加载字段且没有消失
