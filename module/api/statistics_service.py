@@ -2,7 +2,6 @@
 import math
 import os
 import threading
-import calendar
 from datetime import datetime, timedelta
 
 from module.api.protocol import ApiError
@@ -113,9 +112,14 @@ def table(title: str, columns: list[str], rows: list[list], note: str = '', defa
     return result
 
 
+# 1970-01-01 的日期序数：与日期序数相减即可得到协调世界时秒数。
+EPOCH_ORDINAL = 719163
+
+
 def wallclock_micros(timestamp: datetime) -> int:
     """把墙上时钟编码为微秒整数：按协调世界时解释，客户端同样按协调世界时取回，换时区访问也不偏移。"""
-    return calendar.timegm(timestamp.timetuple()) * 1000000 + timestamp.microsecond
+    seconds = (timestamp.toordinal() - EPOCH_ORDINAL) * 86400         + timestamp.hour * 3600 + timestamp.minute * 60 + timestamp.second
+    return seconds * 1000000 + timestamp.microsecond
 
 
 def compact_axis(series_list: list) -> dict:
