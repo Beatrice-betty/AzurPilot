@@ -19,7 +19,6 @@ from Crypto.Cipher import AES, ChaCha20_Poly1305
 
 from module.statistics.opsi_keys import KeyProvider, ProviderUnavailable
 from module.statistics import opsi_secure
-from module.persistence.migration import MigrationError
 
 NOW = 1_800_000_000.0
 FIXTURE = Path(__file__).resolve().parent / 'fixtures' / 'opsi_encrypted_env'
@@ -340,26 +339,32 @@ class QuarantineTests(StoreCase):
         self.assertEqual(opsi_secure.decrypt_all(), {'pending': True, 'decrypted': 0, 'quarantined': 1})
 
     def test_unrecoverable_row_is_backed_up_and_stats_resume(self):
-        """不可解码的旧普通记录阻止切换，不能用空统计替换。"""
+        """不可解码的旧记录保留并跳过，其余记录及后续统计正常写入。"""
         from module.statistics.cl1_database import Cl1Database
         database = Cl1Database(self.root / 'config' / 'cl1_data.db')
         original = (self.root / 'config' / 'cl1_data.db').read_bytes()
-        with self.assertRaises(MigrationError):
-            database.increment_akashi_encounter('beta', '2026-09')
-        self.assertFalse(database.db_path.exists())
+        database.store.ensure_ready()
+        from module.persistence.snapshots import read_month
+        with database.store.transaction(write=False) as connection:
+            self.assertIsNone(read_month(connection, 'beta', '2026-09'))
+            self.assertEqual(read_month(connection, 'alpha', '2026-09')['battle_count'], 128)
+        database.increment_akashi_encounter('beta', '2026-09')
+        self.assertEqual(database.get_stats('beta', '2026-09')['akashi_encounters'], 1)
+        self.assertTrue(database.db_path.exists())
         self.assertEqual((self.root / 'config' / 'cl1_data.db').read_bytes(), original)
         self.assertTrue(list((self.root / 'config' / 'storage-backups').glob('*/sources.json')))
+        self.assertTrue(list((self.root / 'config' / 'storage-backups').glob('*/unmigrated.json')))
         self.assertTrue((self.root / 'config' / 'opsi_secure' / 'keyring.json').exists())
 
     def test_transient_key_outage_keeps_original_row(self):
-        """凭据服务报错的暂时性不可用：保持原样等重试，绝不另存替换。"""
+        """旧密钥暂不可用只跳过旧记录；原件与恢复材料保持原样。"""
         from module.statistics import opsi_keys
         from module.statistics.cl1_database import Cl1Database
         database = Cl1Database(self.root / 'config' / 'cl1_data.db')
         with patch.object(opsi_keys.ContainerFileProvider, 'load',
                           side_effect=opsi_keys.ProviderUnavailable('locked')):
-            with self.assertRaises(MigrationError):
-                database.increment_akashi_encounter('beta', '2026-09')
+            database.increment_akashi_encounter('beta', '2026-09')
+        self.assertEqual(database.get_stats('beta', '2026-09')['akashi_encounters'], 1)
         with closing(sqlite3.connect(self.root / 'config' / 'cl1_data.db')) as conn:
             self.assertEqual(conn.execute(
                 "SELECT secure_json FROM cl1_data WHERE instance='beta'").fetchone()[0], self.broken)
@@ -432,11 +437,14 @@ class WrapperTransitionTests(StoreCase):
         blob = opsi_secure.BLOB_PREFIX + base64.b64encode(b'x' * 60).decode()
         path.write_bytes(json.dumps({opsi_secure.WRAPPER_KEY: True, 'payload': blob}).encode())
         original = path.read_bytes()
-        with self.assertRaises(MigrationError):
-            ShipExpStats(path=path, instance_name='inst')
+        stats = ShipExpStats(path=path, instance_name='inst')
         self.assertEqual(path.read_bytes(), original)
-        self.assertFalse((self.root / 'config' / 'azurpilot.db').exists())
+        self.assertTrue((self.root / 'config' / 'azurpilot.db').exists())
+        from module.persistence.snapshots import read_ship
+        with stats.store.transaction(write=False) as connection:
+            self.assertIsNone(read_ship(connection, 'inst'))
         self.assertTrue(list((self.root / 'config' / 'storage-backups').glob('*/sources.json')))
+        self.assertTrue(list((self.root / 'config' / 'storage-backups').glob('*/unmigrated.json')))
 
 
 class InitializeTests(StoreCase):

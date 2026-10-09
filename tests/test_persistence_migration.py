@@ -10,6 +10,8 @@ from contextlib import closing
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from Crypto.Cipher import AES
+
 from module.persistence.database import BusinessDatabase, register_instance
 from module.persistence.migration import MigrationError, assert_no_workers
 from module.persistence.snapshots import read_month, read_ship, save_month
@@ -103,6 +105,7 @@ class MigrationProcessTests(unittest.TestCase):
         self.scan(current, [other])
 
     def test_uv_startup_migrates_temp_data_with_both_command_forms(self):
+        from module.statistics.cl1_legacy import derive_legacy_key
         uv = shutil.which('uv')
         if uv is None:
             self.skipTest('未安装 uv，无法验证实际启动链')
@@ -121,10 +124,14 @@ class MigrationProcessTests(unittest.TestCase):
                 config.mkdir(parents=True)
                 (root / 'gui.py').write_text(script, encoding='utf-8')
                 source = config / 'cl1_data.db'
+                cipher = AES.new(derive_legacy_key('unavailable-fixture-device'), AES.MODE_GCM)
+                encrypted, tag = cipher.encrypt_and_digest(b'{"battle_count":9}')
                 with closing(sqlite3.connect(source)) as connection, connection:
-                    connection.execute('CREATE TABLE cl1_data(instance TEXT,month TEXT,data_json TEXT)')
-                    connection.execute('INSERT INTO cl1_data VALUES(?,?,?)',
+                    connection.execute('CREATE TABLE cl1_data(instance TEXT,month TEXT,data_json TEXT,encrypted_blob BLOB)')
+                    connection.execute('INSERT INTO cl1_data VALUES(?,?,?,NULL)',
                                        ('inst', '2026-09', '{"battle_count":7}'))
+                    connection.execute('INSERT INTO cl1_data VALUES(?,?,NULL,?)',
+                                       ('inst', '2026-03', cipher.nonce + tag + encrypted))
                 original = source.read_bytes()
                 result = subprocess.run([uv, 'run', '--no-sync', '--project', str(project), *arguments],
                                         cwd=root, capture_output=True, encoding='utf-8', errors='replace', timeout=60)
@@ -132,8 +139,11 @@ class MigrationProcessTests(unittest.TestCase):
                 self.assertIn('migration-ready', result.stdout)
                 self.assertTrue((config / 'azurpilot.migrated').is_file())
                 self.assertEqual(source.read_bytes(), original)
+                report = json.loads(next((config / 'storage-backups').glob('*/unmigrated.json')).read_text(encoding='utf-8'))
+                self.assertEqual(report[0]['identity'], {'instance': 'inst', 'month': '2026-03'})
                 with closing(sqlite3.connect(config / 'azurpilot.db')) as connection:
                     self.assertEqual(connection.execute('SELECT battle_count FROM cl1_months').fetchone()[0], 7)
+                    self.assertIsNone(read_month(connection, 'inst', '2026-03'))
                     self.assertEqual(connection.execute('PRAGMA foreign_key_check').fetchall(), [])
                     self.assertEqual(connection.execute('PRAGMA integrity_check').fetchone()[0], 'ok')
 
@@ -152,6 +162,107 @@ class MigrationTests(unittest.TestCase):
             connection.execute('CREATE TABLE cl1_data(instance TEXT,month TEXT,data_json TEXT,secure_json TEXT,encrypted_blob BLOB)')
             connection.execute('INSERT INTO cl1_data VALUES(?,?,?,NULL,NULL)', ('inst', '2026-09', json.dumps(data)))
         return path
+
+    def encrypted_cl1(self, data, device_id):
+        from module.statistics.cl1_legacy import derive_legacy_key
+        source = self.old_cl1({})
+        cipher = AES.new(derive_legacy_key(device_id), AES.MODE_GCM)
+        encrypted, tag = cipher.encrypt_and_digest(json.dumps(data).encode('utf-8'))
+        blob = cipher.nonce + tag + encrypted
+        with closing(sqlite3.connect(source)) as connection, connection:
+            connection.execute('UPDATE cl1_data SET data_json=NULL,encrypted_blob=?', (blob,))
+        return source
+
+    def test_entire_aes_snapshot_uses_saved_device_id_without_refreshing_it(self):
+        expected = {'battle_count': 7, 'commission_income_entries': [{'keep': True}], 'extra': [None, 2 ** 80]}
+        source = self.encrypted_cl1(expected, 'old-device')
+        identity = self.root / 'log' / 'device_id.json'
+        identity.parent.mkdir()
+        identity.write_text('{"device_id":"old-device","keep":true}', encoding='utf-8')
+        original, material = source.read_bytes(), identity.read_bytes()
+        with patch('module.base.device_id.get_device_id', side_effect=AssertionError('不得刷新设备 ID')), \
+                patch('module.base.device_id._start_refresh_timer', side_effect=AssertionError('不得启动刷新定时器')), \
+                patch('module.base.device_id.generate_device_id', return_value='current-device'):
+            self.database.ensure_ready()
+        with self.database.transaction(write=False) as connection:
+            self.assertEqual(read_month(connection, 'inst', '2026-09'), expected)
+        self.assertEqual(source.read_bytes(), original)
+        self.assertEqual(identity.read_bytes(), material)
+        backups = list((self.config / 'storage-backups').iterdir())
+        self.assertEqual((backups[0] / 'log' / 'device_id.json').read_bytes(), material)
+        self.assertFalse((backups[0] / 'unmigrated.json').exists())
+
+    def test_unreadable_month_is_skipped_and_other_months_migrate_without_source_changes(self):
+        source = self.encrypted_cl1({'battle_count': 9}, 'lost-device')
+        expected = {'battle_count': 7, 'keep': [None, {}, []]}
+        with closing(sqlite3.connect(source)) as connection, connection:
+            connection.execute('INSERT INTO cl1_data VALUES(?,?,?,NULL,NULL)',
+                               ('inst', '2026-08', json.dumps(expected)))
+        archive = self.root / 'log' / 'cl1' / 'inst' / 'cl1_monthly.json'
+        archive.parent.mkdir(parents=True)
+        archive.write_text(json.dumps({'2026-09': {'battle_count': 999}, '2026-07': {'battle_count': 2}}), encoding='utf-8')
+        identity = self.root / 'log' / 'device_id.json'
+        identity.write_text('{"device_id":"current-device"}', encoding='utf-8')
+        original, material = source.read_bytes(), identity.read_bytes()
+        with patch('module.base.device_id.get_device_id', side_effect=AssertionError('不得刷新设备 ID')), \
+                patch('module.base.device_id.generate_device_id', return_value='current-device'):
+            self.database.ensure_ready()
+        with self.database.transaction(write=False) as connection:
+            self.assertIsNone(read_month(connection, 'inst', '2026-09'))
+            self.assertEqual(read_month(connection, 'inst', '2026-08'), expected)
+            self.assertEqual(read_month(connection, 'inst', '2026-07'), {'battle_count': 2})
+            self.assertEqual(connection.execute('PRAGMA foreign_key_check').fetchall(), [])
+            self.assertEqual(connection.execute('PRAGMA integrity_check').fetchone()[0], 'ok')
+        self.assertEqual(source.read_bytes(), original)
+        self.assertEqual(identity.read_bytes(), material)
+        backup = next((self.config / 'storage-backups').iterdir())
+        with closing(sqlite3.connect(source.as_uri() + '?mode=ro', uri=True)) as source_connection, \
+                closing(sqlite3.connect(backup / 'config' / source.name)) as saved_connection:
+            self.assertEqual(saved_connection.execute('SELECT * FROM cl1_data').fetchall(),
+                             source_connection.execute('SELECT * FROM cl1_data').fetchall())
+        report = json.loads((backup / 'unmigrated.json').read_text(encoding='utf-8'))
+        self.assertEqual(len(report), 1)
+        self.assertEqual(report[0]['source'], 'config' + os.sep + 'cl1_data.db')
+        self.assertEqual(report[0]['identity'], {'instance': 'inst', 'month': '2026-09'})
+        self.assertTrue(self.database.marker.exists())
+        with patch('module.persistence.migration.LegacyDecoder.cl1', side_effect=AssertionError('不能重复导入')):
+            BusinessDatabase(self.config).ensure_ready()
+
+    def test_duplicate_month_still_blocks_when_first_row_is_unreadable(self):
+        source = self.encrypted_cl1({'battle_count': 1}, 'lost-device')
+        with closing(sqlite3.connect(source)) as connection, connection:
+            connection.execute("INSERT INTO cl1_data VALUES('inst','2026-09','{}',NULL,NULL)")
+        original = source.read_bytes()
+        with patch('module.base.device_id.generate_device_id', return_value='current-device'):
+            with self.assertRaisesRegex(MigrationError, '重复月份'):
+                self.database.ensure_ready()
+        self.assertFalse(self.database.path.exists())
+        self.assertEqual(source.read_bytes(), original)
+
+    def test_decodable_ciphertext_with_invalid_structure_is_not_silently_skipped(self):
+        source = self.encrypted_cl1([], 'current-device')
+        original = source.read_bytes()
+        with patch('module.base.device_id.generate_device_id', return_value='current-device'):
+            with self.assertRaisesRegex(MigrationError, '快照不是有效对象'):
+                self.database.ensure_ready()
+        self.assertFalse(self.database.path.exists())
+        self.assertEqual(source.read_bytes(), original)
+
+    def test_unreadable_drop_row_does_not_prevent_readable_rows_from_migrating(self):
+        source = self.config / 'azurstats_local.db'
+        with closing(sqlite3.connect(source)) as connection, connection:
+            connection.execute('CREATE TABLE opsi_items(id INTEGER PRIMARY KEY,imgid TEXT,item TEXT,amount INTEGER,secure_payload TEXT)')
+            connection.execute('INSERT INTO opsi_items VALUES(19,?,?,?,?)',
+                               ('unknown', 'PlateT4', 2, opsi_secure.BLOB_PREFIX + 'unreadable'))
+            connection.execute("INSERT INTO opsi_items VALUES(20,'readable','PlateT4',3,NULL)")
+        original = source.read_bytes()
+        self.database.ensure_ready()
+        with self.database.transaction(write=False) as connection:
+            self.assertEqual([tuple(row) for row in connection.execute('SELECT id,imgid,amount FROM opsi_items')],
+                             [(20, 'readable', 3)])
+        self.assertEqual(source.read_bytes(), original)
+        report = json.loads(next((self.config / 'storage-backups').glob('*/unmigrated.json')).read_text(encoding='utf-8'))
+        self.assertEqual(report[0]['identity'], {'table': 'opsi_items', 'rowid': 19})
 
     def test_plain_sources_preserve_fields_ids_watermarks_and_database_priority(self):
         expected = {'battle_count': 7, 'commission_income_entries': [{'keep': True}],
