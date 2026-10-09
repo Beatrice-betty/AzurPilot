@@ -495,10 +495,16 @@ PublicEmotion:
   Tasks:
     type: textarea
     value: null
-  FleetValue: 119
+  FleetValue:
+    value: 119
+    validate: [0, 150]
   FleetRecord:
     value: 2020-01-01 00:00:00
     display: disabled
+  FleetRecoveryState:
+    type: stored
+    value: null
+    display: hide
   FleetControl:
     value: prevent_yellow_face
     option:
@@ -752,10 +758,16 @@ Emotion:
     value: calculate
     option: [calculate, ignore, calculate_ignore]
   IgnoreShipwreck: false
-  Fleet1Value: 119
+  Fleet1Value:
+    value: 119
+    validate: [0, 150]
   Fleet1Record:
     value: 2020-01-01 00:00:00
     display: disabled
+  Fleet1RecoveryState:
+    type: stored
+    value: null
+    display: hide
   Fleet1Control:
     value: prevent_green_face
     option: [ keep_exp_bonus, prevent_green_face, prevent_yellow_face, prevent_red_face ]
@@ -764,10 +776,16 @@ Emotion:
     option: [not_in_dormitory, dormitory_floor_1, dormitory_floor_2]
   Fleet1Oath: false
   Fleet1Onsen: false
-  Fleet2Value: 119
+  Fleet2Value:
+    value: 119
+    validate: [0, 150]
   Fleet2Record:
     value: 2020-01-01 00:00:00
     display: disabled
+  Fleet2RecoveryState:
+    type: stored
+    value: null
+    display: hide
   Fleet2Control:
     value: prevent_green_face
     option: [ keep_exp_bonus, prevent_green_face, prevent_yellow_face, prevent_red_face ]
