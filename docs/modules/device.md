@@ -44,6 +44,7 @@ module/device/
 ├── connection_attr.py   # 连接属性底座：adb 二进制定位、serial 校正、模拟器家族判定
 ├── screenshot.py        # Screenshot mixin：截图分发与统一后处理
 ├── control.py           # Control mixin：点击/滑动/拖拽分发
+├── live_drag.py         # 连续触点：按住期间可穿插截图、识别和移动
 ├── input.py             # Input mixin：文本输入（u2）
 ├── app_control.py       # AppControl mixin：应用启停、前台检测、层级 dump
 ├── env.py               # IS_WINDOWS / IS_MACINTOSH / IS_LINUX 常量
@@ -81,6 +82,7 @@ module/device/
 | `Device.for_existing_device(config)` | 收尾专用：不启动模拟器、不改配置，连不上直接抛 `EmulatorNotRunningError` |
 | `Platform(config, connect=False)` | 模拟器离线时的轻量入口：只解析 serial 与模拟器实例，供调度器重启模拟器 |
 | `self.device.screenshot()` / `click()` / `swipe()` / `app_start()` | 业务模块经 `ModuleBase` 使用的日常接口 |
+| `device.live_drag(name)` | 连续触控上下文；调用 `down(point)`、`move(point)`、`up()`，期间可持续截图 |
 | `device.dump_hierarchy()` | UI 层级树获取，配合 `xpath_to_button()` |
 | `WORKER_POOL.start_thread_soon()` | 供 nemu_ipc 等需要超时强杀的阻塞调用使用 |
 
@@ -143,6 +145,16 @@ Input(Uiautomator2)
 | `nemu_ipc` | MuMu 内部 RPC 触控（低性能机易丢步，保留为可选项） |
 | `Hermit` | HTTP 注入，仅 VMOS（无 u2/minitouch 的环境） |
 | `scrcpy` | scrcpy 控制通道（代码保留，配置选项未暴露） |
+
+### 连续触控（live_drag.py）
+
+`with device.live_drag(name) as touch` 提供独立的 `down / move / up` 原语。
+`move()` 不松手、不生成完整手势或追加点击，业务状态循环可在同一触点仍按住时截图并计算下一步位置。
+MaaTouch、minitouch、uiautomator2、scrcpy、nemu_ipc 支持该接口；ADB 等只能发送整段手势的后端明确报错，不降级。
+触点状态在发送按下前登记，退出上下文时尝试释放，包含截图、识别异常和正常中断。
+持续触点内不自动重放失败的移动命令；异常交给调用方和设备既有恢复流程，避免重建连接后失去抓取状态仍继续拖动。
+scrcpy 的控制锁仅保护单次发送，避免持续持锁阻塞同一设备的截图。
+业务模块负责逐帧反馈、拖动阈值、目标停稳与进展超时；设备层不插入状态循环或固定休眠。
 
 ### WORKER_POOL（method/pool.py）
 
