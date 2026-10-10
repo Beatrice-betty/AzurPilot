@@ -88,9 +88,9 @@ export function readBackgroundPreference(material: Material): BackgroundPreferen
   try {
     const raw = JSON.parse(localStorage.getItem(backgroundStorageKey(material)) ?? 'null') as Record<string, unknown> | null
     const kind = raw?.kind === 'image' || raw?.kind === 'video' ? raw.kind : 'image'
-    /* 关闭档保留已存的地址与类型，重新打开时回到关闭前的那一档。 */
+    /* 关闭档保留已存的地址与图库条目，重新打开时回到关闭前的那一档。 */
     if (raw?.source === 'off') {
-      return {...fallback, source: 'off', kind, urls: Array.isArray(raw.urls) ? normalizeBackgroundUrls(raw.urls.filter((item): item is string => typeof item === 'string')) : [], active: typeof raw.active === 'number' && raw.active >= 0 ? raw.active : 0}
+      return {...fallback, source: 'off', kind, urls: Array.isArray(raw.urls) ? normalizeBackgroundUrls(raw.urls.filter((item): item is string => typeof item === 'string')) : [], active: typeof raw.active === 'number' && raw.active >= 0 ? raw.active : 0, name: typeof raw.name === 'string' ? raw.name : '', entry: typeof raw.entry === 'string' ? raw.entry : undefined}
     }
     /* 旧记录：'default' 就是「用内置 API」，折成 URL 模式的一条。 */
     if (raw?.source === 'default') return {source: 'url', kind, urls: [...DEFAULT_BACKGROUND_URLS], active: pickActive(DEFAULT_BACKGROUND_URLS.length), name: ''}
@@ -393,8 +393,8 @@ export async function removeGalleryEntry(identifier: string) {
 
 /** 关闭背景：普通材质的默认档；玻璃材质下也可显式关掉（上传文件保留，便于切回）。 */
 export function disableBackground() {
-  /* 保留地址列表与类型：只关铺图，地址下次切回 URL 模式仍在。 */
-  const preference: BackgroundPreference = {source: 'off', kind: snapshot.kind, urls: snapshot.urls, active: snapshot.active, name: ''}
+  /* 保留地址列表与图库条目：只关铺图，下次切回各自档位时接着用。 */
+  const preference: BackgroundPreference = {source: 'off', kind: snapshot.kind, urls: snapshot.urls, active: snapshot.active, name: snapshot.name, entry: snapshot.entry}
   replaceObjectUrl()
   savePreference(preference)
   publish({...preference, assetUrl: '', loading: false})
