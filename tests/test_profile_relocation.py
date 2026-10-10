@@ -3,6 +3,7 @@ import json
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
@@ -32,7 +33,7 @@ class ProfileRelocationTests(unittest.TestCase):
             write_observation(db, 'test', 'Oil', 500, '2026-10-10T00:00:00', 'test')
         self.source = self.config_dir / 'scheduler' / 'test.sqlite3'
         self.source.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(self.source) as db:
+        with closing(sqlite3.connect(self.source)) as db, db:
             db.execute('CREATE TABLE preserved (value TEXT)')
             db.execute('INSERT INTO preserved VALUES (?)', ('signed-history-preserved',))
         self.target = self.source.with_name('renamed.sqlite3')
@@ -42,7 +43,7 @@ class ProfileRelocationTests(unittest.TestCase):
     def assert_completed(self):
         """确认历史、调度数据及加密登记均只归属于新实例。"""
         self.assertFalse(self.source.exists())
-        with sqlite3.connect(self.target) as db:
+        with closing(sqlite3.connect(self.target)) as db, db:
             self.assertEqual('signed-history-preserved',
                              db.execute('SELECT value FROM preserved').fetchone()[0])
         with self.store.database.transaction(write=False) as db:
@@ -89,7 +90,7 @@ class ProfileRelocationTests(unittest.TestCase):
 
     def test_unrelated_existing_target_fails_before_mutation(self):
         """旧来源与其他目标历史同时存在时拒绝登记迁移。"""
-        with sqlite3.connect(self.target) as db:
+        with closing(sqlite3.connect(self.target)) as db, db:
             db.execute('CREATE TABLE unrelated (id INTEGER)')
         with self.assertRaises(ApiError) as failure:
             self.protector.relocate_scheduler('renamed', self.identity)
