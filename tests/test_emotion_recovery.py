@@ -97,25 +97,41 @@ class EmotionIntegrationTests(unittest.TestCase):
         emotion.check_reduce(1)
         self.assertEqual(70, config.Emotion_Fleet2Value)
         self.assertIsNone(config.Emotion_Fleet2RecoveryState)
-        # 升级前的配置只有数值与时间：不能因为缺少相位记录而中断任务。
+        # 升级前的配置只有数值与时间：重建后按当前值继续，不要求人工校准。
         config.Emotion_Fleet1RecoveryState = None
-        with self.assertRaises(ScriptEnd):
-            emotion.check_reduce(1)
-        # 迁移回写版本 1；无需等恢复即可确认不再要求人工接管。
+        emotion.check_reduce(1)
         self.assertIn(config.Emotion_Fleet1RecoveryState['version'], (1, 2))
+        self.assertEqual(70, config.Emotion_Fleet2Value)
 
-    def test_broken_recovery_state_still_requires_human_takeover(self):
+    def test_broken_recovery_state_is_rebuilt_conservatively(self):
         _, config, emotion = self.setup_tracker()
-        # 已有存档但版本无效：不得当作旧配置迁移，避免静默重置相位。
+        # 版本无效的存档不可信：按当前心情值重建，三件套回到一致。
         config.Emotion_Fleet1RecoveryState = {'version': 3}
-        with self.assertRaises(RequestHumanTakeover):
-            emotion.check_reduce(1)
+        emotion.check_reduce(1)
+        self.assertIn(config.Emotion_Fleet1RecoveryState['version'], (1, 2))
+        self.assertEqual(config.Emotion_Fleet1Record, emotion.fleet_1.record)
+        self.assertEqual(70, config.Emotion_Fleet1Value)
 
-    def test_condition_change_blocks_before_any_battle(self):
+    def test_three_way_mismatch_is_repaired(self):
+        clock, config, emotion = self.setup_tracker(initial=143)
+        # 实机现场：数值、记录时刻与相位互相矛盾，restore 报“不一致”，任务被拦。
+        stale = EmotionRecoveryState.calibrate(150, clock.now() - timedelta(hours=5),
+                                              'dormitory_floor_2', True, False)
+        config.Emotion_Fleet1RecoveryState = stale.export()
+        config.Emotion_Fleet1Value = 143
+        config.Emotion_Fleet1Record = clock.now() - timedelta(hours=6)
+        emotion.check_reduce(1)
+        restored = EmotionRecoveryState.restore(config.Emotion_Fleet1RecoveryState,
+                                               config.Emotion_Fleet1Value, config.Emotion_Fleet1Record,
+                                               'dormitory_floor_2', True, False)
+        # 重建以配置值为准，不沿用存档里偏高的 150。
+        self.assertEqual(143, restored.value)
+
+    def test_condition_change_rebuilds_from_current_value(self):
         _, config, emotion = self.setup_tracker()
         config.Emotion_Fleet1Recover = 'dormitory_floor_1'
-        with self.assertRaises(RequestHumanTakeover):
-            emotion.check_reduce(1)
+        emotion.check_reduce(1)
+        self.assertEqual('dormitory_floor_1', config.Emotion_Fleet1RecoveryState['signature'][0])
 
     def test_ignore_mode_does_not_require_calibration_or_record_costs(self):
         _, config, emotion = self.setup_tracker()
@@ -149,11 +165,11 @@ class EmotionIntegrationTests(unittest.TestCase):
         self.assertLessEqual(abs(emotion.fleet_1.current - clock.oracle.values[0]), 3)
         self.assertEqual(clock.now(), emotion.fleet_1.state.record)
 
-    def test_recovery_condition_change_requires_calibration(self):
+    def test_recovery_condition_change_rebuilds(self):
         _, config, emotion = self.setup_tracker(public=True)
         config.PublicEmotion_FleetOath = False
-        with self.assertRaises(RequestHumanTakeover):
-            emotion.check_reduce(1)
+        emotion.check_reduce(1)
+        self.assertFalse(config.PublicEmotion_FleetRecoveryState['signature'][1])
 
     def test_red_fallback_recovers_automatically_after_json_reload(self):
         for public in (False, True):
@@ -337,12 +353,14 @@ class EmotionIntegrationTests(unittest.TestCase):
             real.bind('Main')
             with patch.object(config_source, 'filepath_config', return_value=path):
                 emotion = production.Emotion(real)
-                # 旧配置不再要求人工接管；要么直接可出击，要么按恢复时间延迟。
-                with self.assertRaises(ScriptEnd):
-                    emotion.check_reduce(1)
+                # 旧配置不再要求人工接管，重建后三件套自洽。
+                emotion.check_reduce(1)
                 saved = json.loads(Path(path).read_text(encoding='utf-8'))['Main']['Emotion']
                 self.assertIsNotNone(saved.get('Fleet1RecoveryState') or saved.get('Fleet2RecoveryState'))
                 self.assertEqual(2, saved['Fleet2RecoveryState']['version'])
+                self.assertEqual(datetime.fromisoformat(saved['Fleet2Record']),
+                                 datetime.fromisoformat(saved['Fleet2RecoveryState']['record']))
+                self.assertEqual(saved['Fleet2Value'], saved['Fleet2RecoveryState']['segments'][0][2])
                 # 重新加载后状态可恢复，不会陷入重复迁移。
                 real.data = read_config('anonymous')
                 real._loaded_data = copy.deepcopy(real.data)

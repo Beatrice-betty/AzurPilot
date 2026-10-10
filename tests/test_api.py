@@ -155,6 +155,26 @@ class ConfigApiTests(unittest.TestCase):
         latest = self.configs.patch('testpilot', original['revision'], [ConfigChange(path='Alas.Emulator.Serial', value='auto')])
         self.assertEqual('auto', latest['values']['Alas']['Emulator']['Serial'])
 
+    def test_event_daily_last_stage_saves_text_from_legacy_zero(self):
+        """旧数字断点可改成关卡名，刷新后保留大小写，输入 0 仍可重置。"""
+        path = self.configs.path('testpilot')
+        data = self.configs.read_json(path)
+        tasks = ('EventA', 'EventB', 'EventC', 'EventD')
+        for task in tasks:
+            data[task]['EventDaily']['LastStage'] = 0
+        path.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
+
+        for task in tasks:
+            with self.subTest(task=task):
+                original = self.configs.get('testpilot')
+                self.assertEqual(0, original['values'][task]['EventDaily']['LastStage'])
+                for stage in ('a3', 'D3', '0'):
+                    changed = self.configs.patch('testpilot', '', [
+                        ConfigChange(path=f'{task}.EventDaily.LastStage', value=stage)])
+                    self.assertEqual(stage, changed['values'][task]['EventDaily']['LastStage'])
+                    self.assertEqual(stage, self.configs.get('testpilot')['values'][task]['EventDaily']['LastStage'])
+                    self.assertEqual(stage, self.configs.read_json(path)[task]['EventDaily']['LastStage'])
+
     def test_invalid_batch_does_not_partially_save(self):
         original = self.configs.get('testpilot')
         with self.assertRaises(ApiError):
