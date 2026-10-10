@@ -1967,6 +1967,10 @@ class AzurLaneAutoScript:
         from module.retire.fleet_management import FleetManagement
         FleetManagement(config=self.config, device=self.device, task="FleetScan").run()
 
+    def mind_calculator_scan(self):
+        from module.retire.mind_scan import MindCalculatorScan
+        MindCalculatorScan(config=self.config, device=self.device, task="MindCalculatorScan").run()
+
     def game_manager(self):
         from module.daemon.game_manager import GameManager
         GameManager(config=self.config, device=self.device, task="GameManager").run()

@@ -398,6 +398,10 @@
       "name": "Fleet Scan",
       "help": "Scan ships assigned to fleets"
     },
+    "MindCalculatorScan": {
+      "name": "Cognitive chip dock scan",
+      "help": "Scan a CN dock at 1280×720 and review results in the cognitive chip calculator. Keeps old data until completion; resets dock filters."
+    },
     "Daemon": {
       "name": "Semi-Auto Click",
       "help": ""
@@ -6501,6 +6505,16 @@
     "BoostReplaceFilter": {
       "name": "Boost replace filter",
       "help": "When multiple boosted products are detected, the first one in filter order is prioritized for replacement; the replacement slot is the last non-empty slot searched from Product5→1"
+    }
+  },
+  "MindCalculator": {
+    "_info": {
+      "name": "Cognitive chip calculator",
+      "help": "Calculate Cognitive Chips I and coins to reach level 120."
+    },
+    "Result": {
+      "name": "Ship scan results",
+      "help": "Stores ships, levels and review states per instance."
     }
   },
   "FleetInfo": {

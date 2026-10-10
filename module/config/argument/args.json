@@ -19826,6 +19826,23 @@
       }
     }
   },
+  "MindCalculatorScan": {
+    "MindCalculator": {
+      "Result": {
+        "type": "stored",
+        "value": {},
+        "display": "hide"
+      }
+    },
+    "Storage": {
+      "Storage": {
+        "type": "storage",
+        "value": {},
+        "valuetype": "ignore",
+        "display": "disabled"
+      }
+    }
+  },
   "Daemon": {
     "Daemon": {
       "EnterMap": {

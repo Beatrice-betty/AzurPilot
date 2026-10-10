@@ -44,6 +44,17 @@ function validateField(path, value) {
 
 export function createMockState({ empty = false } = {}) {
   const instances = new Map()
+  const mindShips = new Map()
+  function mindPython(action, params) {
+    const run = spawnSync('uv', ['run', '--no-sync', 'python', '-X', 'utf8', '-m', 'dev_tools.mind_calculator_mock'], {
+      cwd: fileURLToPath(new URL('../../', import.meta.url)), input: JSON.stringify({action, ...params}),
+      encoding: 'utf8', timeout: 30000, windowsHide: true,
+    })
+    if (run.error || run.status) fail('INTERNAL_ERROR', '计算器模拟服务运行失败')
+    const result = JSON.parse(run.stdout)
+    if (result.error) fail('INVALID_PARAMS', result.error)
+    return result
+  }
   const stock = createStockProxy(name=>{const r=get(name).values.Dashboard.ActionPoint;return r?.Total!=null&&r.Record?{instance:name,actionPoints:r.Total,observedAt:Math.floor(new Date(r.Record.replace(' ','T')+'Z').getTime()/1000)}:null})
   const programs = new Map()
   const simulations = new Map()
@@ -490,6 +501,18 @@ export function createMockState({ empty = false } = {}) {
         return snapshot(name)
       }
       case 'overview.get': return overview(name)
+      case 'mind.catalog': return mindPython('catalog', params)
+      case 'mind.calculate': return mindPython('calculate', params)
+      case 'mind.report': return {...mindPython('report', {ships: mindShips.get(name) ?? []}), instance: name, updated_at: ''}
+      case 'mind.save': {
+        const current = mindPython('report', {ships: mindShips.get(name) ?? []})
+        if (current.revision !== params.revision) fail('CONFLICT', '舰船数据已变化，请重新载入后再保存')
+        mindShips.set(name, params.ships)
+        return {...mindPython('report', params), instance: name, updated_at: ''}
+      }
+      case 'mind.import': return mindPython('import', params)
+      case 'mind.recognize': return mindPython('recognize', params)
+      case 'mind.export': return mindPython('export', {...params, ships: mindShips.get(name) ?? []})
       case 'stock.status': return stock.status(name)
       case 'stock.rebuild': return stock.rebuild(name,params)
       case 'stock.request': return stock.request(name,params)

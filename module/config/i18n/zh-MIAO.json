@@ -398,6 +398,10 @@
       "name": "舰队扫描喵",
       "help": "扫描当前编入舰队的舰娘信息喵"
     },
+    "MindCalculatorScan": {
+      "name": "心智单元船坞扫描喵",
+      "help": "扫描国服 1280×720 船坞，结果在心智单元计算器中核对喵。完成前保留旧数据；会重置船坞筛选。"
+    },
     "Daemon": {
       "name": "半自动点击小助手喵",
       "help": "遇到未适配关卡？雪风帮你点击准备、结算、退役，你只需手动选敌人喵~ (｀・ω・´)"
@@ -6501,6 +6505,16 @@
     "BoostReplaceFilter": {
       "name": "啾咖啡加成替换顺序喵",
       "help": "多个加成餐品时按过滤顺序优先替换第一个；替换槽位从餐品5→1倒查替换最后一个非空餐品喵 可用餐品key对照：cheese:芝士, strawberry_milkshake:草莓奶绿, morning_light:晨光活力组合, wake_up_call:醒神套餐, fruity_fruitier:果香双杯乐 示例：30 > 20 > cheese > 10 (´・ω・`)"
+    }
+  },
+  "MindCalculator": {
+    "_info": {
+      "name": "心智单元计算器喵",
+      "help": "统计升至 120 级的心智单元Ⅰ与物资喵。"
+    },
+    "Result": {
+      "name": "舰船扫描结果喵",
+      "help": "按实例保存舰船、等级与核对状态喵。"
     }
   },
   "FleetInfo": {
