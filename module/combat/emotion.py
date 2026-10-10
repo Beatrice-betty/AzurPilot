@@ -18,7 +18,6 @@
 首次使用及更换恢复条件后需填写实测心情建立基准。
 """
 
-from datetime import timedelta
 from time import sleep
 
 import numpy as np
@@ -201,13 +200,13 @@ class FleetEmotion:
         self.current = state.value
 
     def _migrate_config(self):
-        """兼容旧版心情配置：只有数值与时间时补建恢复起点。
+        """修复不可用的恢复存档：按当前心情值重建三件套并回写。
 
-        升级后首次运行会走这里，把旧配置按单一区间重建并立即回写，
-        后续运行不再重复迁移。已有校准而失效的情况仍交给人工介入。
+        存档缺失、版本不可用或与配置的心情值和记录时刻不一致时，以配置的值为基准
+        重建恢复起点；配置值始终作为权威，避免从不可信的相位估算出偏高的心情。
 
         Returns:
-            bool: 是否已完成迁移；不适用或不可信时为 False。
+            bool: 是否已完成修复；未绑定或值不可信时为 False。
         """
         value = self.value
         if type(value) is not int or not 0 <= value <= 150:
@@ -216,14 +215,20 @@ class FleetEmotion:
         if isinstance(bound, dict) and self.state_name not in bound:
             # 未绑定则赋值不会回写配置，迁移结果会丢失，不如此处不做迁移。
             return False
+        if current_time() < self.record:
+            # 记录时刻晚于当前时间时不修复，避免拿未来的账本出击。
+            return False
         try:
-            state = EmotionRecoveryState.migrate(getattr(self.config, self.state_name, None),
-                                                 value, self.record, self.recover, self.oath, self.onsen)
-            # 留出最小时间跨度，避免记录时刻晚于当前时刻时 advance 报错。
-            state.advance(current_time() + timedelta(seconds=1))
+            state = EmotionRecoveryState.calibrate(value, current_time(),
+                                                  self.recover, self.oath, self.onsen)
         except (ValueError, TypeError):
             return False
+        logger.info('[心情-兼容] 恢复存档不可用，已按当前值重建恢复起点：'
+                    f'心情 {value}；要获得相位精度，可在任务页重新填写该舰队的实测最低心情值')
+        # 三个字段必须一起写入：只写相位会让下一次 restore 因与值或时间不一致而失败。
         setattr(self.config, self.state_name, state.export())
+        setattr(self.config, self.value_name.replace('Value', 'Record'), state.record)
+        setattr(self.config, self.value_name, state.value)
         self.state = state
         self.calibration_error = ''
         return True
