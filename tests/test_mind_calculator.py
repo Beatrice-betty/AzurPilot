@@ -120,6 +120,31 @@ class RecognitionTests(unittest.TestCase):
         cards = recognize_cards(Image.fromarray(pixels), name_ocr=ocr, level_ocr=ocr)
         self.assertEqual([card.y for card in cards], [76, 303, 530])
 
+    def test_color_rows_survive_partial_level_detection(self):
+        from module.runtime.mind_recognition import CARD_COLUMNS
+        pixels = np.zeros((720, 1280, 3), dtype=np.uint8)
+        # 色框圆角在不同排有像素偏差；整屏 OCR 可能只检测出其中两排的等级。
+        rows = (75, 301, 528)
+        for y in rows:
+            for x in CARD_COLUMNS:
+                pixels[y:y + 4, x:x + 138] = (235, 185, 60)
+        for missing in rows:
+            with self.subTest(missing=missing):
+                ocr = Mock()
+                ocr.det.return_value = [
+                    ('Lv.120', [[170, y + 5], [218, y + 5], [218, y + 20], [170, y + 20]], .99)
+                    for y in rows if y != missing]
+                ocr.ocr_for_single_lines.side_effect = lambda regions: [''] * len(regions)
+                cards = recognize_cards(Image.fromarray(pixels), name_ocr=ocr, level_ocr=ocr)
+                self.assertEqual(sorted({card.y for card in cards}), list(rows))
+                self.assertEqual(len(cards), 21)
+                self.assertEqual(sum(card.y == missing for card in cards), 7)
+
+        # 显式指定裁剪行时仍只读取调用者选择的行。
+        cards = recognize_cards(Image.fromarray(pixels), name_ocr=ocr, level_ocr=ocr, row_origins=[301])
+        self.assertEqual(len(cards), 7)
+        self.assertEqual({card.y for card in cards}, {301})
+
     @staticmethod
     def scroll_frames(offsets):
         rng = np.random.default_rng(20261010)
@@ -169,7 +194,7 @@ class RecognitionTests(unittest.TestCase):
         self.assertEqual(merger.offset, 681)
         self.assertEqual(len(merger.ships()), 6)
 
-    def scan_frames(self, offsets, *, bottom_offset):
+    def scan_frames(self, offsets, *, bottom_offset, rows=(76, 303, 530)):
         from module.retire.mind_scan import MindCalculatorScan
         from types import SimpleNamespace
         class ImmediateTimer:
@@ -199,7 +224,7 @@ class RecognitionTests(unittest.TestCase):
         captured = []
         def recognize(*args, **kwargs):
             captured.append(position[0])
-            return [Card(93, y, 0, ship('拉菲'), 6) for y in (76, 303, 530)]
+            return [Card(93, y, 0, ship('拉菲'), 6) for y in rows]
         with patch('module.retire.mind_scan.Timer', ImmediateTimer), patch('module.retire.mind_scan.DOCK_SCROLL', scrollbar), \
                 patch('module.retire.mind_scan.recognize_cards', side_effect=recognize):
             result = scanner._scan_pages(Mock(), Mock())
@@ -212,6 +237,16 @@ class RecognitionTests(unittest.TestCase):
         self.assertEqual(scanner.device.drag.call_count, 3)
         self.assertTrue(all(call.kwargs['hold_duration'] == .4 for call in scanner.device.drag.call_args_list))
         scanner.device.swipe.assert_not_called()
+
+    def test_color_band_offsets_do_not_accumulate_into_three_row_distance(self):
+        scanner, captured, result = self.scan_frames(
+            [0, 0, 227, 227, 454, 454, 681, 681, 908, 908, 1135, 1135, 1362, 1362],
+            bottom_offset=1362, rows=(75, 301, 528))
+        self.assertEqual(captured, [0, 681, 1362])
+        self.assertEqual(len(result), 9)
+        self.assertEqual(scanner.device.drag.call_count, 6)
+        self.assertEqual([call.args[0][1] - call.args[1][1] for call in scanner.device.drag.call_args_list],
+                         [227] * 6)
 
     def test_scan_corrects_overshoot_before_reading_and_allows_partial_last_page(self):
         scanner, captured, result = self.scan_frames(
