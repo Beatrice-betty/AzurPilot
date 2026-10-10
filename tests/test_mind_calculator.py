@@ -16,7 +16,7 @@ from module.api.config_service import ConfigService
 from module.api.mind_calculator_service import MindCalculatorService, import_ships
 from module.api.protocol import ApiError, MindCalculateParams, MindShip
 from module.api.router import Router
-from module.runtime.mind_calculator import MIND_COSTS, calculate, catalog, detect_rows, recognize
+from module.runtime.mind_calculator import MIND_COSTS, calculate, catalog, detect_rows, highest_ships, recognize
 from module.runtime.mind_recognition import Card, ScanMerger, color_rows, estimate_scroll, level_vote, recognize_cards
 from tests.test_api import fixture
 
@@ -58,11 +58,42 @@ class CalculatorTests(unittest.TestCase):
         self.assertEqual(result['review'], 3)
         self.assertEqual(calculate([ship('未来舰.改', base_rarity='R')])['mind'], 880)
 
+    def test_explicit_original_rarity_overrides_catalog_without_changing_identity(self):
+        default = calculate([ship('皇家财富号')])
+        override = calculate([ship('皇家财富号', base_rarity='SR')])
+        self.assertEqual(default['mind'], 2200)
+        self.assertEqual(override['mind'], 1320)
+        self.assertEqual(override['ships'][0]['rarity'], 'SSR')
+        self.assertEqual(override['ships'][0]['base_rarity'], 'SR')
+        self.assertEqual(override['summary'][2]['count'], 1)
+        self.assertEqual(override['summary'][1]['count'], 0)
+
     def test_public_catalog_integrity(self):
         for name, info in catalog()['ships'].items():
             self.assertEqual(name, info['name'])
             self.assertIn(info['base_rarity'], MIND_COSTS)
         self.assertGreater(len(catalog()['ships']), 800)
+
+    def test_collaboration_catalog_has_original_rarity_without_frame_guessing(self):
+        for name in ('帕特莉夏·阿贝尔海姆', 'DEAD MASTER', '雪泉', '雫', '穗香', '环', '八舞耶俱矢·八舞夕弦'):
+            with self.subTest(name=name):
+                info = catalog()['ships'][name]
+                self.assertEqual(info['base_rarity'], 'SSR')
+                self.assertEqual(info['group'], '联动')
+                result = calculate([ship(name, base_rarity='SR')])
+                self.assertEqual(result['mind'], 0)
+                self.assertEqual(result['excluded'], 1)
+
+    def test_retrofit_identity_keeps_highest_and_prefers_retrofit_only_on_ties(self):
+        for rows in ([ship('卡辛'), ship('卡辛.改')], [ship('卡辛.改'), ship('卡辛')]):
+            self.assertEqual([row['name'] for row in highest_ships(rows)], ['卡辛.改'])
+            result = calculate(rows)
+            self.assertEqual(result['ships'][next(i for i, row in enumerate(rows) if row['name'].endswith('改'))]['status'], 'included')
+        self.assertEqual(highest_ships([ship('卡辛', 105), ship('卡辛.改', 100)])[0]['name'], '卡辛')
+        self.assertEqual(highest_ships([ship('卡辛', 100), ship('卡辛.改', 105)])[0]['name'], '卡辛.改')
+        rows = highest_ships([ship('约克城'), ship('约克城II'), ship('皇家方舟'), ship('皇家方舟·META')])
+        self.assertEqual(len(rows), 4)
+        self.assertEqual(calculate(rows)['included'], 4)
 
     def test_rows_follow_scrolled_level_headers(self):
         ocr = Mock()
@@ -71,7 +102,7 @@ class CalculatorTests(unittest.TestCase):
                                 ('Lv.120', [[170, 332], [218, 332], [218, 348], [170, 348]], .99)]
         self.assertEqual(detect_rows(Image.new('RGB', (1280, 720)), ocr), [105, 332])
 
-    def test_offline_screenshot_uses_ap_models_and_marks_review(self):
+    def test_offline_screenshot_uses_ap_models_and_bills_confirmed_results(self):
         image = Image.open(Path(__file__).parent / 'fixtures/fleet_names_vanguard.png').convert('RGB')
         # 舰队夹具已匿名遮盖页头；这里只验证卡片 OCR，上传布局校验使用完整船坞夹具。
         rows = [card.ship for card in recognize_cards(image)]
@@ -79,7 +110,8 @@ class CalculatorTests(unittest.TestCase):
         self.assertEqual(rows[5]['name'], '灵敏·META')
         self.assertEqual(rows[13]['name'], '热心.改')
         self.assertEqual(rows[13]['level'], 105)
-        self.assertTrue(all(row['review'] for row in rows))
+        self.assertTrue(all(not row['review'] for row in rows))
+        self.assertGreater(calculate(rows)['mind'], 0)
         self.assertEqual([row['level'] for row in rows], [125, 100, 125, 105, 125, 63, 99, 99, 117, 122, 99, 98, 105, 105,
                                                        120, 105, 105, 120, 120, 120, 120])
         with self.assertRaises(ValueError):
@@ -254,6 +286,18 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, 'CONFLICT')
         self.configs.create('other')
         self.assertEqual(self.service.report('other')['ships'], [])
+
+    def test_manual_original_rarity_survives_save_reload_and_export(self):
+        rows = [ship('皇家财富号', base_rarity='SR'), ship('拉菲.改', 105)]
+        saved = self.service.save('testpilot', self.service.report('testpilot')['revision'], rows)
+        reloaded = MindCalculatorService(ConfigService(self.configs.root)).report('testpilot')
+        self.assertEqual(saved['mind'], 2520)
+        self.assertEqual(reloaded['mind'], saved['mind'])
+        self.assertEqual(reloaded['ships'][0]['base_rarity'], 'SR')
+        for format in ('json', 'csv', 'xlsx'):
+            file = self.service.export('testpilot', format)
+            imported = import_ships(file['filename'], file['content'])
+            self.assertEqual(calculate(imported)['mind'], saved['mind'])
 
     def test_all_exports_import_back_without_losing_review_or_exclusion(self):
         rows = [ship('拉菲.改', 105, source='截图.png'), ship('待核对舰', review=True), ship('排除舰', excluded=True)]
