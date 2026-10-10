@@ -23,12 +23,6 @@ def _digest(path):
     return result.hexdigest()
 
 
-def _source_state(path):
-    """记录 SQLite 主文件及 WAL 的指纹，以拒绝迁移时发生的外部写入。"""
-    return tuple(_digest(item) if item.exists() else None
-                 for item in (path, path.with_name(path.name + '-wal')))
-
-
 def _snapshot(source, temporary):
     """用 SQLite 备份 API 取得含已提交 WAL 的一致历史副本。"""
     with closing(sqlite3.connect(source.as_uri() + '?mode=ro', uri=True)) as incoming, \
@@ -69,11 +63,16 @@ def _history_copy(protector, identity, source, target, journal):
 
     temporary = target.with_name(target.name + '.' + uuid.uuid4().hex + '.relocating')
     protector._safe(temporary)
-    before = _source_state(source)
+    verifier = target.with_name(target.name + '.' + uuid.uuid4().hex + '.verify')
+    protector._safe(verifier)
     try:
         checksum = _snapshot(source, temporary)
-        if _source_state(source) != before:
+        # SQLite 的正常只读连接可能触发 WAL 检查点或清理旁路文件；
+        # 主文件/WAL 的原始字节因此不稳定。比较两份逻辑一致的 SQLite 快照。
+        if _snapshot(source, verifier) != checksum:
             raise damaged('旧历史在快照期间发生变化，请停止旧写入进程后重试')
+        # 再次验证必须使用全新目标库；复用 SQLite 连接目标会改变文件头计数器。
+        verifier.unlink(missing_ok=True)
         # 将复制文件的摘要先持久化，再发布目标文件；重启后可识别重复副本。
         with protector.transaction() as (data, _):
             active = data['instances'][identity]['relocation']
@@ -81,11 +80,12 @@ def _history_copy(protector, identity, source, target, journal):
                 raise damaged('实例迁移登记在执行过程中发生改变')
             active['digest'] = checksum
         os.replace(temporary, target)
-        if _source_state(source) != before:
+        if _snapshot(source, verifier) != checksum:
             raise damaged('旧历史在发布后发生变化，已保留原件，请人工核对')
         _discard_source(source)
     finally:
         temporary.unlink(missing_ok=True)
+        verifier.unlink(missing_ok=True)
 
 
 def relocate_profile(protector, identity, source_name, target_name):
