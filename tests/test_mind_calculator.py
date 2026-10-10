@@ -233,6 +233,7 @@ class RecognitionTests(unittest.TestCase):
                 self.active = self.armed = False
                 self.point = None
                 self.events = []
+                self.glide_goal = None
                 self.tracked_while_pressed = []
                 self.click_record_clear = Mock()
                 self.stuck_record_clear = Mock()
@@ -254,6 +255,9 @@ class RecognitionTests(unittest.TestCase):
                 self.marker_frames = marker_delay if self.mode == 'bar' else 0
                 self.events.append(('down', self.mode, point))
             def move(self, point):
+                self.hold()
+                self._move(point)
+            def _move(self, point):
                 assert self.active
                 self.events.append(('move', self.mode, point))
                 if not self.armed:
@@ -266,14 +270,28 @@ class RecognitionTests(unittest.TestCase):
                         self.overshoot = False
                     self.goal = max(0, min(bottom_offset, self.goal + change))
                 self.point = point
+            def glide(self, point, speed):
+                self.glide_goal, self.glide_speed = point, speed
+            def hold(self):
+                self.glide_goal = None
+            def check_error(self):
+                pass
             def up(self):
                 if self.active:
+                    self.hold()
                     assert self.armed, '未跨过拖动阈值就松手会变成点击'
                     self.events.append(('up', self.mode, self.point))
                     self.active = False
             def capture(self):
                 self.frames += 1
                 assert self.frames < 1000, '实时定位没有结束'
+                if self.active and self.glide_goal is not None:
+                    # 每帧间隔内触点逐像素移动；截图读到的可以是尚未到达目标的中途位置。
+                    for _ in range(max(1, int(self.glide_speed * .2))):
+                        if self.point == self.glide_goal:
+                            break
+                        self._move(tuple(value + (1 if goal > value else -1 if goal < value else 0)
+                                         for value, goal in zip(self.point, self.glide_goal)))
                 if animate and self.goal != self.offset:
                     delta = self.goal - self.offset
                     self.offset += int(np.sign(delta) * max(1, abs(delta) // 2))
