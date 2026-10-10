@@ -179,7 +179,6 @@ class ConfigTransactionTests(unittest.TestCase):
         from module.api.config_service import ConfigService
         from module.api.protocol import ConfigChange
         from module.combat.emotion import FleetEmotion
-        from module.exception import RequestHumanTakeover
         from module.config.config import AzurLaneConfig
         from tests.test_api import fixture
 
@@ -203,8 +202,8 @@ class ConfigTransactionTests(unittest.TestCase):
             data['Main']['Emotion']['Fleet1Record'] = '2020-01-01 00:00:00'
             path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
             stale = FleetEmotion(build(path), '1')
-            with self.assertRaises(RequestHumanTakeover):
-                stale.update()
+            stale.update()
+            self.assertEqual(stale.max, stale.current)
 
             service.patch('testpilot', None, [
                 ConfigChange(path='Main.Emotion.Fleet1Value', value=85),

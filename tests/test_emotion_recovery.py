@@ -97,41 +97,68 @@ class EmotionIntegrationTests(unittest.TestCase):
         emotion.check_reduce(1)
         self.assertEqual(70, config.Emotion_Fleet2Value)
         self.assertIsNone(config.Emotion_Fleet2RecoveryState)
-        # 升级前的配置只有数值与时间：重建后按当前值继续，不要求人工校准。
+        # 升级前的配置只有数值与时间：不能因为缺少相位记录而中断任务。
         config.Emotion_Fleet1RecoveryState = None
         emotion.check_reduce(1)
-        self.assertIn(config.Emotion_Fleet1RecoveryState['version'], (1, 2))
-        self.assertEqual(70, config.Emotion_Fleet2Value)
+        self.assertEqual(70, emotion.fleet_1.current)
+        self.assertEqual(2, config.Emotion_Fleet1RecoveryState['version'])
+        production.Emotion(config).check_reduce(1)
 
-    def test_broken_recovery_state_is_rebuilt_conservatively(self):
-        _, config, emotion = self.setup_tracker()
-        # 版本无效的存档不可信：按当前心情值重建，三件套回到一致。
-        config.Emotion_Fleet1RecoveryState = {'version': 3}
-        emotion.check_reduce(1)
-        self.assertIn(config.Emotion_Fleet1RecoveryState['version'], (1, 2))
-        self.assertEqual(config.Emotion_Fleet1Record, emotion.fleet_1.record)
-        self.assertEqual(70, config.Emotion_Fleet1Value)
+    def test_broken_recovery_state_resets_to_default_for_active_fleets(self):
+        for public, fleet_index in ((False, 1), (False, 2), (True, 1)):
+            for damage in ('version', 'segments', 'time', 'value', 'bad_value', 'bad_time'):
+                with self.subTest(public=public, fleet=fleet_index, damage=damage):
+                    clock, config, emotion = self.setup_tracker(public=public)
+                    if fleet_index == 2:
+                        config.Fleet_FleetOrder = 'fleet1_standby_fleet2_all'
+                    prefix = 'PublicEmotion_Fleet' if public else f'Emotion_Fleet{fleet_index}'
+                    state = copy.deepcopy(getattr(config, prefix + 'RecoveryState'))
+                    if damage == 'version':
+                        state['version'] = 3
+                    elif damage == 'segments':
+                        state['segments'] = []
+                    elif damage == 'time':
+                        state['record'] = (clock.now() + timedelta(seconds=1)).isoformat()
+                    elif damage == 'value':
+                        state['segments'] = [[0, PERIOD_US, 80]]
+                    elif damage == 'bad_value':
+                        state = None
+                        setattr(config, prefix + 'Value', -1)
+                    else:
+                        state = None
+                        setattr(config, prefix + 'Record', 'invalid')
+                    setattr(config, prefix + 'RecoveryState', state)
+                    emotion.check_reduce(1)
+                    self.assertEqual(119, getattr(config, prefix + 'Value'))
+                    self.assertEqual(clock.now(), getattr(config, prefix + 'Record'))
+                    restored = EmotionRecoveryState.restore(
+                        getattr(config, prefix + 'RecoveryState'), 119, clock.now(),
+                        getattr(config, prefix + 'Recover'), getattr(config, prefix + 'Oath'),
+                        getattr(config, prefix + 'Onsen'))
+                    self.assertEqual([[0, PERIOD_US, 119]], restored.export()['segments'])
+                    production.Emotion(config).check_reduce(1)
 
     def test_three_way_mismatch_is_repaired(self):
         clock, config, emotion = self.setup_tracker(initial=143)
-        # 实机现场：数值、记录时刻与相位互相矛盾，restore 报“不一致”，任务被拦。
         stale = EmotionRecoveryState.calibrate(150, clock.now() - timedelta(hours=5),
                                               'dormitory_floor_2', True, False)
         config.Emotion_Fleet1RecoveryState = stale.export()
-        config.Emotion_Fleet1Value = 143
         config.Emotion_Fleet1Record = clock.now() - timedelta(hours=6)
         emotion.check_reduce(1)
         restored = EmotionRecoveryState.restore(config.Emotion_Fleet1RecoveryState,
                                                config.Emotion_Fleet1Value, config.Emotion_Fleet1Record,
                                                'dormitory_floor_2', True, False)
-        # 重建以配置值为准，不沿用存档里偏高的 150。
-        self.assertEqual(143, restored.value)
+        # 三字段不一致时从默认 119 重新计时，不能沿用旧估计或相位里的 150。
+        self.assertEqual(119, restored.value)
+        self.assertEqual(clock.now(), restored.record)
 
-    def test_condition_change_rebuilds_from_current_value(self):
+    def test_condition_change_rebuilds_with_current_settings(self):
         _, config, emotion = self.setup_tracker()
         config.Emotion_Fleet1Recover = 'dormitory_floor_1'
         emotion.check_reduce(1)
-        self.assertEqual('dormitory_floor_1', config.Emotion_Fleet1RecoveryState['signature'][0])
+        self.assertEqual(119, config.Emotion_Fleet1Value)
+        self.assertEqual(['dormitory_floor_1', True, False],
+                         config.Emotion_Fleet1RecoveryState['signature'])
 
     def test_ignore_mode_does_not_require_calibration_or_record_costs(self):
         _, config, emotion = self.setup_tracker()
@@ -165,11 +192,13 @@ class EmotionIntegrationTests(unittest.TestCase):
         self.assertLessEqual(abs(emotion.fleet_1.current - clock.oracle.values[0]), 3)
         self.assertEqual(clock.now(), emotion.fleet_1.state.record)
 
-    def test_recovery_condition_change_rebuilds(self):
+    def test_public_recovery_condition_change_rebuilds_with_current_settings(self):
         _, config, emotion = self.setup_tracker(public=True)
         config.PublicEmotion_FleetOath = False
         emotion.check_reduce(1)
-        self.assertFalse(config.PublicEmotion_FleetRecoveryState['signature'][1])
+        self.assertEqual(119, config.PublicEmotion_FleetValue)
+        self.assertEqual(['dormitory_floor_2', False, False],
+                         config.PublicEmotion_FleetRecoveryState['signature'])
 
     def test_red_fallback_recovers_automatically_after_json_reload(self):
         for public in (False, True):
@@ -229,13 +258,14 @@ class EmotionIntegrationTests(unittest.TestCase):
         reloaded.check_reduce(6)
         self.assertGreaterEqual(reloaded.fleet_1.lower, 52)
 
-    def test_clock_rollback_cannot_authorize_sortie(self):
-        clock, _, emotion = self.setup_tracker()
+    def test_clock_rollback_resets_default_at_current_time(self):
+        clock, config, emotion = self.setup_tracker()
         clock.advance(100_000_000)
         emotion.check_reduce(1)
         clock.us -= 1
-        with self.assertRaises(RequestHumanTakeover):
-            emotion.check_reduce(1)
+        emotion.check_reduce(1)
+        self.assertEqual(119, config.Emotion_Fleet1Value)
+        self.assertEqual(clock.now(), config.Emotion_Fleet1Record)
 
     def test_record_conflict_does_not_authorize_using_old_state(self):
         clock, config, emotion = self.setup_tracker()
@@ -250,10 +280,39 @@ class EmotionIntegrationTests(unittest.TestCase):
             config.Emotion_Fleet1RecoveryState = EmotionRecoveryState.calibrate(
                 70, stamp, 'dormitory_floor_2', True, False).export()
 
-        with patch.object(config, 'multi_set', recalibrate_during_save), self.assertRaises(RequestHumanTakeover):
+        with patch.object(config, 'multi_set', recalibrate_during_save), self.assertRaises(ScriptEnd):
             emotion.check_reduce(1)
         self.assertEqual(70, config.Emotion_Fleet1Value)
         self.assertIsNone(emotion.fleet_1.state)
+        self.assertGreater(config.fields['Main.Scheduler.NextRun'], clock.now())
+
+    def test_repair_conflict_preserves_new_manual_calibration(self):
+        clock, config, emotion = self.setup_tracker()
+        config.Emotion_Fleet1RecoveryState = {'version': 3}
+        original_multi_set = config.multi_set
+
+        @contextmanager
+        def recalibrate_during_save():
+            with original_multi_set():
+                yield
+            stamp = clock.now() + timedelta(microseconds=1)
+            config.Emotion_Fleet1Value = 45
+            config.Emotion_Fleet1Record = stamp
+            config.Emotion_Fleet1RecoveryState = EmotionRecoveryState.calibrate(
+                45, stamp, 'dormitory_floor_2', True, False).export()
+
+        with patch.object(config, 'multi_set', recalibrate_during_save), self.assertRaises(ScriptEnd):
+            emotion.check_reduce(1)
+        self.assertEqual(45, config.Emotion_Fleet1Value)
+        self.assertIsNone(emotion.fleet_1.state)
+        self.assertGreater(config.fields['Main.Scheduler.NextRun'], clock.now())
+
+    def test_unreachable_control_setting_is_not_hidden_by_fallback(self):
+        _, config, emotion = self.setup_tracker()
+        config.Emotion_Fleet1Recover = 'not_in_dormitory'
+        config.Emotion_Fleet1Control = 'keep_exp_bonus'
+        with self.assertRaises(RequestHumanTakeover):
+            emotion.check_reduce(1)
 
     def test_double_book_oversized_map_limit_still_recovers(self):
         _, config, emotion = self.setup_tracker(initial=120)
@@ -306,6 +365,19 @@ class EmotionIntegrationTests(unittest.TestCase):
                 self.assertEqual(81, fields['FleetValue'])
                 self.assertEqual([[0, PERIOD_US, 81]], fields['FleetRecoveryState']['segments'])
 
+                # 公共账本损坏后回退 119，切换到另一任务仍沿用修复后的三个字段。
+                real.PublicEmotion_FleetRecoveryState = {'version': 3}
+                reloaded = production.Emotion(real)
+                reloaded.check_reduce(1)
+                fields = service.read('testpilot')[0]['General']['PublicEmotion']
+                self.assertEqual(119, fields['FleetValue'])
+                self.assertEqual(clock.now(), datetime.fromisoformat(fields['FleetRecord']))
+                self.assertEqual([[0, PERIOD_US, 119]], fields['FleetRecoveryState']['segments'])
+                real.bind('Main')
+                real.task = Function(real.data['Main'])
+                production.Emotion(real).reduce(1)
+                self.assertEqual(117, real.PublicEmotion_FleetValue)
+
                 emotion.emergency_reset()
                 fields = service.read('testpilot')[0]['General']['PublicEmotion']
                 self.assertEqual(0, fields['FleetValue'])
@@ -319,15 +391,16 @@ class EmotionIntegrationTests(unittest.TestCase):
 
     def test_legacy_config_migrates_and_persists_on_first_run(self):
         clock, _, _ = self.setup_tracker(initial=119)
+        recorded_at = clock.now() - timedelta(days=2)
         with tempfile.TemporaryDirectory() as directory:
             path = str(Path(directory) / 'anonymous.json')
             # 升级前的存档：只有数值与时间，没有恢复相位记录。
             disk = {'Main': {'Scheduler': {'Enable': False, 'Command': 'Main', 'NextRun': clock.now()},
                              'Emotion': {
-                                 'Fleet1Value': 119, 'Fleet1Record': clock.now(),
-                                 'Fleet1Control': 'prevent_green_face', 'Fleet1Recover': 'not_in_dormitory',
+                                 'Fleet1Value': 135, 'Fleet1Record': recorded_at,
+                                 'Fleet1Control': 'keep_exp_bonus', 'Fleet1Recover': 'dormitory_floor_2',
                                  'Fleet1Oath': False, 'Fleet1Onsen': False, 'Fleet1RecoveryState': None,
-                                 'Fleet2Value': 119, 'Fleet2Record': clock.now(),
+                                 'Fleet2Value': 117, 'Fleet2Record': recorded_at,
                                  'Fleet2Control': 'prevent_green_face', 'Fleet2Recover': 'not_in_dormitory',
                                  'Fleet2Oath': False, 'Fleet2Onsen': False, 'Fleet2RecoveryState': None}},
                     'Alas': {'PublicEmotion': {'Enable': False, 'Tasks': ''}}}
@@ -353,19 +426,51 @@ class EmotionIntegrationTests(unittest.TestCase):
             real.bind('Main')
             with patch.object(config_source, 'filepath_config', return_value=path):
                 emotion = production.Emotion(real)
-                # 旧配置不再要求人工接管，重建后三件套自洽。
-                emotion.check_reduce(1)
+                emotion.check_reduce(7)
                 saved = json.loads(Path(path).read_text(encoding='utf-8'))['Main']['Emotion']
-                self.assertIsNotNone(saved.get('Fleet1RecoveryState') or saved.get('Fleet2RecoveryState'))
-                self.assertEqual(2, saved['Fleet2RecoveryState']['version'])
-                self.assertEqual(datetime.fromisoformat(saved['Fleet2Record']),
-                                 datetime.fromisoformat(saved['Fleet2RecoveryState']['record']))
-                self.assertEqual(saved['Fleet2Value'], saved['Fleet2RecoveryState']['segments'][0][2])
+                for index, value in ((1, 150), (2, 119)):
+                    prefix = f'Fleet{index}'
+                    self.assertEqual(value, saved[prefix + 'Value'])
+                    self.assertEqual(clock.now(), datetime.fromisoformat(saved[prefix + 'Record']))
+                    self.assertEqual(clock.now(), datetime.fromisoformat(saved[prefix + 'RecoveryState']['record']))
+                    self.assertEqual([[0, PERIOD_US, value]], saved[prefix + 'RecoveryState']['segments'])
                 # 重新加载后状态可恢复，不会陷入重复迁移。
                 real.data = read_config('anonymous')
                 real._loaded_data = copy.deepcopy(real.data)
                 real.bind('Main')
-                self.assertIsNotNone(real.Emotion_Fleet2RecoveryState)
+                production.Emotion(real).check_reduce(7)
+                # 继续调用实际扣减入口，不能只检查存档非空就认为迁移成功。
+                production.Emotion(real).reduce(1)
+                self.assertEqual(148, real.Emotion_Fleet1Value)
+
+                # 复现旧迁移已写坏的账本：新相位对应未来时刻，数值与 Record 仍是旧值。
+                with real.multi_set():
+                    for index, old_value, recover, points in (
+                            (1, 135, 'dormitory_floor_2', 150), (2, 117, 'not_in_dormitory', 119)):
+                        prefix = f'Emotion_Fleet{index}'
+                        setattr(real, prefix + 'Value', old_value)
+                        setattr(real, prefix + 'Record', recorded_at)
+                        setattr(real, prefix + 'RecoveryState', EmotionRecoveryState.calibrate(
+                            points, clock.now() + timedelta(seconds=1), recover, False, False).export())
+                real.data = read_config('anonymous')
+                real._loaded_data = copy.deepcopy(real.data)
+                real.bind('Main')
+                with self.assertRaises(ScriptEnd):
+                    production.Emotion(real).check_reduce(7)
+                saved = read_config('anonymous')['Main']['Emotion']
+                for index in (1, 2):
+                    self.assertEqual(119, saved[f'Fleet{index}Value'])
+                    self.assertEqual(clock.now(), saved[f'Fleet{index}Record'])
+                    self.assertEqual([[0, PERIOD_US, 119]], saved[f'Fleet{index}RecoveryState']['segments'])
+                recovered = real.data['Main']['Scheduler']['NextRun']
+                self.assertEqual(clock.now().replace(microsecond=0) + timedelta(minutes=18, seconds=1),
+                                 recovered)
+                clock.advance((recovered - clock.now()) // timedelta(microseconds=1))
+                real.data = read_config('anonymous')
+                real._loaded_data = copy.deepcopy(real.data)
+                real.bind('Main')
+                production.Emotion(real).check_reduce(7)
+                self.assertGreaterEqual(real.Emotion_Fleet1Value, 132)
 
     def test_real_atomic_json_matches_memory_through_restarts(self):
         clock, fake, left = self.setup_tracker()

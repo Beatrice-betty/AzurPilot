@@ -15,9 +15,10 @@
 - 防止红脸（>2）：最低限度保护
 
 恢复批次相位未知时保存完整可能范围，显示中间值，出击控制使用下限。
-首次使用及更换恢复条件后需填写实测心情建立基准。
+缺失相位的旧配置沿用数值与时间；损坏存档按默认心情重新计时，可填写实测值校准。
 """
 
+from datetime import timedelta
 from time import sleep
 
 import numpy as np
@@ -102,10 +103,9 @@ class FleetEmotion:
         return self.state.upper
 
     def require_calibration(self):
+        """确保参与出击的舰队有可用账本，缺失或损坏时自动恢复。"""
         if self.state is None:
-            logger.critical(f'[心情-校准] 舰队 {self.fleet}：{self.calibration_error}。'
-                            '请暂停出击，确认恢复条件，并重新填写该舰队的实测最低心情值。')
-            raise RequestHumanTakeover
+            self.update()
 
     @property
     def record(self):
@@ -186,52 +186,68 @@ class FleetEmotion:
 
     def update(self, now=None, require_calibration=True):
         """读取最新存档后推进所有恢复相位，避免跨任务复用旧的缓存状态。"""
+        now = current_time() if now is None else now
         self.state = None
         try:
             state = EmotionRecoveryState.restore(getattr(self.config, self.state_name, None),
                                                 self.value, self.record, self.recover, self.oath, self.onsen)
-            state.advance(current_time() if now is None else now)
-        except (ValueError, TypeError) as exc:
+            state.advance(now)
+        except (ValueError, TypeError, OverflowError) as exc:
             self.calibration_error = str(exc)
             if require_calibration:
-                self.require_calibration()
+                self._recover_config(now)
             return
         self.state = state
         self.current = state.value
-
-    def _migrate_config(self):
-        """修复不可用的恢复存档：按当前心情值重建三件套并回写。
-
-        存档缺失、版本不可用或与配置的心情值和记录时刻不一致时，以配置的值为基准
-        重建恢复起点；配置值始终作为权威，避免从不可信的相位估算出偏高的心情。
-
-        Returns:
-            bool: 是否已完成修复；未绑定或值不可信时为 False。
-        """
-        value = self.value
-        if type(value) is not int or not 0 <= value <= 150:
-            return False
-        bound = getattr(self.config, 'bound', None)
-        if isinstance(bound, dict) and self.state_name not in bound:
-            # 未绑定则赋值不会回写配置，迁移结果会丢失，不如此处不做迁移。
-            return False
-        if current_time() < self.record:
-            # 记录时刻晚于当前时间时不修复，避免拿未来的账本出击。
-            return False
-        try:
-            state = EmotionRecoveryState.calibrate(value, current_time(),
-                                                  self.recover, self.oath, self.onsen)
-        except (ValueError, TypeError):
-            return False
-        logger.info('[心情-兼容] 恢复存档不可用，已按当前值重建恢复起点：'
-                    f'心情 {value}；要获得相位精度，可在任务页重新填写该舰队的实测最低心情值')
-        # 三个字段必须一起写入：只写相位会让下一次 restore 因与值或时间不一致而失败。
-        setattr(self.config, self.state_name, state.export())
-        setattr(self.config, self.value_name.replace('Value', 'Record'), state.record)
-        setattr(self.config, self.value_name, state.value)
-        self.state = state
         self.calibration_error = ''
-        return True
+
+    def _recover_config(self, now):
+        """迁移旧账本或回退默认值，原子保存同一时刻的三个字段。"""
+        bound = getattr(self.config, 'bound', None)
+        names = (self.value_name, self.value_name.replace('Value', 'Record'), self.state_name)
+        if isinstance(bound, dict) and any(name not in bound for name in names):
+            raise ScriptError(f'舰队 {self.fleet} 的心情存档未完整绑定到当前任务')
+        state = None
+        if getattr(self.config, self.state_name, None) is None:
+            try:
+                state = EmotionRecoveryState.calibrate(self.value, self.record, self.recover, self.oath, self.onsen)
+                state.advance(now)
+            except (ValueError, TypeError, OverflowError) as exc:
+                self.calibration_error = str(exc)
+                state = None
+            else:
+                logger.info(f'[心情-兼容] 舰队 {self.fleet} 已沿用旧心情和记录时间补建恢复存档')
+        if state is None:
+            # 损坏存档不沿用旧时间，避免把默认值按已经过去的时间再次恢复。
+            value = getattr(AzurLaneConfig, self.value_name)
+            try:
+                state = EmotionRecoveryState.calibrate(value, now, self.recover, self.oath, self.onsen)
+            except (ValueError, TypeError) as exc:
+                logger.critical(f'[心情-配置] 舰队 {self.fleet} 的恢复设置无效：{exc}')
+                raise RequestHumanTakeover from exc
+            logger.warning(f'[心情-恢复] 舰队 {self.fleet}：{self.calibration_error}；'
+                           f'已按默认心情 {value} 从当前时刻重新计时，可填写实测最低心情校准')
+        self.state = state
+        self.current = state.value
+        self.calibration_error = ''
+        with self.config.multi_set():
+            for name, value in zip(names, (state.value, state.record, state.export())):
+                setattr(self.config, name, value)
+        self._check_recorded_state()
+
+    def _check_recorded_state(self):
+        """保存遇到并发校准时退出本轮，保留用户基准并让任务重新读取。"""
+        if self.state is None or not getattr(self.config, 'auto_update', True):
+            return
+        if (self.value == self.state.value and self.record == self.state.record and
+                getattr(self.config, self.state_name) == self.state.export()):
+            return
+        self.state = None
+        self.calibration_error = '保存期间心情基准被修改'
+        logger.warning(f'[心情-保存] 舰队 {self.fleet} 的基准已更新，延后任务重新读取')
+        # task_delay 会截去微秒，预留两秒保证目标仍在未来。
+        self.config.task_delay(target=current_time() + timedelta(seconds=2))
+        raise ScriptEnd('[心情-保存] 重新读取最新心情基准')
 
     def consume(self, amount):
         self.require_calibration()
@@ -250,10 +266,7 @@ class FleetEmotion:
         Raises:
             RequestHumanTakeover: 控制策略与恢复地点冲突时抛出，请求人工接管。
         """
-        if self.state is None:
-            # 升级前的配置只有数值与时间：在需要恢复时间时补建起点，不阻断任务。
-            if not self._migrate_config():
-                self.require_calibration()
+        self.require_calibration()
         if self.control == 'keep_exp_bonus' and self.recover == 'not_in_dormitory' and not self.onsen:
             logger.critical(f'[战斗] 舰队 {self.fleet} 的情绪控制设置为"保持开心加成"，且恢复地点设置为"港区"，两者不能同时使用，请检查情绪设置')
             raise RequestHumanTakeover
@@ -357,13 +370,8 @@ class Emotion:
                 setattr(self.config, fleet.value_name, fleet.state.value)
                 setattr(self.config, fleet.value_name.replace('Value', 'Record'), fleet.state.record)
                 setattr(self.config, fleet.state_name, fleet.state.export())
-        if getattr(self.config, 'auto_update', True):
-            for fleet in fleets:
-                if fleet.state is not None and (fleet.value != fleet.state.value or
-                                                fleet.record != fleet.state.record or
-                                                getattr(self.config, fleet.state_name) != fleet.state.export()):
-                    fleet.state = None
-                    fleet.calibration_error = '保存期间心情基准被修改，请重新检查实测值'
+        for fleet in fleets:
+            fleet._check_recorded_state()
 
     def show(self):
         """显示中间值与可能范围，未校准状态不显示为准确心情。"""
@@ -427,6 +435,7 @@ class Emotion:
             logger.info(f'[情绪-检查] 预期情绪扣减: {reduce}')
 
             self.update()
+            self.public_fleet.require_calibration()
             self.record()
             self.show()
             recovered = self.public_fleet.get_recovered(reduce)
@@ -450,9 +459,13 @@ class Emotion:
         logger.info(f'[情绪-检查] 预期情绪扣减: {battle}')
 
         self.update()
+        # 只修复实际出击舰队的存档，待命舰队保持原有账本。
+        for fleet, cost in zip(self.fleets, battle):
+            if cost > 0:
+                fleet.require_calibration()
         self.record()
         self.show()
-        # 待命舰队不参与本图消耗，其未校准状态不能阻塞正在出击的舰队。
+        # 待命舰队不参与本图消耗，其存档状态不能阻塞正在出击的舰队。
         recovered = max((f.get_recovered(b) for f, b in zip(self.fleets, battle) if b > 0),
                         default=current_time())
         delay = recovered > current_time()
@@ -485,12 +498,13 @@ class Emotion:
             fleet_index (int): 舰队编号（1 或 2）。
         """
         self.update()
-        self.record()
-        self.show()
         if self.using_public:
             fleet = self.public_fleet
         else:
             fleet = self.fleets[fleet_index - 1]
+        fleet.require_calibration()
+        self.record()
+        self.show()
 
         recovered = fleet.get_recovered(expected_reduce=self.reduce_per_battle)
         if recovered > current_time():

@@ -134,7 +134,9 @@ tests/test_submarine_advanced.py   # 潜艇进阶规则单测
 
 该上界要求实测初值和记录时刻准确、恢复条件固定且一致、无漏记战斗。混合婚舰、部分后宅、饮料等额外加速不能直接套用此上界；温泉按现有配置的 +1 计算，二楼婚舰叠加温泉一批为 7 点，纯计算上界为 4 点。
 
-首次使用旧配置、新实例或换船／更改恢复条件后，先暂停出击，再在现有 `Fleet*Value` 输入框填入对应舰队的实测最低心情（0–150 整数）。API 原子建立 Value、完整 Record 和隐藏 RecoveryState；条件修改会使基准失效。未校准、损坏存档或时钟倒退会在该舰队参与出击前抛 `RequestHumanTakeover`；待命舰队不会因此阻塞正在出击的舰队。手动校准值和时间必须对应同一实际状态，手动输入延迟跨越恢复批次时应重新核对。
+参与出击的舰队缺少 RecoveryState 时，若旧 Value 和 Record 有效，则沿用旧记录建立完整未知相位并推进到当前时刻；Value、完整微秒 Record 和 RecoveryState 必须原子保存，不能只写相位或人为推进到未来。已有存档损坏、三字段不一致、恢复条件变更或时钟倒退时，自动按配置定义的默认心情 119 从当前时刻重新计时，记录具体原因，不因账本问题请求人工介入或重启模拟器。待命舰队保持原账本。
+
+默认 119 和旧记录迁移都是估计起点，不代表实测最低值，不能套用准确基准的误差保证。可在现有 `Fleet*Value` 输入框填入实测最低心情（0–150 整数）校准；API 原子建立三字段，条件修改会使基准失效。手动校准值和时间必须对应同一实际状态，输入延迟跨越恢复批次时应重新核对。保存遇到并发校准时保留用户最新基准，延后任务重新读取，不能用默认值覆盖它。无法达到的控制设置（如港区恢复但要求保持开心加成）仍需纠正配置。
 
 实测值恰好等于旧值时，WebUI 清空后重新输入并按回车也会提交；TUI 可重新输入或按回车确认，然后保存。仅打开配置页或让未编辑的输入框失焦不会校准。
 
@@ -304,7 +306,7 @@ stateDiagram-v2
 | `Emotion.Mode` | 选项 | `calculate` | `calculate`（预检+等待）/ `ignore`（无视红脸直接确认）/ `calculate_ignore` |
 | `Emotion.IgnoreShipwreck` | bool | `false` | 无视沉船额外扣减（10 点） |
 | `Emotion.Fleet{1,2}Value` / `Record` | int / datetime | 119 / 2020-01-01 | 情绪现值与记账时间戳；`Record` 为隐藏项 |
-| `Emotion.Fleet{1,2}RecoveryState` / `PublicEmotion.FleetRecoveryState` | stored | null | 隐藏恢复存档；旧配置默认未校准，填写实测 Value 后建立基准 |
+| `Emotion.Fleet{1,2}RecoveryState` / `PublicEmotion.FleetRecoveryState` | stored | null | 隐藏恢复存档；出击时迁移有效旧记录，损坏时从默认 119 重新计时；填写实测 Value 可校准 |
 | `Emotion.Fleet{1,2}Control` | 选项 | `prevent_green_face` | keep_exp_bonus(120) / prevent_green_face(40) / prevent_yellow_face(30) / prevent_red_face(2) |
 | `Emotion.Fleet{1,2}Recover` | 选项 | `not_in_dormitory` | 港区 / 后宅一楼 / 后宅二楼 |
 | `Emotion.Fleet{1,2}Oath` / `Onsen` | bool | false | 誓约 / 温泉各 +10/小时 |
