@@ -17,8 +17,7 @@ from module.api.mind_calculator_service import MindCalculatorService, import_shi
 from module.api.protocol import ApiError, MindCalculateParams, MindShip
 from module.api.router import Router
 from module.runtime.mind_calculator import MIND_COSTS, calculate, catalog, detect_rows, recognize
-from module.runtime.mind_recognition import (Card, ScanMerger, color_rows, estimate_scroll, level_vote,
-                                             recognize_cards, row_scroll_offset)
+from module.runtime.mind_recognition import Card, ScanMerger, color_rows, estimate_scroll, level_vote, recognize_cards
 from tests.test_api import fixture
 
 
@@ -74,17 +73,168 @@ class CalculatorTests(unittest.TestCase):
 
     def test_offline_screenshot_uses_ap_models_and_marks_review(self):
         image = Image.open(Path(__file__).parent / 'fixtures/fleet_names_vanguard.png').convert('RGB')
-        rows = recognize(image)
+        # 舰队夹具已匿名遮盖页头；这里只验证卡片 OCR，上传布局校验使用完整船坞夹具。
+        rows = [card.ship for card in recognize_cards(image)]
         self.assertEqual(len(rows), 21)
         self.assertEqual(rows[5]['name'], '灵敏·META')
         self.assertEqual(rows[13]['name'], '热心.改')
         self.assertEqual(rows[13]['level'], 105)
         self.assertTrue(all(row['review'] for row in rows))
-        self.assertEqual([row['level'] for row in rows[:14]], [125, 100, 125, 105, 125, 63, 99, 99, 117, 122, 99, 98, 105, 105])
-        self.assertEqual(rows[14]['name'], '朱诺.改')
-        self.assertEqual(rows[14]['level'], 120)
+        self.assertEqual([row['level'] for row in rows], [125, 100, 125, 105, 125, 63, 99, 99, 117, 122, 99, 98, 105, 105,
+                                                       120, 105, 105, 120, 120, 120, 120])
         with self.assertRaises(ValueError):
             recognize(Image.new('RGB', (2560, 1440)))
+
+
+class RecognitionTests(unittest.TestCase):
+    def test_digit_count_rejects_lost_hundreds_and_conflicting_readings(self):
+        self.assertEqual(level_vote(['Lv.25', 'Lv.125', '125'], 3)[0], 125)
+        self.assertTrue(level_vote(['25', '25', '25'], 3)[1])
+        self.assertEqual(level_vote(['Lv.120', 'Lv.120', '120'], 3), (120, ''))
+        self.assertTrue(level_vote(['100', '101', '100'], 3)[1])
+        self.assertEqual(level_vote(['noise', '126', '0'])[0], 0)
+
+    def test_colored_header_follows_scrolling_and_unread_cards_survive(self):
+        pixels = np.zeros((720, 1280, 3), dtype=np.uint8)
+        pixels[103:107, 93:231] = (235, 185, 60)
+        pixels[108:290, 93:231] = (80, 80, 80)
+        self.assertEqual(color_rows(pixels), [103])
+        ocr = Mock()
+        ocr.det.return_value = []
+        ocr.ocr_for_single_lines.side_effect = lambda regions: [''] * len(regions)
+        cards = recognize_cards(Image.fromarray(pixels), name_ocr=ocr, level_ocr=ocr)
+        self.assertEqual(len(cards), 1)
+        self.assertIn('未识别舰船', cards[0].ship['name'])
+        self.assertTrue(cards[0].ship['review'])
+        self.assertEqual(cards[0].ship['level'], 0)
+
+    def test_third_row_is_read_and_gray_artwork_is_not_a_card_header(self):
+        pixels = np.full((720, 1280, 3), 25, dtype=np.uint8)
+        for y in (76, 303, 530):
+            pixels[y:y + 4, 93:231] = (235, 185, 60)
+        # 实际错误现场中的灰色卡面条带位于列内部，不能生成一排虚假舰船。
+        pixels[381:383, 444:535] = (190, 190, 190)
+        self.assertEqual(color_rows(pixels), [76, 303, 530])
+        ocr = Mock()
+        ocr.det.return_value = []
+        ocr.ocr_for_single_lines.side_effect = lambda regions: [''] * len(regions)
+        cards = recognize_cards(Image.fromarray(pixels), name_ocr=ocr, level_ocr=ocr)
+        self.assertEqual([card.y for card in cards], [76, 303, 530])
+
+    @staticmethod
+    def scroll_frames(offsets):
+        rng = np.random.default_rng(20261010)
+        # 随机纹理模拟不同卡面，原图提供超过一屏的内容以核对实际位移。
+        content = rng.integers(30, 230, (max(offsets) + 575, 1140, 3), dtype=np.uint8)
+        frames = []
+        for offset in offsets:
+            frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+            frame[65:640, 85:1225] = content[offset:offset + 575]
+            frames.append(frame)
+        return frames
+
+    @staticmethod
+    def scroll_images():
+        return RecognitionTests.scroll_frames([0, 227])
+
+    def test_spatial_merge_keeps_distinct_copies_and_best_overlap(self):
+        first, second = self.scroll_images()
+        self.assertEqual(estimate_scroll(first, second), 227)
+        self.assertEqual(estimate_scroll(second, first), -227)
+        merger = ScanMerger()
+        merger.add(Image.fromarray(first), [Card(93, 76, 0, ship('拉菲', 100), 6, True),
+                                            Card(93, 303, 0, ship('拉菲', 100), 1)])
+        merger.add(Image.fromarray(second), [Card(93, 76, 0, ship('拉菲', 101), 6, True),
+                                             Card(93, 303, 0, ship('拉菲', 100), 6, True)])
+        self.assertEqual(len(merger.slots), 3)
+        self.assertEqual(merger.ships()[0]['level'], 101)
+        self.assertIn('跨屏读数不一致', merger.ships()[0]['source'])
+        # 相同截图是零位移，重试截图不增加卡片。
+        merger.add(Image.fromarray(second), [Card(93, 76, 0, ship('拉菲', 101), 6, True)])
+        self.assertEqual(len(merger.slots), 3)
+
+    def test_unrelated_screens_are_not_guessed_as_a_scroll(self):
+        first, _ = self.scroll_images()
+        other = np.random.default_rng(42).integers(30, 230, (720, 1280, 3), dtype=np.uint8)
+        with self.assertRaises(ValueError):
+            estimate_scroll(first, other)
+
+    def test_three_row_pages_merge_using_intermediate_scroll_evidence(self):
+        frames = self.scroll_frames([0, 227, 454, 681])
+        merger = ScanMerger()
+        cards = [Card(93, y, 0, ship(f'拉菲{y}', level=100), 6, True) for y in (76, 303, 530)]
+        merger.add(Image.fromarray(frames[0]), copy.deepcopy(cards))
+        for frame in frames[1:]:
+            merger.advance(Image.fromarray(frame))
+        merger.add(Image.fromarray(frames[-1]), copy.deepcopy(cards))
+        self.assertEqual(merger.offset, 681)
+        self.assertEqual(len(merger.slots), 6)
+
+    def scan_frames(self, offsets, *, bottom_offset):
+        from module.retire.mind_scan import MindCalculatorScan
+        from types import SimpleNamespace
+        class ImmediateTimer:
+            def __init__(self, limit, *args, **kwargs):
+                self.limit = limit
+            def start(self):
+                return self
+            def reset(self):
+                return self
+            def reached(self):
+                return self.limit < 5
+        images = self.scroll_frames(sorted(set(offsets)))
+        by_offset = dict(zip(sorted(set(offsets)), images))
+        frames = iter(offsets)
+        scanner = MindCalculatorScan.__new__(MindCalculatorScan)
+        scanner.config = SimpleNamespace(Emulator_ControlMethod='MaaTouch')
+        scanner.device = Mock()
+        position = [0]
+        def screenshot():
+            position[0] = next(frames)
+            scanner.device.image = by_offset[position[0]]
+        scanner.device.screenshot.side_effect = screenshot
+        scanner.appear = Mock(return_value=True)
+        scrollbar = SimpleNamespace(appear=lambda _: True, total=565,
+                                    match_color=lambda _: np.arange(565) >= 475 if position[0] == bottom_offset
+                                    else (np.arange(565) >= 2) & (np.arange(565) < 92))
+        captured = []
+        def recognize(*args, **kwargs):
+            captured.append(position[0])
+            return [Card(93, y, 0, ship(f'拉菲{y}', level=100), 6, True) for y in (76, 303, 530)]
+        with patch('module.retire.mind_scan.Timer', ImmediateTimer), patch('module.retire.mind_scan.DOCK_SCROLL', scrollbar), \
+                patch('module.retire.mind_scan.recognize_cards', side_effect=recognize):
+            result = scanner._scan_pages(Mock(), Mock())
+        return scanner, captured, result
+
+    def test_scan_moves_three_rows_and_waits_for_motion_to_settle(self):
+        scanner, captured, result = self.scan_frames([0, 0, 100, 227, 227, 454, 454, 681, 681], bottom_offset=681)
+        self.assertEqual(captured, [0, 681])
+        self.assertEqual(len(result), 3)
+        self.assertEqual(scanner.device.drag.call_count, 3)
+        self.assertTrue(all(call.kwargs['hold_duration'] == .4 for call in scanner.device.drag.call_args_list))
+        scanner.device.swipe.assert_not_called()
+
+    def test_scan_corrects_overshoot_before_reading_and_allows_partial_last_page(self):
+        scanner, captured, result = self.scan_frames(
+            [0, 0, 240, 240, 467, 467, 690, 690, 681, 681, 908, 908], bottom_offset=908)
+        self.assertEqual(captured, [0, 681, 908])
+        self.assertEqual(len(result), 3)
+        correction = scanner.device.drag.call_args_list[3]
+        self.assertGreater(correction.args[1][1], correction.args[0][1])
+
+    def test_adb_fallback_is_slow_and_never_falls_back_to_clicking_a_ship(self):
+        from module.retire.mind_scan import MindCalculatorScan
+        from module.exception import MindCalculatorScanError
+        from types import SimpleNamespace
+        scanner = MindCalculatorScan.__new__(MindCalculatorScan)
+        scanner.config = SimpleNamespace(Emulator_ControlMethod='ADB')
+        scanner.device = Mock()
+        scanner._drag_rows(227)
+        scanner.device.drag.assert_not_called()
+        self.assertEqual(scanner.device.swipe.call_args.kwargs['duration'], .6)
+        with self.assertRaises(MindCalculatorScanError):
+            scanner._drag_rows(4)
+        self.assertEqual(scanner.device.swipe.call_count, 1)
 
 
 class ServiceTests(unittest.TestCase):
@@ -177,7 +327,7 @@ class ServiceTests(unittest.TestCase):
                     config.modified = {}
                     scanner = MindCalculatorScan.__new__(MindCalculatorScan)
                     scanner.config = config
-                    scanner.ui_ensure, scanner.dock_reset = Mock(), Mock()
+                    scanner.ui_ensure, scanner.dock_reset, scanner.dock_sort_method_dsc_set = Mock(), Mock(), Mock()
                     scanner.appear = Mock(return_value=False)
                     scrollbar.appear.return_value = scrollbar.at_top.return_value = True
                     def collect(*args):

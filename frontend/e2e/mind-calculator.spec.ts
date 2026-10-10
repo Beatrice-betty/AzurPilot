@@ -100,13 +100,19 @@ test('原生计算器完成手工添加、最高等级合并、保存、Excel �
 })
 
 test('截图导入保持待核对状态并支持人工确认', async ({page}) => {
-  await page.goto('/#/i/demo-alt/mind-calculator')
-  await expect(page.locator('.mind-add')).toBeVisible()
-  await page.locator('input[type=file][accept="image/png,image/jpeg"]').setInputFiles(fileURLToPath(new URL('../../tests/fixtures/fleet_names_vanguard.png', import.meta.url)))
+    await page.goto('/#/i/demo-alt/mind-calculator')
+    await expect(page.locator('.mind-add')).toBeVisible()
+  const add = page.locator('.mind-add')
+  await add.getByLabel('船名', {exact: true}).fill('热心.改')
+  await add.getByLabel('等级', {exact: true}).fill('100')
+  await add.getByRole('button', {name: '添加舰船'}).click()
+  const screenshot = fileURLToPath(new URL('../../tests/fixtures/mind_dock_fleet_priority.png', import.meta.url))
+  await page.locator('input[type=file][accept^="image/png"]').setInputFiles([screenshot, screenshot])
   await expect(page.locator('.mind-ship-table tbody tr')).toHaveCount(21, {timeout: 30_000})
   await expect(page.locator('.mind-totals strong').nth(3)).toHaveText('21')
   await expect(page.locator('.mind-totals strong').first()).toHaveText('0')
   const row = page.locator('.mind-ship-table tbody tr').filter({has: page.locator('input[value="热心.改"]')})
+  await expect(row.locator('input[type=number]')).toHaveValue('105')
   await row.getByRole('button', {name: '已核对', exact: true}).click()
   await expect(page.locator('.mind-totals')).toContainText('800')
   await page.getByRole('heading', {name: '心智单元计算器', exact: true}).scrollIntoViewIfNeeded()
@@ -115,11 +121,17 @@ test('截图导入保持待核对状态并支持人工确认', async ({page}) =>
 
 test('未保存草稿在重载和实例切换后恢复', async ({page}) => {
   await page.goto('/#/i/demo-alt/mind-calculator')
+  await page.getByLabel('最低扫描等级').fill('90')
+  await page.getByLabel('最高扫描等级').fill('115')
+  await page.getByRole('button', {name: '自动扫描船坞', exact: true}).click()
+  await page.getByRole('button', {name: '停止扫描', exact: true}).click()
   const add = page.locator('.mind-add')
   await add.getByLabel('船名', {exact: true}).fill('热心')
   await add.getByRole('button', {name: '添加舰船'}).click()
   await expect(page.locator('.mind-intro')).toContainText('草稿尚未保存')
   await page.reload()
+  await expect(page.getByLabel('最低扫描等级')).toHaveValue('90')
+  await expect(page.getByLabel('最高扫描等级')).toHaveValue('115')
   await expect(page.locator('.mind-ship-table input[value="热心"]')).toBeVisible()
   await expect(page.locator('.mind-totals')).toContainText('880')
   await page.goto('/#/i/demo-main/mind-calculator')
@@ -127,4 +139,47 @@ test('未保存草稿在重载和实例切换后恢复', async ({page}) => {
   await page.goto('/#/i/demo-alt/mind-calculator')
   await expect(page.locator('.mind-ship-table input[value="热心"]')).toBeVisible()
   await expect(page.locator('.mind-intro')).toContainText('草稿尚未保存')
+})
+
+test('国服实例可按包含边界的等级范围启动扫描，错误范围不能启动', async ({page}) => {
+  const requests: Array<{method: string; params: Record<string, unknown>}> = []
+  page.on('websocket', ws => ws.on('framesent', frame => {
+    try {requests.push(JSON.parse(String(frame.payload)))} catch { /* 忽略非 JSON 帧。 */ }
+  }))
+  await page.goto('/#/i/demo-main/mind-calculator')
+  const scan = page.getByRole('button', {name: '自动扫描船坞', exact: true})
+  await expect(scan).toBeEnabled()
+  await page.getByLabel('最低扫描等级').fill('115')
+  await page.getByLabel('最高扫描等级').fill('90')
+  await scan.click()
+  await expect(page.getByText('等级范围必须满足 1 ≤ 最低等级 ≤ 最高等级 ≤ 125', {exact: true})).toBeVisible()
+  expect(requests.some(request => request.method === 'tasks.run')).toBeFalsy()
+  await page.getByLabel('最低扫描等级').fill('90')
+  await page.getByLabel('最高扫描等级').fill('115')
+  await scan.click()
+  await expect(page.getByRole('button', {name: '停止扫描', exact: true})).toBeVisible()
+  const patchIndex = requests.findIndex(request => request.method === 'config.patch')
+  const runIndex = requests.findIndex(request => request.method === 'tasks.run')
+  expect(patchIndex).toBeGreaterThanOrEqual(0)
+  expect(runIndex).toBeGreaterThan(patchIndex)
+  expect(requests[patchIndex].params.changes).toEqual([
+    {path: 'MindCalculatorScan.MindCalculator.MinLevel', value: 90},
+    {path: 'MindCalculatorScan.MindCalculator.MaxLevel', value: 115},
+  ])
+  await page.getByRole('button', {name: '停止扫描', exact: true}).click()
+  await page.reload()
+  await expect(page.getByLabel('最低扫描等级')).toHaveValue('90')
+  await expect(page.getByLabel('最高扫描等级')).toHaveValue('115')
+})
+
+test('批量截图中坏文件显示原因并保留成功识别的三行', async ({page}) => {
+  await page.goto('/#/i/demo-alt/mind-calculator')
+  await expect(page.locator('.mind-add')).toBeVisible()
+  await page.locator('input[type=file][accept^="image/png"]').setInputFiles([
+    {name: '损坏.png', mimeType: 'image/png', buffer: Buffer.from('broken image')},
+    {name: '船坞.png', mimeType: 'image/png', buffer: await readFile(fileURLToPath(new URL('../../tests/fixtures/mind_dock_fleet_priority.png', import.meta.url)))},
+  ])
+  await expect(page.locator('.mind-ship-table tbody tr')).toHaveCount(21, {timeout: 30_000})
+  await expect(page.getByText(/损坏.png: 截图识别失败/)).toBeVisible()
+  await expect(page.getByRole('status').filter({hasText: '已处理 21 条数据，清单保留 21 艘舰船'})).toBeVisible()
 })
