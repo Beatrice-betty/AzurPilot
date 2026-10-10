@@ -210,7 +210,7 @@ class RecognitionTests(unittest.TestCase):
         self.assertEqual(len(merger.ships()), 6)
 
     def scan_live(self, *, gain=8, bottom_offset=1362, initial_offset=0, rows=(76, 303, 530), overshoot=False,
-                  animate=False, fail=False, marker_delay=0, blocked=False, rounded=False):
+                  animate=False, fail=False, marker_delay=0, blocked=False, rounded=False, lost_once=False):
         from module.retire.mind_scan import MindCalculatorScan
         from types import SimpleNamespace
         class FrameTimer:
@@ -234,6 +234,7 @@ class RecognitionTests(unittest.TestCase):
                 self.point = None
                 self.events = []
                 self.glide_goal = None
+                self.speeds = []
                 self.tracked_while_pressed = []
                 self.click_record_clear = Mock()
                 self.stuck_record_clear = Mock()
@@ -272,6 +273,7 @@ class RecognitionTests(unittest.TestCase):
                 self.point = point
             def glide(self, point, speed):
                 self.glide_goal, self.glide_speed = point, speed
+                self.speeds.append(speed)
             def hold(self):
                 self.glide_goal = None
             def check_error(self):
@@ -343,7 +345,12 @@ class RecognitionTests(unittest.TestCase):
                 if 65 <= y <= 537:
                     cards.append(Card(93, y, 0, ship('拉菲'), 6))
             return cards
+        lost = False
         def measure(previous, current):
+            nonlocal lost
+            if lost_once and not lost and device.active and device.mode == 'bar' and device.offset > 100:
+                lost = True
+                raise ValueError('模拟快拖失去重叠')
             measured = estimate_scroll(previous, current)
             # 实际画面有亚像素重采样，逐帧整数匹配会累积取整误差。
             return measured - int(np.sign(measured)) if rounded and measured else measured
@@ -368,10 +375,19 @@ class RecognitionTests(unittest.TestCase):
         scanner.device.swipe.assert_not_called()
         self.assertGreater(scanner.device.stuck_record_clear.call_count, 5)
         self.assertEqual(scanner.device.stuck_record_clear.call_count, scanner.device.click_record_clear.call_count)
+        self.assertGreater(max(scanner.device.speeds), 4)
+        # 截图帧率不控制触点移动步长；每次实际纵向注入最多一像素。
+        previous = None
+        for operation, mode, point in scanner.device.events:
+            if operation == 'down':
+                previous = point
+            elif operation == 'move':
+                self.assertLessEqual(abs(point[1] - previous[1]), 1)
+                previous = point
 
     def test_live_scrollbar_moves_touch_effect_outside_color_detection(self):
         scanner, captured, result = self.scan_live(gain=300, marker_delay=2)
-        self.assertEqual(captured, [0, 681, 1362])
+        self.assertTrue(all(abs(actual - expected) <= 3 for actual, expected in zip(captured, [0, 681, 1362])))
         self.assertEqual(len(result), 9)
         # 抓住滑块后纵向移动期间，特效的最右边仍在黄色滑块左侧。
         bar_moves = [point for operation, mode, point in scanner.device.events if (operation, mode) == ('move', 'bar')]
@@ -391,7 +407,8 @@ class RecognitionTests(unittest.TestCase):
 
     def test_scan_corrects_small_overshoot_with_same_finger_and_reads_last_page(self):
         scanner, captured, result = self.scan_live(gain=19, bottom_offset=908, overshoot=True)
-        self.assertEqual(captured, [0, 681, 908])
+        self.assertTrue(all(abs(actual - expected) <= 3 for actual, expected in zip(captured, [0, 681, 908])))
+        self.assertEqual(captured[-1], 908)
         self.assertEqual(len(result), 7)
         strokes = []
         for operation, mode, point in scanner.device.events:
@@ -420,6 +437,18 @@ class RecognitionTests(unittest.TestCase):
         self.assertTrue(all(abs(actual - expected) <= 3 for actual, expected in zip(captured, [0, 681, 1362])))
         self.assertEqual(len(result), 9)
         self.assertFalse(scanner.device.active)
+
+    def test_fast_motion_recovers_overlap_without_releasing_the_scrollbar(self):
+        scanner, captured, result = self.scan_live(lost_once=True)
+        self.assertTrue(all(abs(actual - expected) <= 3 for actual, expected in zip(captured, [0, 681, 1362])))
+        self.assertEqual(len(result), 9)
+        strokes = []
+        for operation, mode, point in scanner.device.events:
+            if mode == 'bar' and operation == 'down':
+                strokes.append([])
+            if mode == 'bar' and operation == 'move':
+                strokes[-1].append(point[1])
+        self.assertTrue(any(any(after < before for before, after in zip(stroke, stroke[1:])) for stroke in strokes[1:]))
 
     def test_near_top_is_rewound_exactly_before_scan(self):
         _, captured, result = self.scan_live(initial_offset=45, gain=9)
