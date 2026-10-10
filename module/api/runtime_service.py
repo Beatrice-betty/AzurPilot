@@ -88,9 +88,13 @@ class RuntimeService:
             from module.statistics.cl1_database import Cl1Database
             cl1_db = Cl1Database(store=self.database)
             for name in configs.names():
-                with cl1_db._stats_transaction() as conn:
-                    cl1_db.ensure_coins_history(name, conn)
-                    cl1_db.ensure_coins_cleanup(name, conn)
+                try:
+                    with cl1_db._stats_transaction() as conn:
+                        cl1_db.ensure_coins_history(name, conn)
+                        cl1_db.ensure_coins_cleanup(name, conn)
+                except Exception as exc:
+                    # 回填属于辅助操作；单个实例损坏或锁超时不能阻断整个 WebUI。
+                    logger.warning(f'实例 {name} 物资历史回填失败，已跳过：{exc}')
 
     def _record_running_now(self) -> None:
         """把当前的运行集合立刻落盘。

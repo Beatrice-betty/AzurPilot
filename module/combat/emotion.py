@@ -226,9 +226,10 @@ class FleetEmotion:
         logger.info('[心情-兼容] 恢复存档不可用，已按当前值重建恢复起点：'
                     f'心情 {value}；要获得相位精度，可在任务页重新填写该舰队的实测最低心情值')
         # 三个字段必须一起写入：只写相位会让下一次 restore 因与值或时间不一致而失败。
-        setattr(self.config, self.state_name, state.export())
-        setattr(self.config, self.value_name.replace('Value', 'Record'), state.record)
-        setattr(self.config, self.value_name, state.value)
+        with self.config.multi_set():
+            setattr(self.config, self.state_name, state.export())
+            setattr(self.config, self.value_name.replace('Value', 'Record'), state.record)
+            setattr(self.config, self.value_name, state.value)
         self.state = state
         self.calibration_error = ''
         return True

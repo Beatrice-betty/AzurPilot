@@ -34,10 +34,8 @@ class IslandPlan(Island):
         self.ui_goto(page_island, get_ship=False)
         for name in routes:
             logger.hr(f'走位校验 {name}', level=2)
-            try:
-                self.island_walk_route(name)
-            except Exception as e:
-                logger.warning(f'[岛屿-计划] 路线 {name} 执行异常，继续下一条: {e}')
+            # 人工接管、设备异常和卡死均应交由调度器处理，不应标记任务成功。
+            self.island_walk_route(name)
             # 留一秒让角色停稳，方便截图/人工核对落点
             self.device.sleep(1)
         logger.info('[岛屿-计划] 走位校验结束')

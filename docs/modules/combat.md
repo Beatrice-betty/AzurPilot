@@ -225,7 +225,7 @@ reduce(fleet_index)  ← 进入战斗后：扣 2 点（双倍经验书 4 点）�
 record()  ← 与 update 成对：同一计算时刻的 Value + 完整 Record + RecoveryState 原子保存
 ```
 
-公海舰队（`PublicEmotion_Enable` 且当前任务在 `PublicEmotion_Tasks` 列表）把上述过程收敛到一份共享情绪上。每次更新都读取最新共享存档，跨任务不能缓存旧的相位状态。计算模式下若仍出现红脸弹窗，`handle_combat_low_emotion()`（处理器层）会退出关卡、清零记录并使恢复基准失效、延迟到服务器刷新并抛 `ScriptEnd`；弹窗不能证明两支舰队实际均为 0，恢复前需重新填写实测值。
+公海舰队（`PublicEmotion_Enable` 且当前任务在 `PublicEmotion_Tasks` 列表）把上述过程收敛到一份共享情绪上。每次更新都读取最新共享存档，跨任务不能缓存旧的相位状态。计算模式下若仍出现红脸弹窗，`handle_combat_low_emotion()`（处理器层）会退出关卡，将对应舰队心情基准重建为 0，并按当前地图的心情消耗计算恢复时间、延后任务后自动重试；无需等待服务器刷新或人工重填校准值。
 
 ## 7. 调用关系
 

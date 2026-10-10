@@ -286,7 +286,7 @@ flowchart TD
   → commit()：pack 成长图，文件名 = 13 位毫秒时间戳
       ├─ save → {DropRecord_SaveFolder}/{genre}/{ts}.png（后台线程）
       └─ local → SceneOperationSiren.parse_scene() → DataOpsiItems
-              → opsi_items 表（azurstats_local.db）→ 重算 farming CSV
+              → opsi_items 表（config/azurpilot.db）→ 重算 farming CSV
               └─ 统计页「大世界掉落」= opsi_drop_stats.collect()（指定部件、图纸、材料、计划及突破部件）
               └─ 有未识别物品 → unknown_items/ 红框标注图
 
@@ -296,7 +296,7 @@ flowchart TD
   └─ meow 来源只进 cl1_db 耙耋桶
 资源 OCR（LogRes 赋值）
   ├─ Dashboard.<Res>.Value/Record → 配置文件（WebUI 仪表盘）
-  └─ 全量快照 → resource_snapshots（azurstats_local.db）
+  └─ 全量快照 → resource_snapshots（config/azurpilot.db）
 
 查询侧：
   statistics.report → opsi_month / commission_income_stats / research_stats / ship_exp_stats

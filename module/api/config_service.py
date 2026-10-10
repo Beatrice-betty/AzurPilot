@@ -505,9 +505,18 @@ class ConfigService:
                     prefixes = ('Fleet1', 'Fleet2') if group == 'Emotion' else ('Fleet',)
                     for prefix in prefixes:
                         if prefix + 'Value' in args:
-                            fields[prefix + 'RecoveryState'] = EmotionRecoveryState.calibrate(
-                                fields[prefix + 'Value'], now, fields[prefix + 'Recover'],
-                                fields[prefix + 'Oath'], fields[prefix + 'Onsen']).export()
+                            try:
+                                fields[prefix + 'RecoveryState'] = EmotionRecoveryState.calibrate(
+                                    fields[prefix + 'Value'], now, fields[prefix + 'Recover'],
+                                    fields[prefix + 'Oath'], fields[prefix + 'Onsen']).export()
+                            except KeyError as exc:
+                                raise ApiError(
+                                    'INVALID_PARAMS', f'{task}.{group}.{exc.args[0]}: 缺少心情恢复配置'
+                                ) from None
+                            except ValueError as exc:
+                                raise ApiError(
+                                    'INVALID_PARAMS', f'{task}.{group}.{prefix}Value: {exc}'
+                                ) from None
                         elif any(prefix + suffix in args for suffix in ('Recover', 'Oath', 'Onsen')):
                             fields[prefix + 'RecoveryState'] = None
             atomic_write(str(self.path(name)), json.dumps(data, ensure_ascii=False, indent=2))

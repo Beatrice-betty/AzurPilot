@@ -1428,12 +1428,12 @@ class Island(SelectCharacter):
         """
         from module.island_daily_interact.assets import ROUTE_TWO_OPTION_COMPLETE
 
-        self.device.click(ROUTE_TWO_OPTION_COMPLETE)
-        self.device.sleep(2)
         for _ in self.loop(timeout=12, skip_first=False):
             if self.appear(ISLAND_CHECK):
-                break
-            self.device.sleep(2)
+                return
+            if self.appear(ROUTE_TWO_OPTION_COMPLETE):
+                self.device.click(ROUTE_TWO_OPTION_COMPLETE)
+        raise GameStuckError('切换啾咖啡餐厅超时，停止后续岛屿走位')
 
     def island_walk_action(self, action):
         """执行规则里的固定动作步骤。
@@ -1479,15 +1479,18 @@ class Island(SelectCharacter):
         Returns:
             list[int]: 长度等于 count 的毫秒时长列表。
         """
-        durations = self.island_walk_durations(route)
-        if len(durations) != count:
+        configured = [(direction, hold) for direction, hold in self.island_walk_steps(route)
+                      if direction not in ISLAND_WALK_ACTIONS]
+        default = [(direction, hold) for direction, hold in ISLAND_WALK_ROUTES[route]
+                   if direction not in ISLAND_WALK_ACTIONS]
+        if len(configured) != count or [direction for direction, _ in configured] != [
+                direction for direction, _ in default]:
             logger.warning(
-                f'[岛屿-走位] {route} 的方向与中间操作由代码固定，需要 {count} 个时长，'
-                f'配置给了 {len(durations)} 个，本次使用代码默认值'
+                f'[岛屿-走位] {route} 的步数或方向与固定补滑路线不一致，'
+                '本次使用代码默认值'
             )
-            return [hold for direction, hold in ISLAND_WALK_ROUTES[route]
-                    if direction not in ISLAND_WALK_ACTIONS]
-        return durations
+            return [hold for _, hold in default]
+        return [hold for _, hold in configured]
 
     def set_buy_number(self, target):
         """设置购买弹窗中的目标购买数量。
