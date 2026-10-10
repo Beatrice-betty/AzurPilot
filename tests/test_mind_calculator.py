@@ -74,12 +74,14 @@ class CalculatorTests(unittest.TestCase):
     def test_offline_screenshot_uses_ap_models_and_marks_review(self):
         image = Image.open(Path(__file__).parent / 'fixtures/fleet_names_vanguard.png').convert('RGB')
         rows = recognize(image)
-        self.assertEqual(len(rows), 14)
+        self.assertEqual(len(rows), 21)
         self.assertEqual(rows[5]['name'], '灵敏·META')
         self.assertEqual(rows[13]['name'], '热心.改')
         self.assertEqual(rows[13]['level'], 105)
         self.assertTrue(all(row['review'] for row in rows))
-        self.assertEqual([row['level'] for row in rows], [125, 100, 125, 105, 125, 63, 99, 99, 117, 122, 99, 98, 105, 105])
+        self.assertEqual([row['level'] for row in rows[:14]], [125, 100, 125, 105, 125, 63, 99, 99, 117, 122, 99, 98, 105, 105])
+        self.assertEqual(rows[14]['name'], '朱诺.改')
+        self.assertEqual(rows[14]['level'], 120)
         with self.assertRaises(ValueError):
             recognize(Image.new('RGB', (2560, 1440)))
 
@@ -105,19 +107,39 @@ class RecognitionTests(unittest.TestCase):
         self.assertTrue(cards[0].ship['review'])
         self.assertEqual(cards[0].ship['level'], 0)
 
+    def test_third_row_is_read_and_gray_artwork_is_not_a_card_header(self):
+        pixels = np.zeros((720, 1280, 3), dtype=np.uint8)
+        for y in (76, 303, 530):
+            pixels[y:y + 4, 93:231] = (235, 185, 60)
+        # 实际错误现场中的灰色卡面条带位于列内部，不能生成一排虚假舰船。
+        pixels[381:383, 444:535] = (190, 190, 190)
+        self.assertEqual(color_rows(pixels), [76, 303, 530])
+        ocr = Mock()
+        ocr.det.return_value = []
+        ocr.ocr_for_single_lines.side_effect = lambda regions: [''] * len(regions)
+        cards = recognize_cards(Image.fromarray(pixels), name_ocr=ocr, level_ocr=ocr)
+        self.assertEqual([card.y for card in cards], [76, 303, 530])
+
     @staticmethod
-    def scroll_images():
+    def scroll_frames(offsets):
         rng = np.random.default_rng(20261010)
         # 随机纹理模拟不同卡面，原图提供超过一屏的内容以核对实际位移。
-        content = rng.integers(30, 230, (1000, 1140, 3), dtype=np.uint8)
-        first, second = np.zeros((720, 1280, 3), dtype=np.uint8), np.zeros((720, 1280, 3), dtype=np.uint8)
-        first[65:640, 85:1225] = content[:575]
-        second[65:640, 85:1225] = content[227:802]
-        return first, second
+        content = rng.integers(30, 230, (max(offsets) + 575, 1140, 3), dtype=np.uint8)
+        frames = []
+        for offset in offsets:
+            frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+            frame[65:640, 85:1225] = content[offset:offset + 575]
+            frames.append(frame)
+        return frames
+
+    @staticmethod
+    def scroll_images():
+        return RecognitionTests.scroll_frames([0, 227])
 
     def test_spatial_merge_keeps_distinct_copies_and_best_overlap(self):
         first, second = self.scroll_images()
         self.assertEqual(estimate_scroll(first, second), 227)
+        self.assertEqual(estimate_scroll(second, first), -227)
         merger = ScanMerger()
         merger.add(Image.fromarray(first), [Card(93, 76, 0, ship('拉菲', 100), 6),
                                             Card(93, 303, 0, ship('拉菲', 100), 1)])
@@ -136,7 +158,18 @@ class RecognitionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             estimate_scroll(first, other)
 
-    def test_scan_waits_for_stability_and_positive_scroll_bottom(self):
+    def test_three_row_pages_merge_using_intermediate_scroll_evidence(self):
+        frames = self.scroll_frames([0, 227, 454, 681])
+        merger = ScanMerger()
+        cards = [Card(93, y, 0, ship('拉菲'), 6) for y in (76, 303, 530)]
+        merger.add(Image.fromarray(frames[0]), copy.deepcopy(cards))
+        for frame in frames[1:]:
+            merger.advance(Image.fromarray(frame))
+        merger.add(Image.fromarray(frames[-1]), copy.deepcopy(cards))
+        self.assertEqual(merger.offset, 681)
+        self.assertEqual(len(merger.ships()), 6)
+
+    def scan_frames(self, offsets, *, bottom_offset):
         from module.retire.mind_scan import MindCalculatorScan
         from types import SimpleNamespace
         class ImmediateTimer:
@@ -148,21 +181,59 @@ class RecognitionTests(unittest.TestCase):
                 return self
             def reached(self):
                 return self.limit < 5
-        first, second = self.scroll_images()
-        frames = iter([first, first, second, second])
+        images = self.scroll_frames(sorted(set(offsets)))
+        by_offset = dict(zip(sorted(set(offsets)), images))
+        frames = iter(offsets)
         scanner = MindCalculatorScan.__new__(MindCalculatorScan)
+        scanner.config = SimpleNamespace(Emulator_ControlMethod='MaaTouch')
         scanner.device = Mock()
-        scanner.device.screenshot.side_effect = lambda: setattr(scanner.device, 'image', next(frames))
+        position = [0]
+        def screenshot():
+            position[0] = next(frames)
+            scanner.device.image = by_offset[position[0]]
+        scanner.device.screenshot.side_effect = screenshot
         scanner.appear = Mock(return_value=True)
-        scrollbar = SimpleNamespace(appear=lambda _: True, at_bottom=Mock(side_effect=[False, True]), length=20, total=400)
-        cards = [[Card(93, 76, 0, ship('拉菲'), 6), Card(93, 303, 0, ship('拉菲'), 6)],
-                 [Card(93, 76, 0, ship('拉菲'), 6), Card(93, 303, 0, ship('热心'), 6)]]
+        scrollbar = SimpleNamespace(appear=lambda _: True, total=565,
+                                    match_color=lambda _: np.arange(565) >= 475 if position[0] == bottom_offset
+                                    else (np.arange(565) >= 2) & (np.arange(565) < 92))
+        captured = []
+        def recognize(*args, **kwargs):
+            captured.append(position[0])
+            return [Card(93, y, 0, ship('拉菲'), 6) for y in (76, 303, 530)]
         with patch('module.retire.mind_scan.Timer', ImmediateTimer), patch('module.retire.mind_scan.DOCK_SCROLL', scrollbar), \
-                patch('module.retire.mind_scan.recognize_cards', side_effect=cards):
+                patch('module.retire.mind_scan.recognize_cards', side_effect=recognize):
             result = scanner._scan_pages(Mock(), Mock())
-        self.assertEqual(len(result), 3)
-        self.assertEqual(scanner.device.screenshot.call_count, 4)
-        scanner.device.swipe.assert_called_once()
+        return scanner, captured, result
+
+    def test_scan_moves_three_rows_and_waits_for_motion_to_settle(self):
+        scanner, captured, result = self.scan_frames([0, 0, 100, 227, 227, 454, 454, 681, 681], bottom_offset=681)
+        self.assertEqual(captured, [0, 681])
+        self.assertEqual(len(result), 6)
+        self.assertEqual(scanner.device.drag.call_count, 3)
+        self.assertTrue(all(call.kwargs['hold_duration'] == .4 for call in scanner.device.drag.call_args_list))
+        scanner.device.swipe.assert_not_called()
+
+    def test_scan_corrects_overshoot_before_reading_and_allows_partial_last_page(self):
+        scanner, captured, result = self.scan_frames(
+            [0, 0, 240, 240, 467, 467, 690, 690, 681, 681, 908, 908], bottom_offset=908)
+        self.assertEqual(captured, [0, 681, 908])
+        self.assertEqual(len(result), 7)
+        correction = scanner.device.drag.call_args_list[3]
+        self.assertGreater(correction.args[1][1], correction.args[0][1])
+
+    def test_adb_fallback_is_slow_and_never_falls_back_to_clicking_a_ship(self):
+        from module.retire.mind_scan import MindCalculatorScan
+        from module.exception import MindCalculatorScanError
+        from types import SimpleNamespace
+        scanner = MindCalculatorScan.__new__(MindCalculatorScan)
+        scanner.config = SimpleNamespace(Emulator_ControlMethod='ADB')
+        scanner.device = Mock()
+        scanner._drag_rows(227)
+        scanner.device.drag.assert_not_called()
+        self.assertEqual(scanner.device.swipe.call_args.kwargs['duration'], .6)
+        with self.assertRaises(MindCalculatorScanError):
+            scanner._drag_rows(4)
+        self.assertEqual(scanner.device.swipe.call_count, 1)
 
 
 class ServiceTests(unittest.TestCase):
