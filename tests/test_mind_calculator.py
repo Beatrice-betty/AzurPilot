@@ -109,6 +109,13 @@ class CalculatorTests(unittest.TestCase):
         self.assertEqual(result['included'], 2)
         self.assertEqual(result['excluded'], 1)
 
+    def test_meta_uses_playable_rarity_instead_of_story_copy(self):
+        result = calculate([ship('灵敏·META')])
+        self.assertEqual(result['included'], 1)
+        self.assertEqual(result['ships'][0]['base_rarity'], 'SR')
+        self.assertEqual(result['ships'][0]['group'], 'META')
+        self.assertEqual(result['mind'], 1320)
+
     def test_shared_data_extractor_attaches_resolved_retrofits_to_playable_ship(self):
         from dev_tools.ship_data_extractor import extract_ship_data
         with tempfile.TemporaryDirectory() as directory:
@@ -167,8 +174,7 @@ class CalculatorTests(unittest.TestCase):
         self.assertEqual(rows[5]['name'], '灵敏·META')
         self.assertEqual(rows[13]['name'], '热心.改')
         self.assertEqual(rows[13]['level'], 105)
-        # 共享资料仅有灵敏 META 的剧情复制记录，不能当作可靠的可获取舰船计费。
-        self.assertEqual([row['name'] for row in rows if row['review']], ['灵敏·META'])
+        self.assertTrue(all(not row['review'] for row in rows))
         self.assertGreater(calculate(rows)['mind'], 0)
         self.assertEqual([row['level'] for row in rows], [125, 100, 125, 105, 125, 63, 99, 99, 117, 122, 99, 98, 105, 105,
                                                        120, 105, 105, 120, 120, 120, 120])
