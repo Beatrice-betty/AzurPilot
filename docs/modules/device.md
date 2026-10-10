@@ -237,6 +237,20 @@ flowchart TD
 
 所有后端返回前都已转成 RGB numpy 数组；`Screenshot.screenshot()` 是唯一做后处理的地方（缩放、旋转、去抖），下游模块永远拿到 720p 资源空间的图像。
 
+### Windows 模拟器与启动器的退出边界
+
+`PlatformWindows.execute(wait=False)` 用短命的 `cmd /c start` 断开模拟器与 ALAS 的进程树关系；
+这不会解除 Windows Job 归属。启动器需为后端 Job 设置 `JOB_OBJECT_LIMIT_BREAKAWAY_OK`，
+并向 Python 注入 `ALAS_LAUNCHER_JOB_BREAKAWAY=1`；ALAS 仅在此能力存在时以
+`CREATE_BREAKAWAY_FROM_JOB` 启动 cmd，使模拟器及其后代独立于后端 Job。
+普通 Python worker 仍继承 Job，退出或关闭 Job 句柄时照常回收。
+
+异步模拟器启动还会从复制的环境中移除 `ALAS_LAUNCHER_PID`、`ALAS_LAUNCHER_JOB_BREAKAWAY`
+和 `ALAS_WEBUI_TRUST_SECRET`，避免模拟器被启动器的残留进程扫描误杀或继承 WebUI 信任密钥。
+父进程环境及同步管理命令保持原有行为。直接运行 Python 不请求 breakaway；旧启动器未提供能力时
+保留原有启动方式，因此要彻底解决 Job 连带关闭问题，需同时更新启动器和 ALAS。
+显式配置的停止后关闭模拟器、模拟器故障恢复和看门狗仍按各自规则执行。
+
 ## 9. 状态模型
 
 设备恢复没有显式状态机，但存在一条隐式的异常升级链：
