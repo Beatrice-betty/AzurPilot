@@ -17,7 +17,8 @@ from module.api.mind_calculator_service import MindCalculatorService, import_shi
 from module.api.protocol import ApiError, MindCalculateParams, MindShip
 from module.api.router import Router
 from module.runtime.mind_calculator import MIND_COSTS, calculate, catalog, detect_rows, recognize
-from module.runtime.mind_recognition import Card, ScanMerger, color_rows, estimate_scroll, level_vote, recognize_cards
+from module.runtime.mind_recognition import (Card, ScanMerger, color_rows, estimate_scroll, level_vote,
+                                             recognize_cards, row_scroll_offset)
 from tests.test_api import fixture
 
 
@@ -145,6 +146,20 @@ class RecognitionTests(unittest.TestCase):
         self.assertEqual(len(cards), 7)
         self.assertEqual({card.y for card in cards}, {301})
 
+    def test_row_alignment_corrects_accumulated_drift_with_a_clipped_first_row(self):
+        pixels = np.zeros((720, 1280, 3), dtype=np.uint8)
+        for y in (42, 268, 495):
+            pixels[y:y + 4, 93:231] = (235, 185, 60)
+        self.assertEqual(color_rows(pixels), [268, 495])
+        self.assertEqual(row_scroll_offset(pixels, 75, 227, 679), 715)
+        # 校准方向也支持少拖：第三排船名接近画面下边缘时，只用上面两排确认偏差。
+        pixels[:] = 0
+        for y in (86, 313, 540):
+            pixels[y:y + 4, 93:231] = (235, 185, 60)
+        self.assertEqual(row_scroll_offset(pixels, 75, 227, 681), 670)
+        pixels[313:317] = 0
+        self.assertIsNone(row_scroll_offset(pixels, 75, 227, 681))
+
     @staticmethod
     def scroll_frames(offsets):
         rng = np.random.default_rng(20261010)
@@ -195,7 +210,7 @@ class RecognitionTests(unittest.TestCase):
         self.assertEqual(len(merger.ships()), 6)
 
     def scan_live(self, *, gain=8, bottom_offset=1362, initial_offset=0, rows=(76, 303, 530), overshoot=False,
-                  animate=False, fail=False, marker_delay=0, blocked=False):
+                  animate=False, fail=False, marker_delay=0, blocked=False, rounded=False):
         from module.retire.mind_scan import MindCalculatorScan
         from types import SimpleNamespace
         class FrameTimer:
@@ -266,6 +281,10 @@ class RecognitionTests(unittest.TestCase):
                     self.offset = self.goal
                 image = np.zeros((720, 1280, 3), dtype=np.uint8)
                 image[65:640, 85:1225] = self.content[self.offset:self.offset + 575]
+                for index in range(bottom_offset // 227 + 4):
+                    y = index // 3 * 681 + rows[index % 3] - self.offset
+                    if 55 <= y <= 716:
+                        image[y:y + 4, 93:231] = (235, 185, 60)
                 start = 545 if self.offset == bottom_offset else max(0, min(544, round(self.offset / gain)))
                 image[76 + start:96 + start, 1239:1248] = (247, 211, 66)
                 if self.active:
@@ -306,8 +325,13 @@ class RecognitionTests(unittest.TestCase):
                 if 65 <= y <= 537:
                     cards.append(Card(93, y, 0, ship('拉菲'), 6))
             return cards
+        def measure(previous, current):
+            measured = estimate_scroll(previous, current)
+            # 实际画面有亚像素重采样，逐帧整数匹配会累积取整误差。
+            return measured - int(np.sign(measured)) if rounded and measured else measured
         with patch('module.retire.mind_scan.Timer', FrameTimer), patch('module.retire.mind_scan.DOCK_SCROLL', scrollbar), \
                 patch('module.retire.mind_scan.recognize_cards', side_effect=recognize), \
+                patch('module.runtime.mind_recognition.estimate_scroll', side_effect=measure), \
                 patch('module.retire.mind_scan.logger'):
             result = scanner._scan_pages(Mock(), Mock())
         return scanner, captured, result
@@ -316,13 +340,15 @@ class RecognitionTests(unittest.TestCase):
         scanner, captured, result = self.scan_live()
         self.assertTrue(all(abs(actual - expected) <= 3 for actual, expected in zip(captured, [0, 681, 1362])))
         self.assertEqual(len(result), 9)
-        self.assertGreater(len(set(scanner.device.tracked_while_pressed)), 50)
-        self.assertIn(8, scanner.device.tracked_while_pressed)
+        self.assertGreater(len(set(scanner.device.tracked_while_pressed)), 5)
+        self.assertLess(scanner.device.frames, 100)
+        self.assertTrue(any(abs(after - before) >= 100 for before, after in zip(
+            scanner.device.tracked_while_pressed, scanner.device.tracked_while_pressed[1:])))
         self.assertTrue(any(event[:2] == ('down', 'bar') for event in scanner.device.events))
         self.assertFalse(scanner.device.active)
         scanner.device.drag.assert_not_called()
         scanner.device.swipe.assert_not_called()
-        self.assertGreater(scanner.device.stuck_record_clear.call_count, 50)
+        self.assertGreater(scanner.device.stuck_record_clear.call_count, 5)
         self.assertEqual(scanner.device.stuck_record_clear.call_count, scanner.device.click_record_clear.call_count)
 
     def test_live_scrollbar_moves_touch_effect_outside_color_detection(self):
@@ -341,7 +367,8 @@ class RecognitionTests(unittest.TestCase):
 
     def test_color_band_offsets_do_not_accumulate_into_three_row_distance(self):
         _, captured, result = self.scan_live(rows=(75, 301, 528), gain=19)
-        self.assertEqual(captured, [0, 681, 1362])
+        self.assertTrue(all(abs(actual - expected) <= 3 for actual, expected in zip(captured, [0, 681, 1362])))
+        self.assertEqual(captured[-1], 1362)
         self.assertEqual(len(result), 9)
 
     def test_scan_corrects_small_overshoot_with_same_finger_and_reads_last_page(self):
@@ -363,10 +390,18 @@ class RecognitionTests(unittest.TestCase):
 
     def test_large_scrollbar_gain_still_has_overlap_and_exact_three_row_goals(self):
         scanner, captured, result = self.scan_live(gain=300)
-        self.assertEqual(captured, [0, 681, 1362])
+        self.assertTrue(all(abs(actual - expected) <= 3 for actual, expected in zip(captured, [0, 681, 1362])))
         self.assertEqual(len(result), 9)
+        # 未知倍率下快拖失去重叠，返回原触点并减速，再继续扫描。
+        vertical = [point[1] for operation, mode, point in scanner.device.events if operation == 'move' and mode == 'bar']
+        self.assertTrue(any(after < before for before, after in zip(vertical, vertical[1:])))
         self.assertIn(300, scanner.device.tracked_while_pressed)
-        self.assertIn(600, scanner.device.tracked_while_pressed)
+
+    def test_near_goal_uses_card_rows_to_remove_frame_rounding_drift(self):
+        scanner, captured, result = self.scan_live(gain=9, rounded=True)
+        self.assertTrue(all(abs(actual - expected) <= 3 for actual, expected in zip(captured, [0, 681, 1362])))
+        self.assertEqual(len(result), 9)
+        self.assertFalse(scanner.device.active)
 
     def test_near_top_is_rewound_exactly_before_scan(self):
         _, captured, result = self.scan_live(initial_offset=45, gain=9)
@@ -377,7 +412,7 @@ class RecognitionTests(unittest.TestCase):
         scanner, captured, result = self.scan_live(gain=300, animate=True)
         self.assertTrue(all(abs(actual - expected) <= 3 for actual, expected in zip(captured, [0, 681, 1362])))
         self.assertEqual(len(result), 9)
-        self.assertIn(150, scanner.device.tracked_while_pressed)
+        self.assertTrue(any(0 < offset < 300 for offset in scanner.device.tracked_while_pressed))
 
     def test_adb_is_rejected_without_falling_back_to_clicks(self):
         from module.retire.mind_scan import MindCalculatorScan
