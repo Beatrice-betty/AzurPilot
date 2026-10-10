@@ -61,6 +61,13 @@ class Router:
             'config.export': Method(p.InstanceParams, lambda x: configs.export(x.instance)),
             'config.patch': Method(p.PatchParams, lambda x: configs.patch(x.instance, x.revision, x.changes), True),
             'overview.get': Method(p.InstanceParams, lambda x: runtime.overview(x.instance)),
+            'mind.catalog': Method(p.InstanceParams, lambda x: self.mind.catalog(x.instance)),
+            'mind.report': Method(p.InstanceParams, lambda x: self.mind.report(x.instance)),
+            'mind.calculate': Method(p.MindCalculateParams, lambda x: self.mind.calculate(x.instance, [ship.model_dump() for ship in x.ships])),
+            'mind.save': Method(p.MindSaveParams, lambda x: self.mind.save(x.instance, x.revision, [ship.model_dump() for ship in x.ships]), True),
+            'mind.import': Method(p.MindFileParams, lambda x: self.mind.import_file(x.instance, x.filename, x.content)),
+            'mind.recognize': Method(p.MindFileParams, lambda x: self.mind.recognize(x.instance, x.filename, x.content)),
+            'mind.export': Method(p.MindExportParams, lambda x: self.mind.export(x.instance, x.format)),
             'stock.status': Method(p.InstanceParams, lambda x: self.stock_exchange.status(x.instance)),
             'stock.rebuild': Method(p.StockRebuildParams, lambda x: self.stock_exchange.rebuild(x.instance, x.confirm, x.scope), True),
             'stock.request': Method(p.StockRequestParams, lambda x: self.stock_exchange.request(x.instance, x.path, x.method, x.body, x.etag), True),
@@ -108,6 +115,11 @@ class Router:
                                                     lambda x: {'removed': background.gallery_remove(x.id)}, True),
             'background.gallery.open': Method(p.Params, lambda _: background.gallery_open(), True),
         }
+
+    @property
+    def mind(self):
+        from module.api.mind_calculator_service import MindCalculatorService
+        return MindCalculatorService(self.configs)
 
     @property
     def opsi_simulator(self):

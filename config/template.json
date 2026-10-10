@@ -3717,6 +3717,14 @@
       "Storage": {}
     }
   },
+  "MindCalculatorScan": {
+    "MindCalculator": {
+      "Result": {}
+    },
+    "Storage": {
+      "Storage": {}
+    }
+  },
   "Daemon": {
     "Daemon": {
       "EnterMap": true

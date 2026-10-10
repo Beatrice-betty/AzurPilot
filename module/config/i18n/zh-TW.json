@@ -398,6 +398,10 @@
       "name": "艦隊掃描",
       "help": "掃描目前編入艦隊的艦船資訊"
     },
+    "MindCalculatorScan": {
+      "name": "心智單元船塢掃描",
+      "help": "掃描陸服 1280×720 船塢，結果在心智單元計算器中核對。完成前保留舊資料；會重設船塢篩選。"
+    },
     "Daemon": {
       "name": "半自動點選",
       "help": ""
@@ -6501,6 +6505,16 @@
     "BoostReplaceFilter": {
       "name": "啾咖啡加成替換過濾",
       "help": "多個加成餐品時按過濾順序優先替換第一個；替換槽位從餐品5→1倒查替換最後一個非空餐品\n可用餐品key對照：cheese:起司, strawberry_milkshake:草莓奶綠, morning_light:晨光活力組合, wake_up_call:醒神套餐, fruity_fruitier:果香雙杯樂\n示例：30 > 20 > cheese > 10"
+    }
+  },
+  "MindCalculator": {
+    "_info": {
+      "name": "心智單元計算器",
+      "help": "統計升至 120 級的心智單元Ⅰ與物資。"
+    },
+    "Result": {
+      "name": "艦船掃描結果",
+      "help": "依實例儲存艦船、等級與核對狀態。"
     }
   },
   "FleetInfo": {

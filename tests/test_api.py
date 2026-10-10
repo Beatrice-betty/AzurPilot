@@ -283,6 +283,21 @@ class SocketApiTests(unittest.TestCase):
             self.assertTrue(self.call(ws, 'auth.login', {'password': 'test-secret'})['ok'])
             self.assertEqual('testpilot', self.call(ws, 'instances.list')['result'][0]['name'])
 
+    def test_large_calculator_file_keeps_other_message_limits(self):
+        """舰船文件可超过 1 MiB，其余方法仍受原限制约束。"""
+        import base64
+        rows = [{'name': '扩展文件舰船' * 8, 'level': 100, 'source': 'x' * 200}] * 3000
+        content = base64.b64encode(json.dumps({'ships': rows}, ensure_ascii=False).encode()).decode()
+        self.assertGreater(len(content), 1024 * 1024)
+        with self.client.websocket_connect('/api/v1/ws') as ws:
+            self.login(ws)
+            result = self.call(ws, 'mind.import', {'instance': 'testpilot', 'filename': 'ships.json', 'content': content})
+            self.assertTrue(result['ok'], result)
+            self.assertEqual(len(result['result']['ships']), 3000)
+            result = self.call(ws, 'config.get', {'instance': 'testpilot', 'padding': content})
+            self.assertEqual(result['error']['code'], 'INVALID_REQUEST')
+            self.assertIn('1 MiB', result['error']['message'])
+
     def test_update_methods_require_auth_and_validate_pagination(self):
         with self.client.websocket_connect('/api/v1/ws') as ws:
             ws.receive_json()
