@@ -26,6 +26,21 @@ def normalize_name(name):
     return re.sub(r'[\s.·・．。]', '', unicodedata.normalize('NFKC', name)).casefold()
 
 
+def highest_ships(ships):
+    """同基础身份取最高等级；同级优先改造舰，II 型与 META 保留独立身份。"""
+    output = {}
+    for index, ship in enumerate(ships):
+        if not 1 <= ship['level'] <= 125:
+            continue
+        info = find_ship(ship['name'])
+        key = base_key(info) if info else normalize_name(ship['name'])
+        if ship['name'].startswith('未识别舰船'):
+            key = f'unknown:{index}'
+        if key not in output or preference(output[key]) < preference(ship):
+            output[key] = ship
+    return list(output.values())
+
+
 def find_ship(name):
     """根据名称查询内置舰船目录。"""
     ships = catalog()['ships']
@@ -50,13 +65,13 @@ def revision(ships):
 
 
 def enrich(ship):
-    """资料优先确定稀有度，未知改造船必须显式提供基础稀有度。"""
+    """资料补全默认稀有度，保留用户明确指定的计费基础稀有度。"""
     item = dict(ship)
     info = find_ship(item['name'])
     if info:
         item['name'] = info['name']
         item['rarity'] = info['rarity']
-        item['base_rarity'] = info['base_rarity']
+        item['base_rarity'] = item.get('base_rarity') or info['base_rarity']
         item['group'] = info['group']
         item['base_name'] = info['base_name']
     else:
@@ -79,13 +94,19 @@ def base_key(ship):
     return normalize_name(name)
 
 
+def preference(ship):
+    """最高等级优先，只有等级相同才优先保留已确认的改造身份。"""
+    info = find_ship(ship['name'])
+    return ship['level'], bool(info and info['group'] == '改造')
+
+
 def calculate(ships):
     """等级只能推断觉醒阶段：116 级起已走完四阶，目标限定为 120 级。"""
     rows = [enrich(ship) for ship in ships]
     highest = {}
     for index, ship in enumerate(rows):
         name = ship['name']
-        if ship['excluded'] or '兵装' in name or 'μ' in name.casefold() or ship['group'] == '幼体':
+        if ship['excluded'] or '兵装' in name or 'μ' in name.casefold() or ship['group'] in ('幼体', '联动'):
             ship['status'] = 'excluded'
         elif ship['review'] or not 1 <= ship['level'] <= 125 or ship['base_rarity'] not in RARITIES:
             ship['status'] = 'review'
@@ -93,7 +114,7 @@ def calculate(ships):
             ship['status'] = 'merged'
             key = base_key(ship)
             previous = highest.get(key)
-            if previous is None or rows[previous]['level'] < ship['level']:
+            if previous is None or preference(rows[previous]) < preference(ship):
                 highest[key] = index
         ship['mind'] = ship['gold'] = 0
     summary = {rarity: dict(rarity=rarity, stages=[0] * 6, stage_mind=[0] * 4,
@@ -120,10 +141,22 @@ def calculate(ships):
 
 
 def recognize(image, source='', *, name_ocr=None, level_ocr=None, row_origins=None):
-    """读取完整卡片；保留多轮识别提示，全部要求人工核对。"""
-    from module.runtime.mind_recognition import recognize_cards
-    return [card.ship for card in recognize_cards(image, source, name_ocr=name_ocr,
-                                                  level_ocr=level_ocr, row_origins=row_origins)]
+    """读取完整卡片；可靠结果直接计费，身份不明的条目保留核对提示。"""
+    import numpy as np
+    from module.retire.assets import DOCK_CHECK
+    from module.runtime.mind_recognition import normalize_screenshot, recognize_cards
+    image = normalize_screenshot(image)
+    pixels = np.array(image)
+    left, top, right, bottom = DOCK_CHECK.area
+    # Button.match 的反向模板参数对纯色输入可能返回 1，先排除没有文字的页头。
+    if pixels[top:bottom, left:right].std() < 10 or not DOCK_CHECK.match(pixels, offset=(0, 0)):
+        raise ValueError('截图未显示完整船坞界面，请上传包含顶部“船坞”标识及舰船卡片的游戏截图')
+    cards = recognize_cards(image, source, name_ocr=name_ocr, level_ocr=level_ocr, row_origins=row_origins)
+    invalid = [f'第 {sorted({card.y for card in cards}).index(card.y) + 1} 行第 {card.col + 1} 列'
+               for card in cards if not card.level_reliable]
+    if invalid:
+        raise ValueError('等级未能确认：' + '、'.join(invalid) + '；请上传清晰的静止船坞截图，未导入零等级数据')
+    return highest_ships([card.ship for card in cards])
 
 
 def detect_rows(image, ocr):
