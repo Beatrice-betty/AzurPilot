@@ -5,9 +5,10 @@
 import { PasswordInput, Select } from '../components/FormControls'
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type MouseEvent, type ChangeEvent } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { getLayout, setSidebarCollapsed, subscribeLayout } from './layout'
-import {getThemePreference, supportsBackground, usesMaterial} from './theme'
-import { ArrowRight, CalendarClock, Cat, ChartNoAxesCombined, CirclePause, CirclePlay, Code2, Compass, Download, ExternalLink, FileJson, GalleryHorizontal, Globe, House, LayoutDashboard, LoaderCircle, Maximize2, Megaphone, Menu, Minimize2, Palette, PanelTop, Settings2, WifiOff, X, ChevronRight, Workflow } from 'lucide-react'
+import { getLayout, subscribeLayout } from './layout'
+import {usesMaterial} from './theme'
+import {NavHandle} from './NavHandle'
+import { ArrowRight, CalendarClock, Cat, ChartNoAxesCombined, CirclePause, CirclePlay, Code2, Compass, Download, ExternalLink, FileJson, GalleryHorizontal, Globe, House, LayoutDashboard, LoaderCircle, Maximize2, Megaphone, Menu, Minimize2, Palette, PanelTop, Settings2, WifiOff, X, Workflow } from 'lucide-react'
 import { api } from '../api/client'
 import { editor } from '../config/editors'
 import {bulkAction, bulkTargets} from './instanceBulk'
@@ -323,39 +324,4 @@ export function App() {
     {creating && <CreateInstance onClose={() => setCreating(false)}/>}
     <MaterialInspector/>
   </div>
-}
-
-/** 侧栏收起/展开把手：侧栏边缘一条很细的竖带 + 一枚扁的指示标记（收起时贴屏幕左缘）。
- *  自己订阅布局状态，不依赖所在页面的局部量；把手始终在，收起后就是那唯一的一道细带。 */
-function NavHandle() {
-  const {ui} = useApp()
-  const layout = useSyncExternalStore(subscribeLayout, getLayout, getLayout)
-  const collapsed = layout.sidebarCollapsed
-  /* 看图模式的退出条件是「再次与页面交互」，不是离开页面。
-     用捕获阶段监听，交互一发生就先折回展开，再让这次交互照常作用到目标上；
-     把手自身排除：它的点击本身就是展开/收起，不参与自动折回。 */
-  useEffect(() => {
-    if (!collapsed) return
-    const restore = (event: Event) => {
-      const target = event.target as HTMLElement | null
-      if (target?.closest?.('.nav-handle')) return
-      setSidebarCollapsed(false)
-    }
-    document.addEventListener('pointerdown', restore, true)
-    document.addEventListener('keydown', restore, true)
-    return () => {
-      document.removeEventListener('pointerdown', restore, true)
-      document.removeEventListener('keydown', restore, true)
-    }
-  }, [collapsed])
-  /* 只有会铺壁纸的族才需要这个把手：简约/紧凑族根本没有背景，收起也没意义。 */
-  if (!supportsBackground(getThemePreference().theme)) return null
-  return <button
-    type="button"
-    className="nav-handle"
-    aria-label={ui(collapsed ? 'nav.expand' : 'nav.collapse')}
-    title={ui(collapsed ? 'nav.expand' : 'nav.collapse')}
-    aria-expanded={!collapsed}
-    onClick={() => setSidebarCollapsed(!collapsed)}
-  ><ChevronRight size={15} aria-hidden="true" style={{transform: collapsed ? 'none' : 'rotate(180deg)'}}/></button>
 }
