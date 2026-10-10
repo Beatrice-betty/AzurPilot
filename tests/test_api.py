@@ -541,6 +541,33 @@ class SocketApiTests(unittest.TestCase):
         asyncio.run(check())
 
 
+class RuntimeMetadataTests(unittest.TestCase):
+    def test_game_region_uses_package_instead_of_server_checker_setting(self):
+        """开服检测关闭或选择国服检测区，都不能决定设备实际运行的游戏地区。"""
+        emulator = {'ServerName': 'disabled', 'PackageName': 'auto'}
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        configs = SimpleNamespace(directory=Path(temporary.name), names=lambda: ['test'],
+                                  read=lambda _: ({'Alas': {'Emulator': emulator}}, ''))
+        runtime = RuntimeService(configs)
+        cases = [
+            ('auto', 'disabled', None), ('', 'disabled', None),
+            ('com.bilibili.azurlane', 'disabled', 'cn'),
+            ('com.bilibili.blhx.huawei', 'cn_channel-0', 'cn'),
+            ('com.YoStarEN.AzurLane', 'disabled', 'en'),
+            ('com.YoStarJP.AzurLane', 'cn_android-0', 'jp'),
+            ('com.hkmanjuu.azurlane.gp', 'disabled', 'tw'),
+            ('com.hkmanjuu.azurlane.gp.mc', 'disabled', 'tw'),
+        ]
+        with patch('module.api.runtime_service.ProcessManager._processes', {}):
+            for package, checker, expected in cases:
+                with self.subTest(package=package, checker=checker):
+                    emulator.update(PackageName=package, ServerName=checker)
+                    instance = runtime.instances()[0]
+                    self.assertEqual(expected, instance['region'])
+                    self.assertEqual(checker, instance['server'])
+
+
 class LogCursorTests(unittest.TestCase):
     def test_start_passes_update_stop_event_to_worker(self):
         runtime = RuntimeService(SimpleNamespace(path=lambda _: None))

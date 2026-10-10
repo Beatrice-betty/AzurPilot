@@ -6,6 +6,63 @@ test.beforeEach(async ({page}) => {
   await page.addInitScript(() => {localStorage.setItem('azurpilot.theme', 'light'); localStorage.setItem('azurpilot.language', 'zh-CN')})
 })
 
+test('自动扫描在开服检测关闭时可启动，草稿保存后解除禁用并可停止扫描', async ({page}) => {
+  await page.goto('/#/i/demo-dog/mind-calculator')
+  const scan = page.getByRole('button', {name: '自动扫描船坞', exact: true})
+  await expect(scan).toBeEnabled()
+  const add = page.locator('.mind-add')
+  await add.getByLabel('船名', {exact: true}).fill('热心')
+  await add.getByRole('button', {name: '添加舰船'}).click()
+  await expect(scan).toBeDisabled()
+  await expect(page.locator('#mind-scan-reason')).toContainText('请先保存舰船数据')
+  await page.screenshot({path: test.info().outputPath('scan-disabled-draft.png'), fullPage: true})
+  await page.getByRole('button', {name: '保存舰船数据'}).click()
+  await expect(scan).toBeEnabled()
+  await expect(page.locator('#mind-scan-reason')).toHaveCount(0)
+  await scan.click()
+  await expect(page.getByRole('button', {name: '正在扫描船坞', exact: true})).toBeDisabled()
+  await expect(page.locator('#mind-scan-reason')).toContainText('正在扫描船坞')
+  await page.getByRole('button', {name: '停止扫描', exact: true}).click()
+  await expect(scan).toBeEnabled()
+})
+
+test('自动扫描按游戏地区和实例状态显示禁用原因，国服检测区不会掩盖日服配置', async ({page}) => {
+  let region = 'jp', status = 'stopped'
+  await page.routeWebSocket('**/api/v1/ws', socket => {
+    const server = socket.connectToServer()
+    const requests = new Map<string, string>()
+    socket.onMessage(message => {
+      const request = JSON.parse(String(message))
+      requests.set(request.id, request.method)
+      server.send(message)
+    })
+    server.onMessage(message => {
+      const response = JSON.parse(String(message))
+      const instances = response.topic === 'instances' ? response.data : requests.get(response.id) === 'instances.list' ? response.result : undefined
+      if (Array.isArray(instances)) {
+        const current = instances.find(item => item.name === 'demo-dog')
+        if (current) Object.assign(current, {region, status, server: 'cn_android-0', currentTask: status === 'running' ? 'Commission' : null})
+      }
+      socket.send(JSON.stringify(response))
+    })
+  })
+  await page.goto('/#/i/demo-dog/mind-calculator')
+  const scan = page.getByRole('button', {name: '自动扫描船坞', exact: true})
+  await expect(scan).toBeDisabled()
+  await expect(page.locator('#mind-scan-reason')).toContainText('游戏地区不受支持')
+  region = 'cn'; status = 'running'
+  await page.reload()
+  await expect(scan).toBeDisabled()
+  await expect(page.locator('#mind-scan-reason')).toContainText('请先停止当前任务')
+  status = 'updating'
+  await page.reload()
+  await expect(scan).toBeDisabled()
+  await expect(page.locator('#mind-scan-reason')).toContainText('请等待更新完成')
+  status = 'stopped'
+  await page.reload()
+  await expect(scan).toBeEnabled()
+})
+
 test('原生计算器完成手工添加、最高等级合并、保存、Excel 往返与实例隔离', async ({page}) => {
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))

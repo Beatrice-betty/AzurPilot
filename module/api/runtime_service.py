@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from rich.console import Console
 
 from module.api.protocol import ApiError
+from module.config.server import to_server
 from module.persistence.database import configured_database, get_database
 from module.logger import logger
 from module.runtime.process_manager import ProcessManager
@@ -124,16 +125,20 @@ class RuntimeService:
         """获取所有配置实例的状态列表。
 
         Returns:
-            list[dict]: 包含实例名、运行状态、当前任务、模拟器序列号及服务器信息的列表。
+            list[dict]: 包含实例名、运行状态、当前任务、模拟器序列号、服务器检测配置及游戏地区的列表。
         """
         result = []
         for name in self.configs.names():
             data, _ = self.configs.read(name)
             emulator = data.get('Alas', {}).get('Emulator', {})
+            package = emulator.get('PackageName', 'auto')
+            # ServerName 仅用于开服检测；自动包名的地区要等设备检测后才能确定。
+            region = to_server(package) if package and package != 'auto' else None
             manager = ProcessManager._processes.get(name)
             result.append({'name': name, 'status': STATES.get(manager.state, 'stopped') if manager else 'stopped',
                            'currentTask': getattr(manager, 'current_task', None) if manager and manager.state == 1 else None,
-                           'serial': emulator.get('Serial', 'auto'), 'server': emulator.get('ServerName', 'cn')})
+                           'serial': emulator.get('Serial', 'auto'), 'server': emulator.get('ServerName', 'cn'),
+                           'region': region})
         return result
 
     @configured_database
