@@ -9,7 +9,7 @@ export type Scalar = string | number | boolean | null
 export type Value = Scalar | Value[] | {[key: string]: Value}
 type Values = Record<string, Record<string, Record<string, Value>>>
 export type Status = 'running' | 'stopped' | 'error' | 'updating'
-export interface Instance { name: string; status: Status; serial: string; server: string; currentTask?: string | null }
+export interface Instance { name: string; status: Status; serial: string; server: string; region?: 'cn' | 'en' | 'jp' | 'tw' | null; currentTask?: string | null }
 export interface UpdateStatus {
   state: string; localHead: string | null; upstreamHead: string | null; branch: string
   ahead: number; behind: number; available: boolean; busy: boolean; canApply: boolean; canCancel: boolean; error: string

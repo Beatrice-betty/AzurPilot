@@ -41,6 +41,14 @@ export function MindCalculator() {
   const running = current?.status === 'running'
   const scanning = running && current?.currentTask === 'MindCalculatorScan'
   const ready = connection === 'ready' && !!saved
+  const scanReason = connection !== 'ready' ? ui('mind.scanDisconnected')
+    : !saved || !current ? ui('mind.scanLoading')
+    : busy ? ui('mind.processing')
+    : scanning ? ui('mind.scanInProgress')
+    : running ? ui('mind.scanRunning')
+    : current.status === 'updating' ? ui('mind.scanUpdating')
+    : current.region && current.region !== 'cn' ? ui('mind.scanUnsupported')
+    : dirty ? ui('mind.scanDraft') : ''
   function accept(report: MindReport) {
     savedRef.current = report
     setSaved(report); setShips(report.ships.map(editableShip)); setResult(report)
@@ -147,12 +155,13 @@ export function MindCalculator() {
     {!saved && !error && <Loading/>}
     {saved && <>
       <section className="mind-panel mind-toolbar" aria-busy={busy}>
-        <button className="button secondary" disabled={busy || !ready || running || dirty || current?.server !== 'cn'} onClick={() => action(async () => {await api.request('tasks.run', {instance, task: 'MindCalculatorScan'}); notify(ui('mind.scanStarted'))})}><ScanLine size={16}/>{ui(scanning ? 'mind.scanning' : 'mind.scan')}</button>
+        <button className="button secondary" disabled={!!scanReason} title={scanReason || undefined} aria-describedby={scanReason ? 'mind-scan-reason' : 'mind-scan-hint'} onClick={() => action(async () => {await api.request('tasks.run', {instance, task: 'MindCalculatorScan'}); notify(ui('mind.scanStarted'))})}><ScanLine size={16}/>{ui(scanning ? 'mind.scanning' : 'mind.scan')}</button>
         {scanning && <button className="button secondary" disabled={busy} onClick={() => action(async () => {await api.request('scheduler.stop', {instance})})}>{ui('mind.stop')}</button>}
         <label className={`button secondary file-button${busy || !ready ? ' mind-disabled' : ''}`}><Upload size={16}/>{ui('mind.import')}<input type="file" accept=".json,.csv,.xlsx" disabled={busy || !ready} onChange={event => upload(event, false)}/></label>
         <label className={`button secondary file-button${busy || !ready ? ' mind-disabled' : ''}`}><ScanLine size={16}/>{ui('mind.screenshots')}<input type="file" multiple accept="image/png,image/jpeg" disabled={busy || !ready} onChange={event => upload(event, true)}/></label>
         <div className="mind-export"><Select aria-label={ui('mind.exportFormat')} value={exportFormat} onChange={event => setExportFormat(event.target.value as typeof exportFormat)}><option value="xlsx">Excel</option><option value="csv">CSV</option><option value="json">JSON</option></Select><button className="button secondary" disabled={busy || dirty || !ready} onClick={() => action(async () => {const file = await api.request('mind.export', {instance, format: exportFormat}); download(file.filename, file.content)})}><Download size={16}/>{ui('mind.export')}</button></div>
-        <p className="muted">{busy ? ui('mind.processing') : ui('mind.scanHint')}</p>
+        {scanReason && <p id="mind-scan-reason" role="status"><strong>{scanReason}</strong></p>}
+        <p id="mind-scan-hint" className="muted">{ui('mind.scanHint')}</p>
       </section>
       <div className="mind-totals" aria-live="polite">
         <div className="mind-panel"><span>{ui('mind.mind')}</span><strong>{number(result?.mind ?? 0)}</strong></div>
