@@ -41,6 +41,8 @@ export function BackgroundPreferences() {
     if (next === 'url') {
       try { applyRows() } catch (error) { setError((error as Error).message) }
     }
+    /* 切回图库档就铺上原来那张；它已被删除时随机抽一张。 */
+    if (next === 'upload') applyGalleryEntry(background.entry)
   }
 
   /** 改某一行；改的是最后一行且非空时，自动补一个空行（填一行就长一行）。 */
