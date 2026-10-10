@@ -3,7 +3,7 @@ import { defineConfig } from '@playwright/test'
 export default defineConfig({
   testDir: './e2e',
   // 股票与心智单元用例分别依赖专用 mock 服务，由对应的 Playwright 配置执行。
-  testIgnore: ['**/mock.spec.ts', '**/stock-exchange/**', '**/mind-calculator.spec.ts'],
+  testIgnore: ['**/mock.spec.ts', '**/stock-exchange/**', '**/mind-*.spec.ts'],
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
