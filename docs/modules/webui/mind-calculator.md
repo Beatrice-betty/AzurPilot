@@ -11,7 +11,7 @@
 
 实现参考心智单元计算器 v0.32.43 还原工程的 `Calculator.cs`、`OcrService.cs` 和 `AutoScanService.cs`，
 在 Python / React 中独立实现，并复用 AP 的设备、OCR、船坞导航和任务恢复机制。
-公共舰船资料由原工具的 Wiki 缓存提取，并复用现有 Lua 提取器补齐联动身份和缺少的资料，保留来源与更新时间。
+公共舰船资料直接复用 `assets/ship/ship_data.json`，由现有 Lua 提取器维护，不再保存独立的计算器目录。
 
 ## 2. 模块职责
 
@@ -35,7 +35,7 @@
 | `module/runtime/mind_recognition.py` | 卡片定位、多轮 OCR、跨页合并 |
 | `module/retire/mind_scan.py` | 自动船坞扫描任务 |
 | `module/api/mind_calculator_service.py` | 实例保存、导入、识别与导出 |
-| `assets/ship/mind_calculator.json` | 公共国服舰船资料 |
+| `assets/ship/ship_data.json` | 共享舰船属性、基础身份与改造名称 |
 | `frontend/src/pages/MindCalculator.tsx` | 页面、草稿、核对和任务入口 |
 | `frontend/src/mind/` | 类型、翻译和布局 |
 
@@ -169,9 +169,12 @@ API 保存和游戏工作进程共用实例配置事务锁，锁内重读并比�
 
 ## 15. 扩展方式
 
-更新资料时保留 `source / updated_at / ships`，验证基础稀有度和身份归并。
-`uv run python -m dev_tools.mind_catalog_extract --lua-repo <Lua 仓库路径>` 复用 `ship_data_extractor`，
-仅补齐国服名称白名单中的联动舰，并标记已有联动条目；不改变原缓存其他舰船字段，重复运行结果一致。
+更新资料运行 `uv run python -m dev_tools.ship_data_extractor --lua-repo <Lua 仓库路径>`，
+统一生成 `assets/ship/ship_data.json`。改造名称从 `skin_type=2` 的皮肤表提取，写入基础舰船的 `retrofit_names`。
+计算器运行时按名称合并突破阶段，排除无舰船模板及复制身份的剧情记录；改造关系保留基础稀有度，II 型与 META 保持独立身份。
+幼体分类由 Lua 的 `Little-series` 标签生成 `is_child`，不按「小」字前缀判断，避免排除小猎兔犬与小天鹅。
+目录没有独立更新时间，接口的 `updated_at` 返回空字符串；更新共享文件后重启服务加载。
+共享资料只有剧情记录、缺少可获取身份的舰船（当前包括灵敏 META）保留待核对，不使用剧情模板自动计费。
 支持其他游戏服务器前，应增加对应语言舰船资料与截图回归；不能只解除国服检查。
 调整 API 参数时重新生成契约；调整配置源时重新运行配置生成器并补齐五语言文案。
 

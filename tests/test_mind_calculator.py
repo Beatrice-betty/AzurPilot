@@ -74,6 +74,63 @@ class CalculatorTests(unittest.TestCase):
             self.assertIn(info['base_rarity'], MIND_COSTS)
         self.assertGreater(len(catalog()['ships']), 800)
 
+    def test_shared_catalog_preserves_base_rarity_and_separate_identities(self):
+        def record(name, **kwargs):
+            return dict(name={'cn': name}, rarity_name='SSR', nationality=1,
+                        group_type=1, star_max=6, is_retrofit=False,
+                        retrofit_base_id=None, type_name='驱逐', **kwargs)
+
+        data = {'10': record('测试舰', retrofit_names=['测试舰·改']),
+                '20': record('测试舰II'), '30': record('测试舰.META'),
+                '40': record('测试舰.改'), '50': record('测试舰')}
+        data['20']['group_type'] = 2
+        data['30'].update(nationality=97, group_type=3)
+        data['40'].update(is_retrofit=True, retrofit_base_id=10)
+        data['50']['rarity_name'] = 'UR'
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'ship_data.json'
+            path.write_text(json.dumps(data), encoding='utf-8')
+            catalog.cache_clear()
+            try:
+                with patch('module.runtime.mind_calculator.SHIP_DATA_FILE', path):
+                    result = calculate([ship('测试舰'), ship('测试舰·改', 106),
+                                        ship('测试舰II'), ship('测试舰·META')])
+                    self.assertEqual(result['included'], 3)
+                    self.assertEqual(result['ships'][1]['base_rarity'], 'SSR')
+                    self.assertEqual(result['ships'][1]['rarity'], 'UR')
+                    self.assertEqual(result['ships'][1]['mind'], 1600)
+                    self.assertEqual(catalog()['ships']['测试舰.改']['base_name'], '测试舰')
+                    self.assertEqual(catalog()['ships']['测试舰']['rarity'], 'SSR')
+            finally:
+                catalog.cache_clear()
+
+    def test_small_named_normal_ships_are_not_child_ships(self):
+        result = calculate([ship('小猎兔犬'), ship('小天鹅'), ship('小企业')])
+        self.assertEqual(result['included'], 2)
+        self.assertEqual(result['excluded'], 1)
+
+    def test_shared_data_extractor_attaches_resolved_retrofits_to_playable_ship(self):
+        from dev_tools.ship_data_extractor import extract_ship_data
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'CN'
+            (root / 'sharecfg').mkdir(parents=True)
+            (root / 'sharecfgdata').mkdir()
+            (root / 'sharecfg/ship_data_by_type.lua').write_text('', encoding='utf-8')
+            (root / 'sharecfg/name_code.lua').write_text('[1] = {\n name = "舰名",\n}\n', encoding='utf-8')
+            (root / 'sharecfgdata/ship_data_statistics.lua').write_text(
+                '[11] = {\n name = "舰名",\n rarity = 5,\n tag_list = {"Little-series"},\n}\n'
+                '[900001] = {\n name = "剧情舰",\n rarity = 6,\n}\n', encoding='utf-8')
+            (root / 'sharecfgdata/ship_data_template.lua').write_text(
+                '[11] = {\n group_type = 1,\n}\n[900001] = {\n group_type = 1,\n}\n', encoding='utf-8')
+            (root / 'sharecfg/ship_skin_template.lua').write_text(
+                '[19] = {\n name = "{namecode:1}.改",\n skin_type = 2,\n ship_group = 1,\n}\n',
+                encoding='utf-8')
+            with patch('sys.stdout', io.StringIO()):
+                data = extract_ship_data(directory)
+            self.assertEqual(data['11']['retrofit_names'], ['舰名.改'])
+            self.assertTrue(data['11']['is_child'])
+            self.assertNotIn('retrofit_names', data['900001'])
+
     def test_collaboration_catalog_has_original_rarity_without_frame_guessing(self):
         for name in ('帕特莉夏·阿贝尔海姆', 'DEAD MASTER', '雪泉', '雫', '穗香', '环', '八舞耶俱矢·八舞夕弦'):
             with self.subTest(name=name):
@@ -110,7 +167,8 @@ class CalculatorTests(unittest.TestCase):
         self.assertEqual(rows[5]['name'], '灵敏·META')
         self.assertEqual(rows[13]['name'], '热心.改')
         self.assertEqual(rows[13]['level'], 105)
-        self.assertTrue(all(not row['review'] for row in rows))
+        # 共享资料仅有灵敏 META 的剧情复制记录，不能当作可靠的可获取舰船计费。
+        self.assertEqual([row['name'] for row in rows if row['review']], ['灵敏·META'])
         self.assertGreater(calculate(rows)['mind'], 0)
         self.assertEqual([row['level'] for row in rows], [125, 100, 125, 105, 125, 63, 99, 99, 117, 122, 99, 98, 105, 105,
                                                        120, 105, 105, 120, 120, 120, 120])
