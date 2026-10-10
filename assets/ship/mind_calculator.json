@@ -5031,7 +5031,7 @@
       "rarity": "SR",
       "base_rarity": "SR",
       "base_name": "霞",
-      "group": "",
+      "group": "联动",
       "type": "驱逐"
     },
     "霞飞": {
@@ -7313,6 +7313,775 @@
       "base_name": "飞龙",
       "group": "改造",
       "type": "航母"
+    },
+    "22": {
+      "name": "22",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "22",
+      "group": "联动",
+      "type": "驱逐"
+    },
+    "2B": {
+      "name": "2B",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "2B",
+      "group": "联动",
+      "type": "轻巡"
+    },
+    "33": {
+      "name": "33",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "33",
+      "group": "联动",
+      "type": "驱逐"
+    },
+    "A2": {
+      "name": "A2",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "A2",
+      "group": "联动",
+      "type": "重巡"
+    },
+    "BLACK★ROCK SHOOTER": {
+      "name": "BLACK★ROCK SHOOTER",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "BLACK★ROCK SHOOTER",
+      "group": "联动",
+      "type": "战巡"
+    },
+    "BLACK★ROCK SHOOTER（前排）": {
+      "name": "BLACK★ROCK SHOOTER（前排）",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "BLACK★ROCK SHOOTER（前排）",
+      "group": "联动",
+      "type": "重巡"
+    },
+    "BLACK★ROCK SHOOTER（后排）": {
+      "name": "BLACK★ROCK SHOOTER（后排）",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "BLACK★ROCK SHOOTER（后排）",
+      "group": "联动",
+      "type": "战巡"
+    },
+    "DEAD MASTER": {
+      "name": "DEAD MASTER",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "DEAD MASTER",
+      "group": "联动",
+      "type": "正航"
+    },
+    "三浦 梓": {
+      "name": "三浦 梓",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "三浦 梓",
+      "group": "联动",
+      "type": "重巡"
+    },
+    "久远": {
+      "name": "久远",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "久远",
+      "group": "联动",
+      "type": "重巡"
+    },
+    "乌璐露": {
+      "name": "乌璐露",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "乌璐露",
+      "group": "联动",
+      "type": "轻航"
+    },
+    "五河琴里": {
+      "name": "五河琴里",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "五河琴里",
+      "group": "联动",
+      "type": "战列"
+    },
+    "伊莉丝": {
+      "name": "伊莉丝",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "伊莉丝",
+      "group": "联动",
+      "type": "正航"
+    },
+    "优米雅·利斯菲尔德": {
+      "name": "优米雅·利斯菲尔德",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "优米雅·利斯菲尔德",
+      "group": "联动",
+      "type": "轻航"
+    },
+    "八舞耶俱矢·八舞夕弦": {
+      "name": "八舞耶俱矢·八舞夕弦",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "八舞耶俱矢·八舞夕弦",
+      "group": "联动",
+      "type": "轻巡"
+    },
+    "公主": {
+      "name": "公主",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "公主",
+      "group": "联动",
+      "type": "运输"
+    },
+    "凪咲": {
+      "name": "凪咲",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "凪咲",
+      "group": "联动",
+      "type": "战列"
+    },
+    "千乃": {
+      "name": "千乃",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "千乃",
+      "group": "联动",
+      "type": "轻巡"
+    },
+    "南梦芽": {
+      "name": "南梦芽",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "南梦芽",
+      "group": "联动",
+      "type": "重巡"
+    },
+    "卡菈·伊迪亚斯": {
+      "name": "卡菈·伊迪亚斯",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "卡菈·伊迪亚斯",
+      "group": "联动",
+      "type": "超巡"
+    },
+    "双海亚美": {
+      "name": "双海亚美",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "双海亚美",
+      "group": "联动",
+      "type": "潜艇"
+    },
+    "双海真美": {
+      "name": "双海真美",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "双海真美",
+      "group": "联动",
+      "type": "潜艇"
+    },
+    "古手川唯": {
+      "name": "古手川唯",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "古手川唯",
+      "group": "联动",
+      "type": "正航"
+    },
+    "四糸乃": {
+      "name": "四糸乃",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "四糸乃",
+      "group": "联动",
+      "type": "轻航"
+    },
+    "圣黑之心": {
+      "name": "圣黑之心",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "圣黑之心",
+      "group": "联动",
+      "type": "重巡"
+    },
+    "夏色祭": {
+      "name": "夏色祭",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "夏色祭",
+      "group": "联动",
+      "type": "驱逐"
+    },
+    "夕烧": {
+      "name": "夕烧",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "夕烧",
+      "group": "联动",
+      "type": "重巡"
+    },
+    "夜刀神十香": {
+      "name": "夜刀神十香",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "夜刀神十香",
+      "group": "联动",
+      "type": "重巡"
+    },
+    "大神澪": {
+      "name": "大神澪",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "大神澪",
+      "group": "联动",
+      "type": "正航"
+    },
+    "天海春香": {
+      "name": "天海春香",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "天海春香",
+      "group": "联动",
+      "type": "轻巡"
+    },
+    "奈美子": {
+      "name": "奈美子",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "奈美子",
+      "group": "联动",
+      "type": "重巡"
+    },
+    "女天狗": {
+      "name": "女天狗",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "女天狗",
+      "group": "联动",
+      "type": "正航"
+    },
+    "如月千早": {
+      "name": "如月千早",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "如月千早",
+      "group": "联动",
+      "type": "正航"
+    },
+    "妮娜·弗里德": {
+      "name": "妮娜·弗里德",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "妮娜·弗里德",
+      "group": "联动",
+      "type": "战列"
+    },
+    "娜娜·阿丝达·戴比路克": {
+      "name": "娜娜·阿丝达·戴比路克",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "娜娜·阿丝达·戴比路克",
+      "group": "联动",
+      "type": "驱逐"
+    },
+    "宝多六花": {
+      "name": "宝多六花",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "宝多六花",
+      "group": "联动",
+      "type": "轻巡"
+    },
+    "布兰": {
+      "name": "布兰",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "布兰",
+      "group": "联动",
+      "type": "驱逐"
+    },
+    "帕特莉夏·阿贝尔海姆": {
+      "name": "帕特莉夏·阿贝尔海姆",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "帕特莉夏·阿贝尔海姆",
+      "group": "联动",
+      "type": "战列"
+    },
+    "斑鸠": {
+      "name": "斑鸠",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "斑鸠",
+      "group": "联动",
+      "type": "重巡"
+    },
+    "新条茜": {
+      "name": "新条茜",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "新条茜",
+      "group": "联动",
+      "type": "战列"
+    },
+    "时乃空": {
+      "name": "时乃空",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "时乃空",
+      "group": "联动",
+      "type": "正航"
+    },
+    "时崎狂三": {
+      "name": "时崎狂三",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "时崎狂三",
+      "group": "联动",
+      "type": "轻巡"
+    },
+    "梦梦·贝莉雅·戴比路克": {
+      "name": "梦梦·贝莉雅·戴比路克",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "梦梦·贝莉雅·戴比路克",
+      "group": "联动",
+      "type": "轻巡"
+    },
+    "死亡主宰": {
+      "name": "死亡主宰",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "死亡主宰",
+      "group": "联动",
+      "type": "正航"
+    },
+    "水濑伊织": {
+      "name": "水濑伊织",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "水濑伊织",
+      "group": "联动",
+      "type": "战列"
+    },
+    "派蒂": {
+      "name": "派蒂",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "派蒂",
+      "group": "联动",
+      "type": "潜艇"
+    },
+    "海咲": {
+      "name": "海咲",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "海咲",
+      "group": "联动",
+      "type": "轻巡"
+    },
+    "涅普顿": {
+      "name": "涅普顿",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "涅普顿",
+      "group": "联动",
+      "type": "轻巡"
+    },
+    "湊阿库娅": {
+      "name": "湊阿库娅",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "湊阿库娅",
+      "group": "联动",
+      "type": "潜艇"
+    },
+    "焰": {
+      "name": "焰",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "焰",
+      "group": "联动",
+      "type": "潜艇"
+    },
+    "狂战帝王古立特": {
+      "name": "狂战帝王古立特",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "狂战帝王古立特",
+      "group": "联动",
+      "type": "轻巡"
+    },
+    "猫音": {
+      "name": "猫音",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "猫音",
+      "group": "联动",
+      "type": "驱逐"
+    },
+    "玛莉萝丝": {
+      "name": "玛莉萝丝",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "玛莉萝丝",
+      "group": "联动",
+      "type": "驱逐"
+    },
+    "环": {
+      "name": "环",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "环",
+      "group": "联动",
+      "type": "战巡"
+    },
+    "琉·璃昂": {
+      "name": "琉·璃昂",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "琉·璃昂",
+      "group": "联动",
+      "type": "轻巡"
+    },
+    "白上吹雪": {
+      "name": "白上吹雪",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "白上吹雪",
+      "group": "联动",
+      "type": "驱逐"
+    },
+    "百鬼绫目": {
+      "name": "百鬼绫目",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "百鬼绫目",
+      "group": "联动",
+      "type": "重巡"
+    },
+    "秋月律子": {
+      "name": "秋月律子",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "秋月律子",
+      "group": "联动",
+      "type": "运输"
+    },
+    "科洛蒂娅·巴兰茨": {
+      "name": "科洛蒂娅·巴兰茨",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "科洛蒂娅·巴兰茨",
+      "group": "联动",
+      "type": "轻航"
+    },
+    "穗香": {
+      "name": "穗香",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "穗香",
+      "group": "联动",
+      "type": "战列"
+    },
+    "第二代": {
+      "name": "第二代",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "第二代",
+      "group": "联动",
+      "type": "航战"
+    },
+    "筑紫": {
+      "name": "筑紫",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "筑紫",
+      "group": "联动",
+      "type": "驱逐"
+    },
+    "紫": {
+      "name": "紫",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "紫",
+      "group": "联动",
+      "type": "轻航"
+    },
+    "紫咲诗音": {
+      "name": "紫咲诗音",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "紫咲诗音",
+      "group": "联动",
+      "type": "轻航"
+    },
+    "绀紫之心": {
+      "name": "绀紫之心",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "绀紫之心",
+      "group": "联动",
+      "type": "轻巡"
+    },
+    "绊爱": {
+      "name": "绊爱",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "绊爱",
+      "group": "联动",
+      "type": "驱逐"
+    },
+    "绊爱·Anniversary": {
+      "name": "绊爱·Anniversary",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "绊爱·Anniversary",
+      "group": "联动",
+      "type": "正航"
+    },
+    "绊爱·Elegant": {
+      "name": "绊爱·Elegant",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "绊爱·Elegant",
+      "group": "联动",
+      "type": "重巡"
+    },
+    "绊爱·SuperGamer": {
+      "name": "绊爱·SuperGamer",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "绊爱·SuperGamer",
+      "group": "联动",
+      "type": "战列"
+    },
+    "群白之心": {
+      "name": "群白之心",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "群白之心",
+      "group": "联动",
+      "type": "驱逐"
+    },
+    "翡绿之心": {
+      "name": "翡绿之心",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "翡绿之心",
+      "group": "联动",
+      "type": "正航"
+    },
+    "艾菈·冯·杜勒": {
+      "name": "艾菈·冯·杜勒",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "艾菈·冯·杜勒",
+      "group": "联动",
+      "type": "轻巡"
+    },
+    "芙米露露": {
+      "name": "芙米露露",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "芙米露露",
+      "group": "联动",
+      "type": "正航"
+    },
+    "莉拉·德西亚斯": {
+      "name": "莉拉·德西亚斯",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "莉拉·德西亚斯",
+      "group": "联动",
+      "type": "重巡"
+    },
+    "莫妮卡": {
+      "name": "莫妮卡",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "莫妮卡",
+      "group": "联动",
+      "type": "轻巡"
+    },
+    "莱莎琳·斯托特": {
+      "name": "莱莎琳·斯托特",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "莱莎琳·斯托特",
+      "group": "联动",
+      "type": "轻巡"
+    },
+    "莲": {
+      "name": "莲",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "莲",
+      "group": "联动",
+      "type": "轻巡"
+    },
+    "菈菈·撒塔琳·戴比路克": {
+      "name": "菈菈·撒塔琳·戴比路克",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "菈菈·撒塔琳·戴比路克",
+      "group": "联动",
+      "type": "重巡"
+    },
+    "萨拉娜": {
+      "name": "萨拉娜",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "萨拉娜",
+      "group": "联动",
+      "type": "轻航"
+    },
+    "蕾妮雅": {
+      "name": "蕾妮雅",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "蕾妮雅",
+      "group": "联动",
+      "type": "驱逐"
+    },
+    "西连寺春菜": {
+      "name": "西连寺春菜",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "西连寺春菜",
+      "group": "联动",
+      "type": "战巡"
+    },
+    "诺瓦露": {
+      "name": "诺瓦露",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "诺瓦露",
+      "group": "联动",
+      "type": "重巡"
+    },
+    "貉": {
+      "name": "貉",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "貉",
+      "group": "联动",
+      "type": "战列"
+    },
+    "贝露": {
+      "name": "贝露",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "贝露",
+      "group": "联动",
+      "type": "正航"
+    },
+    "赛莉·古劳斯": {
+      "name": "赛莉·古劳斯",
+      "rarity": "SR",
+      "base_rarity": "SR",
+      "base_name": "赛莉·古劳斯",
+      "group": "联动",
+      "type": "正航"
+    },
+    "赫斯缇雅": {
+      "name": "赫斯缇雅",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "赫斯缇雅",
+      "group": "联动",
+      "type": "维修"
+    },
+    "金色暗影": {
+      "name": "金色暗影",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "金色暗影",
+      "group": "联动",
+      "type": "战列"
+    },
+    "雪不归": {
+      "name": "雪不归",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "雪不归",
+      "group": "联动",
+      "type": "战列"
+    },
+    "雪泉": {
+      "name": "雪泉",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "雪泉",
+      "group": "联动",
+      "type": "正航"
+    },
+    "雫": {
+      "name": "雫",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "雫",
+      "group": "联动",
+      "type": "战列"
+    },
+    "露娜": {
+      "name": "露娜",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "露娜",
+      "group": "联动",
+      "type": "轻航"
+    },
+    "露露缇耶": {
+      "name": "露露缇耶",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "露露缇耶",
+      "group": "联动",
+      "type": "轻巡"
+    },
+    "飞鸟": {
+      "name": "飞鸟",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "飞鸟",
+      "group": "联动",
+      "type": "轻巡"
+    },
+    "飞鸟川千濑": {
+      "name": "飞鸟川千濑",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "飞鸟川千濑",
+      "group": "联动",
+      "type": "正航"
+    },
+    "香迪": {
+      "name": "香迪",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "香迪",
+      "group": "联动",
+      "type": "重巡"
+    },
+    "鸢一折纸": {
+      "name": "鸢一折纸",
+      "rarity": "SSR",
+      "base_rarity": "SSR",
+      "base_name": "鸢一折纸",
+      "group": "联动",
+      "type": "正航"
     }
-  }
+  },
+  "supplement_source": "AzurLaneLuaScripts CN ship_data_statistics 联动舰名称及基础稀有度"
 }

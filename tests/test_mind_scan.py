@@ -204,10 +204,12 @@ class ScreenshotTests(unittest.TestCase):
         self.assertTrue(all(c.fleet != 0 for c in self.cards))
         self.assertEqual(self.cards[8].ship['name'], '杓鹬.改')
         self.assertEqual(self.cards[13].ship['name'], '阿尔弗雷多·奥里亚尼')
-        # 识别清单待核对；确认范围内舰船后可直接使用原有计算逻辑。
-        selected = [dict(c.ship, review=False) for c in self.cards if 90 <= c.ship['level'] <= 115]
+        # 名单、等级和基础稀有度已确认的原始结果直接计费，无需修改核对字段。
+        selected = [c.ship for c in self.cards if 90 <= c.ship['level'] <= 115]
         report = calculate(selected)
-        self.assertEqual(report['included'], len(selected))
+        self.assertTrue(all(not ship['review'] for ship in selected))
+        self.assertEqual(report['included'], len(selected) - 1)
+        self.assertEqual(report['excluded'], 1)  # 帕特莉夏为联动舰，保存但不计费。
         self.assertGreater(report['mind'], 0)
 
     def test_scaled_and_black_border_images_share_layout(self):
@@ -232,6 +234,14 @@ class ScreenshotTests(unittest.TestCase):
         self.assertIsNone(_match_name(['未知的舰船', '完全陌生'], 'SSR')[0])
         self.assertIsNone(_match_name(['皇家方舟·META', '皇家方舟'], 'SSR')[0])
         self.assertIsNone(_match_name(['拉菲', '标枪'], 'SR')[0])
+
+    def test_unknown_name_keeps_review_when_level_is_confirmed(self):
+        ocr = Mock()
+        ocr.ocr_for_single_lines.side_effect = lambda regions: ['不存在的舰船'] * len(regions)
+        cards = recognize_cards(self.image, name_ocr=ocr)
+        self.assertTrue(all(card.level_reliable for card in cards))
+        self.assertTrue(all(card.ship['review'] for card in cards))
+        self.assertEqual(calculate([card.ship for card in cards])['mind'], 0)
 
     def test_native_name_crops_use_fleet_preprocessing(self):
         from module.ocr.al_ocr import AlOcr, OcrSettings
