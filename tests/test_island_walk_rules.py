@@ -104,6 +104,10 @@ class TestWalkRuleParsing(unittest.TestCase):
         self.assertIsNone(parse_walk_rule('diag 100'))
         self.assertIsNone(parse_walk_rule('up abc'))
         self.assertIsNone(parse_walk_rule('up 100, diag 200'))
+        self.assertIsNone(parse_walk_rule('jump up 3000'))
+        self.assertIsNone(parse_walk_rule('switch right 800'))
+        self.assertIsNone(parse_walk_rule('jump unknown'))
+        self.assertEqual(parse_walk_rule('jump 300, right 900'), (('jump', 0), ('right', 900)))
 
     def test_format_rule(self):
         self.assertEqual(format_walk_rule((('up', 3000), ('jump', 0))), 'up 3000, jump')
@@ -169,6 +173,10 @@ class TestIslandWalkConfig(unittest.TestCase):
         self.assertEqual(island.island_walk_composite_durations('AirDropRetry', 3),
                          [500, 500, 500])
 
+        island, _ = build_island(values=rule('AirDropRetry', 'right 900, right 900, right 900'))
+        self.assertEqual(island.island_walk_composite_durations('AirDropRetry', 3),
+                         [500, 500, 500])
+
     def test_verify_flag(self):
         island, _ = build_island(values={'IslandPlan.IslandWalk.DailyLishaEnable': True})
         self.assertTrue(island.island_walk_enabled('DailyLisha'))
@@ -200,6 +208,19 @@ class TestIslandPlanTask(unittest.TestCase):
         self.assertEqual(visited, ['DailyLisha', 'PearlPort'])
         self.assertEqual(len(config.delays), 1)
         self.assertEqual(config.delays[0]['task'], 'IslandPlan')
+
+    def test_route_failure_propagates_without_delaying(self):
+        from module.exception import GameStuckError
+
+        plan, config, _ = self.build_plan({'IslandPlan.IslandWalk.DailyLishaEnable': True})
+
+        def fail(_):
+            raise GameStuckError('岛屿不可操作')
+
+        plan.island_walk_route = fail
+        with self.assertRaises(GameStuckError):
+            plan.run()
+        self.assertEqual(config.delays, [])
 
     def test_no_ticked_route_still_delays(self):
         plan, config, visited = self.build_plan({})

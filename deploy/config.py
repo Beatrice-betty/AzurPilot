@@ -138,15 +138,12 @@ class DeployConfig(DeployConfigTransaction, ConfigModel):
             'https://e.coding.net/saarcenter/alas/AzurLaneAutoScript.git',
             'https://git.saarcenter.com/LmeSzinc/AzurLaneAutoScript.git',
             'git://git.lyoko.io/AzurLaneAutoScript',
-            'https://gitcode.com/ddl2/AzurLaneAutoScript',
             'https://gitcode.com/ZhangMusan/AzurLaneAutoScript',
             'https://gitcode.com/nerom/AzurLaneAutoScript',
             'https://gitee.com/wqeaxc/AzurLaneAutoScript1',
             'https://git.nanoda.work/git/AzurLaneAutoScript',
             'https://git.nanoda.work/git/AzurPilot',
             'https://git.nanoda.work',
-            'https://cnb.cool/AzurPilot/AzurPilot',
-            'https://cnb.cool/AzurPilot/AzurPilot.git',
         ]:
             object.__setattr__(self, 'Repository', GIT_OVER_CDN_REPOSITORY)
             self.config['Repository'] = GIT_OVER_CDN_REPOSITORY

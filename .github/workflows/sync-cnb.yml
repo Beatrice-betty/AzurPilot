@@ -6,6 +6,10 @@ on:
       - dev
   workflow_dispatch:
 
+# 镜像同步使用独立凭据；限制默认 GITHUB_TOKEN 权限。
+permissions:
+  contents: read
+
 jobs:
   repo-sync:
     runs-on: ubuntu-latest

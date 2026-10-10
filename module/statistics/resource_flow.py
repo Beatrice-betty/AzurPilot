@@ -137,7 +137,8 @@ def report(instance, start, end, resource=None, task=None, offset=0, limit=100, 
         raise ValueError('时间区间必须为递增的本地时间')
     filters = 'instance=? AND ts>=? AND ts<?'
     params = [instance, start.isoformat(sep=' '), end.isoformat(sep=' ')]
-    with connect() as connection:
+    # 查询报表不需要 BEGIN IMMEDIATE 写锁，避免影响收支写入和日报采集。
+    with resource_stats._database().transaction(write=False) as connection:
         through_id = through_id if through_id is not None else connection.execute(
             'SELECT COALESCE(MAX(id), 0) FROM resource_flows WHERE instance=?', (instance,)).fetchone()[0]
         filters += ' AND id<=?'

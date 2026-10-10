@@ -128,6 +128,9 @@ def parse_walk_rule(text: str) -> Optional[WalkRoute]:
         if direction not in ISLAND_WALK_DIRECTIONS:
             return None
         if direction in ISLAND_WALK_ACTIONS:
+            # 固定动作保留可选数字参数；遗漏逗号的后续方向不能被静默忽略。
+            if len(parts) > 2 or (len(parts) == 2 and parse_walk_duration(parts[1]) is None):
+                return None
             steps.append((direction, 0))
             continue
         if len(parts) != 2:

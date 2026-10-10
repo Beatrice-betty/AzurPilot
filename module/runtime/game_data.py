@@ -487,7 +487,11 @@ class GameDataProtector:
         with config_transaction(source), config_transaction(target):
             if source.exists() and target.exists():
                 raise damaged('实例重命名后资源数据库冲突，请保留原文件并恢复对应备份')
-            store.relocate(old, instance)
+            from module.scheduler.store import ConflictError
+            try:
+                store.relocate(old, instance)
+            except ConflictError:
+                raise damaged('实例重命名后调度数据冲突，请保留原数据并恢复对应备份') from None
             if source.exists():
                 if target.exists():
                     raise damaged('实例重命名后资源数据库冲突，请保留原文件并恢复对应备份')
