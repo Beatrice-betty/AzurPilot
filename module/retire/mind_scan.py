@@ -218,6 +218,7 @@ class MindCalculatorScan(Dock):
         stable, empty = Timer(.25, count=1).start(), Timer(1.2, count=3).start()
         waiting = Timer(12).start()
         previous = accepted = None
+        accepted_thumb = None
         last_drag = None
         page = failures = unread_pages = stalled = top_attempts = 0
         positioning = True
@@ -267,7 +268,9 @@ class MindCalculatorScan(Dock):
                     logger.warning(f'[{label}] 回顶未完全确认，继续读取当前可见卡片')
                 positioning = False
             same = accepted is not None and pixels.shape == accepted.shape and cv2.mean(cv2.absdiff(pixels, accepted))[0] <= 1
-            stalled = stalled + 1 if same and last_drag is not None else 0
+            thumb_moved = (thumb is not None and accepted_thumb is not None
+                           and not np.array_equal(thumb, accepted_thumb))
+            stalled = stalled + 1 if same and last_drag is not None and not thumb_moved else 0
             if stalled >= 2:
                 bottom = self._dock_scroll_at_bottom(thumb)
                 self._scan_metadata.update(finished=bottom, reached_bottom=bottom)
@@ -317,10 +320,13 @@ class MindCalculatorScan(Dock):
             # 跨屏冲突沿当前阵营目录回填；未知等级继续保留，不阻塞后面的页面。
             for card, _ in merger.slots:
                 if card.ship.get('group_type') is None:
-                    info, note = self._identity.fallback(card.name_reads or [card.ship['name']], card.ship.get('rarity', ''))
+                    hull = card.ship.get('type')
+                    info, note = self._identity.fallback(card.name_reads or [card.ship['name']], card.ship.get('rarity', ''),
+                                                         aviation=hull in ('正航', '轻航', '航战', '潜母'),
+                                                         surface=hull in ('战列', '战巡', '超巡', '重炮'))
                     if info:
                         card.ship.update(name=info['name'], rarity=info['rarity'], base_rarity=info['base_rarity'],
-                                         group_type=info['group_type'], candidates=[], review=not card.level_reliable,
+                                         group_type=info['group_type'], type=info['type'], candidates=[], review=not card.level_reliable,
                                          source=f'{note}；{card.ship["source"]}'[:200])
                 elif card.level_reliable:
                     card.ship['review'] = False
@@ -336,6 +342,7 @@ class MindCalculatorScan(Dock):
                 self._scan_metadata.update(finished=True, reached_bottom=at_bottom or short_list)
                 break
             accepted = pixels.copy()
+            accepted_thumb = thumb.copy() if thumb is not None else None
             self.device.click_record_clear()
             with self._metrics.measure('drag'):
                 last_drag = self._drag_rows(190, hold_duration=.12)
