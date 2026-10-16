@@ -146,8 +146,9 @@ test('截图可靠结果直接计算，保留最高等级，不确定名称可�
   await add.getByRole('button', {name: '添加舰船'}).click()
   const screenshot = fileURLToPath(new URL('../../tests/fixtures/mind_dock_fleet_priority.png', import.meta.url))
   await page.locator('input[type=file][accept^="image/png"]').setInputFiles([screenshot, screenshot])
-  await expect(page.locator('.mind-ship-table tbody tr')).toHaveCount(21, {timeout: 30_000})
-  await expect(page.locator('.mind-totals strong').nth(3)).toHaveText('0')
+  // 两张截图中未确认的新月分别保留，不能按同名误并或计费。
+  await expect(page.locator('.mind-ship-table tbody tr')).toHaveCount(22, {timeout: 30_000})
+  await expect(page.locator('.mind-totals strong').nth(3)).toHaveText('2')
   await expect(page.locator('.mind-totals strong').first()).not.toHaveText('0')
   const row = page.locator('.mind-ship-table tbody tr').filter({has: page.locator('input[value="热心.改"]')})
   await expect(row.locator('input[type=number]')).toHaveValue('105')
@@ -157,7 +158,7 @@ test('截图可靠结果直接计算，保留最高等级，不确定名称可�
     name: '待核对.json', mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify([{name: '人工核对舰', level: 100, base_rarity: 'SR', review: true}])),
   })
-  await expect(page.locator('.mind-totals strong').nth(3)).toHaveText('1')
+  await expect(page.locator('.mind-totals strong').nth(3)).toHaveText('3')
   const uncertain = page.locator('.mind-ship-table tbody tr').filter({has: page.locator('input[value="人工核对舰"]')})
   await expect(uncertain.locator('input[type=text], input:not([type])')).not.toHaveAttribute('readonly', '')
   await expect(uncertain).toContainText('待核对')

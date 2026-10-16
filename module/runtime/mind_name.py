@@ -42,7 +42,7 @@ def match_lua_name(texts, frame_rarity='', *, ellipsis=False, meta_frame=False, 
     if not reads or max(map(len, reads)) < 2:
         return None, '船名有效文字不足，待核对'
     ships = catalog()['ships']
-    names = _names(tuple(ships))
+    names = _names(tuple(dict.fromkeys(info['name'] for info in ships.values())))
     exact = {_key(info['name']) for text in texts if (info := find_ship(text))}
     exact.update(key for _, key in names if key in reads)
     if len(exact) > 1:
@@ -61,8 +61,8 @@ def match_lua_name(texts, frame_rarity='', *, ellipsis=False, meta_frame=False, 
             if base and find_ship(base['name'] + 'II'):
                 return None, '罗马后缀未确认，待核对'
     ranked = []
-    for name, key in names:
-        info = ships[name]
+    for info in ships.values():
+        name, key = info['name'], _key(info['name'])
         if require_meta and info['group'] != 'META' or require_retrofit and info['group'] != '改造':
             continue
         scores = sorted((_similarity(read, key, ellipsis or text.endswith(('..', '…', '⋯')))
@@ -75,6 +75,11 @@ def match_lua_name(texts, frame_rarity='', *, ellipsis=False, meta_frame=False, 
         return None, f'国服 Lua 名单匹配度较低（{score:.0%}），待核对'
     best = ranked[0][0]
     close = [(score, info) for score, info in ranked if best - score <= .05]
+    same_names = {}
+    for _, info in close:
+        same_names.setdefault(_key(info['name']), set()).add(info['group_type'])
+    if any(len(ids) > 1 for ids in same_names.values()):
+        return None, '同名舰缺少唯一群组证据，待核对'
     matching_rarity = [(score, info) for score, info in close if info['rarity'] == frame_rarity]
     if matching_rarity:
         close = matching_rarity
@@ -87,7 +92,7 @@ def match_lua_name(texts, frame_rarity='', *, ellipsis=False, meta_frame=False, 
         if not close:
             return None, '国服 Lua 名单候选与航空图标不一致，待核对'
     # 改造的同名别名属于同一身份，不能把它们算作身份冲突。
-    identities = {(normalize_name(info['base_name']), info['group'], info['name'].casefold().endswith('ii'))
+    identities = {(info['group_type'], info['group'], info['name'].casefold().endswith('ii'))
                   for _, info in close}
     if len(identities) != 1:
         return None, '国服 Lua 名单存在相近身份候选，待核对：' + ' / '.join(info['name'] for _, info in close[:3])
