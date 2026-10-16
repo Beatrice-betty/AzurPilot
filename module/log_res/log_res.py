@@ -88,7 +88,8 @@ class LogRes:
                     self.config.modified[_key_time] = _time
                     _mod = True
                 if _mod:
-                    if key == 'ActionPoint':
+                    if (key == 'ActionPoint' and value.get('Total') is not None
+                            and self.__dict__.get('_observation_enabled', True)):
                         try:
                             from module.statistics.opsi_runtime import record_ap_snapshot
                             source = 'dashboard'
@@ -97,15 +98,11 @@ class LogRes:
                             )
                             if task:
                                 source = task
-                            # 统计口径使用始终含体力箱的总行动力，避免被 OS_ACTION_POINT_BOX_USE
-                            # 的临时关闭（如防止行动力溢出任务）污染快照
-                            ap_total = getattr(self.config, '_action_point_total_with_box', None)
-                            if ap_total is None:
-                                ap_total = value.get('Total')
+                            # Total 必须来自本次完整面板读取，不能用旧配置或缓存箱子补齐。
                             record_ap_snapshot(
                                 self.config,
                                 ap_current=value.get('Value'),
-                                ap_total=ap_total,
+                                ap_total=value['Total'],
                                 source=source,
                                 observed_at=self.__dict__.get('_recorded_at'),
                             )

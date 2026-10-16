@@ -654,6 +654,8 @@ class ConfigUpdater:
         ('General.Enhance.SkipSingleCommonCV', 'General.Enhance.KeepCommonCV'),
         ('OpsiAshBeacon.OpsiAshBeacon.OneHitMode', 'OpsiAshBeacon.OpsiAshBeacon.AssistRequestLimit',
          meta_assist_limit_redirect),
+        ('OpsiHazard1Leveling.OpsiHazard1Leveling.RecordSeaMiles',
+         'OpsiHazard1Leveling.OpsiHazard1Leveling.RecordSeaMiles', sea_miles_interval_redirect),
         # ('OpsiDaily.OpsiDaily.BuySupply', 'OpsiShop.Scheduler.Enable'),
         # ('OpsiDaily.Scheduler.Enable', 'OpsiDaily.OpsiDaily.DoMission'),
         # ('OpsiShop.Scheduler.Enable', 'OpsiShop.OpsiShop.BuySupply'),

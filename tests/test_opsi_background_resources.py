@@ -204,7 +204,7 @@ class BackgroundRuntimeTests(unittest.TestCase):
         config.is_task_enabled = Mock(return_value=False)
         config.OpsiHazard1Leveling_MinimumActionPointReserve = 200
         config.OpsiHazard1Leveling_TargetZone = 22
-        config.OpsiHazard1Leveling_RecordSeaMiles = False
+        config.OpsiHazard1Leveling_RecordSeaMiles = -1
         config.OpsiFleet_Fleet = 1
         self.runner._cl1_next_search_ready = True
         self.runner.zone = SimpleNamespace(zone_id=22, hazard_level=1)
@@ -284,6 +284,17 @@ class ResourcePersistenceTests(unittest.TestCase):
         saved = json.loads(self.path.read_text(encoding='utf-8'))
         self.assertEqual(saved['Dashboard']['YellowCoin']['Value'], 51000)
 
+    def test_background_current_only_read_does_not_write_total_ap_statistics(self):
+        with patch('module.statistics.cl1_database.db.async_add_ap_snapshot') as saved:
+            record_resources_background(self.config, {'ActionPoint': {'Value': 123}},
+                                        observed_at=self.stamp).result(timeout=15)
+            saved.assert_not_called()
+            record_resources_background(self.config, {'ActionPoint': {'Value': 189, 'Total': 7289}},
+                                        observed_at=self.stamp + timedelta(seconds=1)).result(timeout=15)
+            saved.assert_called_once_with('testpilot', 189, source='OpsiHazard1Leveling',
+                                           distance=None, ap_total=7289,
+                                           observed_at=self.stamp + timedelta(seconds=1))
+
     def test_delayed_observation_does_not_count_later_purchase_twice(self):
         with resource_flow.task_session('testpilot', 'OpsiHazard1Leveling'), \
                 patch('module.statistics.resource_flow.now', return_value=self.stamp + timedelta(seconds=2)):
@@ -356,7 +367,9 @@ class FarmingStatisticsTests(unittest.TestCase):
         with patch('module.statistics.opsi_runtime.record_ap_snapshot') as ap, \
                 patch('module.statistics.cl1_database.db.async_add_coins_snapshot'):
             runner._record_ap_and_coins(sea_miles=120000)
-        self.assertEqual(ap.call_args.kwargs['source'], 'hazard1_estimate')
+        self.assertEqual(ap.call_args.kwargs['source'], 'sea_miles')
+        self.assertIsNone(ap.call_args.kwargs['ap_current'])
+        self.assertIsNone(ap.call_args.kwargs.get('ap_total'))
         self.assertEqual(ap.call_args.kwargs['distance'], 120000)
 
 

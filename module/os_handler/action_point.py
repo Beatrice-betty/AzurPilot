@@ -406,8 +406,10 @@ class ActionPointHandler(UI, MapEventHandler):
                 values['Oil'] = int(oil)
             record_resources_background(self.config, values)
         elif not fast:
-            resource_log.record('ActionPoint', {'Value': current, 'Total': self._action_point_total_with_box},
-                                observed=ap_valid, **record_options)
+            values = {'Value': current}
+            if ap_valid and self.__dict__.get('_ap_inventory_valid', False):
+                values['Total'] = self._action_point_total_with_box
+            resource_log.record('ActionPoint', values, observed=ap_valid, **record_options)
         recorded = perf_counter()
         if not fast:
             if self.__dict__.get('_ap_defer_config_update', False):

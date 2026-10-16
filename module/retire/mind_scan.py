@@ -751,7 +751,7 @@ class MindCalculatorScan(Dock):
                                 logger.warning('当前页局部缺格已保留为待核对卡位，继续处理其余舰船')
                         invalid = [card for card in cards if not card.level_reliable]
                         uncertain_names = [card for card in cards if card.ship['review'] and card.level_reliable
-                                           and not card.ship.get('identity_ambiguous')]
+                                           and not (getattr(card, 'identity_ambiguous', False) or card.ship.get('identity_ambiguous'))]
                         uncertain_fleets = [card for card in cards if card.fleet < 0]
                         # 复核本页与前一船位的边界；历史疑点保留在原卡位，
                         # 不让单点读数问题持续污染后续完整页面的早停证据。

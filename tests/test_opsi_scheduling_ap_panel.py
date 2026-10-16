@@ -112,7 +112,7 @@ class TestSchedulingActionPointPanel(unittest.TestCase):
     def test_cl1_entry_reuses_replenished_read_without_reopening_panel(self):
         fresh_ap = self.runner._get_scheduling_action_point(keep_open=True)
         self.runner.config.OpsiHazard1Leveling_TargetZone = 0
-        self.runner.config.OpsiHazard1Leveling_RecordSeaMiles = False
+        self.runner.config.OpsiHazard1Leveling_RecordSeaMiles = -1
         self.runner.config.OpsiFleet_Fleet = 1
         self.runner.config.override = Mock()
         self.runner.zone = SimpleNamespace(zone_id=22, hazard_level=1)

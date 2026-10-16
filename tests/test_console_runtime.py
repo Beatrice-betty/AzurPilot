@@ -273,7 +273,7 @@ class StatisticsTests(unittest.TestCase):
         self.assertEqual(['短猫运行统计'], [item['title'] for item in result['tables']])
 
     def test_action_sources_and_commission_records_keep_time_and_scope(self):
-        raw = {'ap_snapshots': [{'ts': '2026-09-01 12:00:00', 'ap': 0, 'asset': 50, 'distance': 100, 'source': 'cl1'}],
+        raw = {'ap_snapshots': [{'ts': '2026-09-01 12:00:00', 'ap': 0, 'ap_total': 0, 'asset': 50, 'distance': 100, 'source': 'cl1'}],
                'coins_snapshots': [{'ts': '2026-09-02 13:00:00', 'yellow_coins': 200, 'purple_coins': 5}]}
         entries = [{'ts': '2026-09-01 12:00:00', 'commission_count': 2, 'items': {'Gems': 7, 'Cubes': 3}},
                    {'ts': '2026-09-02 12:00:00', 'commission_count': 1, 'items': {}},
