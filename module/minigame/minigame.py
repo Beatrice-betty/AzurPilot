@@ -88,11 +88,14 @@ class MinigameRun(UI):
                 skip_first_screenshot = False
             else:
                 self.device.screenshot()
-            # 结束判断：列表界面出现
-            if self.appear(GAME_ROOM_CHECK, offset=(5, 5)) and not self.appear(GOTO_CHOOSE_GAME, offset=(20, 20)):
-                if MINIGAME_SCROLL.appear(main=self):
-                    break
-            # 处理无法获取更多游戏券等弹窗
+            # End
+            # 小游戏主页与选择游戏页共用同一个头部（GAME_ROOM_CHECK），
+            # 且 2026.10 啾啾游戏屋改版后两个页面都常驻右下角的 GOTO_CHOOSE_GAME 按钮，
+            # 无法再用"按钮消失"来判断是否进入列表页。
+            # 滚动条只有选择游戏页才有，改用它来判断已进入列表页。
+            if self.appear(GAME_ROOM_CHECK, offset=(5, 5)) and MINIGAME_SCROLL.appear(main=self):
+                break
+            # unable to get more ticket popup
             if self.deal_popup():
                 continue
             if self.appear_then_click(GOTO_CHOOSE_GAME, offset=(5, 5), interval=3):

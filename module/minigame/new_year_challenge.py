@@ -65,8 +65,12 @@ class NewYearChallenge(MinigameRun):
             # 入口
             if self.appear(NEW_YEAR_CHALLENGE_START, offset=(5, 5)):
                 break
-            # GOTO_CHOOSE_GAME -> 选游戏界面
-            if self.appear_then_click(GOTO_CHOOSE_GAME, offset=(5, 5), interval=3):
+            # GOTO_CHOOSE_GAME -> choose game
+            # 仅在游戏屋主页（滚动条未出现）时点击，用于进入选择游戏页。
+            # 2026.10 啾啾游戏屋改版后选择游戏页也常驻该按钮，若不加滚动条约束，
+            # 列表页滚动寻找入口时每 3 秒就会误点一次开始游戏按钮。
+            if not MINIGAME_SCROLL.appear(main=self) \
+                    and self.appear_then_click(GOTO_CHOOSE_GAME, offset=(5, 5), interval=3):
                 continue
             # 选择游戏
             if self.appear(NEW_YEAR_CHALLENGE_ENTRANCE, offset=(5, 500), interval=3):
