@@ -415,25 +415,16 @@ class GitOverCdnClient:
         return stdout.decode()
 
     def git_reset(self):
-        """执行 git reset --hard 到远程分支，清理锁文件并重置工作区。
+        """保留旧方法名，仅快进到远程分支，保护本地修改、提交和并发锁。
 
         Returns:
-            bool: 重置是否成功。
+            bool: 快进是否成功。
         """
-        # 移除 git 锁文件
-        for lock_file in [
-            './.git/index.lock',
-            './.git/HEAD.lock',
-            f'./.git/refs/heads/{self.branch}.lock',
-        ]:
-            lock_file = os.path.join(self.folder, lock_file)
-            if os.path.exists(lock_file):
-                self.logger.info(f'Lock file {lock_file} exists, removing')
-                os.remove(lock_file)
         try:
-            self.git_command('reset', '--hard', f'{self.source}/{self.branch}')
+            self.git_command('merge-base', '--is-ancestor', 'HEAD', f'{self.source}/{self.branch}')
+            self.git_command('merge', '--ff-only', f'{self.source}/{self.branch}')
         except (OSError, subprocess.CalledProcessError) as e:
-            self.logger.error(f'Failed to reset local repository: {e}')
+            self.logger.error(f'无法快进本地仓库，保留本地修改与提交: {e}')
             return False
         self.__dict__.pop('current_commit', None)
         return True

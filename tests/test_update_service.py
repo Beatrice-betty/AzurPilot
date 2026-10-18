@@ -65,7 +65,7 @@ class UpdateServiceTest(unittest.TestCase):
                 if self.service.operation is None:
                     break
                 threading.Event().wait(0.05)
-        self.updater.run_update.assert_called_once()
+        self.updater.run_update.assert_called_once_with(manual=True)
 
     def test_stale_upstream_head_from_rewritten_history_can_apply(self):
         """上游重写历史后，停在旧版上游历史的本地分支不应被当成"有独有提交"。"""
@@ -130,7 +130,7 @@ class UpdateServiceTest(unittest.TestCase):
         self.updater.state = 1
         self.updater.run_update = Mock(return_value=True)
         self.service._run('apply')
-        self.updater.run_update.assert_called_once()
+        self.updater.run_update.assert_called_once_with(manual=True)
         self.assertIsNone(self.service.operation)
 
     def test_protocol_and_readonly_gate(self):

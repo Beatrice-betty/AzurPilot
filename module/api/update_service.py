@@ -260,7 +260,7 @@ class UpdateService:
             else:
                 if self.updater.state == 'finish':
                     self.updater.state = 0
-                if not self.updater.run_update():
+                if not self.updater.run_update(manual=True):
                     raise ApiError('UPDATE_FAILED', '更新失败，请检查服务日志')
         except Exception:
             self.error = '获取更新失败，请检查网络或服务日志' if operation == 'fetch' else '更新失败，请检查服务日志'

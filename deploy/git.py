@@ -1,6 +1,7 @@
 import random
 import subprocess
 import time
+from pathlib import Path
 from typing import Optional
 
 import requests
@@ -162,11 +163,7 @@ class GitManager(DeployConfig):
         git = f'"{self.git}" -c http.userAgent={self.git_user_agent()}'
 
         logger.hr('Git Init', 1)
-        if not self.execute(f'{git} init', allow_failure=True):
-            self.remove('./.git/config')
-            self.remove('./.git/index')
-            self.remove('./.git/HEAD')
-            self.execute(f'{git} init')
+        self.execute(f'{git} init')
 
         logger.hr('Set Git Proxy', 1)
         if proxy:
@@ -189,19 +186,13 @@ class GitManager(DeployConfig):
         self._fetch_with_retry(source, branch)
 
         logger.hr('Pull Repository Branch', 1)
-        # 移除 git 锁文件
-        for lock_file in [
-            './.git/index.lock',
-            './.git/HEAD.lock',
-            './.git/refs/heads/master.lock',
-        ]:
-            if os.path.exists(lock_file):
-                logger.info(f'Lock file {lock_file} exists, removing')
-                os.remove(lock_file)
-        self.execute(f'{git} reset --hard {source}/{branch}')
-        # pull 联网，与 fetch 用不同 UA，降低同源请求的可归集性
-        git = f'"{self.git}" -c http.userAgent={self.git_user_agent()}'
-        self.execute(f'{git} pull --ff-only {source} {branch}')
+        # 尚无 HEAD 的首次安装交给 merge 处理；已有提交必须被目标分支包含。
+        if self.execute(f'{git} rev-parse --verify HEAD', allow_failure=True):
+            if not self.execute(f'{git} merge-base --is-ancestor HEAD {source}/{branch}', allow_failure=True):
+                logger.warning('本地存在目标分支未包含的提交，保留本地分支并跳过更新')
+                return self.use_local_version()
+        # 只快进到刚获取的版本；分叉、未提交修改或锁冲突交由 Git 拒绝，不强制覆盖。
+        self.execute(f'{git} merge --ff-only {source}/{branch}')
 
         logger.hr('Show Version', 1)
         self.execute(f'{git} --no-pager log --no-merges -1')
@@ -225,35 +216,46 @@ class GitManager(DeployConfig):
         return client
 
     @staticmethod
+    def _cloud_update_enabled(url, name):
+        """单次读取三态控制值，拒绝重定向，避免故障端点拖延启动。"""
+        logger.info(f'检查云端{name}开关: {url}')
+        try:
+            resp = requests.get(
+                url, timeout=5, headers={'User-Agent': 'alas AzurPilot'}, allow_redirects=False,
+            )
+            resp.raise_for_status()
+            if resp.status_code != 200:
+                logger.warning(
+                    f'云端{name}状态未知: HTTP {resp.status_code}, '
+                    f'Location={resp.headers.get("Location", "")}; 不跟随重定向'
+                )
+                return None
+            text = resp.text.strip()
+            try:
+                data = resp.json()
+            except ValueError:
+                data = text
+        except Exception as exc:
+            logger.warning(f'云端{name}状态未知: {type(exc).__name__}: {exc}')
+            return None
+
+        if data is True or (isinstance(data, str) and data.lower() in ('true', 'ture')):
+            logger.info(f'云端{name}开关已开启')
+            return True
+        if data is False or (isinstance(data, str) and data.lower() in ('false', 'fales')):
+            logger.info(f'云端{name}开关已关闭')
+            return False
+        logger.warning(f'云端{name}状态未知: 返回内容格式无效 {text[:200]!r}')
+        return None
+
+    @staticmethod
     def cloud_auto_update_enabled():
         """检查云端自动更新开关是否启用。
 
         Returns:
             bool | None: True 启用，False 禁用，网络异常返回 None。
         """
-        logger.info(f'Check cloud update control: {CLOUD_UPDATE_CONTROL_URL}')
-        try:
-            resp = requests.get(CLOUD_UPDATE_CONTROL_URL, timeout=5, headers={'User-Agent': 'alas AzurPilot'})
-            resp.raise_for_status()
-        except Exception as e:
-            logger.warning(f'Failed to check cloud update control: {e}')
-            return None
-
-        text = resp.text.strip()
-        try:
-            data = resp.json()
-        except ValueError:
-            data = text
-
-        if data is True or (isinstance(data, str) and data.lower() in ('true', 'ture')):
-            logger.info('Cloud update control is enabled')
-            return True
-        if data is False or (isinstance(data, str) and data.lower() in ('false', 'fales')):
-            logger.info('Cloud update control is disabled')
-            return False
-
-        logger.info(f'Cloud update control is inaccessible: {text}')
-        return None
+        return GitManager._cloud_update_enabled(CLOUD_UPDATE_CONTROL_URL, '自动更新')
 
     @staticmethod
     def cloud_force_update_enabled():
@@ -262,72 +264,111 @@ class GitManager(DeployConfig):
         Returns:
             bool | None: True 启用，False 禁用，网络异常返回 None。
         """
-        logger.info(f'Check cloud force update control: {CLOUD_FORCE_UPDATE_CONTROL_URL}')
+        return GitManager._cloud_update_enabled(CLOUD_FORCE_UPDATE_CONTROL_URL, '强制更新')
+
+    def use_local_version(self):
+        """校验本地启动基础条件；前端构建和依赖同步仍由后续启动流程负责。"""
+        from deploy.uv import venv_python
+
+        root = Path(self.root_filepath)
+        required = (
+            'gui.py', 'alas.py', 'pyproject.toml', 'uv.lock', 'module/api/app.py',
+            'module/runtime/process_manager.py', 'module/config/argument/args.json',
+            'frontend/package.json',
+        )
+        missing = [name for name in required if not (root / name).is_file()]
+        if missing:
+            reason = f'本地安装不完整，缺少关键文件: {", ".join(missing)}'
+            logger.critical(reason)
+            raise ExecutionError(reason)
+
+        python = venv_python(root)
+        if not python.is_file():
+            reason = f'本地 Python 环境缺失: {python}，请先修复安装环境'
+            logger.critical(reason)
+            raise ExecutionError(reason)
         try:
-            resp = requests.get(
-                CLOUD_FORCE_UPDATE_CONTROL_URL,
-                timeout=5,
-                headers={'User-Agent': 'alas AzurPilot'},
+            result = subprocess.run(
+                [str(python), '-c', 'import starlette, uvicorn, pydantic, yaml, numpy, cv2, requests'],
+                cwd=root, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=20,
             )
-            resp.raise_for_status()
-        except Exception as e:
-            logger.warning(f'Failed to check cloud force update control: {e}')
-            return None
+            if result.returncode:
+                raise ExecutionError(f'本地 Python 依赖不可用: {result.stderr.strip()}')
+        except (OSError, subprocess.TimeoutExpired, ExecutionError) as exc:
+            logger.critical(f'本地启动环境校验失败: {exc}')
+            raise ExecutionError(f'本地启动环境校验失败: {exc}') from exc
+        logger.info('本地启动基础校验通过，使用当前本地版本继续启动；后续依赖和前端检查仍须通过')
+        return False
 
-        text = resp.text.strip()
-        try:
-            data = resp.json()
-        except ValueError:
-            data = text
-
-        if data is True or (isinstance(data, str) and data.lower() in ('true', 'ture')):
-            logger.info('Cloud force update control is enabled')
-            return True
-        if data is False or (isinstance(data, str) and data.lower() in ('false', 'fales')):
-            logger.info('Cloud force update control is disabled')
+    def local_changes_present(self):
+        """更新前保护已跟踪文件的修改；未跟踪文件由 Git 的合并冲突检查保护。"""
+        if not (Path(self.root_filepath) / '.git').exists():
             return False
-
-        logger.info(f'Cloud update control is inaccessible: {text}')
-        return None
+        try:
+            result = subprocess.run(
+                [self.git, 'status', '--porcelain', '--untracked-files=no'], cwd=self.root_filepath,
+                capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=10,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise ExecutionError(f'无法检查本地 Git 修改: {exc}') from exc
+        if result.returncode:
+            raise ExecutionError(f'无法检查本地 Git 修改: {result.stderr.strip()}')
+        return bool(result.stdout.strip())
 
     def cloud_update_access_failed(self, fatal=True):
         """处理云端更新控制接口访问失败的情形。
 
         Args:
-            fatal (bool): 是否视为致命错误并终止启动。
+            fatal (bool): 兼容旧调用；True 时校验本地安装，False 时仅跳过运行期检查。
 
         Raises:
-            ExecutionError: 当 fatal 为 True 时抛出。
+            ExecutionError: 本地安装不满足启动基础条件时抛出。
         """
         logger.hr('Cloud Update Control Failed', 0)
         if fatal:
-            logger.warning('Failed to access cloud update control, stopping startup')
-            raise ExecutionError
+            logger.warning('云端更新状态未知，跳过 Git/CDN 更新，尝试使用本地版本')
+            return self.use_local_version()
         else:
             logger.warning('Failed to access cloud update control, skip update check')
 
-    def git_install(self):
-        """根据云端状态与本地配置执行 Git 源码拉取与更新。"""
+    def git_install(self, manual=False):
+        """自动更新遵循云端三态；手动更新绕过云端控制，均保留本地工作。
+
+        Returns:
+            bool: True 已完成更新，False 使用本地版本。
+        """
         logger.hr('Update AzurPilot', 0)
 
-        cloud_update = self.cloud_auto_update_enabled()
-        if cloud_update is None:
-            self.cloud_update_access_failed()
-        if not cloud_update:
-            logger.info('Cloud update control disabled, skip')
-            return
+        if not manual:
+            cloud_update = self.cloud_auto_update_enabled()
+            if cloud_update is None:
+                return self.cloud_update_access_failed()
+            if cloud_update is False:
+                logger.info('云端明确关闭自动更新，使用本地版本')
+                return self.use_local_version()
+        else:
+            logger.info('用户手动更新，跳过云端自动更新控制')
+
+        if self.local_changes_present():
+            logger.warning('本地存在未提交修改，保留全部修改并跳过更新；请自行提交或备份后重试')
+            return self.use_local_version()
 
         if self.GitOverCdn:
             if self.goc_client.update():
-                return
+                logger.info('GitOverCDN 更新完成，使用更新后的版本')
+                return True
 
-        self.git_repository_init(
+        updated = self.git_repository_init(
             repo=self.Repository,
             source='origin',
             branch=self.Branch,
             proxy=self.GitProxy,
             ssl_verify=self.SSLVerify,
         )
+        if updated is False:
+            return False
+        logger.info('Git 更新完成，使用当前版本（仅允许快进）')
+        return True
 
 
 if __name__ == '__main__':
