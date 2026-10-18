@@ -85,7 +85,7 @@ macOS 本机部署（Apple Silicon 与 Intel）使用相同的游戏密钥存储
 ```
 Alas.bat → python -m deploy.installer
   patch.pre_checks()          # 运行目录、site-packages 补丁
-  git_install()               # 云端三态控制；Git/CDN 仅快进，未知时校验并使用本地
+  git_install()               # git pull / GitOverCdn 兜底
   alas_kill()                 # 停掉本实例的 alas 进程
   pip_install()               # 实为 uv sync（--frozen），失败抛 ExecutionError
   app_update()                # ensure_frontend()：摘要变化才 npm ci + build
@@ -94,14 +94,11 @@ Alas.bat → python -m deploy.installer
 成功 → start pythonw gui.py --electron
 ```
 
-### 云端控制与本地回退
+### 云端异常时使用本地版本
 
-`GitManager.git_install()` 保持无参启动接口，Launcher 的内嵌 Python 调用无需调整。
-自动更新控制返回 `True` 时保留 GitOverCDN 优先、失败回退 Git 的流程；`False` 表示服务端明确禁止自动更新，使用本地版本；`None` 表示状态未知，记录原因并使用本地版本，不执行 Git/CDN 更新。每次控制接口只请求一次，超时为 5 秒，关闭自动重定向；301/302 等跳转（包括跳转自身）、403/404/5xx、DNS/TLS/连接错误及非法内容均返回 `None`，不会转换成 `False` 或云端强制更新要求。
+云端控制接口保留三态：`True` 继续原有 GitOverCDN/Git 更新流程，`False` 明确关闭自动更新，`None` 表示超时、网络异常、HTTP 错误或非法内容导致状态未知。控制接口每次只请求一次，5 秒超时且不跟随重定向，自重定向立即按未知处理并记录原因。
 
-使用本地版本前检查 `gui.py`、`alas.py`、`pyproject.toml`、`uv.lock`、API 入口、进程管理器、生成参数文件及前端包清单，并验证项目 Python 可执行文件和基础 WebUI/图像依赖可导入。缺失文件、依赖异常或解释器故障会给出具体路径或异常并抛出 `ExecutionError`。这是启动基础校验，后续依赖同步、前端构建、服务就绪检查仍正常执行；不会将回退日志视为 WebUI 已成功启动，也不保证完全离线可完成首次安装。
-
-`git_install(manual=True)` 供用户主动更新使用，绕过云端控制接口。WebUI 的 `updater.apply` 显式传入手动模式，该模式仅在更新锁内有效；定时和强制更新仍遵循云端控制。两类更新均先保护已跟踪文件的未提交修改；运行包中的未跟踪文件不阻挡检查，与上游新增文件冲突时由 Git 拒绝合并。Git 与 CDN 均只允许快进，不执行 `reset --hard`，不删除 Git 元数据或锁文件。目标分支不包含本地提交时保留本地版本；历史重写产生的分叉也需用户自行处理，不再强制覆盖。
+启动时状态未知则检查 `gui.py`、`alas.py`、`pyproject.toml`、`uv.lock`、`module/api/app.py`，缺失时报告具体文件；齐全则跳过 Git/CDN 更新并使用当前本地版本继续后续启动。依赖同步、前端构建和服务就绪检查仍由原流程负责。本次不调整 Git 重置、本地修改处理或手动更新机制。运行期状态未知时清除残留强制更新标记，避免沿用每秒检查频率。
 
 ### 启动后的依赖自举
 
@@ -126,9 +123,6 @@ Alas.bat → python -m deploy.installer
 | --- | --- |
 | 任一管理器抛 `ExecutionError` | 安装器 `exit(1)`，bat `pause` 停留展示日志 |
 | uv sync 失败 | 输出 uv 日志（敏感文本经 `redact_sensitive_text` 脱敏）后中止 |
-| 云端更新控制不可访问或内容无效 | 警告包含实际原因；校验并使用本地版本，跳过 Git/CDN 更新 |
-| 本地回退校验失败 | 报告缺失文件、解释器路径或依赖异常，拒绝假报启动成功 |
-| 本地修改或分支私有提交 | 保留本地工作；仅允许快进，不强制重置 |
 | git 418/镜像封禁 | 随机 git User-Agent + GitOverCdn 端点轮换兜底 |
 | Windows 文件占用 | `atomic.py` 按重试上限等待后清理 |
 | `.venv` 损坏 | `uv.py` 检测 python 不可用 → 自举重建 |

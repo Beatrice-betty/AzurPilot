@@ -163,8 +163,7 @@ class Updater(DeployConfig, GitManager):
         force_update = self._check_cloud_force_update()
         self.force_update = force_update is True
         if force_update is None:
-            logger.warning("强制更新状态未知，保留本地版本，跳过本轮自动更新检查")
-            return False
+            logger.warning("强制更新开关不可访问，按关闭处理")
 
         if State.deploy_config.GitOverCdn:
             status = self.goc_client.get_status()
@@ -289,12 +288,10 @@ class Updater(DeployConfig, GitManager):
                 self.run_update()
         except Exception as e:
             logger.exception(e)
-            self.force_update = False
             self.state = 0
 
     def _check_force_update_thread(self):
         """已有更新时，在后台线程仅检查强制更新开关以保留前端状态。"""
-        self.force_update = False
         try:
             cloud_update = self._check_cloud_update()
             if cloud_update is not True:
@@ -350,7 +347,7 @@ class Updater(DeployConfig, GitManager):
     @retry(ExecutionError, tries=3, delay=5, logger=None)
     def git_install(self):
         """执行 Git 源码拉取与安装，失败自动重试。"""
-        return super().git_install(manual=getattr(self, '_manual_update', False))
+        return super().git_install()
 
     def update(self):
         """执行实际的代码拉取与更新。
@@ -360,7 +357,7 @@ class Updater(DeployConfig, GitManager):
         """
         logger.hr("[WebUI-更新] 执行更新")
         try:
-            updated = self.git_install()
+            self.git_install()
         except ExecutionError:
             return False
         except Exception as exc:
@@ -372,9 +369,9 @@ class Updater(DeployConfig, GitManager):
                 level=50,
             )
             return False
-        return updated is not False
+        return True
 
-    def run_update(self, manual=False) -> bool:
+    def run_update(self) -> bool:
         """获取更新锁并启动安全的完整更新流程。
 
         Returns:
@@ -398,12 +395,7 @@ class Updater(DeployConfig, GitManager):
                     self.state = "failed"
                     logger.critical("依赖同步服务不可用，拒绝执行无法安全恢复的更新")
                     return False
-                # 更新锁覆盖此标记的整个生命周期，手动请求不会影响后续定时更新。
-                self._manual_update = manual
-                try:
-                    return self._start_update()
-                finally:
-                    self._manual_update = False
+                return self._start_update()
 
     def _start_update(self) -> bool:
         """准备需要暂停的实例列表并开始等待停止。
@@ -494,7 +486,7 @@ class Updater(DeployConfig, GitManager):
             self.state = "run update"
             logger.info("[WebUI-更新] 所有 AzurPilot 已停止，开始更新")
 
-            # 更新前先持久化恢复计划。Git 合并即使报错也可能已修改源码，
+            # 更新前先持久化恢复计划。Git 的 reset/pull 即使报错也可能已修改源码，
             # 因而一旦开始更新，worker 只能由父进程完成依赖同步后恢复。
             try:
                 mark_dependency_sync_pending()
@@ -517,7 +509,7 @@ class Updater(DeployConfig, GitManager):
             if updated:
                 self.state = "reload"
             else:
-                # Git 更新失败时不能假定工作树保持旧版本：合并可能已部分完成。
+                # Git 更新失败时不能假定工作树保持旧版本：git reset/pull 可能已部分完成。
                 # 保留已写入的同步和恢复计划，交由父进程以一致环境重启。
                 self.state = "failed"
                 logger.warning("[WebUI-更新] 更新失败，将由父进程完成依赖同步后重启")

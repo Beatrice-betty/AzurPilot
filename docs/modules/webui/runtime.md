@@ -219,9 +219,7 @@ flowchart TD
     F --> G["置位 dependency_sync_event + restart_event<br/>clearup() 后父监督器接管"]
 ```
 
-「先写盘再更新」是关键顺序：Git 合并即使报错也可能已部分改写源码，因此一旦开始更新，恢复只能走「依赖同步后重启」一条路。更新检查本身分两条路：`GitOverCdn` 开启时读 CDN 状态（`uptodate`/`behind`/`failed`，failed 回退 git）；否则 `git fetch` 后对比 `..origin/{Branch}`，本地存在上游没有的提交（开发分叉）时跳过更新。云端自动更新或强制更新状态未知时跳过本轮检查并清除残留强制标记，恢复普通检查间隔；只有明确强制开启时检查间隔缩短到 1 秒。
-
-`updater.apply` 使用 `run_update(manual=True)`，在更新锁内将手动模式传给 `GitManager.git_install`，不受控制接口故障或自动更新关闭阻挡；退出本次更新后清除手动模式。定时、强制更新仍检查云端状态。Git 与 GitOverCDN 都只快进更新，保护未提交修改和目标分支未包含的提交，不再执行强制重置或删除锁。跳过更新返回 `False`，不会误报已更新成功。本地回退的基础校验与完整启动检查边界见[部署文档](../infra/deploy.md#云端控制与本地回退)。
+「先写盘再更新」是关键顺序：git reset/pull 即使报错也可能已部分改写源码，因此一旦开始更新，恢复只能走「依赖同步后重启」一条路。更新检查本身分两条路：`GitOverCdn` 开启时读 CDN 状态（`uptodate`/`behind`/`failed`，failed 回退 git）；否则 `git fetch` 后对比 `..origin/{Branch}`，本地存在上游没有的提交（开发分叉）时跳过更新。云端开关（`cloud_auto_update_enabled`）与强制更新开关每轮检查，强制开启时检查间隔缩短到 1 秒。
 
 ### 更新检查的调度
 
@@ -314,7 +312,7 @@ stateDiagram-v2
 | `Update.CheckUpdateInterval` | int | 5 | 更新检查周期（分钟）；`updater.delay` 换算为秒 |
 | `Update.AutoRestartTime` | str\|null | null | 每日定时更新时刻（ISO time）；null 则移除定时任务 |
 | `Update.EnableReload` | bool | true | false 时 `State.restart_event` 为 None，更新器拒绝执行热重载更新 |
-| `Git.GitOverCdn` | bool | false | 走 GitOverCdn 检查/更新，failed 时回退 Git 获取与快进合并 |
+| `Git.GitOverCdn` | bool | false | 走 GitOverCdn 检查/更新，failed 时回退 `git pull` |
 | `RemoteAccess.RemoteAccessMode` | select | auto | `auto`/`webrtc`/`ssh`/`cloudflare`，决定激活哪个远程访问 provider；Quick Tunnel 显式选择 |
 | `RemoteAccess.EnableRemoteAccess` | bool | false | 启动时挂载远程访问保活任务 |
 | `RemoteAccess.CloudflareRegistry` / `CloudflareDeviceId` | str | 注册服务入口 / 空 | Quick Tunnel 的 HTTPS 注册地址与安装 ID；空 ID 由身份文件首次生成并持久化 |
@@ -333,9 +331,9 @@ stateDiagram-v2
 | `stop` 未确认全部退出 | 树枚举被拒、进程卡死 | 返回 False，API 层报 `STOP_FAILED`；登记保留供重试 |
 | 启动收尾进程失败/超时 | 设备依赖异常、动作超过 30 秒 | 记录告警；超时收尾进程被终止，不影响已完成的停止 |
 | 更新等不到实例退出 | worker 卡在不可中断的设备操作 | 等待 10 分钟后 `stop()` 强停；仍有存活则取消更新并重启实例 |
-| git 更新失败 | 网络、锁文件、分叉 | 不回滚恢复计划——合并可能已部分完成，交父进程以「同步后重启」收场 |
+| git 更新失败 | 网络、锁文件、分叉 | 不回滚恢复计划——reset/pull 可能已部分完成，交父进程以「同步后重启」收场 |
 | 更新检查线程异常 | 云端开关不可达、git 命令失败 | `state = 0`（或 failed），下个周期重试；不中断调度任务 |
-| 云端开关不可访问 | 控制点网络失败 | `_check_update` 跳过本轮检查（`fatal=False`） |
+| 云端开关不可访问 | 控制点网络失败 | `_check_update` 跳过本轮检查（`fatal=False`）并清除残留强制标记，恢复普通检查间隔；安装器校验关键文件后使用本地版本继续启动 |
 | TaskHandler 任务抛异常 | 业务任务 bug | `logger.exception` 后立即移除该任务，其余任务不受影响 |
 | 预览队列异常（EOF/OSError） | worker 或队列消亡 | 转发线程退出；丢帧不中断实际任务，队列满时丢弃旧帧 |
 

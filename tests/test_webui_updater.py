@@ -176,28 +176,6 @@ class TestUpdaterReload(unittest.TestCase):
 
         log_error.assert_called_once()
 
-    def test_manual_update_flag_is_scoped_to_locked_update(self):
-        updater = self._updater()
-        updater.state = 0
-        seen = []
-        updater._start_update = Mock(side_effect=lambda: seen.append(updater._manual_update) or True)
-        self.assertTrue(updater.run_update(manual=True))
-        self.assertFalse(updater._manual_update)
-        self.assertTrue(updater.run_update())
-        self.assertEqual([True, False], seen)
-
-    def test_local_fallback_is_not_reported_as_completed_update(self):
-        updater = object.__new__(Updater)
-        updater.git_install = Mock(return_value=False)
-        self.assertFalse(updater.update())
-
-    def test_runtime_git_install_passes_manual_mode_and_does_not_retry_fallback(self):
-        updater = object.__new__(Updater)
-        updater._manual_update = True
-        with patch('deploy.git.GitManager.git_install', return_value=False) as install:
-            self.assertFalse(updater.git_install())
-        install.assert_called_once_with(manual=True)
-
     def test_trigger_reload_sets_parent_event_immediately(self):
         Updater._trigger_reload()
 
@@ -402,44 +380,20 @@ class TestUpdaterForceUpdate(unittest.TestCase):
         updater.force_update = True
         updater._check_cloud_update = Mock(return_value=None)
         updater.cloud_update_access_failed = Mock()
-        updater._check_cloud_force_update = Mock()
         updater._fetch_with_retry = Mock()
 
         self.assertFalse(updater._check_update())
         self.assertFalse(updater.force_update)
         updater.cloud_update_access_failed.assert_called_once_with(fatal=False)
-        updater._check_cloud_force_update.assert_not_called()
         updater._fetch_with_retry.assert_not_called()
 
-    def test_unknown_force_state_skips_fetch_and_clears_force_flag(self):
+    def test_unknown_cloud_does_not_trigger_git_install_retries(self):
         updater = self._updater()
-        updater.force_update = True
-        updater._check_cloud_update = Mock(return_value=True)
-        updater._check_cloud_force_update = Mock(return_value=None)
-        updater._fetch_with_retry = Mock()
-
-        self.assertFalse(updater._check_update())
-        self.assertFalse(updater.force_update)
-        updater._fetch_with_retry.assert_not_called()
-
-    def test_force_check_exception_clears_stale_force_flag(self):
-        updater = self._updater()
-        updater.force_update = True
-        updater._check_cloud_update = Mock(side_effect=RuntimeError('network failed'))
-        updater.run_update = Mock()
-        updater._check_force_update_thread()
-        self.assertFalse(updater.force_update)
-        self.assertFalse(updater._force_update_checking)
-        updater.run_update.assert_not_called()
-
-    def test_update_check_exception_clears_stale_force_flag(self):
-        updater = self._updater()
-        updater.force_update = True
-        updater._check_update = Mock(side_effect=RuntimeError('failed'))
-        with patch('module.runtime.updater.logger.exception'):
-            updater._check_update_thread()
-        self.assertFalse(updater.force_update)
-        self.assertEqual(0, updater.state)
+        updater.cloud_auto_update_enabled = Mock(return_value=None)
+        updater.cloud_update_access_failed = Mock()
+        updater.git_install()
+        updater.cloud_auto_update_enabled.assert_called_once()
+        updater.cloud_update_access_failed.assert_called_once()
 
     def test_detected_update_waits_for_manual_or_scheduled_update_when_force_is_disabled(self):
         updater = self._updater()
