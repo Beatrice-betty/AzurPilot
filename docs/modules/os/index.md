@@ -164,6 +164,7 @@ flowchart BT
 - 行动力自然恢复每 600 秒 1 点、自然上限 200（`tasks/prevent_action_point_overflow.py` 常量）；月卡与道具购买受月度购买次数限制。
 - `ActionPointHandler.handle_action_point(..., avoid_ap_overflow=True)` 在「开箱会溢出」时拒绝开箱，抛 `ActionPointLimit`（携带 `current/total/cost/preserve`，可换算 `delay_minutes`）。
 - 黄币读取 `OSStatus.get_yellow_coins()`：OCR 连续两次一致才确认，失败时回退线程安全缓存值（`_cache_lock`）。
+- 常规调度经 `get_routine_yellow_coins()` 比较当前数字区域，变化后重新双读，不能直接使用上一轮余额。侵蚀一与短猫持续验收地图后台黄币，紫币只在对应商店读取；画面变化和同步确认均会撤销旧后台结果，避免延迟覆盖新余额。
 - 补黄币决策在 `CoinTaskMixin`：低于 `OpsiScheduling` 保留值时进入补币模式，从启用的补币任务（耄耋相接/隐秘/深渊/要塞）里按推迟时间选一个**代理执行一轮**——不启用子任务自己的调度器，避免任务间抢跑。
 
 ### 球面图与海域
