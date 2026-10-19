@@ -42,8 +42,8 @@ class ModeSwitch(Switch):
             CampaignNameError: 意外检测到撤退按钮时抛出。
         """
         if main.appear(WITHDRAW, offset=(30, 30)):
-            logger.warning(f'模式切换: 出现撤退按钮')
-            raise CampaignNameError
+            logger.info('[模式切换] 先完成遗留战斗')
+            return main.handle_navigation_battle()
 
 
 MODE_SWITCH_1 = ModeSwitch('Mode_switch_1', offset=(30, 10))
@@ -557,18 +557,12 @@ class CampaignUI(MapOperation, CampaignEvent, CampaignOcr):
     def handle_campaign_ui_additional(self):
         """战役 UI 的额外异常处理。
 
-        若检测到撤退按钮，则等待信息提示条消失后执行撤退。
+        遇到未完成地图或战斗，先自律完成当前轮次，再继续章节导航。
 
         Returns:
             bool: 是否进行了额外处理。
         """
-        if self.appear(WITHDRAW, offset=(30, 30)):
-            # logger.info("发现 WITHDRAW 按钮，等待地图加载完成以防止游戏客户端 bug")
-            self.ensure_no_info_bar(timeout=2)
-            try:
-                self.withdraw()
-            except CampaignEnd:
-                pass
+        if self.handle_navigation_battle():
             return True
         return False
 

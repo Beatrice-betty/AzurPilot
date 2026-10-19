@@ -554,7 +554,7 @@ class LoginHandler(UI):
         # self.ensure_no_unfinished_campaign()
 
     def ensure_no_unfinished_campaign(self, confirm_wait=3):
-        """确保没有未完成的战役，如有则撤退。
+        """确保遗留战役已通过自律完成，再返回主页面。
 
         Pages:
             in: page_main
@@ -565,10 +565,7 @@ class LoginHandler(UI):
         """
 
         def ensure_campaign_retreat():
-            if self.appear_then_click(WITHDRAW, offset=(30, 30), interval=5):
-                return True
-            if self.handle_popup_confirm('WITHDRAW'):
-                return True
+            return self.handle_navigation_battle()
 
         def in_campaign():
             return self.appear(CAMPAIGN_CHECK, offset=(30, 30)) \

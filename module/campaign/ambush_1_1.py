@@ -718,12 +718,7 @@ class Ambush11(FleetSelectionMixin, CampaignRun, FleetEquipment, Retirement):
                     self.device.screenshot()
                 self.campaign.device.image = self.device.image
 
-                if self.campaign.is_in_map():
-                    logger.info('[战役-伏击] 已在地图中，撤退中')
-                    try:
-                        self.campaign.withdraw()
-                    except CampaignEnd:
-                        pass
+                self.campaign.handle_navigation_battle()
 
                 self.campaign.ensure_campaign_ui(name=self.stage, mode=mode)
                 self.disable_raid_on_event()

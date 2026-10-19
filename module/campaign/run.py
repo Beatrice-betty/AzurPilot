@@ -426,12 +426,7 @@ class CampaignRun(CampaignEvent, ShopStatus):
             if not self.device.has_cached_image:
                 self.device.screenshot()
             self.campaign.device.image = self.device.image
-            if self.campaign.is_in_map():
-                logger.info('[战役] 已在地图中，执行撤退。')
-                try:
-                    self.campaign.withdraw()
-                except CampaignEnd:
-                    pass
+            if self.campaign.handle_navigation_battle():
                 self.campaign.ensure_campaign_ui(name=self.stage, mode=mode)
             elif self.campaign.is_in_auto_search_menu():
                 if self.can_use_auto_search_continue():

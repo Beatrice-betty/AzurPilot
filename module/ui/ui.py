@@ -244,6 +244,10 @@ class UI(InfoHandler):
             if timeout.reached():
                 break
 
+            if self.handle_navigation_battle():
+                timeout.reset()
+                continue
+
             # 已知页面检测
             for page in Page.iter_pages():
                 if page.check_button is None:
@@ -327,6 +331,10 @@ class UI(InfoHandler):
                 skip_first_screenshot = False
             else:
                 self.device.screenshot()
+
+            if self.handle_navigation_battle():
+                nav_timeout.reset()
+                continue
 
             # 到达目标页面
             if self.ui_page_appear(page=destination, offset=offset):
@@ -647,6 +655,26 @@ class UI(InfoHandler):
 
         return False
 
+    def handle_navigation_battle(self):
+        """导航遇到未完成的战斗时先自律完成，防止其他页面跳转触发撤离。"""
+        if getattr(self.config, '_navigation_battle_active', False):
+            return False
+        from module.combat.navigation_combat import NavigationCombat
+        worker = self.__dict__.get('_navigation_combat_worker')
+        if worker is None:
+            worker = NavigationCombat(self.config, self.device)
+            self._navigation_combat_worker = worker
+        worker.config = self.config
+        worker.device = self.device
+        if not worker.has_pending_battle():
+            return False
+        self.config._navigation_battle_active = True
+        try:
+            worker.run()
+        finally:
+            del self.config._navigation_battle_active
+        return True
+
     def ui_additional(self, get_ship=True):
         """处理 UI 切换过程中出现的各种弹窗。
 
@@ -656,6 +684,9 @@ class UI(InfoHandler):
         Returns:
             bool: 是否处理了弹窗。
         """
+        if self.handle_navigation_battle():
+            return True
+
         # 大世界页面弹窗
         # 包含 popup_confirm 变体，必须优先处理
         if self.ui_page_os_popups():
@@ -716,25 +747,6 @@ class UI(InfoHandler):
             return True
         if self.appear_then_click(AUTO_SEARCH_REWARD, offset=(50, 50), interval=3):
             return True
-        if self.appear(WITHDRAW, offset=(30, 30), interval=3):
-            # 此处等待是为了处理 2022-04-07 游戏更新后的客户端 bug
-            # 复现步骤（100% 成功）：
-            # - 进入任意关卡，如 12-4
-            # - 停止并重启游戏
-            # - 运行 Alas 的 Main 任务
-            # - Alas 切换到 page_campaign 并从已有关卡撤退
-            # - 游戏客户端在 page_campaign W12 界面卡死，点击屏幕无响应
-            # - 再次重启游戏客户端可修复此问题
-            logger.info("[UI-额外] 发现撤退按钮，等待地图加载以防止游戏客户端bug")
-            self.device.sleep(2)
-            self.device.screenshot()
-            if self.appear_then_click(WITHDRAW, offset=(30, 30)):
-                self.interval_reset(WITHDRAW)
-                return True
-            else:
-                logger.warning("[UI-额外] 撤退按钮已不存在")
-                self.interval_reset(WITHDRAW)
-
         # 登录相关
         if self.appear_then_click(LOGIN_CHECK, offset=(30, 30), interval=3):
             return True
