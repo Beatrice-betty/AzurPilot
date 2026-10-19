@@ -68,7 +68,7 @@ bin/ocr_models/     # 模型文件（非代码）
 | 入口 | 用途 |
 | --- | --- |
 | `from module.ocr.ocr import Ocr / Digit / DigitCounter / Duration` | 业务构造识别器的唯一常规入口（含 `*Yuv` 变体） |
-| `ocr_batch(image, readers)` | 同帧、同语言及字符表的单区域合并队列提交，逐字段保持预处理、后处理和有效性 |
+| `ocr_batch(image, readers, *, show_log=True)` | 同帧、同语言及字符表的单区域合并队列提交，逐字段保持预处理、后处理和有效性；后台采样可关闭结果日志 |
 | `OCR_MODEL.<lang>` | 框架内获取 `AlOcr` 实例；导入时按部署配置决定本地模型或 RPC 代理 |
 | `AlOcr(config=…, settings=…)` | 框架内部（models.py、ocr_benchmark）直接构造；业务代码不应使用 |
 | `release_ocr_models()` / `reset_ocr_model()` | 空闲释放内存 / 配置变更后重置模型缓存 |

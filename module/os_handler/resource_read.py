@@ -33,7 +33,7 @@ def read_coins(image, readers, identity, observed_at, ap_epoch=0, ap_spent=0, sa
     readers = [copy(reader) for reader in readers]
     for reader in readers:
         reader.buttons = tuple(reader.buttons[0])
-    values = ocr_batch(image, readers)
+    values = ocr_batch(image, readers, show_log=False)
     # 地图只显示黄币；商店紫币区域在地图上是舰队信息，不能参与确认或写库。
     yellow = values[0]
     valid = yellow >= 0 and bool(getattr(readers[0], 'last_valid', False))

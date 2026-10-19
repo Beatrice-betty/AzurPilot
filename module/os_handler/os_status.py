@@ -87,7 +87,6 @@ class OSStatus(UI):
                 self.config, {'YellowCoin': reading.yellow},
                 observed_at=reading.observed_at,
             )
-            logger.info(f'[大世界-资源后台] 已确认黄币={reading.yellow}')
         ap_due = bool(sample and getattr(self, 'action_point_check_due', lambda: False)())
         if in_map and (state.wanted or ap_due) and not self.handle_map_event():
             readers = [OCR_SHOP_YELLOW_COINS]

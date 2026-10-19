@@ -200,7 +200,7 @@ OpsiAshBeacon.run() → META 页攻击 → MetaReward 领奖 → task_delay(serv
 
 代理任务可能已经结算奖励或购买物品，但运行器仍保留进入任务前的截图。`OpsiScheduling._run_with_opsi_task_context()` 因此在 `finally` 中更新货币修订，使旧预算和在途结果失效；覆盖正常返回、`TaskEnd`、异常及防溢出嵌套代理。下一次黄币预算必须通过新截图重新确认，不能只比较旧截图上的数字区域。独立隐秘、深渊、要塞等不启用常规缓存，直接沿同步预算读取。
 
-资源观察、收支复核及仪表盘保存由 `resource_write.py` 串行提交；固定采样时间和任务上下文，后台只事务合并仪表盘字段，不修改运行中的配置对象。收支复核按采样时间计算已发生交易，旧观察不能覆盖新读数。后台确认侵蚀一黄币低于当前保留值时，由主线程通过 `interrupt_auto_search(goto_main=False, end_task=False)` 返回地图，智能调度下一轮立即执行补币决策；补币任务不被自己的低黄币状态打断。日志入口为 `[大世界-资源后台]`，离线回归见 `tests/test_opsi_background_resources.py`。
+资源观察、收支复核及仪表盘保存由 `resource_write.py` 串行提交；固定采样时间和任务上下文，后台只事务合并仪表盘字段，不修改运行中的配置对象。收支复核按采样时间计算已发生交易，旧观察不能覆盖新读数。后台确认侵蚀一黄币低于当前保留值时，由主线程通过 `interrupt_auto_search(goto_main=False, end_task=False)` 返回地图，智能调度下一轮立即执行补币决策；补币任务不被自己的低黄币状态打断。后台正常采样使用 `ocr_batch(..., show_log=False)`，不输出逐帧批量结果和黄币确认日志；`[大世界-资源后台]` 仅保留识别异常与低币切换提示。离线回归见 `tests/test_opsi_background_resources.py`。
 
 ```
 行动力面板截图 → OCR(当前/总/购买次数) → ActionPointLimit 或放行
