@@ -85,7 +85,7 @@ macOS 本机部署（Apple Silicon 与 Intel）使用相同的游戏密钥存储
 ```
 Alas.bat → python -m deploy.installer
   patch.pre_checks()          # 运行目录、site-packages 补丁
-  git_install()               # git pull / GitOverCdn 兜底
+  git_install()               # GitOverCdn 或 GitCode → GitHub，安全快进
   alas_kill()                 # 停掉本实例的 alas 进程
   pip_install()               # 实为 uv sync（--frozen），失败抛 ExecutionError
   app_update()                # ensure_frontend()：摘要变化才 npm ci + build
@@ -95,6 +95,14 @@ Alas.bat → python -m deploy.installer
 ```
 
 `GitManager.git_install()` 按本地配置直接执行 Git/CDN 更新，不再请求云端更新总开关。云端仅保留运行期间的强制更新开关，其访问失败不阻止正常版本检查。
+
+Git 直连更新对官方 GitHub、GitCode 和 CDN 回退镜像统一按 `https://gitcode.com/ddl2/AzurPilot.git` → `https://github.com/wess09/AzurPilot.git` 顺序尝试；配置的 `Branch` 决定请求的 `refs/heads/<Branch>`，不自动改成其他分支。自定义 `Repository` 只访问原配置地址。已启用的 GitOverCDN 仍先按原机制下载对象；失败或无法安全应用时进入上述直连流程。
+
+每个 Git 源最多尝试两次：引用探测总时限 15 秒，单次 fetch 总时限 180 秒，HTTP 连续低速时限 15 秒，两次尝试间隔 1 秒。超时会终止 Git 及传输子进程；两源耗尽后汇总错误并抛出 `ExecutionError`，WebUI 不再整轮重试。独立 Rust 启动器也须使用只调用一次 Python 更新器的配套版本，否则旧启动器仍会重复执行更新脚本。
+
+fetch 使用临时 URL 和独立引用，验证目标提交及本地目标分支的祖先关系后才更新远端跟踪引用。成功后直接应用已下载的提交，不再联网 pull，不持久修改已有 `origin`、代理或 SSL 配置。已有代理环境与显式 `GitProxy` 均保留；证书验证沿用 `SSLVerify`。
+
+源码应用和 CDN 应用均不执行 hard reset、清理或自动暂存。有已暂存或未暂存修改时，保留内容并跳过本次代码应用，继续启动；无关未跟踪文件（例如启动器本身）不会阻止安全快进。同名未跟踪或忽略文件冲突时 Git 拒绝覆盖并报错。目标分支与当前分支不同时安全检出或创建目标分支，保留原分支历史；同一目标分支的镜像历史落后或分叉时尝试下一源，所有源都不兼容时保留本地提交并报错，须人工处理。detached HEAD 不自动丢弃或改写。
 
 ### 启动后的依赖自举
 
@@ -119,7 +127,8 @@ Alas.bat → python -m deploy.installer
 | --- | --- |
 | 任一管理器抛 `ExecutionError` | 安装器 `exit(1)`，bat `pause` 停留展示日志 |
 | uv sync 失败 | 输出 uv 日志（敏感文本经 `redact_sensitive_text` 脱敏）后中止 |
-| git 418/镜像封禁 | 随机 git User-Agent + GitOverCdn 端点轮换兜底 |
+| Git 网络故障、418 或镜像引用异常 | 随机 User-Agent、有限超时重试，GitCode 失败后切换 GitHub；全部失败停止网络重试 |
+| Git 本地修改或历史不兼容 | 保留修改与本地提交；脏工作区跳过应用，历史分叉或文件冲突明确报错 |
 | Windows 文件占用 | `atomic.py` 按重试上限等待后清理 |
 | `.venv` 损坏 | `uv.py` 检测 python 不可用 → 自举重建 |
 

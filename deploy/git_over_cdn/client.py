@@ -458,8 +458,8 @@ class GitOverCdnClient:
         self.logger.info('Current repo is behind remote')
         return 'behind'
 
-    def update(self):
-        """通过 CDN 更新仓库。
+    def update(self, apply=None):
+        """通过 CDN 更新仓库，可由部署管理器提供安全应用回调。
 
         Returns:
             bool: 仓库是否已是最新。
@@ -474,6 +474,8 @@ class GitOverCdnClient:
             return False
         if self.current_commit == self.latest_commit:
             self.logger.info('Already up to date')
+            if apply is not None:
+                return apply(self.latest_commit)
             # HEAD 可能已更新而远端引用仍旧，先对齐引用再 reset，避免回退版本。
             if not self.update_refs():
                 return False
@@ -481,6 +483,8 @@ class GitOverCdnClient:
 
         if not self.download_pack():
             return False
+        if apply is not None:
+            return apply(self.latest_commit)
         if not self.update_refs():
             return False
         if not self.git_reset():

@@ -6,11 +6,19 @@ import unittest
 from unittest.mock import Mock, patch
 
 from deploy.git import GitManager
+from deploy.config import ExecutionError
 from module.runtime.setting import State
 from module.runtime.updater import Updater
 
 
 class TestGitInstall(unittest.TestCase):
+    def test_runtime_does_not_repeat_exhausted_source_selection(self):
+        updater = object.__new__(Updater)
+        with patch.object(GitManager, 'git_install', side_effect=ExecutionError('sources exhausted')) as install:
+            with self.assertRaises(ExecutionError):
+                updater.git_install()
+        install.assert_called_once_with()
+
     def test_source_update_uses_cdn_and_git_without_cloud_control(self):
         for use_cdn, cdn_success in ((False, False), (True, True), (True, False)):
             with self.subTest(use_cdn=use_cdn, cdn_success=cdn_success):
@@ -22,7 +30,7 @@ class TestGitInstall(unittest.TestCase):
 
                 request.assert_not_called()
                 if use_cdn:
-                    manager.goc_client.update.assert_called_once_with()
+                    manager.goc_client.update.assert_called_once_with(apply=manager._apply_cdn_update)
                 else:
                     manager.goc_client.update.assert_not_called()
                 if use_cdn and cdn_success:

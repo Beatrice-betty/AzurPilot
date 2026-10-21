@@ -1,7 +1,11 @@
+import os
 import random
+import re
+import signal
 import subprocess
 import time
 from typing import Optional
+from uuid import uuid4
 
 import requests
 
@@ -9,10 +13,17 @@ from deploy.config import GIT_OVER_CDN_FALLBACK_REPOSITORIES, DeployConfig, Exec
 from deploy.git_over_cdn.client import GitOverCdnClient
 from deploy.git_over_cdn.endpoints import CLOUDFLARE_UPDATE_URLS, FALLBACK_UPDATE_URLS
 from deploy.logger import logger
-from deploy.utils import *
+from deploy.utils import cached_property
 
 
 CLOUD_FORCE_UPDATE_CONTROL_URL = 'https://alas-apiv2.nanoda.work/api/force_update'
+GIT_UPDATE_SOURCES = (
+    ('GitCode', 'https://gitcode.com/ddl2/AzurPilot.git'),
+    ('GitHub', 'https://github.com/wess09/AzurPilot.git'),
+)
+GIT_NETWORK_RETRIES = 2
+GIT_CONNECT_TIMEOUT = 15
+GIT_FETCH_TIMEOUT = 180
 
 
 def peer_fallback_repository(url: str) -> Optional[str]:
@@ -85,65 +96,159 @@ class GitManager(DeployConfig):
     def get_remote_url(self, source: str) -> str:
         """获取指定远程源的 URL。"""
         try:
-            res = subprocess.run(
-                [self.git, 'remote', 'get-url', source],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
+            res = self._run_git('remote', 'get-url', source, timeout=5, allow_failure=True)
             return res.stdout.strip() if res.returncode == 0 else ''
-        except Exception:
+        except ExecutionError:
             return ''
 
-    def _fetch_with_retry(self, source, branch, max_retry=5, delay=2):
-        """带 UA 重试与同级镜像容灾的 git fetch。
-
-        gitcode 等仓库会返回 418 拦截特定 UA，此时自动更换 UA 重试；
-        若多次重试仍失败且当前 remote 为国内镜像源（如 GitCode/CNB），
-        自动切换至同级备用分流镜像重试，避免单一仓库受风控导致更新中断。
-
-        Args:
-            source: 远程源名称。
-            branch: 分支名称。
-            max_retry: 最大尝试次数（含首次）。
-            delay: 重试间隔秒数。
-
-        Raises:
-            ExecutionError: 所有尝试均失败时抛出。
-        """
-        ua = self.git_user_agent()
-        for i in range(max_retry):
-            git = f'"{self.git}" -c http.userAgent={ua}'
-            logger.info(f'Use git User-Agent: {ua}')
-            if self.execute(f'{git} fetch {source} {branch}'):
-                return
-            logger.warning(f'git fetch failed with UA {ua}, attempt {i + 1}/{max_retry}')
-            if i < max_retry - 1:
-                # 重试间隔加随机抖动，避免暴露固定的失败-重试节奏
-                time.sleep(delay * random.uniform(0.5, 1.8))
-                ua = self.git_user_agent()
-
-        current_url = self.get_remote_url(source)
-        peer_url = peer_fallback_repository(current_url)
-        if peer_url:
-            logger.warning(
-                f'当前镜像源 {current_url} 获取失败（可能触发限流或风控），自动切换至同级分流镜像 {peer_url} 重试'
+    def _run_git(self, *args, timeout=30, allow_failure=False, options=()):
+        """执行有总时限的 Git 命令；超时连同传输子进程一起终止。"""
+        command = [self.git]
+        for option in options:
+            command.extend(('-c', option))
+        command.extend(args)
+        logger.info(subprocess.list2cmdline(command))
+        env = {**os.environ, 'GIT_TERMINAL_PROMPT': '0', 'GCM_INTERACTIVE': 'Never'}
+        process = None
+        try:
+            process = subprocess.Popen(
+                command, cwd=self.root_filepath, env=env, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace',
+                start_new_session=os.name != 'nt',
             )
-            git = f'"{self.git}" -c http.userAgent={self.git_user_agent()}'
-            if self.execute(f'{git} remote set-url {source} {peer_url}', allow_failure=True):
-                if hasattr(self, 'Repository'):
-                    self.Repository = peer_url
-                ua = self.git_user_agent()
-                for i in range(max_retry):
-                    git = f'"{self.git}" -c http.userAgent={ua}'
-                    logger.info(f'Use git User-Agent: {ua}')
-                    if self.execute(f'{git} fetch {source} {branch}'):
-                        return
-                    logger.warning(f'备用镜像 git fetch 失败 (UA: {ua}), 尝试 {i + 1}/{max_retry}')
-                    if i < max_retry - 1:
-                        time.sleep(delay * random.uniform(0.5, 1.8))
-                        ua = self.git_user_agent()
-        raise ExecutionError
+            output, error = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired as exc:
+            if os.name == 'nt':
+                try:
+                    terminated = subprocess.run(
+                        ['taskkill', '/F', '/T', '/PID', str(process.pid)],
+                        capture_output=True, timeout=10,
+                    )
+                    if terminated.returncode:
+                        process.kill()
+                except (OSError, subprocess.TimeoutExpired):
+                    process.kill()
+            else:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            try:
+                output, error = process.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                # 不关闭仍被 communicate 读取线程持有的管道，避免关闭操作再次阻塞。
+                output = error = ''
+            logger.warning((output + error).strip())
+            raise ExecutionError(f'Git 操作超时（{timeout} 秒）：{args[0]}') from exc
+        except OSError as exc:
+            raise ExecutionError(f'无法执行 Git：{exc}') from exc
+        if output.strip():
+            logger.info(output.strip())
+        if error.strip():
+            logger.info(error.strip())
+        if process.returncode and not allow_failure:
+            raise ExecutionError(f'Git {args[0]} 失败（{process.returncode}）：{(output + error).strip()}')
+        return subprocess.CompletedProcess(command, process.returncode, output)
+
+    @staticmethod
+    def _update_sources(repo):
+        """官方部署按固定顺序容灾，自定义仓库只使用原地址。"""
+        normalized = repo.strip().rstrip('/').removesuffix('.git').lower()
+        official = [url for _, url in GIT_UPDATE_SOURCES] + GIT_OVER_CDN_FALLBACK_REPOSITORIES
+        if normalized in [url.rstrip('/').removesuffix('.git').lower() for url in official]:
+            return GIT_UPDATE_SOURCES
+        return (('Repository', repo),)
+
+    def _validate_update(self, commit, branch):
+        """只接受目标本地分支可快进的历史，不将镜像 SHA 当作等价历史。"""
+        self._run_git('cat-file', '-e', f'{commit}^{{commit}}')
+        local = self._run_git('rev-parse', '--verify', f'refs/heads/{branch}', allow_failure=True)
+        if local.returncode == 0:
+            if self._run_git('merge-base', '--is-ancestor', local.stdout.strip(), commit,
+                             allow_failure=True).returncode:
+                raise ExecutionError(f'更新源的 {branch} 落后或历史分叉，保留本地提交')
+
+    def _fetch_with_retry(self, source, branch, max_retry=GIT_NETWORK_RETRIES, delay=1,
+                          repo=None, options=()):
+        """逐源有限重试；探测和 fetch 均限时，成功后不再连接其他源。"""
+        repo = repo or self.Repository
+        if not options:
+            options = (f'http.sslVerify={str(self.SSLVerify).lower()}',)
+            if self.GitProxy:
+                options += (f'http.proxy={self.GitProxy}', f'https.proxy={self.GitProxy}')
+        self._run_git('check-ref-format', f'refs/heads/{branch}')
+        self._run_git('check-ref-format', f'refs/remotes/{source}/{branch}')
+        retries = max(1, min(max_retry, GIT_NETWORK_RETRIES))
+        failures = []
+        for name, url in self._update_sources(repo):
+            logger.info(f'Trying {name}: {url} ({branch})')
+            ref = f'refs/azurpilot/update/{uuid4().hex}'
+            try:
+                for attempt in range(retries):
+                    network_options = (*options, f'http.userAgent={self.git_user_agent()}',
+                                       'http.lowSpeedLimit=1', 'http.lowSpeedTime=15',
+                                       'credential.interactive=false')
+                    try:
+                        remote = self._run_git(
+                            'ls-remote', '--exit-code', '--refs', '--', url, f'refs/heads/{branch}',
+                            timeout=GIT_CONNECT_TIMEOUT, options=network_options,
+                        )
+                        if not re.fullmatch(rf'[0-9a-f]{{40,64}}\s+refs/heads/{re.escape(branch)}\s*',
+                                            remote.stdout):
+                            raise ExecutionError(f'{name} 未返回有效的 {branch} 分支引用')
+                        self._run_git(
+                            'fetch', '--progress', '--no-tags', '--no-recurse-submodules',
+                            '--no-write-fetch-head', '--refmap=', '--', url,
+                            f'+refs/heads/{branch}:{ref}', timeout=GIT_FETCH_TIMEOUT,
+                            options=network_options,
+                        )
+                        break
+                    except ExecutionError as exc:
+                        logger.warning(f'{name} update failed ({attempt + 1}/{retries}): {exc}')
+                        if attempt + 1 == retries:
+                            raise
+                        time.sleep(delay)
+                commit = self._run_git('rev-parse', '--verify', f'{ref}^{{commit}}').stdout.strip()
+                self._validate_update(commit, branch)
+                self._run_git('update-ref', f'refs/remotes/{source}/{branch}', commit)
+                logger.info(f'{name} fetch successful: {commit}')
+                return commit
+            except ExecutionError as exc:
+                failures.append(f'{name}: {exc}')
+                logger.warning(f'{name} update failed: {exc}')
+            finally:
+                self._run_git('update-ref', '-d', ref, allow_failure=True)
+        message = '所有 Git 更新源均失败，停止网络重试；本地文件和提交已保留。' + '\n' + '\n'.join(failures)
+        logger.error(message)
+        raise ExecutionError(message)
+
+    def _apply_git_update(self, commit, branch):
+        """保留本地修改，安全切换目标分支并快进，不重置或自动暂存。"""
+        self._validate_update(commit, branch)
+        status = self._run_git('status', '--porcelain', '--untracked-files=no').stdout
+        if status.strip():
+            logger.warning('本地存在未提交修改，保留全部内容并跳过代码应用，继续启动')
+            return True
+        current = self._run_git('symbolic-ref', '--quiet', '--short', 'HEAD', allow_failure=True)
+        if current.returncode:
+            raise ExecutionError('当前为 detached HEAD，保留本地提交；请先切换到配置的目标分支')
+        local = self._run_git('show-ref', '--verify', '--quiet', f'refs/heads/{branch}', allow_failure=True)
+        if local.returncode:
+            self._run_git('checkout', '--no-overwrite-ignore', '-b', branch, commit)
+        else:
+            if current.stdout.strip() != branch:
+                self._run_git('checkout', '--no-overwrite-ignore', branch)
+            self._run_git('merge', '--ff-only', '--no-edit', '--no-autostash',
+                          '--no-overwrite-ignore', commit)
+        self._run_git('--no-pager', 'log', '--no-merges', '-1')
+        return True
+
+    def _apply_cdn_update(self, commit):
+        """CDN 仅提供对象，应用前复用直连 Git 的本地保护。"""
+        self._validate_update(commit, self.Branch)
+        self._run_git('update-ref', f'refs/remotes/origin/{self.Branch}', commit)
+        return self._apply_git_update(commit, self.Branch)
 
     def git_repository_init(
             self, repo, source='origin', branch='master', proxy='', ssl_verify=True
@@ -157,53 +262,16 @@ class GitManager(DeployConfig):
             proxy (str): HTTP/HTTPS 代理地址。
             ssl_verify (bool): 是否校验 SSL 证书。
         """
-        # 所有 git 命令统一带随机 UA，绕过 gitcode 等仓库对特定 UA 的 418 封禁
-        git = f'"{self.git}" -c http.userAgent={self.git_user_agent()}'
-
         logger.hr('Git Init', 1)
-        if not self.execute(f'{git} init', allow_failure=True):
-            self.remove('./.git/config')
-            self.remove('./.git/index')
-            self.remove('./.git/HEAD')
-            self.execute(f'{git} init')
-
-        logger.hr('Set Git Proxy', 1)
+        self._run_git('init')
+        if not self.get_remote_url(source):
+            self._run_git('remote', 'add', source, repo)
+        # 无显式 GitProxy 时保留用户的 Git / 系统代理，选源不写回 origin 或部署配置。
+        options = (f'http.sslVerify={str(ssl_verify).lower()}',)
         if proxy:
-            self.execute(f'{git} config --local http.proxy {proxy}')
-            self.execute(f'{git} config --local https.proxy {proxy}')
-        else:
-            self.execute(f'{git} config --local --unset http.proxy', allow_failure=True)
-            self.execute(f'{git} config --local --unset https.proxy', allow_failure=True)
-
-        if ssl_verify:
-            self.execute(f'{git} config --local http.sslVerify true', allow_failure=True)
-        else:
-            self.execute(f'{git} config --local http.sslVerify false', allow_failure=True)
-
-        logger.hr('Set Git Repository', 1)
-        if not self.execute(f'{git} remote set-url {source} {repo}', allow_failure=True):
-            self.execute(f'{git} remote add {source} {repo}')
-
-        logger.hr('Fetch Repository Branch', 1)
-        self._fetch_with_retry(source, branch)
-
-        logger.hr('Pull Repository Branch', 1)
-        # 移除 git 锁文件
-        for lock_file in [
-            './.git/index.lock',
-            './.git/HEAD.lock',
-            './.git/refs/heads/master.lock',
-        ]:
-            if os.path.exists(lock_file):
-                logger.info(f'Lock file {lock_file} exists, removing')
-                os.remove(lock_file)
-        self.execute(f'{git} reset --hard {source}/{branch}')
-        # pull 联网，与 fetch 用不同 UA，降低同源请求的可归集性
-        git = f'"{self.git}" -c http.userAgent={self.git_user_agent()}'
-        self.execute(f'{git} pull --ff-only {source} {branch}')
-
-        logger.hr('Show Version', 1)
-        self.execute(f'{git} --no-pager log --no-merges -1')
+            options += (f'http.proxy={proxy}', f'https.proxy={proxy}')
+        commit = self._fetch_with_retry(source, branch, repo=repo, options=options)
+        self._apply_git_update(commit, branch)
 
     @property
     def goc_client(self):
@@ -263,8 +331,12 @@ class GitManager(DeployConfig):
         logger.hr('Update AzurPilot', 0)
 
         if self.GitOverCdn:
-            if self.goc_client.update():
-                return
+            try:
+                if self.goc_client.update(apply=self._apply_cdn_update):
+                    return
+            except ExecutionError as exc:
+                logger.warning(f'CDN 更新无法安全应用：{exc}')
+            logger.warning('CDN update unavailable; falling back to direct Git update')
 
         self.git_repository_init(
             repo=self.Repository,
