@@ -17,6 +17,7 @@ from deploy.atomic import atomic_write
 from deploy.config import ExecutionError
 from deploy.git import GitManager
 from deploy.utils import DEPLOY_CONFIG
+from module.base.retry import retry
 from module.logger import logger
 from module.runtime.config import DeployConfig
 from module.runtime.process_manager import ProcessManager
@@ -320,8 +321,9 @@ class Updater(DeployConfig, GitManager):
             th._task.delay = 1
             yield
 
+    @retry(ExecutionError, tries=3, delay=5, logger=None)
     def git_install(self):
-        """执行源码更新；逐源重试由 GitManager 统一限次，避免整轮重试。"""
+        """执行 Git 源码拉取与安装，失败自动重试。"""
         return super().git_install()
 
     def update(self):
