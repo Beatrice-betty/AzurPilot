@@ -217,6 +217,7 @@ flowchart TD
 游戏自己移动舰队、自己开战，脚本退居「监工」：
 
 - `auto_search_moving()`：等待期间监视石油/物资 OCR（触发 `auto_search_oil/coin_limit_triggered`）与舰队等级，处理退役、低情绪弹窗；自动搜索菜单出现则抛 `CampaignEnd`。
+- `handle_auto_search_map_wait()`：仅在普通自律移动等待中，自律已开启但 30 秒未进入战斗加载或战斗画面时，确认开启按钮的模板和颜色后点击关闭；持续截图至少 0.5 秒，确认关闭状态后再次点击开启。退役、强化后的 `map_offensive_auto_search()` 保留原先每 3 秒尝试关闭、再由原开启逻辑重开的专项处理，不接入此恢复。普通移动中，加载、战斗、结束菜单与弹窗优先于开关操作，避免点击转场残留按钮。每次等待下一场战斗只恢复一次；关闭后 30 秒仍未能重新开启，或重新开启后 30 秒仍停在开启状态，抛 `GameStuckError` 交回原异常恢复。离线时序、专项流程隔离与原生截图按钮识别见 `tests/test_auto_search_stuck.py`，不代表真实模拟器验收。
 - `auto_search_combat_execute()`：加载期处理弹窗；进入战斗后先扣基础情绪，再观察结果。S/A/B 记录到本场 `CombatResult`；C/D 字母和结算超时只转交结算阶段，红色 DEFEAT 画面（沿用资源名 `OPTS_INFO_D`）或无可用舰队正文才确认战败，避免转场误识别引发撤退。
 - `handle_combat_defeat()`：普通、自动搜索、共斗和联盟共用 C/D 战败画面的识别与关闭。记录不受点击冷却影响；同场重复画面、评价页和经验页最多触发一次额外心情扣减。恢复由 `combat_defeat_recovery()` 按任务决定，联盟自行推进活动流程。
 - `auto_search_combat_status()`：优先处理共用战败画面和 `FLEET_UNAVAILABLE` 正文，再推进经验、委托、剧情和奖励。`withdraw_continue` 每次战败撤退后继续任务；`switch_fleet` 必须同时确认本场失效弹窗、游戏已自动换到另一队的 `FLEET_NUM_1/2` 及接替队心情预检通过，才能恢复自律，无弹窗或等待自动换队超时则撤退；`withdraw_stop` 每次战败撤退，连续 3 次后确认回到选关页再抛 `ScriptEnd('DefeatWithdraw=withdraw_stop')`，由运行器禁用当前任务。

@@ -157,6 +157,64 @@ class AutoSearchCombat(MapOperation, Combat, CampaignStatus):
             if self.is_combat_loading():
                 break
 
+    def _auto_search_wait_reset(self):
+        """每次等待下一场战斗时重新分配一次地图自律恢复机会。"""
+        self._auto_search_wait_timer = Timer(30)
+        self._auto_search_restart_timer = Timer(0.5)
+        self._auto_search_restart_attempted = False
+
+    def handle_auto_search_map_wait(self):
+        """自律开启后 30 秒未进入战斗时，关闭并在至少 0.5 秒后重新开启。
+
+        仅用于普通自律移动等待；退役、强化后重开自律保留原有专项流程。
+        调用方先检查加载、战斗和弹窗；这里仅操作当前画面已确认的自律开关。
+        两次点击之间持续截图，OFF 尚未出现时不盲目点击。
+
+        Returns:
+            bool: 是否操作了自律开关。
+
+        Pages:
+            in: 地图自律开关可见
+            out: 地图界面，等待下一张截图确认战斗状态
+        """
+        if self._auto_search_restart_timer.started():
+            if self._auto_search_wait_timer.reached():
+                raise GameStuckError('[自动搜索-恢复] 关闭自律后未能在 30 秒内重新开启')
+            if self._auto_search_restart_timer.reached() \
+                    and self.match_template_color(AUTO_SEARCH_MAP_OPTION_OFF,
+                                                  offset=self._auto_search_offset, threshold=10):
+                self.device.click(AUTO_SEARCH_MAP_OPTION_OFF)
+                self.interval_reset(AUTO_SEARCH_MAP_OPTION_OFF, interval=2)
+                self._auto_search_restart_timer.clear()
+                self._auto_search_wait_timer.reset()
+                if self.__dict__.get('_restart_resume_guard', False):
+                    self._restart_resume_timer.reset()
+                logger.info('[自动搜索-恢复] 已重新开启自律，继续等待战斗')
+                return True
+            return False
+
+        if self.is_auto_search_running():
+            self._auto_search_wait_timer.start()
+            if not self._auto_search_wait_timer.reached():
+                return False
+            if self._auto_search_restart_attempted:
+                raise GameStuckError('[自动搜索-恢复] 重新开启自律后 30 秒仍未进入战斗')
+            # ON/OFF 的文字相同，必须同时验证颜色，避免把关闭状态误认为开启。
+            if self.match_template_color(AUTO_SEARCH_MAP_OPTION_ON,
+                                         offset=self._auto_search_offset, threshold=10):
+                logger.warning('[自动搜索-恢复] 自律开启后 30 秒未进入战斗，关闭后重新开启')
+                self.device.click(AUTO_SEARCH_MAP_OPTION_ON)
+                self._auto_search_restart_timer.start()
+                self._auto_search_wait_timer.reset()
+                self._auto_search_restart_attempted = True
+                return True
+            return False
+
+        if self.handle_auto_search_map_option():
+            self._auto_search_wait_timer.reset()
+            return True
+        return False
+
     def auto_search_watch_fleet(self, checked=False):
         """监控舰队索引与舰船等级。
 
@@ -283,13 +341,14 @@ class AutoSearchCombat(MapOperation, Combat, CampaignStatus):
 
         Pages:
             in: 地图界面
-            out: is_combat_loading()
+            out: is_combat_loading() 或 is_combat_executing()
         """
         logger.info('自动搜索移动中')
         self.device.stuck_record_clear()
         checked_fleet = False
         checked_oil = False
         checked_coin = False
+        self._auto_search_wait_reset()
         for _ in self.loop():
 
             if self.is_auto_search_running():
@@ -297,12 +356,20 @@ class AutoSearchCombat(MapOperation, Combat, CampaignStatus):
                 if not checked_oil or not checked_coin:
                     checked_oil = self.auto_search_watch_oil(checked_oil)
                     checked_coin = self.auto_search_watch_coin(checked_coin)
+
+            # 转场画面可能仍残留地图按钮，先确认已进入加载或战斗再考虑操作开关。
+            if self.is_combat_loading():
+                break
+            if self.is_combat_executing():
+                logger.info('[自动搜索-战斗] 战斗执行中')
+                break
+            if self.is_in_auto_search_menu() or self._handle_auto_search_menu_missing():
+                raise CampaignEnd
+
             if self.handle_retirement():
                 self.map_offensive_auto_search()
                 # 地图出击在 is_combat_loading 处结束
                 break
-            if self.handle_auto_search_map_option():
-                continue
             if self.handle_combat_low_emotion():
                 self._auto_search_status_confirm = True
                 continue
@@ -312,15 +379,8 @@ class AutoSearchCombat(MapOperation, Combat, CampaignStatus):
                 continue
             if self.handle_vote_popup():
                 continue
-
-            # 结束判断
-            if self.is_combat_loading():
-                break
-            if self.is_combat_executing():
-                logger.info('[自动搜索-战斗] 战斗执行中')
-                break
-            if self.is_in_auto_search_menu() or self._handle_auto_search_menu_missing():
-                raise CampaignEnd
+            if self.handle_auto_search_map_wait():
+                continue
 
     def auto_search_combat_execute(self, emotion_reduce, fleet_index, battle=None, expected_end=None,
                                    shipwreck_reduce=None):
