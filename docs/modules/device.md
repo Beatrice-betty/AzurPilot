@@ -228,7 +228,7 @@ flowchart TD
 
 ### 重试骨架（method/retry.py）
 
-重试前及恢复动作前通过 `check_error_recovery()` 检查最新总开关与敏感保护，禁止时透传 `RecoveryStopped` 结束 worker，不继续重连。所有后端的 `@retry` 都是 `retry_backend` 的 partial：最多 `RETRY_TRIES=5` 次，退避 0/0/1/3/3 秒；每轮先执行上一轮选出的恢复动作再重试。`recover(self, error, trial)` 返回下一个恢复函数，返回 `None` 表示无法自动恢复（升级为 `RequestHumanTakeover`）。`RequestHumanTakeover` 与 `EmulatorNotRunningError` 永不重试、原样上抛——前者是人工接管信号，后者是交给调度器的统一「设备离线」信号。重试耗尽的默认异常可由 `on_exhausted` 指定，截图类方法指定为 `EmulatorNotRunningError`，触控类保持 `RequestHumanTakeover`。
+所有后端的 `@retry` 都是 `retry_backend` 的 partial：最多 `RETRY_TRIES=5` 次，退避 0/0/1/3/3 秒；每轮先执行上一轮选出的恢复动作再重试。`recover(self, error, trial)` 返回下一个恢复函数，返回 `None` 表示无法自动恢复（升级为 `RequestHumanTakeover`）。`RequestHumanTakeover` 与 `EmulatorNotRunningError` 永不重试、原样上抛——前者是人工接管信号，后者是交给调度器的统一「设备离线」信号。重试耗尽的默认异常可由 `on_exhausted` 指定，截图类方法指定为 `EmulatorNotRunningError`，触控类保持 `RequestHumanTakeover`。
 
 ### 模拟器启动（Windows）
 
@@ -303,7 +303,7 @@ flowchart TD
 | 瞬时故障 | ADB 抖动/图像截断 | 后端 retry 内恢复（重连/重启服务），对上层不可见 |
 | 传输耗尽 | 5 次重试仍失败 | 抛 `EmulatorNotRunningError` |
 | 模拟器离线 | 调度器捕获上者 | `_try_restart_emulator()`（含深度重启阶梯） |
-| 需人工接管 | 未授权/参数错误/配置缺失 | `RequestHumanTakeover`，保存现场并停止当前 worker |
+| 需人工接管 | 未授权/参数错误/配置缺失 | `RequestHumanTakeover`，调度器仍会尝试重启模拟器 |
 
 Device 构造也有自己的小型阶梯：`super().__init__` 抛 `EmulatorNotRunningError` 时，若允许自动启动则 `emulator_start(failures=trial)` 重试至多 3 轮（等待随轮次放宽），仍失败则把离线异常交给上层；`EmulatorOpBusy`（别的流程正在启停模拟器）被转译为 `EmulatorNotRunningError`，避免白跑剩余尝试。
 
@@ -335,8 +335,8 @@ Device 构造也有自己的小型阶梯：`super().__init__` 抛 `EmulatorNotRu
 | `MinitouchOccupiedError` | minitouch 单连接被占 | `restart_atx()` 踢掉旧连接 |
 | `JobTimeout` | nemu_ipc DLL 调用挂死 | WORKER_POOL 强杀线程后重试，超时逐轮放宽 |
 | `GameStuckError` / `GameTooManyClickError` | 等待超时 / 点击循环 | 由调度器 `run()` 捕获→保存错误现场→重启游戏恢复 |
-| `EmulatorNotRunningError` | 重连耗尽、冷启动失败、10061 拒连 | 调度器核实离线重启开关及连续次数，恢复预算耗尽则停止 |
-| `RequestHumanTakeover` | 授权、保活开关、网络桥接等无法自动修复 | 保存错误现场并停止当前 worker，等待人工处理 |
+| `EmulatorNotRunningError` | 重连耗尽、冷启动失败、10061 拒连 | 调度器 `_try_restart_emulator()`，永不放弃 |
+| `RequestHumanTakeover` | 授权、保活开关、网络桥接等无法自动修复 | 调度器记录后仍会尝试重启模拟器恢复 |
 | `EmulatorOpBusy` | 模拟器启停互斥锁被占 | 调用方跳过本轮，不打断进行中的操作 |
 
 恢复责任的分层边界（测试 `test_device_recovery.py` 明确固化）：设备层只做**传输级**恢复（重连 ADB、重启后端），重试耗尽统一抛 `EmulatorNotRunningError` 而不自行重启模拟器；重启模拟器/游戏是调度器的决策。这保证 `get_orientation` 等非截图调用失败时不会各自为政地重启模拟器。

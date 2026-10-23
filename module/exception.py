@@ -13,7 +13,7 @@
     - MapEnemyMoved: 敌人移动导致路径失效，需要重新规划
     - CampaignNameError: 关卡名称无法识别
 
-游戏状态错误（按异常处理与来源开关分级恢复）：
+游戏状态错误（触发模拟器重启）：
     - GameStuckError: 游戏卡死（1 分钟内无有效操作，战斗期间 5 分钟）
     - GameBugError: 游戏客户端 bug（重启通常可恢复）
     - GameTooManyClickError: 点击次数过多（15 次操作中同一按钮被点 ≥12 次）
@@ -104,7 +104,8 @@ class StorageStatisticsError(Exception):
 class ScriptError(Exception):
     """脚本逻辑错误。
 
-    由调度器保存现场并停止，需要修复原因后人工重新启动。
+    通常是开发者的代码错误，但也可能是偶发的随机问题。
+    触发模拟器重启尝试恢复。
     """
     pass
 
@@ -122,7 +123,7 @@ class GameStuckError(Exception):
     """游戏卡死。
 
     1 分钟内无有效截图操作（战斗/启动期间为 5 分钟）时触发。
-    异常处理允许时先恢复游戏；升级模拟器重启还需独立开关和连续次数。
+    通常通过重启模拟器恢复。
     """
     pass
 

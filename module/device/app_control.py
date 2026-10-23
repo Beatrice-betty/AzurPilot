@@ -10,7 +10,6 @@ import shlex
 from lxml import etree
 
 from module.base.timer import Timer
-from module.config.recovery import check_error_recovery
 from module.device.method.adb import Adb
 from module.device.method.azurpilot_android import AzurPilotAndroid
 from module.device.method.uiautomator_2 import Uiautomator2
@@ -79,24 +78,22 @@ class AppControl(AzurPilotAndroid, Adb, WSA, Uiautomator2):
             timeout (int): 单次 ADB 查询超时秒数，默认 10 秒。
 
         Returns:
-            bool: 应用在前台运行返回 True；无法确认运行返回 False，连接异常原样抛出。
+            bool: 应用在前台运行返回 True；查询失败或无法判断返回 False。
         """
         if self.config.Emulator_ControlMethod == 'azurpilot_android':
             try:
                 package = self.app_current_azurpilot_android(timeout=timeout)
             except Exception as e:
-                check_error_recovery(self.config, e)
                 logger.warning(f'[设备-应用] 前台应用检查失败（{timeout}s 超时）: {e}')
-                raise
+                return False
             logger.attr('应用包名', package)
             return package == self.package
 
         try:
             output = self.adb_shell(['dumpsys', 'window', 'windows'], timeout=timeout)
         except Exception as e:
-            check_error_recovery(self.config, e)
             logger.warning(f'[设备-应用] 前台应用检查失败（{timeout}s 超时）: {e}')
-            raise
+            return False
 
         _focusedRE = re.compile(
             r'mCurrentFocus=Window{.*\s+(?P<package>[^\s]+)/(?P<activity>[^\s]+)\}'
@@ -111,9 +108,8 @@ class AppControl(AzurPilotAndroid, Adb, WSA, Uiautomator2):
         try:
             output = self.adb_shell(['dumpsys', 'activity', 'top'], timeout=timeout)
         except Exception as e:
-            check_error_recovery(self.config, e)
             logger.warning(f'[设备-应用] 前台 Activity 检查失败（{timeout}s 超时）: {e}')
-            raise
+            return False
         _activityRE = re.compile(
             r'ACTIVITY (?P<package>[^\s]+)/(?P<activity>[^/\s]+) \w+ pid=(?P<pid>\d+)'
         )

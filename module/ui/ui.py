@@ -218,14 +218,14 @@ class UI(InfoHandler):
 
         Args:
             skip_first_screenshot (bool): 是否跳过首次截图。
-            recover_unknown (bool): 保留调用参数；未知页面统一抛出异常交给调度器。
+            recover_unknown (bool): 未知页面时是否通过登录处理器重启游戏。
 
         Returns:
             Page: 当前页面对象。
 
         Raises:
             GameNotRunningError: 游戏进程未运行时抛出。
-            GamePageUnknownError: 无法识别页面时抛出，由调度器决定是否恢复。
+            GamePageUnknownError: 未知页面且禁止自动重启时抛出。
         """
         logger.info("UI 获取当前页面")
 
@@ -302,8 +302,16 @@ class UI(InfoHandler):
                         "要么找个带『一键回港』按钮的界面再求我。你要是连这都找不到，建议直接把号删了止损。")
         logger.critical("[UI] 看懂了吗？废材？不要再浪费我的算力了，赶紧去改！")
         
-        # 未知页面交回统一恢复入口，避免内部重启绕过设置或递归重试。
-        raise GamePageUnknownError('[UI] 无法识别当前页面')
+        # 未知页面自动重启
+        logger.warning("[UI] 检测到未知页面，尝试重启游戏")
+        from module.handler.login import LoginHandler
+        login_handler = LoginHandler(config=self.config, device=self.device)
+        login_handler.device.app_stop()
+        while login_handler.device.app_is_running():
+            self.device.sleep(0.5)
+        login_handler.device.app_start()
+        login_handler.handle_app_login()
+        return self.ui_get_current_page(skip_first_screenshot=True)
 
     def ui_goto(self, destination, get_ship=True, offset=(30, 30), skip_first_screenshot=True,
                 recover_unknown=True):

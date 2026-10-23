@@ -96,10 +96,7 @@ class AutoSearchCombat(MapOperation, Combat, CampaignStatus):
                 return False
             try:
                 self.emotion.check_fleet(self.fleet_show_index, after_restart=True)
-            except (ScriptEnd, RequestHumanTakeover) as error:
-                if isinstance(error, RequestHumanTakeover):
-                    from module.config.recovery import check_error_recovery
-                    check_error_recovery(self.config, error)
+            except (ScriptEnd, RequestHumanTakeover):
                 logger.warning('[战役续接] 舰队心情检查未通过，先撤退再交回任务处理')
                 try:
                     self.withdraw()
@@ -583,9 +580,6 @@ class AutoSearchCombat(MapOperation, Combat, CampaignStatus):
                             try:
                                 self.emotion.check_fleet(target_index)
                             except (RequestHumanTakeover, ScriptEnd) as exc:
-                                if isinstance(exc, RequestHumanTakeover):
-                                    from module.config.recovery import check_error_recovery
-                                    check_error_recovery(self.config, exc)
                                 logger.warning('[战败恢复] 接替舰队心情检查未通过，先撤退再上报')
                                 resume_error = exc
                                 handoff_failed = True

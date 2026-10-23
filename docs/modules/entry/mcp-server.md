@@ -383,5 +383,3 @@ MCP 客户端配置（密码可放查询参数，也可以改用请求头）：
 - [调度器（alas.py）](alas.md)——`start_instance`/`trigger_task` 最终作用于的调度循环与配置热重载
 - [配置系统](../config.md)——`ConfigService` 校验与事务写盘背后的配置定义体系
 - [设备层](../device.md)——设备工具子进程内实际执行截图与模拟器控制的层
-
-设备工具的显式 `restart_emulator` 使用 `Platform(config, connect=False)`，不先建立 ADB、截图或初始化游戏；与异常自动恢复开关相互独立。平台启停未明确返回成功时，工具必须报告失败，不能返回成功文本。
