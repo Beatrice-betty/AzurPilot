@@ -214,6 +214,9 @@ class OpsiFleetAutoChange(CoinTaskMixin, DockMixin, OSMap):
         Args:
             error_msg (str): 错误信息。
         """
+        from module.config.recovery import check_error_recovery
+        check_error_recovery(self.config, RuntimeError(error_msg))
+
         logger.error(f"[大世界-自动配队] 自动配队发生错误: {error_msg}")
 
         self.config.OpsiFleetAutoChange_Enable = False
@@ -227,8 +230,7 @@ class OpsiFleetAutoChange(CoinTaskMixin, DockMixin, OSMap):
         except Exception as e:
             logger.warning(f"[大世界-自动配队] 推送通知失败: {e}")
 
-        logger.info("[大世界-自动配队] 尝试重启游戏以恢复状态")
-        self.config.task_call('Restart')
+        # 调用方会继续抛出原异常，由调度器统一决定恢复或停机。
 
     def _check_cooldown(self):
         """检查自动配队冷却时间是否已到期。

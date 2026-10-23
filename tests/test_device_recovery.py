@@ -81,7 +81,7 @@ class TestDeviceInitializationRecovery(unittest.TestCase):
     def setUp(self):
         self.enterContext(patch('module.device.device.logger'))
         self.device = Device.__new__(Device)
-        self.device.config = Mock(Emulator_Serial='127.0.0.1:5555')
+        self.device.config = Mock(Emulator_Serial='127.0.0.1:5555', Error_AdbOfflineRestart=True, Error_AdbOfflineThreshold=1)
 
     def test_standalone_initialization_keeps_bounded_start_attempts(self):
         offline = EmulatorNotRunningError('设备仍离线')
@@ -110,6 +110,21 @@ class TestDeviceInitializationRecovery(unittest.TestCase):
         self.assertIs(caught.exception, offline)
         connect.assert_called_once()
         instance.assert_not_called()
+        start.assert_not_called()
+
+    def test_threshold_above_connection_budget_cannot_report_initialization_success(self):
+        self.device.config.Error_AdbOfflineThreshold = 5
+        offline = EmulatorNotRunningError('设备始终离线，尚未达到自动启动阈值')
+        with (
+            patch('module.device.connection.Connection.__init__', side_effect=offline) as connect,
+            patch.object(Device, 'emulator_start') as start,
+            patch.object(Device, '_set_screenshot_interval_readonly'),
+        ):
+            with self.assertRaises(EmulatorNotRunningError) as caught:
+                Device.__init__(self.device, self.device.config, initialize_runtime=False)
+
+        self.assertIs(caught.exception, offline)
+        self.assertEqual(connect.call_count, 4)
         start.assert_not_called()
 
     def test_missing_managed_instance_still_requests_takeover_for_auto_start(self):
@@ -178,7 +193,7 @@ class TestSchedulerDeviceBoundary(unittest.TestCase):
         with patch('module.device.device.Device', side_effect=EmulatorNotRunningError('设备离线')):
             self.assertEqual(self.script.run('commission'), 'recoverable')
 
-        self.script._try_restart_emulator.assert_called_once_with()
+        self.script._try_restart_emulator.assert_called_once_with(reason='adb_offline')
         self.script.config.task_call.assert_called_once_with('Restart')
 
     def test_initialization_offline_preserves_strict_sensitive_stop(self):

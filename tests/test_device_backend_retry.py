@@ -261,6 +261,7 @@ class TestActualBackendMethods(unittest.TestCase):
         ):
             with self.subTest(backend=backend_type.__name__):
                 device = backend_type.__new__(backend_type)
+                device.config = Mock(Error_HandleError=True, Error_StrictRestart=False)
                 operation = Mock(side_effect=OSError('触控服务初始化失败'))
                 setattr(device, init_name, operation)
                 with self.assertRaises(EmulatorNotRunningError):

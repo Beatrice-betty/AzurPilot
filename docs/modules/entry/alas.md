@@ -4,12 +4,12 @@
 
 ## 1. 模块概述
 
-`alas.py` 是 AzurPilot 的运行时心脏。WebUI 只负责展示与配置编辑，真正的游戏操作由本模块驱动的 worker 进程完成：它不断循环「选出下一个到期任务 → 绑定配置 → 执行 → 按结果安排下次运行」，并在任何失败（游戏卡死、模拟器掉线、代码异常、服务器维护）后自动恢复，而不是退出。
+`alas.py` 是 AzurPilot 的运行时心脏。WebUI 只负责展示与配置编辑，真正的游戏操作由本模块驱动的 worker 进程完成：它不断循环「选出下一个到期任务 → 绑定配置 → 执行 → 按结果安排下次运行」，并根据最新设置及异常分类决定恢复或停止，保留人工处理边界。
 
 它存在的核心原因有三个：
 
 - **把「何时做什么」从业务代码中剥离**。各游戏功能模块（科研、委托、大世界……）只实现自己的 `run()`，完全不知道彼此存在；排队、优先级、互斥、恢复全部由调度器统一裁决。
-- **把失败当作常态而非异常**。模拟器可能崩、网络可能断、游戏客户端可能有 bug，调度器的反应永远是「分级恢复 + 继续跑」，只有两类情况才会终止：代码 bug 连续复现（`ScriptError` 连续 3 次）和敏感任务失败（避免状态或数据损坏）。
+- **按授权分级恢复**。游戏退出可恢复客户端，模拟器升级重启需要独立开关与次数；关闭异常处理、敏感任务、脚本错误或人工接管时停止当前 worker。
 - **集中管理模拟器生命周期**。设备的 `Device` 构造以 `auto_start_emulator=False` 创建，模拟器的启动/重启/关闭决策全部上收到调度器，避免设备层与恢复层互相嵌套启动重试。
 
 一个 AzurPilot 实例（一份用户配置）对应一个调度器进程。多个实例并行时，每个进程有独立的 `AzurLaneAutoScript` 与状态。
@@ -104,7 +104,7 @@ AUTO-MAS 一类外部调度器把 AzurPilot 当黑箱驱动，只用以下四个
 | `is_first_task` | bool | 调度器启动后的首个 `Restart` 直接跳过——进程刚启动时游戏通常已就绪，无需重启 |
 | `failure_record` | dict[str, int] | 每任务连续失败计数；仅存内存，进程重启即清零 |
 | `consecutive_game_stuck` / `consecutive_adb_offline` / `consecutive_unexpected_error` | int | 各类连续故障计数，驱动「重启游戏 → 重启模拟器」的升级 |
-| `script_error_count` | int | `ScriptError` 连续计数，达到 3 次退出（代码 bug 重试无意义） |
+| `_restart_recovery_failures` | int | Restart 连续恢复失败次数，达到运行参数 `Reboot.Tries` 后停止 |
 | `last_emulator_restart_time` | float | 上次计划重启模拟器的 `time.monotonic()`，用于定时重启间隔 |
 | `_watchdog_*` | 线程与标志 | 运行监护线程及其「激活」标志，仅任务执行期间激活 |
 | `_warmup_measured_cold_seconds` 等 | float/None | 预热实测耗时，用于动态计算下次提前量 |
@@ -124,35 +124,18 @@ AUTO-MAS 一类外部调度器把 AzurPilot 当黑箱驱动，只用以下四个
 
 ```mermaid
 flowchart TD
-    A[启动 loop] --> B[启动日报线程与运行监护<br>OOBE 检查 / 每日备份 / 调试服务]
-    B --> C{stop_event 置位?}
-    C -- 是 --> Z[退出循环, 原因: 更新]
-    C -- 否 --> D[checker.wait_until_available<br>服务器维护则阻塞等待]
-    D --> E{服务器刚恢复?}
-    E -- 是 --> E1[失效 config 缓存<br>task_call Restart]
-    E -- 否 --> F
-    E1 --> F{到达计划重启间隔?}
-    F -- 是且重启成功 --> F1[task_call Restart<br>进入下一轮]
-    F -- 否 --> G
-    F1 --> G[get_next_task 选任务<br>含空闲等待与预热]
-    G --> H[初始化 device<br>跳过启动后的首个 Restart]
-    H --> I[激活运行监护<br>run 任务]
-    I --> J{run 返回值}
-    J -- True --> K[重置该任务失败计数与全局计数]
-    J -- recoverable --> L[失败计数不变<br>刷新配置后继续]
-    J -- False --> M{Error.HandleError?}
-    M -- 是 --> L
-    M -- 否 --> Z2[返回 False, 调度器结束]
-    K --> C
-    L --> C
-    N[失败计数与敏感判断] --> O{敏感任务失败?}
-    O -- 是 --> Z3[上报错误日志并 exit 1]
-    O -- 否 --> P{连续失败达阈值?}
-    P -- 是 --> P1[强制重启模拟器<br>注入 Restart, 计数清零]
-    P -- 否 --> C
-    P1 --> C
-    C -. 任意未捕获异常 .-> Q[上报 + 重启模拟器<br>注入 Restart<br>指数退避 20s 起步, 上限 300s]
-    Q --> C
+    A[启动设置观察与调度] --> B[检查最新配置与正常定时重启]
+    B --> C[选择并绑定任务]
+    C --> D[执行任务]
+    D --> E{结果}
+    E -- 成功 --> B
+    E -- 故障 --> F{最新恢复授权与异常分类}
+    F -- 禁止恢复或需要人工处理 --> G[保存现场并退出当前 worker]
+    F -- 客户端故障 --> H[有限安排游戏 Restart]
+    F -- 离线或卡死且独立开关和次数允许 --> I[重启模拟器后安排 Restart]
+    H --> J[核对任务恢复次数和冷却]
+    I --> J
+    J --> B
 ```
 
 每轮的固定动作：
@@ -192,15 +175,11 @@ flowchart TD
 - `'recoverable'`：失败但已就地安排恢复（几乎总是 `task_call('Restart')`），不计入任务失败次数。
 - `False`：不可恢复失败，计入失败计数。
 
-每个异常分支的第一动作都是 `_check_sensitive_exit()`：严格重启开启（`Error_StrictRestart`）且该任务配置了 `Scheduler.Sensitive` 时，立即保存现场、推送通知并 `exit(1)`——敏感任务（默认 `OpsiCrossMonth`、`OpsiObscure`、`OpsiAbyssal`）出错不做任何自动重启，避免在错误状态上继续写入。是否敏感不是写死的常量，而是运行时读 `{Task}.Scheduler.Sensitive` 配置动态判断，用户可自行调整。
-
-异常分级（详见第 11 节）的本质是一根「恢复力度」的标尺：重启游戏最轻（秒级），重启模拟器最重（分钟级）。多数异常走轻端；`GameStuckError` 与未预期异常带独立连续计数，连续超过 `Error_GameStuckThreshold` 才升级到模拟器重启。恢复动作完成后统一返回 `'recoverable'`。
-
-推送策略与恢复力度解耦：可恢复分支统一走 `_notify_recoverable()`（OnePush + WebUI 双通道），开启 `Error_LowPushMode` 时整体跳过、只在日志留痕，避免无人值守时被「游戏未运行」「模拟器离线」这类会自动重试恢复的错误刷屏；需要人工介入或不依赖自动恢复的路径（`_check_sensitive_exit`、`ScriptError` 满 3 次退出、调度循环判定任务连续失败）直接调用 `handle_notify`，不受该模式影响。
+任务与主循环的异常都交给 `_handle_task_error()`。恢复前由 `module/config/recovery.py` 读取最新配置，不重绑正在执行的任务；不允许恢复时保存已有现场并退出当前 worker。已安排的故障 Restart 保留来源，执行前再次检查；正常每日或手动 Restart 保留主动语义。
 
 ### 全局异常兜底
 
-`loop()` 的最外层 `except` 是最后一道防线：上报错误日志（仅首次）、可选触发 LLM 错误分析、尽力重启模拟器、注入 `Restart`，然后按 `min(300, 20 × 2^(连续失败-1))` 秒指数退避后重试。调度器**永不因连续失败而退出**，退出只保留给代码 bug 与敏感任务。
+初始化、收尾与任务内部使用同一分类。已知可恢复故障可以带退避继续，脚本错误和人工接管停止；尚未选出任务的初始化恢复也受运行参数 `Reboot.Tries` 限制。完整矩阵与配置热更新见第 11 节。
 
 ## 7. 调用关系
 
@@ -287,11 +266,11 @@ stateDiagram-v2
 | `<Task>.Scheduler.ServerUpdate` | time | 00:00 | 服务器刷新点，每日重启的排期基准 |
 | `<Task>.Scheduler.Sensitive` | checkbox | false | 敏感任务标记；`OpsiCrossMonth`/`OpsiObscure`/`OpsiAbyssal` 默认 true |
 | `<Task>.Scheduler.PushNotification` | checkbox | false | 该任务每次结束后推送结果 |
-| `Error.HandleError` | bool | true | 关闭后非可恢复失败将终止调度而非继续 |
+| `Error.HandleError` | bool | true | 关闭后任何需要恢复的运行错误均停止当前 worker，禁止恢复或故障重调度 |
 | `Error.LowPushMode` | checkbox | false | 低推送量模式；可恢复错误（游戏未运行、模拟器离线、卡死等）只记日志不推送 |
 | `Error.StrictRestart` | bool | false | 严格重启总开关（配合 `Sensitive` 生效） |
 | `Error.GameStuckRestart` / `GameStuckThreshold` | bool/int | false / 3 | 卡死是否允许升级到模拟器重启及阈值 |
-| `Error.AdbOfflineThreshold` | int | 3 | 模拟器重启超过该次数后拉长等待间隔（不放弃） |
+| `Error.AdbOfflineRestart` / `AdbOfflineThreshold` | bool/int | false / 3 | 允许且连续离线检测达到次数后才重启模拟器，不按秒计时 |
 | `Error.WatchdogEnable` / `WatchdogTaskEnable` / `WatchdogTaskTimeout` | bool/bool/分钟 | false/false/120 | 运行监护总开关、任务超时子开关与阈值；超时为 0 表示禁用 |
 | `Error.LlmAnalysis` | bool | true | 异常时调用 LLM 分析 |
 | `Optimization.WhenTaskQueueEmpty` | option | goto_main | 空闲行为：stay_there / goto_main / close_game |
@@ -310,38 +289,28 @@ stateDiagram-v2
 
 ## 11. 异常与错误处理
 
-`run()` 内按异常类型分级；所有分支先过敏感任务检查，再执行恢复动作：
+统一决策及停机信号见 `module/config/recovery.py` 和 [异常恢复授权说明](error-recovery.md)。
 
-| 异常 | 原因 | 处理 | 返回 |
-| --- | --- | --- | --- |
-| `TaskEnd` | 任务主动结束（如情绪不足延迟） | 视为正常结束 | `True` |
-| `GameNotRunningError` | 游戏进程不存在 | 注入 `Restart` | `'recoverable'` |
-| `GameStuckError` / `GameTooManyClickError` | 画面无推进 / 重复连点 | 连续计数达 `GameStuckThreshold` 则重启模拟器，否则 10 秒后重启游戏 | `'recoverable'` |
-| `GameBugError` | 客户端 bug | 重启游戏 | `'recoverable'` |
-| `GamePageUnknownError` | 页面无法识别 | 先查服务器：可用则重启游戏；维护中则阻塞等待，等完返回 | `'recoverable'` / `False` |
-| `ScriptError` | 代码 bug | 连续 3 次内注入 `Restart` 重试；达到 3 次退出 | `'recoverable'` / `exit(1)` |
-| `EmulatorNotRunningError` | 模拟器离线 | `_try_restart_emulator()`（永不放弃，超阈值只加长间隔）+ `Restart` | `'recoverable'` |
-| `RequestHumanTakeover` | 严重到无法安全自动判断 | 也先尝试重启模拟器自动恢复，不再直接终止 | `'recoverable'` |
-| `MindCalculatorScanError` | 船坞扫描识别或三排定位无法确认 | 记录具体原因、异常和错误截图，保留旧清单并结束当前工具任务；不重启模拟器 | `False` |
-| `AutoSearchSetError` | 自动搜索设置失败 | 重启游戏 | `'recoverable'` |
-| 其他 `Exception` | 未预期异常 | 连续计数达 `GameStuckThreshold` 升级为重启模拟器，否则仅重启游戏 | `'recoverable'` |
-| `EmulatorOpBusy` | 已有模拟器启停操作在跑 | 放弃本轮恢复，后台操作结束后下一轮调度接手（非错误，是并发保护） | `False`（重启函数内消化） |
+| 情况 | 行为 |
+| --- | --- |
+| 总异常处理关闭 | 需要恢复的故障立即结束当前自动化 worker；保存已有日志和缓存截图，不重新截图、撤退、重连或排队故障任务 |
+| 游戏退出、客户端 bug、未知页面、自动搜索设置失败 | 授权后安排游戏 Restart；未知页面先核实服务器维护状态 |
+| 游戏卡死或重复连点 | 授权后重启游戏；只有卡死重启开关开启且次数达到阈值才升级模拟器 |
+| ADB/模拟器离线 | 授权后有限重连和游戏恢复；离线重启开关及连续次数均满足才重启模拟器 |
+| 游戏启停操作超时 | 作为游戏卡死处理；启动次数和观察时间耗尽后请求人工处理；查询应用时的断连原样抛出 |
+| 人工接管、脚本错误、未分类异常 | 保存现场并退出，不能用重启掩盖原因 |
+| 仓库完整性失败 | 保留旧快照和任务自身失败排期，不追加通用重启 |
+| 船坞扫描识别失败 | 保留旧清单并结束工具，不自动重启 |
+| 手动、主动任务及正常等待后的启动 | 保留正常启停；发生错误后的重试重新核对恢复授权 |
+| 独立定时模拟器重启 | 由模拟器管理自身开关和间隔授权；强制中断避让敏感任务，后续断连保留主动来源 |
 
-调度循环兜底（`loop()` 最外层 `except`）：保存并上报错误日志、重启模拟器、注入 `Restart`、按 20 秒起步、300 秒封顶的指数退避后重试，永不退出。
+任务超时监护同时检查监护总开关、子开关和有效分钟阈值。中断模拟器前还要通过异常处理、敏感保护、卡死重启及次数条件；否则停止 worker 并保留游戏现场。后台线程直接退出当前进程，避免只退出监护线程而让故障自动化继续。它不枚举或终止 WebUI、其他实例或模拟器进程。
 
-终止路径只有四条：`ScriptError` 连续 3 次；敏感任务失败（`_check_sensitive_exit` 或失败计数命中）；`stop_event` 更新信号；配置/设备初始化即失败。其余一切故障都应自动恢复。
+`Error.TaskRestartLimit` 仍累计业务任务未成功的恢复轮次，达到后延至服务器下一次零点，其他任务继续。0 表示用户明确允许不限轮次；运行中改为 0 会解除本进程旧冷却，仅回收仍启用且排期仍等于原故障截止时间的排期，保留用户后改时间和禁用状态。比较和写入使用事务锁。Restart 不套用业务任务的次日冷却，其连续恢复失败受运行参数 `Reboot.Tries` 限制；未选出任务的初始化恢复也有预算。
 
-**为什么恢复性失败不计入失败次数**：失败计数驱动的是「强制重启模拟器」这类高代价动作。可恢复错误已经各自触发过针对性恢复（重启游戏或模拟器），不再通过 `failure_record` 重复升级。
+普通业务成功重置连续故障；Restart 成功只代表恢复步骤完成。模拟器深度重启使用实际启停失败次数，与离线检测次数分开。模拟器启停显式返回 False 时不能记录成功。配置改动在下一相应检查点生效，已经发出的系统命令不能撤销。
 
-**同一任务连续重启上限**：`Error.TaskRestartLimit` 默认 3，0 表示关闭限制。独立的 `task_restart_record` 累计同一任务未成功的恢复轮次，包含 `'recoverable'`、`False` 和选出任务后的全局异常；该任务成功才清零，其他任务成功或 `Restart` 成功不会清掉原任务计数。达到上限后将故障任务的 `Scheduler.NextRun` 写为服务器下一次零点，发送 `Error.OnePushConfig` 错误推送和 WebUI 提醒，低推送量模式也保留此提醒。其他任务继续调度，本轮冷却也适用于自定义调度卡片和强制任务调用。
-
-`Restart` 是系统恢复入口，豁免该上限，不累计恢复次数，也不受旧冷却记录阻拦。重启失败仍走原有客户端重试或模拟器恢复分支，避免游戏未运行时整个队列依次失败。普通任务在选出后的全局异常中达到上限时，也先尝试重启模拟器并安排 `Restart`，再延后故障任务；正常每日重启排期和随机延后设置保持不变。
-
-敏感任务与 `ScriptError` 的退出规则优先执行。选出任务后的全局异常（包括初始化和收尾阶段）在执行任何恢复或延后前，同样通过 `_check_sensitive_exit()` 检查严格重启模式与该任务的 `Scheduler.Sensitive`，防止绕过敏感任务保护。
-
-恢复次数和强制调用的冷却保护只存于调度器进程内；普通调度的延后时间写入配置，配置重新加载后仍有效。
-
-**为什么主循环捕获一切异常后继续跑**：目标是无人值守 7×24 运行，任何一次未预期异常终止进程，损失的是整个夜间挂机时段；而「重启模拟器 + 注入 Restart」对绝大多数故障都是有效复位。指数退避保证重试有节制，避免在硬故障上打转刷日志。
+停止时不等待 LLM 分析或清理旧错误档案；现场副本遵守 `Error.SaveError`，普通日志和游戏现场保留。真实游戏登录、平台重启和外部日报需单独实机验证，不能由 Mock 通过推断。
 
 ## 12. 并发与线程模型
 
@@ -350,17 +319,17 @@ stateDiagram-v2
 | 线程 | 创建者 | 生命周期 | 职责 |
 | --- | --- | --- | --- |
 | 主线程 | ProcessManager | 进程全程 | `loop()` 调度与任务执行 |
-| 运行监护 `alas-watchdog`（daemon） | `_start_watchdog()`，任一子功能开启才创建 | 随进程退出 | 每 30 秒检查任务是否超时、是否到达强制定时重启条件 |
+| 运行监护 `alas-watchdog`（daemon） | `_start_watchdog()`，始终保留轻量配置观察 | 随进程退出 | 每 30 秒检查任务是否超时、是否到达强制定时重启条件 |
 | 日报 `daily-summary-scheduler-<config>`（daemon） | `_start_daily_summary_scheduler()`，仅日报开启时创建 | 随进程退出或功能关闭 | 每秒检查是否到达日报触发窗口 |
 | 模拟器启停 worker（daemon，瞬时） | `_emulator_op_with_timeout()` | 操作结束或被超时放弃 | 真正执行 stop/start，超时放弃后仍持有平台启停锁直到完成 |
 
 关键约定：
 
 - **运行监护激活窗口**。`_watchdog_active` 仅在 `run()` 前后置位/复位，空闲等待与退避 `sleep` 期间自动暂停，避免把正常的长等待误判为卡死。
-- **运行监护为什么杀模拟器而不是杀任务**：任务主线程可能阻塞在 uiohook 级的底层 I/O（uiautomator2 HTTP、ADB shell）中，Python 层无法安全中断线程；杀死模拟器进程会让主线程的下一次 I/O 调用失败并抛异常，从而自然汇入统一的异常恢复流程。这比从外部强杀线程安全得多。
+- **运行监护如何中断**：Python 不能安全中断阻塞中的主线程；授权与阈值满足时通过停止模拟器打断 I/O，否则结束当前 worker 保留游戏现场。不能仅改任务排期并假装调用栈已退出。
 - **模拟器启停的并发保护**：`_emulator_op_with_timeout` 用独立线程执行操作并设硬超时（600 秒，覆盖模拟器完整冷启动预算）；超时放弃的线程仍在真实操作模拟器并持有平台层启停互斥锁，后续任何启停请求都会收到 `EmulatorOpBusy` 而被跳过，防止「一个线程正在启动、另一个随即关闭」的踩踏。
 - **跨进程停止信号**：WebUI 生命周期通过 `State.manager.Event()` 创建事件代理并交给 `ProcessManager`，worker 将其挂到 `AzurLaneConfig.stop_event` 与 `AzurLaneAutoScript.stop_event`。主循环和 `wait_until()` 轮询该代理，在检查点响应停止请求；普通 `threading.Event` 不能替代这条跨进程信号链。运行监护自身的 `_watchdog_stop` 才是进程内线程事件。
-- **线程间不共享 config 对象**：日报线程刻意不访问 `self.config`（任务执行期间它绑定着当前任务参数，跨线程重载会破坏一致性），而是直接读配置文件并按 mtime 缓存只读快照。
+- **后台不重载绑定配置**：日报与监护读取专用文件快照，刻意不懒加载 `self.config`（任务执行期间它绑定着当前任务参数，跨线程重载会破坏一致性），而是直接读配置文件并按 mtime 缓存只读快照。
 
 ## 13. 缓存与持久化
 
@@ -403,9 +372,9 @@ def my_feature(self):
 
 ## 16. 修改注意事项
 
-- **`run()` 的每个异常分支都必须先调用 `_check_sensitive_exit()`**。新增异常处理时漏掉它，敏感任务就会在应当停机时被自动重启，这是保护用户数据的关键闸门。
+- **异常恢复先检查最新授权**：复用 `check_error_recovery()` 和 `_handle_task_error()`，不得绕过总开关、敏感保护及来源专属开关。
 - **不要恢复 `RESTART_SENSITIVE_TASKS` 常量**。敏感任务已是动态配置（`{Task}.Scheduler.Sensitive`），静态列表无法表达用户自定义；该常量已从代码删除。
-- **不要让 `loop()` 在任何新分支中主动退出**。「永不主动退出」是 7×24 运行的根基；新故障一律转为 `'recoverable'` 或带退避的重试。
+- **不能无限自动恢复**：已知故障按配置恢复；禁止恢复、脚本错误、人工接管和恢复预算耗尽时必须退出。
 - **删除 `config` 缓存的时机有讲究**：成功后删除是为了让任务期间用户的新修改生效；模拟器重启后删除 `device` 缓存是为了强制重建连接。新增恢复路径时想清楚哪些缓存已经失效。
 - **模拟器启停必须经 `_emulator_op_with_timeout` 包装**，且遇到 `EmulatorOpBusy` 只能放弃本轮。绕过它直接调用平台启停会打破互斥锁保护，复现「模拟器永远起不来」的历史故障。
 - **运行监护的时间窗语义**：`_watchdog_active` 在任务执行前置位、`finally` 复位，并覆盖退避等待。在调度器里新增长时间非任务阻塞（如新的等待循环）时，确认它不在运行监护激活窗口内，或已有对应的豁免。
@@ -414,10 +383,10 @@ def my_feature(self):
 
 ## 17. 已知限制
 
-- `run()` 与 `loop()` 都是数百行的长方法，异常矩阵以内联分支表达，新增异常类型时容易遗漏对称的通知与计数处理。
+- 新增业务内部恢复时仍需显式调用统一授权；不能用 `except BaseException` 吞掉停机信号。
 - 返回值 `True / False / 'recoverable'` 是弱类型协议，调用方靠字符串字面量判断，重构时需全局搜索。
 - 每任务失败计数只存内存，调度器重启后清零；对「连续失败即停」的敏感任务意味着重启本身会重置保护。
-- `loop()` 顶部关于运行监护「监测日志心跳」的注释与实际实现有出入：运行监护当前实现的是两项基于时间的检查（任务超时、强制定时重启），并无日志心跳检测；长时间无日志导致的卡死实际由设备层的 `GameStuckError` 机制兜底。阅读时以 `_watchdog_loop()` 为准。
+- 运行监护按任务时间和独立定时配置检查，不以日志是否刷新推断卡死。恢复授权检查点可以中止当前 worker，但已经发出的外部启停命令不能撤销。
 - 空闲「关闭模拟器」的省资源分支依赖本地模拟器实例，无线 ADB / SSH 远程设备会跳过该优化。
 - `emulator_manager()` 任务方法内联了完整的 SSH 远程执行逻辑（含临时密钥文件处理），是任务方法中唯一不遵循「委托业务模块」统一形态的特例。
 
@@ -439,14 +408,14 @@ get_next() 选中 MyFeature（Enable=true，NextRun 已过期）
   → 模块内部用 self.config.task_delay(success=True) 把 NextRun 推到下次
   → run 返回 True → 失败计数清零 → del config 缓存 → 下一轮
 若模块内抛 GameStuckError：
-  → save_error_log() → 计数 → 10 秒后重启游戏 → 返回 'recoverable' → 调度继续
+  → 检查最新授权 → save_error_log() → 按次数决定游戏或模拟器恢复 → 返回 'recoverable' → 调度继续
 ```
 
 ## 19. 调试方法
 
 - **日志文件**：`loop()` 启动即按实例名设置文件日志；任务边界用 `logger.hr(task)` 分隔，全文检索 `[AzurPilot]` 可看到调度决策链（等待、注入 Restart、重启模拟器、运行监护触发）。
 - **错误现场**：`./log/error/<config_name>/<时间戳>/` 内含最近截图与裁剪后的 `log.txt`，已做敏感信息遮罩；保留天数由 `Error_SaveErrorRetentionDays` 控制（0 = 不清理），过期现场按 `Error_SaveErrorBackUpMethod` 删除、拷贝备份或压缩备份到 `log/error/<实例名>/bak/`。
-- **常见问题排查顺序**：模拟器反复离线先看 `连续次数 X/阈值` 与 `_try_restart_emulator` 的退避日志；任务反复失败看 `failure_record` 相关的「连续失败 N 次」日志；任务卡住但日志还在动，怀疑逻辑死循环，开 `Error.WatchdogEnable` + `WatchdogTaskEnable` 验证；服务器相关看 `[服务器检查]` 前缀日志。
+- **常见问题排查顺序**：模拟器反复离线先看 `连续次数 X/阈值` 与 `_try_restart_emulator` 的来源与阈值日志；任务反复失败看 `failure_record` 相关的「连续失败 N 次」日志；任务卡住但日志还在动，怀疑逻辑死循环，开 `Error.WatchdogEnable` + `WatchdogTaskEnable` 验证；服务器相关看 `[服务器检查]` 前缀日志。
 - **WebUI 侧**：worker 通过日志队列与 `set_task()` 向父进程发布实时日志与当前任务名，前端「日志」页即来源于此。
 - **本地调试服务**：环境变量 `ALAS_DEBUG_SERVER=1` 时启动仅监听本机的调试服务，用于向统计库注入测试数据，默认关闭。
 

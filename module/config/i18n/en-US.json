@@ -755,8 +755,8 @@
       "help": ""
     },
     "HandleError": {
-      "name": "Enable exception handling",
-      "help": "Handle some exceptions and retreat when an error occurs."
+      "name": "Enable error recovery",
+      "help": "When disabled, an error requiring recovery stops only this automation worker and preserves the scene for manual handling. Manual actions, normal task actions and independently scheduled restarts remain available."
     },
     "SaveError": {
       "name": "When an error occurs, save the log and screenshots",
@@ -808,36 +808,36 @@
       "help": "After the game freezes (triggers GameStuckError) for the specified number of times, try restarting the emulator. It may help solve problems such as emulator freeze or memory overflow."
     },
     "GameStuckThreshold": {
-      "name": "Restart when the game is stuck for X seconds",
-      "help": "How many consecutive times it is stuck before triggering a restart."
+      "name": "Consecutive game failures before emulator restart",
+      "help": "Counts consecutive failures, not seconds. A successful business task resets the count."
     },
     "AdbOfflineRestart": {
       "name": "Restart the emulator when the device is not detected",
       "help": "After the device cannot be detected continuously (ADB is offline or the connection fails) for the specified number of times, try to restart the emulator."
     },
     "AdbOfflineThreshold": {
-      "name": "Restart when the device is unreachable for X seconds",
-      "help": "The number of times the device cannot be detected in a row triggers a restart."
+      "name": "Consecutive offline detections before emulator restart",
+      "help": "The offline restart switch must be enabled and this detection count reached before restarting the emulator. This is not a duration."
     },
     "WatchdogEnable": {
       "name": "Watchdog master switch",
-      "help": "What's a watchdog? It's a bodyguard running in the background. Turn it on to enable the checks below; turn it off and nothing below matters. Default off."
+      "help": "Task timeout monitoring requires both master and task switches. Forced scheduled restarts use their independent emulator management settings."
     },
     "WatchdogTaskEnable": {
       "name": "Auto-restart if task runs too long",
       "help": "When enabled, if a task runs too long (e.g. stuck on an unskippable story, pathfinding loop), the emulator is force-restarted to break out of it.\nRequires the master switch above to be on. Default off."
     },
     "WatchdogTaskTimeout": {
-      "name": "How long before a task is considered stuck (min)",
-      "help": "How many minutes a task can run before it's considered stuck. If exceeded, the emulator is force-restarted.\n0 = never trigger; 99999 = basically never.\nDefault 120 min (2 hours)."
+      "name": "Task timeout (minutes)",
+      "help": "Timeout recovery obeys error handling, game stuck restart permission and its failure threshold. If emulator interruption is not allowed, stop only the automation worker and preserve the game scene. 0 disables timeout monitoring."
     },
     "RestartOperationTimeoutEnable": {
       "name": "Game restart timeout protection",
       "help": "When enabled, if a step during game restart (stopping/starting the game) gets stuck for longer than the timeout below, the emulator is considered dead and gets restarted.\nWhen disabled, this check is skipped.\nDefault off."
     },
     "RestartOperationTimeout": {
-      "name": "How long before game restart is considered stuck (sec)",
-      "help": "During game restart, if stopping or starting the game is stuck for longer than this many seconds, the emulator is considered dead and gets restarted.\nRequires 'Game restart timeout protection' above to be on.\nDefault 120 sec."
+      "name": "Game restart operation timeout (seconds)",
+      "help": "A timed out app stop/start is treated as a game stuck error. Emulator restart still requires error handling, game stuck restart permission and its failure threshold."
     },
     "LlmAnalysis": {
       "name": "Enable LLM error analysis",

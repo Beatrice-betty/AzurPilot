@@ -4,7 +4,7 @@
 SP 关卡通常需要完成所有前置关卡后才可解锁，难度较高但奖励丰厚。
 
 流程简单：检查 sp.py 地图文件是否存在 → 执行 1 次 → 延迟到次日。
-如果活动没有 SP 关卡或已执行过，自动延迟到次日服务器刷新。
+正常完成后延迟到次日服务器刷新；无法确认完成的异常交回统一处理。
 
 配置路径: Campaign.Name (战役名称)
 """
@@ -20,7 +20,7 @@ from module.logger import logger
 class CampaignSP(EventBase):
     """活动 SP 关卡的执行器。
 
-    执行单个 SP 关卡（每日限定 1 次），执行完毕或无法进入时延迟到次日服务器刷新。
+    执行单个 SP 关卡（每日限定 1 次），确认完成后延迟到次日服务器刷新。
 
     Pages:
         in: page_event
@@ -44,12 +44,11 @@ class CampaignSP(EventBase):
         except TaskEnd:
             # 捕获任务切换，正常中断
             pass
-        except RequestHumanTakeover:
-            # 每日 SP 已完成或无法进入，延迟到次日
-            logger.info('每日SP已完成或无法进入')
-            logger.info('延迟任务到明天')
-            self.config.task_delay(server_update=True)
-            return
+        except RequestHumanTakeover as error:
+            from module.config.recovery import check_error_recovery
+            check_error_recovery(self.config, error)
+            # 点击受限、属性不足、配置错误都可能走到此处，不能据此认定今日已完成。
+            raise
 
         # 根据执行结果决定后续调度
         if self.run_count > 0:
