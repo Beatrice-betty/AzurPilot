@@ -15831,6 +15831,24 @@
         "type": "checkbox",
         "value": false
       },
+      "SkipHpCheck": {
+        "type": "checkbox",
+        "value": false,
+        "option": [
+          true,
+          false
+        ]
+      },
+      "ActionPointCheckInterval": {
+        "type": "input",
+        "value": 0,
+        "valuetype": "int",
+        "validate": "^\\d+$"
+      },
+      "SkipStrategicSearchCheck": {
+        "type": "checkbox",
+        "value": false
+      },
       "DebugClip": {
         "type": "checkbox",
         "value": false

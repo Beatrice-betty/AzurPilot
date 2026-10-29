@@ -60,7 +60,7 @@ from module.os_handler.assets import (
     AUTO_SEARCH_REWARD,
 )
 from module.os_handler.storage import StorageHandler, RepairResult
-from module.os_handler.resource_state import reset_resource_caches
+from module.os_handler.resource_state import reset_resource_caches, skip_hp_check
 from module.os_handler.resource_read import CoinReplenishRequired
 from module.os_handler.action_point import ACTION_POINTS_COST
 from module.os_handler.strategic import StrategicSearchHandler
@@ -1101,7 +1101,7 @@ class OSMap(MapEventResumeMixin, OSFleet, Map, GlobeCamera, StorageHandler, Stra
                     self.hp_get()
                     if (
                         any(self.need_repair)
-                        and not self.config.OpsiHazard1Leveling_SkipHpCheck
+                        and not skip_hp_check(self.config)
                     ):
                         success = False
                         logger.warning("[大世界-战斗] 舰队阵亡，停止自动搜索")

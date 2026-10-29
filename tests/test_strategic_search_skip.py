@@ -1,18 +1,21 @@
 """计划作战启动和确认弹窗的离线回归，不连接游戏。"""
 
 import unittest
+from types import SimpleNamespace
 from unittest.mock import Mock, call
 
 from module.os_handler.strategic import StrategicSearchHandler
 
 
 class TestStrategicSearchSkipCheck(unittest.TestCase):
-    """用 Mock 替换面板交互，验证侵蚀一配置对启动流程的分派。"""
+    """用 Mock 替换面板交互，验证任务配置对启动流程的分派。"""
 
-    def make_handler(self, skip):
+    def make_handler(self, skip, command='OpsiHazard1Leveling', bound_task=None):
         handler = StrategicSearchHandler.__new__(StrategicSearchHandler)
-        handler.config = Mock()
-        handler.config.cross_get.return_value = skip
+        handler.config = SimpleNamespace(
+            task=SimpleNamespace(command=command), _bind_task_override=bound_task,
+            cross_get=Mock(return_value=skip),
+        )
         handler.strategy_search_enter = Mock()
         handler.strategic_search_set_tab = Mock()
         handler.strategic_search_set_option = Mock(return_value=True)
@@ -30,10 +33,32 @@ class TestStrategicSearchSkipCheck(unittest.TestCase):
     def test_skip_check_confirms_directly(self):
         handler = self.make_handler(skip=True)
         self.assertTrue(handler.strategic_search_start(skip_first_screenshot=True))
+        handler.config.cross_get.assert_called_once_with(
+            'OpsiHazard1Leveling.OpsiHazard1Leveling.SkipStrategicSearchCheck', False,
+        )
         handler.strategy_search_enter.assert_called_once_with()
         handler.strategic_search_set_tab.assert_called_once_with()
         handler.strategic_search_set_option.assert_not_called()
         handler.strategic_search_confirm.assert_called_once_with()
+
+    def test_meow_and_scheduling_proxy_use_meow_setting(self):
+        for command, bound_task in (('OpsiMeowfficerFarming', None),
+                                    ('OpsiScheduling', 'OpsiMeowfficerFarming')):
+            with self.subTest(command=command):
+                handler = self.make_handler(skip=True, command=command, bound_task=bound_task)
+                self.assertTrue(handler.strategic_search_start())
+                handler.config.cross_get.assert_called_once_with(
+                    'OpsiMeowfficerFarming.OpsiMeowfficerFarming.SkipStrategicSearchCheck', False,
+                )
+                handler.strategic_search_set_option.assert_not_called()
+
+    def test_other_task_keeps_existing_hazard_setting(self):
+        handler = self.make_handler(skip=False, command='OpsiAbyssal')
+        self.assertTrue(handler.strategic_search_start())
+        handler.config.cross_get.assert_called_once_with(
+            'OpsiHazard1Leveling.OpsiHazard1Leveling.SkipStrategicSearchCheck', False,
+        )
+        handler.strategic_search_set_option.assert_called_once_with()
 
     def test_failed_option_check_retries(self):
         handler = self.make_handler(skip=False)

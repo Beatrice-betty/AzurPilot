@@ -22,7 +22,7 @@ from module.logger import logger
 from module.ocr.ocr import Digit, DigitCounter
 from module.os_handler.assets import *
 from module.os_handler.map_event import MapEventHandler
-from module.os_handler.resource_state import ActionPointSnapshot, resource_fast_path
+from module.os_handler.resource_state import ActionPointSnapshot, effective_task, resource_fast_path
 from module.os_handler.resource_write import record_resources_background
 from module.statistics.item import Item, ItemGrid
 from module.ui.assets import OS_CHECK
@@ -255,7 +255,10 @@ class ActionPointHandler(UI, MapEventHandler):
     def action_point_check_due(self):
         """定时读取在已有地图截图上后台执行；0 关闭定时读取。"""
         snapshot = self.__dict__.get('_ap_snapshot')
-        interval = self._action_point_policy_value('OpsiHazard1Leveling_ActionPointCheckInterval')
+        argument = ('OpsiMeowfficerFarming_ActionPointCheckInterval'
+                    if effective_task(self.config) == 'OpsiMeowfficerFarming'
+                    else 'OpsiHazard1Leveling_ActionPointCheckInterval')
+        interval = self._action_point_policy_value(argument)
         return (snapshot is not None and snapshot.identity == self._action_point_identity()
                 and type(interval) is int and interval > 0
                 and monotonic() - snapshot.checked_at >= interval * 60)
@@ -597,7 +600,9 @@ class ActionPointHandler(UI, MapEventHandler):
             if policy is None or policy[:2] != (str(path), stamp):
                 data = read_file(str(path))
                 values = {}
-                for attr in ('OpsiGeneral_BuyActionPointLimit', 'OpsiHazard1Leveling_ActionPointCheckInterval'):
+                for attr in ('OpsiGeneral_BuyActionPointLimit',
+                             'OpsiHazard1Leveling_ActionPointCheckInterval',
+                             'OpsiMeowfficerFarming_ActionPointCheckInterval'):
                     group, field = attr.split('_', 1)
                     key = bound.get(attr, f'{group}.{group}.{field}')
                     value = deep_get(data, key, default=getattr(self.config, attr, 0))

@@ -203,7 +203,7 @@ class OpsiMeowfficerFarming(MeowfficerTargetZoneMixin, CoinTaskMixin, OSMap):
 
     def _meow_fixed_patrol_scan(self):
         """
-        短猫相接的战后强制移动：短猫舰队没找到事件就换其他舰队扫雷达。
+        短猫相接战后雷达扫描：当前舰队没找到事件时换队查看雷达。
 
         这是短猫唯一的强制移动形式——等价于侵蚀一的 L0/L1（换队扫雷达清问号），
         **没有**侵蚀一的 L2。侵蚀一 L2 会把舰队逐个挪到固定的 C1/D1/E1/F1，
@@ -222,14 +222,14 @@ class OpsiMeowfficerFarming(MeowfficerTargetZoneMixin, CoinTaskMixin, OSMap):
             return
         if self._solved_map_event & ALREADY_SOLVED_MAP_EVENTS:
             return
-        logger.info('[大世界-耄耋相接] 触发效率模式强制移动')
+        logger.info('[大世界-耄耋相接] 雷达扫描')
         self.clear_question_any_fleet()
         self.fleet_set(self.config.OpsiFleet_Fleet)
 
     def _meow_debug_clip(self):
         """战后 debug 录像的上下文，开关为 OpsiMeowfficerFarming.DebugClip。
 
-        录制「打完找事件 / 处理事件 / 强制移动」这一段的真实游戏画面，每一轮都保存，
+        录制「找事件 / 处理事件 / 雷达扫描」这一段的真实游戏画面，每一轮都保存，
         方便逐轮回看有没有漏掉问号或事件。保留天数统一在「大世界通用设置」里配置。
 
         Returns:

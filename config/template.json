@@ -3039,6 +3039,9 @@
       "TargetZone": 0,
       "StayInZone": false,
       "ExecuteFixedPatrolScan": false,
+      "SkipHpCheck": false,
+      "ActionPointCheckInterval": 0,
+      "SkipStrategicSearchCheck": false,
       "DebugClip": false
     },
     "OpsiSirenBug": {

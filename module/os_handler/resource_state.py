@@ -18,6 +18,13 @@ def resource_fast_path(config):
     return effective_task(config) in FARMING_TASKS | {'OpsiScheduling'}
 
 
+def skip_hp_check(config):
+    """短猫与其他大世界任务分别读取自己的沉船忽略开关。"""
+    if effective_task(config) == 'OpsiMeowfficerFarming':
+        return getattr(config, 'OpsiMeowfficerFarming_SkipHpCheck', False)
+    return config.OpsiHazard1Leveling_SkipHpCheck
+
+
 def invalidate_action_point_inventory(config):
     """可能改变箱子库存时使完整面板缓存失效。"""
     config._opsi_ap_inventory_revision = getattr(config, '_opsi_ap_inventory_revision', 0) + 1

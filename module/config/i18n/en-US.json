@@ -4218,12 +4218,26 @@
       "help": "After enabling this, the task runs according to Target Zone. With one zone it stays there; with multiple zones it cycles through them in the configured order. Only takes effect when Target Zone is not 0."
     },
     "ExecuteFixedPatrolScan": {
-      "name": "Fixed patrol scan",
-      "help": "After enabling this, the task will scan the fixed patrol zone every 10 seconds."
+      "name": "Radar scan",
+      "help": "After battle, check fleets 1–4 for question marks. Switch fleets without moving them. Off by default."
+    },
+    "SkipHpCheck": {
+      "name": "Sacrifice run: skip HP check",
+      "help": "Ignore sunk ships after battle and continue sorties.",
+      "True": "Enabled",
+      "False": "Disabled"
+    },
+    "ActionPointCheckInterval": {
+      "name": "Routine AP check interval (minutes)",
+      "help": "0 disables timed checks; a positive number sets the interval in minutes. Resupply and recovery still trigger checks."
+    },
+    "SkipStrategicSearchCheck": {
+      "name": "Skip planned operation scroll checks",
+      "help": "Skip scrolling through planned operation options and confirm directly. Configure the options in-game first."
     },
     "DebugClip": {
       "name": "Post-battle debug recording",
-      "help": "When enabled, during each Meowfficer-farming round's post-battle handling (event detection / event resolution / forced movement), record what ALAS itself sees into an mp4 under log/clips/ (filename starts with meow_clip_). Every round is saved, whether or not an event occurred, so you can review each round. Retention is configured under OS General Settings."
+      "help": "When enabled, during each Meowfficer-farming round's post-battle handling (event detection / event resolution / radar scan), record what ALAS itself sees into an mp4 under log/clips/ (filename starts with meow_clip_). Every round is saved, whether or not an event occurred, so you can review each round. Retention is configured under OS General Settings."
     }
   },
   "OpsiTarget": {
@@ -4265,22 +4279,22 @@
       "help": "Give it a try, the bicycle turns into a motorcycle. Yukikaze-sama has given the luck to Commander nanoda, go for it nanoda!"
     },
     "ExecuteFixedPatrolScan": {
-      "name": "Post-battle forced movement (efficiency mode)",
-      "help": "When enabled, after each battle ALAS cycles through fleets 1-4 and checks each radar for remaining question marks (switching fleets only, moving none), and handles Akashi / logging tower / Siren device if found. If that is not enough, it moves fleets one by one and rescans the whole map, with fixed destinations C1/D1/E1/F1 (only fit for the Hazard-1 map): if some fleet saw a question mark it could not reach (blocked / out of movement range) it moves right away; only when no fleet saw anything does it check the current action points, moving only when they are above 7, otherwise saving them for the next round. Default off. Meowfficer Farming does not use this; it only switches fleets and checks radars."
+      "name": "Radar scan",
+      "help": "After battle, check each fleet's radar for question marks. Move fleets and rescan if needed (Corrosion 1 only). Off by default."
     },
     "SkipHpCheck": {
       "name": "Sacrifice run: skip HP check",
-      "help": "Skip HP check after combat. Fleet will continue even if ships are sunk.",
+      "help": "Ignore sunk ships after battle and continue sorties.",
       "True": "Enabled",
       "False": "Disabled"
     },
     "ActionPointCheckInterval": {
       "name": "Routine AP check interval (minutes)",
-      "help": "0 disables scheduled checks. Read AP only for resupply, when the interval expires, or for the first confirmation after recovery. Otherwise skip screenshots and OCR. Applies to CL1, smart scheduling and Meowfficer farming."
+      "help": "0 disables timed checks; a positive number sets the interval in minutes. Resupply and recovery still trigger checks."
     },
     "SkipStrategicSearchCheck": {
-      "name": "Skip plan battle option checks",
-      "help": "When looping a single zone (Corrosion 1 leveling / Meowfficer farming), open the plan battle panel and confirm directly without scroll-checking every option. The panel options must already be configured in-game (zone mode: repeat, stop on merchant/device, auto-submit missions); let the task run once normally, or configure them manually first."
+      "name": "Skip planned operation scroll checks",
+      "help": "Skip scrolling through planned operation options and confirm directly. Configure the options in-game first."
     },
     "Cl1Filter": {
       "name": "Akashi purchase filter",

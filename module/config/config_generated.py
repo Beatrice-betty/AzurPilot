@@ -829,6 +829,9 @@ class GeneratedConfig:
     OpsiMeowfficerFarming_TargetZone = 0
     OpsiMeowfficerFarming_StayInZone = False
     OpsiMeowfficerFarming_ExecuteFixedPatrolScan = False
+    OpsiMeowfficerFarming_SkipHpCheck = False  # True, False
+    OpsiMeowfficerFarming_ActionPointCheckInterval = 0
+    OpsiMeowfficerFarming_SkipStrategicSearchCheck = False
     OpsiMeowfficerFarming_DebugClip = False
 
     # 配置组 `OpsiTarget`

@@ -21,7 +21,7 @@ from module.os.operation_siren import OperationSiren
 from module.os_handler.action_point import ActionPointHandler
 from module.os_handler.assets import STRATEGIC_SEARCH_MAP_OPTION_OFF
 from module.os_handler.os_status import OSStatus
-from module.os_handler.resource_state import ActionPointSnapshot, invalidate_action_point_inventory
+from module.os_handler.resource_state import ActionPointSnapshot, invalidate_action_point_inventory, skip_hp_check
 from module.os_shop.assets import PORT_SUPPLY_CHECK
 from module.statistics.cl1_database import Cl1Database
 from module.statistics.item import AmountOcr
@@ -196,6 +196,28 @@ class TestActionPointCheckInterval(unittest.TestCase):
         self.handler.config.OpsiHazard1Leveling_ActionPointCheckInterval = 1
         with patch('module.os_handler.action_point.monotonic', return_value=160):
             self.assertTrue(self.handler.action_point_check_due())
+
+    def test_meow_interval_is_independent_and_proxy_uses_it(self):
+        self.handler.config.OpsiMeowfficerFarming_ActionPointCheckInterval = 1
+        with patch('module.os_handler.action_point.monotonic', return_value=160):
+            self.assertFalse(self.handler.action_point_check_due())
+            self.handler.config.task.command = 'OpsiMeowfficerFarming'
+            self.assertTrue(self.handler.action_point_check_due())
+            self.handler.config.task.command = 'OpsiScheduling'
+            self.handler.config._bind_task_override = 'OpsiMeowfficerFarming'
+            self.assertTrue(self.handler.action_point_check_due())
+
+    def test_meow_interval_change_on_disk_takes_effect(self):
+        self.handler.config.task.command = 'OpsiMeowfficerFarming'
+        self.handler.config.OpsiMeowfficerFarming_ActionPointCheckInterval = 0
+        self.handler.config.bound = {}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'isolated.json'
+            path.write_text(json.dumps({'OpsiMeowfficerFarming': {
+                'OpsiMeowfficerFarming': {'ActionPointCheckInterval': 1}}}), encoding='utf-8')
+            with patch('module.os_handler.action_point.filepath_config', return_value=str(path)), \
+                    patch('module.os_handler.action_point.monotonic', return_value=160):
+                self.assertTrue(self.handler.action_point_check_due())
 
     def test_file_interval_change_takes_effect_without_full_panel_reload(self):
         self.handler.config.OpsiHazard1Leveling_ActionPointCheckInterval = 0
@@ -595,14 +617,49 @@ class TestIntervalConfiguration(unittest.TestCase):
         args_path = Path(__file__).parents[1] / 'module/config/argument/args.json'
         service = ConfigService.__new__(ConfigService)
         service.__dict__['args'] = json.loads(args_path.read_text(encoding='utf-8'))
-        field = service.args['OpsiHazard1Leveling']['OpsiHazard1Leveling']['ActionPointCheckInterval']
-        self.assertEqual(field['value'], 0)
-        for value in (0, 1, 60, 99999):
-            self.assertEqual(service.validate('OpsiHazard1Leveling.OpsiHazard1Leveling.ActionPointCheckInterval', value),
-                             ['OpsiHazard1Leveling', 'OpsiHazard1Leveling', 'ActionPointCheckInterval'])
-        for value in (-1, 0.5, True, '10'):
-            with self.subTest(value=value), self.assertRaises(ApiError):
-                service.validate('OpsiHazard1Leveling.OpsiHazard1Leveling.ActionPointCheckInterval', value)
+        for task in ('OpsiHazard1Leveling', 'OpsiMeowfficerFarming'):
+            field = service.args[task][task]['ActionPointCheckInterval']
+            self.assertEqual(field['value'], 0)
+            key = f'{task}.{task}.ActionPointCheckInterval'
+            for value in (0, 1, 60, 99999, '10'):
+                self.assertEqual(service.validate(key, value), [task, task, 'ActionPointCheckInterval'])
+            for value in (-1, 0.5, True):
+                with self.subTest(task=task, value=value), self.assertRaises(ApiError):
+                    service.validate(key, value)
+
+
+class TestMeowHpSetting(unittest.TestCase):
+    def test_each_task_uses_its_own_sunk_ship_setting(self):
+        config = SimpleNamespace(
+            task=SimpleNamespace(command='OpsiHazard1Leveling'),
+            OpsiHazard1Leveling_SkipHpCheck=True,
+            OpsiMeowfficerFarming_SkipHpCheck=False,
+        )
+        self.assertTrue(skip_hp_check(config))
+        config.task.command = 'OpsiMeowfficerFarming'
+        self.assertFalse(skip_hp_check(config))
+        config.OpsiMeowfficerFarming_SkipHpCheck = True
+        config._bind_task_override = 'OpsiMeowfficerFarming'
+        config.task.command = 'OpsiScheduling'
+        self.assertTrue(skip_hp_check(config))
+        config.task.command = 'OpsiAbyssal'
+        config._bind_task_override = None
+        self.assertTrue(skip_hp_check(config))
+
+    def test_meow_skip_clears_repair_flag_before_icon_check(self):
+        config = SimpleNamespace(
+            task=SimpleNamespace(command='OpsiMeowfficerFarming'),
+            OpsiHazard1Leveling_SkipHpCheck=False,
+            OpsiMeowfficerFarming_SkipHpCheck=True,
+        )
+        fleet = OSFleet.__new__(OSFleet)
+        fleet.config = config
+        fleet.need_repair = [True] * 6
+        fleet._hp_grid = Mock(side_effect=AssertionError('不应检测维修图标'))
+        with patch('module.combat.hp_balancer.HPBalancer.hp_get', return_value=[1.0] * 6):
+            OSFleet.hp_get(fleet)
+        self.assertEqual(fleet.need_repair, [False] * 6)
+        fleet._hp_grid.assert_not_called()
 
 
 class TestDeferredResourceHistory(unittest.TestCase):

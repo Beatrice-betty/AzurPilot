@@ -50,7 +50,7 @@ from module.os_handler.assets import (
     AUTO_SEARCH_REWARD, CLICK_SAFE_AREA, IN_MAP, PORT_ENTER, STRATEGIC_SEARCH_MAP_OPTION_OFF,
     TEMPLATE_STORAGE_SHIP_EMPTY,
 )
-from module.os_handler.resource_state import FARMING_TASKS, effective_task
+from module.os_handler.resource_state import FARMING_TASKS, effective_task, skip_hp_check
 from module.os_shop.assets import PORT_SUPPLY_CHECK
 from module.ui.assets import BACK_ARROW
 
@@ -323,7 +323,7 @@ class OSFleet(OSCamera, Combat, Fleet, OSAsh):
             list[float]: 各舰船血量百分比列表。
         """
         super().hp_get()
-        if self.config.OpsiHazard1Leveling_SkipHpCheck:
+        if skip_hp_check(self.config):
             self.need_repair = [False, False, False, False, False, False]
             return
 
