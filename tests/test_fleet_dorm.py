@@ -11,6 +11,9 @@ import numpy as np
 from PIL import Image
 
 from module.campaign.fleet_rotation import preflight_rotation
+from module.device.connection import Connection
+from module.device.control import control_interval, wait_control_interval
+from module.device.device import Device
 from module.api.config_service import ConfigService
 from module.api.protocol import ApiError, ConfigChange
 from module.dorm.assets import (DORM_FLEET_CANCEL, DORM_FLEET_CHECK, DORM_FLEET_CONFIRM,
@@ -88,6 +91,13 @@ class DormRuleTests(unittest.TestCase):
 
 
 class DormImageTests(unittest.TestCase):
+    def test_new_client_target_ships_are_on_the_third_row_not_deep_in_the_dock(self):
+        scanner = DormFleetScanner()
+        top, next_row = frame('vanguard_top_slow'), frame('vanguard_row_slow')
+        self.assertEqual([(1, 75)], [(card.col, card.y) for card in scanner.scan(top) if card.fleet == 1])
+        self.assertEqual([(2, 403), (3, 403)],
+                         [(card.col, card.y) for card in scanner.scan(next_row) if card.fleet == 1])
+
     def test_selected_markers_and_fleet_four_after_scrolling(self):
         scanner = DormFleetScanner()
         image = frame('picker_selected')
@@ -116,19 +126,28 @@ class DormImageTests(unittest.TestCase):
 class DormSelectionTests(unittest.TestCase):
     def controller(self, pages, selected=()):
         tool = FleetRotationDorm.__new__(FleetRotationDorm)
+        tool.config = SimpleNamespace(Emulator_ControlMethod='MaaTouch')
         self.page, self.selected, self.clicks = 0, set(selected), []
+        self.clock = 0.0
+        self.enterContext(patch('module.base.timer.time', side_effect=lambda: self.clock))
         tool.device = SimpleNamespace(image=np.zeros((720, 1280, 3), dtype=np.uint8))
         tool.appear = Mock(return_value=True)
         tool.handle_popup_cancel = Mock(return_value=False)
-        tool.loop = lambda **kwargs: iter(range(80))
+        def loop(**kwargs):
+            for _ in range(200):
+                self.clock += .2
+                yield tool.device.image
+        tool.loop = loop
         def click(button):
-            x = button.area[0] - 25
-            card = next(card for card in pages[self.page] if card.x == x)
+            x, y = button.area[0] - 25, button.area[1] - 35
+            card = next(card for card in pages[self.page] if (card.x, card.y) == (x, y))
             self.clicks.append(card.key)
             self.selected.symmetric_difference_update({card.key})
         def swipe(*args, **kwargs):
             self.page = min(self.page + 1, len(pages) - 1)
+            tool.device.image = np.full((720, 1280, 3), self.page * 10, dtype=np.uint8)
         tool.device.click, tool.device.swipe = Mock(side_effect=click), Mock(side_effect=swipe)
+        tool.device.drag = Mock(side_effect=swipe)
         scanner = Mock()
         scanner.scan.side_effect = lambda image: pages[self.page]
         scanner.selected.side_effect = lambda image, card: card.key in self.selected
@@ -161,7 +180,62 @@ class DormSelectionTests(unittest.TestCase):
         tool, _ = self.controller([[first, other], [first, second, other]])
         tool._selection(4, 2, 6)
         self.assertEqual(['target1', 'target2'], self.clicks)
+        tool.device.drag.assert_called_once()
+        self.assertEqual(.4, tool.device.drag.call_args.kwargs['hold_duration'])
+        tool.device.swipe.assert_not_called()
+
+    def test_only_one_held_drag_is_needed_for_the_two_ships_in_the_new_screenshots(self):
+        scanner = DormFleetScanner()
+        images = [frame('vanguard_top_slow'), frame('vanguard_row_slow')]
+        pages = [scanner.scan(image) for image in images]
+        for page, cards in enumerate(pages):
+            for card in cards:
+                card.key = f'{page}:{card.col}:{card.y}'
+        selected = [card.key for card in pages[0] if scanner.selected(images[0], card)]
+        tool, _ = self.controller(pages, selected=selected)
+        advance = tool.device.drag.side_effect
+        def drag(*args, **kwargs):
+            advance(*args, **kwargs)
+            tool.device.image = images[self.page]
+        tool.device.drag.side_effect = drag
+        tool.device.image = images[0]
+        tool._selection(1, 3, 6)
+        self.assertEqual(['1:2:403', '1:3:403'], self.clicks)
+        tool.device.drag.assert_called_once()
+        tool.device.swipe.assert_not_called()
+
+    def test_stale_frames_after_a_drag_do_not_cause_another_drag(self):
+        tool, _ = self.controller([[self.card('other', 0, 5)], [self.card('target', 1, 4)]])
+        tool.device.drag.side_effect = None
+        with self.assertRaisesRegex(DormArrangeError, '未确认列表移动'):
+            tool._selection(4, 1, 6)
+        tool.device.drag.assert_called_once()
+        tool.device.click.assert_not_called()
+
+    def test_scrollbar_jitter_without_card_movement_does_not_cause_another_drag(self):
+        tool, _ = self.controller([[self.card('other', 0, 5)], [self.card('target', 1, 4)]])
+        tool.device.drag.side_effect = None
+        with patch('module.dorm.fleet_rotation.Scroll') as scroll:
+            scroll.return_value.cal_position.side_effect = lambda main: .01 if int(self.clock * 5) % 2 else .02
+            with self.assertRaisesRegex(DormArrangeError, '未确认列表移动'):
+                tool._selection(4, 1, 6)
+        tool.device.drag.assert_called_once()
+        tool.device.click.assert_not_called()
+
+    def test_missing_target_stops_after_the_prefix_instead_of_scrolling_the_whole_dock(self):
+        tool, _ = self.controller([[self.card(f'other{page}', 0, 5)] for page in range(8)])
+        with self.assertRaisesRegex(DormArrangeError, '前五排'):
+            tool._selection(4, 1, 6)
+        self.assertEqual(3, tool.device.drag.call_count)
+        tool.device.click.assert_not_called()
+
+    def test_backend_without_held_drag_uses_a_slow_swipe_without_a_fallback_click(self):
+        tool, _ = self.controller([[self.card('other', 0, 5)], [self.card('target', 1, 4)]])
+        tool.config.Emulator_ControlMethod = 'azurpilot_android'
+        tool._selection(4, 1, 6)
         tool.device.swipe.assert_called_once()
+        self.assertEqual(.6, tool.device.swipe.call_args.kwargs['duration'])
+        tool.device.drag.assert_not_called()
 
     def test_click_without_verified_count_change_is_not_repeated(self):
         tool, _ = self.controller([[self.card('target', 0, 4)]])
@@ -297,3 +371,70 @@ class DormIntegrationTests(unittest.TestCase):
         self.assertFalse(case.state()['1'].get('rescan'))
         case.campaign.ensure_campaign_ui.assert_called_once()
         case.campaign.map_get_info.assert_called_once()
+
+
+class FleetControlIntervalTests(unittest.TestCase):
+    def device(self):
+        tool = Device.__new__(Device)
+        tool.config = SimpleNamespace(Emulator_ControlMethod='MaaTouch')
+        tool.image = np.zeros((720, 1280, 3), dtype=np.uint8)
+        tool.sleep = Mock()
+        tool.stuck_record_clear, tool.click_record_add, tool.click_record_check = Mock(), Mock(), Mock()
+        tool.click_methods = {'MaaTouch': Mock()}
+        tool.swipe_maatouch, tool.drag_maatouch = Mock(), Mock()
+        self.enterContext(patch('module.statistics.resource_flow.reward_frame'))
+        return tool
+
+    def test_normal_controls_keep_their_original_timing(self):
+        tool = self.device()
+        tool.click(DORM_FLEET_CONFIRM)
+        tool.swipe((1170, 470), (1170, 243))
+        tool.drag((1170, 470), (1170, 243))
+        tool.sleep.assert_not_called()
+        self.assertEqual(3, tool.click_record_check.call_count)
+
+    def test_click_swipe_and_drag_all_use_the_requested_interval_inside_the_scope(self):
+        tool = self.device()
+        with control_interval((.1, .3)):
+            tool.click(DORM_FLEET_CONFIRM)
+            tool.swipe((1170, 470), (1170, 243))
+            tool.drag((1170, 470), (1170, 243))
+        self.assertEqual([((.1, .3),)] * 3, [call.args for call in tool.sleep.call_args_list])
+        self.assertEqual(3, tool.click_record_check.call_count)
+        tool.click(DORM_FLEET_CONFIRM)
+        self.assertEqual(3, tool.sleep.call_count)
+
+    def test_nested_scopes_and_errors_restore_the_previous_interval(self):
+        tool = self.device()
+        with control_interval((.1, .3)):
+            with self.assertRaisesRegex(ValueError, 'test'):
+                with control_interval((.2, .2)):
+                    wait_control_interval(tool)
+                    raise ValueError('test')
+            wait_control_interval(tool)
+        wait_control_interval(tool)
+        self.assertEqual([((.2, .2),), ((.1, .3),)], [call.args for call in tool.sleep.call_args_list])
+
+    def test_random_sleep_values_stay_between_point_one_and_point_three(self):
+        tool = self.device()
+        tool.sleep = Connection.sleep
+        with patch('module.device.connection.time.sleep') as sleep, control_interval((.1, .3)):
+            for _ in range(20):
+                wait_control_interval(tool)
+        self.assertEqual(20, sleep.call_count)
+        self.assertTrue(all(.1 <= call.args[0] <= .3 for call in sleep.call_args_list))
+
+    def test_morale_rotation_is_paced_and_leaves_no_interval_for_the_following_task(self):
+        case = rotation_cases.RotationIntegrationTests()
+        case.setUp()
+        self.addCleanup(case.doCleanups)
+        case.runner.device = SimpleNamespace(sleep=Mock())
+        rotate = case.manager.rotate_slot.side_effect
+        def swap(*args):
+            wait_control_interval(case.runner.device)
+            return rotate(*args)
+        case.manager.rotate_slot.side_effect = swap
+        preflight_rotation(case.runner, 5, 'normal')
+        self.assertEqual(3, case.runner.device.sleep.call_count)
+        wait_control_interval(case.runner.device)
+        self.assertEqual(3, case.runner.device.sleep.call_count)

@@ -5,6 +5,7 @@ from copy import deepcopy
 from module.combat.emotion import Emotion
 from module.campaign.fleet_rotation_emotion import RotationEmotion, selected_morale
 from module.config.time_source import now
+from module.device.control import control_interval
 from module.equipment.fleet_rotation import FleetRotationEquipment
 from module.exception import FleetManagementError, GameStuckError, GameTooManyClickError, RequestHumanTakeover
 from module.logger import logger
@@ -57,6 +58,7 @@ def mark_morale_checked(config, emotion, selected, battle, context):
     persist_context(config, context)
 
 
+@control_interval((0.1, 0.3))
 def preflight_rotation(runner, battle, mode):
     """在原有心情检查之前轮换，恢复选关页后仍走正常心情及入场流程。
 
