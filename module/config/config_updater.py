@@ -829,11 +829,6 @@ class ConfigUpdater:
             value = parse_value(value, data=data)
             deep_set(new, keys=keys, value=value)
 
-        # 处理 AzurStatsID
-        if is_template:
-            deep_set(new, 'Alas.DropRecord.AzurStatsID', None)
-        else:
-            deep_default(new, 'Alas.DropRecord.AzurStatsID', random_id())
         # 更新到最新活动
         refresh_campaign_events(new, self.args, is_template=is_template)
 
@@ -858,6 +853,16 @@ class ConfigUpdater:
 
         if not is_template:
             new = self.config_redirect(old, new)
+            # 在 OpsiRecord 拆分后统一清洗旧档位；只保存的科研/委托按新三档迁移。
+            drop = deep_get(new, 'Alas.DropRecord')
+            old_drop = deep_get(old, 'Alas.DropRecord', {})
+            for arg in ('ResearchRecord', 'CommissionRecord'):
+                # parse_value 已将不再合法的旧选项替换成默认值，迁移时需读原值。
+                if old_drop.get(arg) == 'save':
+                    drop[arg] = 'save_and_upload'
+            for arg in (*OPSI_RECORD_ARGS, 'CombatRecord', 'MeowfficerTalent'):
+                value = old_drop.get(arg, drop[arg])
+                drop[arg] = 'save' if value in ('save', 'save_and_upload') else 'do_not'
             old_priority = deep_get(old, 'General.YukikazeTaskManager.TaskPriorityAdjustment')
             new_priority = deep_get(new, 'General.YukikazeTaskManager.TaskPriorityAdjustment')
             template_priority = deep_get(
