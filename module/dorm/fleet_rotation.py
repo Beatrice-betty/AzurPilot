@@ -78,7 +78,9 @@ class DormFleetScanner(VisualDockScanner):
         binary = (region.min(axis=2) > 205).astype(np.uint8) * 255
         template = (TEMPLATE_DORM_SELECTED.image.min(axis=2) > 205).astype(np.uint8) * 255
         score = cv2.minMaxLoc(cv2.matchTemplate(binary, template, cv2.TM_CCOEFF_NORMED))[1]
-        return score >= .75
+        # 滚动后的失败截图中，原生已选中文字匹配值为0.675，
+        # 同批未选中卡片均低于0.27，仅调整后宅的文字判定。
+        return score >= .65
 
 
 class FleetRotationDorm(Dock):
@@ -283,6 +285,9 @@ class FleetRotationDorm(Dock):
         self.ui_ensure(page_dorm)
         self._enter_floor(floor)
         self._open_picker(floor)
+        self.dock_favourite_set(False)
+        self.dock_filter_set(index=['vanguard', 'main'], reset_index=True)
+        self._top()
         counter, previous, count = DormCounter(DOCK_SELECTED), None, None
         for _ in self.loop(skip_first=False, timeout=15):
             count = counter.ocr(self.device.image)
@@ -294,20 +299,8 @@ class FleetRotationDorm(Dock):
         if count[1] < amount:
             raise DormArrangeError('未确认足够的后宅栏位，不取消原有选中')
         capacity = count[1]
-        scanner = DormFleetScanner()
-        try:
-            visible_selected = sum(scanner.selected(self.device.image, card)
-                                   for card in scanner.scan(self.device.image))
-        except ValueError:
-            visible_selected = None
-        # 默认置顶的原有选中已全部可见时，直接逐艘取消，不先往返筛选面板。
-        if visible_selected != count[0]:
-            self.dock_favourite_set(False)
-            self.dock_filter_set(index='all', reset_index=True)
-            self._top()
         self._selection(fleet, 0, capacity, clear=True)
-        self.dock_favourite_set(False)
-        self.dock_filter_set(index=['vanguard', 'main'], reset_index=True)
+        # 清空时若发生过滚动，只恢复列表顶部；筛选始终沿用入口设置。
         self._top()
         self._selection(fleet, amount, capacity)
         self._confirm(floor, amount)

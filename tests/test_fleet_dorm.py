@@ -91,6 +91,14 @@ class DormRuleTests(unittest.TestCase):
 
 
 class DormImageTests(unittest.TestCase):
+    def test_scrolled_selected_ship_is_recognized_while_the_last_ship_is_still_partial(self):
+        scanner = DormFleetScanner()
+        image = frame('picker_partial_last')
+        cards = scanner.scan(image)
+        self.assertEqual([(6, 317)], [(card.col, card.y) for card in cards if scanner.selected(image, card)])
+        self.assertEqual([(6, 317)], [(card.col, card.y) for card in cards if card.fleet == 1])
+        self.assertTrue(all(card.y + 190 <= 627 for card in cards))
+
     def test_new_client_target_ships_are_on_the_third_row_not_deep_in_the_dock(self):
         scanner = DormFleetScanner()
         top, next_row = frame('vanguard_top_slow'), frame('vanguard_row_slow')
@@ -230,6 +238,17 @@ class DormSelectionTests(unittest.TestCase):
         self.assertEqual(.4, tool.device.drag.call_args.kwargs['hold_duration'])
         tool.device.swipe.assert_not_called()
 
+    def test_fifth_ship_is_clicked_once_then_scrolls_for_the_remaining_sixth_ship(self):
+        fifth, sixth = self.card('fifth', 6, 1), self.card('sixth', 0, 1)
+        fifth.y = 317
+        tool, _ = self.controller([[fifth], [fifth, sixth]],
+                                 selected=('hidden1', 'hidden2', 'hidden3', 'hidden4'))
+        tool._selection(1, 6, 6)
+        self.assertEqual(['fifth', 'sixth'], self.clicks)
+        self.assertEqual(6, len(self.selected))
+        tool.device.drag.assert_called_once()
+        tool.device.swipe.assert_not_called()
+
     def test_only_one_held_drag_is_needed_for_the_two_ships_in_the_new_screenshots(self):
         scanner = DormFleetScanner()
         images = [frame('vanguard_top_slow'), frame('vanguard_row_slow')]
@@ -320,20 +339,25 @@ class DormFlowTests(unittest.TestCase):
         for floor in ('floor_1', 'floor_2'):
             with self.subTest(floor=floor):
                 tool = self.tool(floor=floor)
+                events = Mock()
+                for name in ('_open_picker', 'dock_filter_set', '_selection', '_confirm'):
+                    events.attach_mock(getattr(tool, name), name)
                 self.assertTrue(tool.run(4))
                 tool._enter_floor.assert_called_once_with(floor)
                 self.assertEqual([((4, 0, 6), {'clear': True}), ((4, 6, 6), {})],
                                  tool._selection.call_args_list)
                 self.assertEqual([['vanguard', 'main']],
                                  [call.kwargs['index'] for call in tool.dock_filter_set.call_args_list])
+                self.assertEqual(['_open_picker', 'dock_filter_set', '_selection', '_selection', '_confirm'],
+                                 [call[0] for call in events.mock_calls])
                 tool._confirm.assert_called_once_with(floor, 6)
                 tool._leave.assert_called_once()
 
-    def test_incomplete_visible_old_selection_resets_filters_before_clearing(self):
+    def test_partial_visible_selection_never_reopens_filters_after_the_initial_setup(self):
         tool = self.tool()
         tool.device.image = frame('vanguard_top_slow')
         tool.run(4)
-        self.assertEqual(['all', ['vanguard', 'main']],
+        self.assertEqual([['vanguard', 'main']],
                          [call.kwargs['index'] for call in tool.dock_filter_set.call_args_list])
 
     def test_capacity_locked_floor_and_unconfirmed_selection_skip_and_continue(self):
