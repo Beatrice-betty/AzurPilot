@@ -175,5 +175,6 @@ class FleetTrainingReader(FleetShipDetail):
                 values['affinity'] = self._affinity()
             readings[slot] = values
             self._back_to_details()
-        self._back_to_formation()
+        if not self.__dict__.get('_reuse_details', False):
+            self._back_to_formation()
         return readings

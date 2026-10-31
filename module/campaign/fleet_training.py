@@ -156,27 +156,28 @@ class TrainingSession:
                     self.inventory_fleets.add(source)
             snapshots = {source: recorded_morale(self.result, source) for source in rule['sources']}
             jobs = []
-            for slot in ready:
-                key = f'{fleet}:{slot}'
-                job = self.saved['pending'].get(key)
-                if job is None:
-                    order = rank_sources(dict(rule, slots=[slot]), snapshots,
-                                         selected_only=self.runner.campaign.emotion.selected_only)
-                    for source in order:
-                        candidate = ships(self.result, source).get(slot)
-                        name = identity(candidate, self.result)
-                        if name is None or excluded(self.saved['records'].get(name, {}), self.targets):
-                            continue
-                        # 候补也实读，避免换入尚未登记但已达到全部目标的舰船。
-                        names = self.inspect(source, [slot])
-                        if slot not in names or excluded(self.saved['records'][name], self.targets):
-                            continue
-                        job = dict(fleet=fleet, slot=slot, source=source, outgoing=current[slot], incoming=name,
-                                   targets=dict(self.targets))
-                        break
-                if job is None:
-                    self.delay(f'第{fleet}舰队{slot}位已培养完成，但没有合适候补，延迟当前任务')
-                jobs.append((key, job))
+            with self.reader.reuse_details():
+                for slot in ready:
+                    key = f'{fleet}:{slot}'
+                    job = self.saved['pending'].get(key)
+                    if job is None:
+                        order = rank_sources(dict(rule, slots=[slot]), snapshots,
+                                             selected_only=self.runner.campaign.emotion.selected_only)
+                        for source in order:
+                            candidate = ships(self.result, source).get(slot)
+                            name = identity(candidate, self.result)
+                            if name is None or excluded(self.saved['records'].get(name, {}), self.targets):
+                                continue
+                            # 候补也实读，避免换入尚未登记但已达到全部目标的舰船。
+                            names = self.inspect(source, [slot])
+                            if slot not in names or excluded(self.saved['records'][name], self.targets):
+                                continue
+                            job = dict(fleet=fleet, slot=slot, source=source, outgoing=current[slot], incoming=name,
+                                       targets=dict(self.targets))
+                            break
+                    if job is None:
+                        self.delay(f'第{fleet}舰队{slot}位已培养完成，但没有合适候补，延迟当前任务')
+                    jobs.append((key, job))
             if not jobs:
                 continue
             self.prepare(fleet)
