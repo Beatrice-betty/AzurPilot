@@ -145,6 +145,9 @@ class FleetRotationDorm(Dock):
         scanner, counter = DormFleetScanner(), DormCounter(DOCK_SELECTED)
         scroll = Scroll((1240, 70, 1247, 627), color=(247, 211, 66), name='后宅选船滚动条')
         previous, pending = None, None
+        stable_image, moved_from = None, None
+        stable = Timer(.3, count=1).start()
+        pages = 0
         change = Timer(10).start()
         for _ in self.loop(skip_first=False, timeout=45):
             if self.handle_popup_cancel('FLEET_DORM_SELECT'):
@@ -159,6 +162,7 @@ class FleetRotationDorm(Dock):
                 if pending is not None:
                     if current == pending:
                         pending, previous = None, None
+                        stable_image = None
                         continue
                     if change.reached():
                         raise DormArrangeError('点击后未确认已选数量变化，未重复点选')
@@ -170,15 +174,30 @@ class FleetRotationDorm(Dock):
                         return
                     previous = ('done', count)
                     continue
+                position = round(scroll.cal_position(self), 3)
+                pixels = self.device.image[65:627, 85:1225].astype(np.int16)
+                if moved_from is not None:
+                    if np.mean(np.abs(pixels - moved_from)) <= 2:
+                        if change.reached():
+                            raise DormArrangeError('拖动后未确认列表移动，不再继续向下翻页')
+                        continue
+                    moved_from = None
+                    stable_image = None
+                if stable_image is None or np.mean(np.abs(pixels - stable_image)) > 2:
+                    stable_image = pixels.copy()
+                    stable.reset()
+                    previous = None
+                    continue
+                if not stable.reached():
+                    continue
                 try:
                     cards = scanner.scan(self.device.image)
                 except ValueError:
                     previous = None
                     continue
                 selected = [scanner.selected(self.device.image, card) for card in cards]
-                position = round(scroll.cal_position(self), 3)
-                signature = (count, position, tuple((card.x, card.y, card.fleet, chosen)
-                                                    for card, chosen in zip(cards, selected)))
+                signature = (count, tuple((card.x, card.y, card.fleet, chosen)
+                                          for card, chosen in zip(cards, selected)))
                 if signature != previous:
                     previous = signature
                     continue
@@ -192,11 +211,25 @@ class FleetRotationDorm(Dock):
                     pending = current - 1 if clear else current + 1
                     change.reset()
                     previous = None
+                    stable_image = None
                     continue
                 if scroll.length == 0 or position >= .995:
                     raise DormArrangeError(f'未能选齐第{fleet}舰队，或原有选中尚未清空，未提交选择')
-                self.device.swipe((1100, 570), (1100, 275), name='后宅选船翻页')
+                # 每种前后排最多18艘编队船，加两层后宅的12艘置顶船和离队格，
+                # 均在前五排内。两排起步，最多再逐排拖动三次，不深翻普通船坞。
+                if pages >= 3:
+                    raise DormArrangeError(f'前五排未能选齐第{fleet}舰队，跳过本次后宅安排')
+                if self.config.Emulator_ControlMethod in ('minitouch', 'MaaTouch', 'uiautomator2', 'scrcpy', 'nemu_ipc'):
+                    self.device.drag((1170, 470), (1170, 243), point_random=(0, 0, 0, 0),
+                        shake=(0, 0), shake_random=(0, 0, 0, 0), hold_duration=.4, name='后宅选船逐排拖动')
+                else:
+                    # 不支持拖拽的后端使用慢滑，避免 Device.drag 的回退点击碰到舰船。
+                    self.device.swipe((1170, 470), (1170, 243), duration=.6, name='后宅选船逐排滑动')
+                pages += 1
+                moved_from = pixels.copy()
+                change.reset()
                 previous = None
+                stable_image = None
         raise DormArrangeError('选船状态未确认，未提交选择')
 
     def _confirm(self, floor, amount):

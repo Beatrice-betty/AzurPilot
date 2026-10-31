@@ -22,7 +22,7 @@ from module.base.utils import limit_in
 from module.config.time_source import now as current_time
 from module.config.utils import get_server_next_update
 from module.device.app_control import AppControl
-from module.device.control import Control
+from module.device.control import Control, wait_control_interval
 from module.device.input import Input
 from module.device.platform import Platform
 from module.device.screenshot import Screenshot
@@ -485,6 +485,7 @@ class Device(Screenshot, Control, AppControl, Input):
         Args:
             button: 即将点击或操作的按钮对象或操作名。
         """
+        wait_control_interval(self)
         self.stuck_record_clear()
         self.click_record_add(button)
         self.click_record_check()
