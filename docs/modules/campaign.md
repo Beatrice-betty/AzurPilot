@@ -87,6 +87,19 @@
 装备开启时仍先卸装、换船再补装。
 定向验证见`tests/test_fleet_training.py`，截图来源见`tests/fixtures/fleet_training/README.md`。
 
+`FleetInfo.FleetDorm.Enabled`为默认关闭的“换船休息”，`Floor`可选`floor_1`训练或`floor_2`休息。
+整轮实际换船及换装全部完成后，`module/dorm/fleet_rotation.py`按全队出击、道中队、Boss队的优先级，
+从本轮已完成换船的出战舰队中选一队；提交编队后进入后宅，打开训练入口并切换指定页签。
+先逐艘取消所选楼层原有选中，再分别筛选先锋、主力，按实际舰队徽标选择整队，包括未更换的固定舰位。
+每次点击均核对数量变化，翻页重叠的已选舰船不重复点击；选齐后确认，并退出后宅继续原任务。
+后宅选船每次仅拖动一排，松手前保持触点以抑制惯性；不支持按住拖动的控制后端使用慢滑。
+确认卡片画面实际移动并持续稳定后再识别，只检查前五排（最多三次逐排拖动），未选齐则跳过本次后宅安排。
+智能换船期间，每次输入操作前增加0.1–0.3秒随机间隔；退出换船流程或发生异常后恢复普通任务的原有速度，界面就绪仍由截图确认。
+栏位不足、楼层未解锁或选择无法确认时，取消未提交选择、退出后宅并跳过本次安排，保留已完成换船与换装，继续原任务。
+不会自动扩建、解锁或确认额外的移出另一楼层提示；原有心情恢复配置不自动修改。没有实际换船及关闭开关时不进入后宅。
+仅适配国服1280×720截图；定向离线验证见`tests/test_fleet_dorm.py`和`tests/fixtures/fleet_dorm/README.md`，不代表实机验收。
+WebUI 界面对比：[修改前](webui/images/fleet-dorm-before.png)、[修改后](webui/images/fleet-dorm-after.png)。
+
 `CampaignRun` 为单次出击实例安装 `preflight_rotation()` 回调，`CampaignBase.run()`
 在读取地图战斗次数之后、原有 `emotion.check_reduce()` 之前执行。开关及规则位于
 `FleetInfo.FleetRotation`，默认关闭，不注册执行任务或调度状态。仅 Main/Main2–5、

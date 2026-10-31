@@ -141,21 +141,19 @@
       "RetentionDays": 0,
       "BackUpMethod": "zip",
       "ZipMethod": "zip",
-      "AzurStatsID": null,
       "CloudUpload": true,
-      "API": "default",
-      "ResearchRecord": "do_not",
-      "CommissionRecord": "do_not",
+      "ResearchRecord": "upload",
+      "CommissionRecord": "upload",
       "CommissionIncomeScreenshot": "save",
       "CombatRecord": "do_not",
-      "OpsiHazard1Leveling": "upload",
-      "OpsiMeowfficerFarming": "upload",
-      "OpsiDaily": "upload",
-      "OpsiObscure": "upload",
-      "OpsiAbyssal": "upload",
-      "OpsiStronghold": "upload",
-      "OpsiExplore": "upload",
-      "OpsiOther": "upload",
+      "OpsiHazard1Leveling": "do_not",
+      "OpsiMeowfficerFarming": "do_not",
+      "OpsiDaily": "do_not",
+      "OpsiObscure": "do_not",
+      "OpsiAbyssal": "do_not",
+      "OpsiStronghold": "do_not",
+      "OpsiExplore": "do_not",
+      "OpsiOther": "do_not",
       "MeowfficerBuy": "do_not",
       "MeowfficerTalent": "do_not",
       "TelemetryReport": true
@@ -3808,6 +3806,10 @@
     "FleetAffinityTraining": {
       "Enabled": false,
       "Target": 100
+    },
+    "FleetDorm": {
+      "Enabled": false,
+      "Floor": "floor_1"
     },
     "FleetTraining": {
       "FullScanRecord": "2020-01-01 00:00:00",
