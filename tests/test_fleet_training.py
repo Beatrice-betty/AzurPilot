@@ -159,6 +159,21 @@ class TrainingRuleTests(unittest.TestCase):
         observe(saved, '舰船B', {'level': 99}, {'level': 120})
         self.assertIsNone(saved['records']['舰船B']['exp'])
 
+    def test_same_batch_candidate_reads_return_to_details_and_leave_formation_once(self):
+        reader = FleetTrainingReader.__new__(FleetTrainingReader)
+        reader.config = SimpleNamespace(SERVER='cn')
+        reader._details, reader._back_to_details, reader._back_to_formation = Mock(), Mock(), Mock()
+        reader._ship, reader.appear = Mock(return_value=True), Mock(return_value=True)
+        with reader.reuse_details():
+            reader.read(3, [4], {})
+            reader.read(3, [5], {})
+            reader._back_to_formation.assert_not_called()
+        self.assertEqual([((4,), {}), ((5,), {})], reader._ship.call_args_list)
+        self.assertEqual(2, reader._back_to_details.call_count)
+        reader._back_to_formation.assert_called_once()
+        reader.read(3, [6], {})
+        self.assertEqual(2, reader._back_to_formation.call_count)
+
     def test_affinity_navigation_waits_for_two_fresh_matching_values(self):
         reader = FleetTrainingReader.__new__(FleetTrainingReader)
         reader.device = SimpleNamespace(image=None, click=Mock())
@@ -366,6 +381,10 @@ class TrainingIntegrationTests(unittest.TestCase):
         class Reader:
             def __init__(self, manager):
                 self.manager = manager
+
+            def reuse_details(self):
+                from contextlib import nullcontext
+                return nullcontext()
 
             def inventory(self, fleets, **kwargs):
                 outer.training_events.append(('inventory', set(fleets)))
