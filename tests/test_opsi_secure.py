@@ -284,9 +284,10 @@ class FixtureMigrationTests(StoreCase):
         self.assertNotIn(opsi_secure.MISSING_MARKER, stats)
         database.increment_battle_count('alpha')
         from datetime import datetime
+        from module.persistence.snapshots import read_month
         month = datetime.now().strftime('%Y-%m')
         with database.store.transaction(write=False) as conn:
-            raw = conn.execute("SELECT battle_count FROM cl1_months WHERE instance='alpha' AND month=?", (month,)).fetchone()[0]
+            raw = read_month(conn, 'alpha', month)['battle_count']
         self.assertEqual(raw, 1)
         from module.statistics.daily_summary_store import DailySummaryStore
         store = DailySummaryStore(self.root / 'config' / 'daily_summary.db')

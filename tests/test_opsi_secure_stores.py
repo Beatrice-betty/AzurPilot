@@ -1,6 +1,6 @@
 """四个统计存储在明文语义下的集成测试。
 
-覆盖原生业务列、旧文件只读转换、部分快照保留及业务接口一致性。
+覆盖月度记录与原生业务列、旧文件只读转换、部分快照保留及业务接口一致性。
 """
 
 import json
@@ -42,22 +42,25 @@ class Cl1StoreIntegration(StoreCase):
     def month(self):
         return datetime.now().strftime('%Y-%m')
 
-    def test_writes_split_public_and_secure_columns_as_plaintext(self):
+    def test_writes_one_record_per_month(self):
         db = self.make_db()
         db.increment_battle_count('inst', 3)
         db.add_ap_snapshot('inst', 131, source='cl1', ap_total=1131)
         db.add_commission_income('inst', {'Gem': 5})
-        self.assertEqual(self.raw('SELECT battle_count FROM cl1_months')[0][0], 3)
-        self.assertEqual(self.raw('SELECT ap FROM action_point_snapshots')[0][0], 131)
-        self.assertEqual(self.raw('SELECT item,amount FROM commission_income_items')[0], ('Gem', 5))
         data = db.get_stats('inst', self.month())
+        rows = self.raw('SELECT instance,month,data_json FROM cl1_data')
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][:2], ('inst', self.month()))
+        self.assertEqual(json.loads(rows[0][2]), data)
         self.assertEqual(data['battle_count'], 3)
         self.assertEqual(len(data['ap_snapshots']), 1)
+        self.assertEqual(data['ap_snapshots'][0]['ap'], 131)
         self.assertEqual(len(data['commission_income_entries']), 1)
+        self.assertEqual(data['commission_income_entries'][0]['items'], {'Gem': 5})
         db.increment_akashi_encounter('inst')
         self.assertEqual(db.get_stats('inst', self.month())['akashi_encounters'], 1)
 
-    def test_legacy_whole_row_reads_and_splits_on_next_write(self):
+    def test_legacy_whole_row_import_preserves_original_database(self):
         path = self.root / 'config' / 'cl1_data.db'
         data = {'battle_count': 7, 'commission_income_entries': [{'keep': True}]}
         with sqlite3.connect(path) as conn:
@@ -67,7 +70,7 @@ class Cl1StoreIntegration(StoreCase):
         db = self.make_db()
         self.assertEqual(db.get_stats('inst', self.month()), data)
         db.increment_battle_count('inst', 1)
-        self.assertEqual(self.raw('SELECT battle_count FROM cl1_months')[0][0], 8)
+        self.assertEqual(json.loads(self.raw('SELECT data_json FROM cl1_data')[0][0])['battle_count'], 8)
         self.assertEqual(db.get_stats('inst', self.month())['commission_income_entries'], [{'keep': True}])
         self.assertEqual(path.read_bytes(), original)
 
@@ -180,6 +183,13 @@ class ResourceStatsIntegration(StoreCase):
         resource_stats.record_resource_snapshot('other', {'Oil': 1}, carry_forward=True)
         rows = self.raw("SELECT oil,coin,pt,gem FROM resource_snapshots WHERE instance='inst' ORDER BY id")
         self.assertEqual(rows, [(6753, None, None, None), (6753, 7882, None, None), (6753, 7882, 4720, None)])
+
+    def test_carry_forward_uses_the_latest_insert_for_the_same_instance(self):
+        resource_stats.record_resource_snapshot('inst', {'Oil': 100}, observed_at=datetime(2026, 9, 2))
+        resource_stats.record_resource_snapshot('inst', {'Oil': 110}, observed_at=datetime(2026, 9, 1))
+        resource_stats.record_resource_snapshot('other', {'Oil': 999})
+        resource_stats.record_resource_snapshot('inst', {'Coin': 200}, carry_forward=True)
+        self.assertEqual(self.raw('SELECT oil,coin FROM resource_snapshots ORDER BY id DESC LIMIT 1'), [(110, 200)])
 
 
 class ShipExpIntegration(StoreCase):

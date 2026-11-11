@@ -178,11 +178,11 @@ module/log_res/
 
 ### 普通总库与旧数据迁移
 
-普通数据统一进入实际配置目录的 `azurpilot.db`，资源、掉落、仓库、月度事件、舰船与日报均使用原生列及关联表。自由参数和无法无损投影的兼容字段使用类型化树，不在数据库保存整行 JSON。完整结构、公开字段位序、迁移和恢复流程见 [普通业务数据存储](persistence.md)。
+普通数据统一进入实际配置目录的 `azurpilot.db`。科研、委托和大世界月度统计保存为每实例每月一条完整记录。资源快照、资源流水、仓库、舰船经验和日报使用原生列及关联表。完整结构、迁移和恢复流程见 [普通业务数据存储](persistence.md)。
 
 首次启动在业务 worker 之前锁定旧源，先通过 SQLite 备份接口保存含已提交 WAL 的源库及安全恢复材料，再在临时总库中转换、对照业务快照和检查完整性，成功后切换。`OPSIV1.`/`OPSIV2.`、旧 AES 月份及包装文件使用只读解码，不调用自动改写、隔离或撤销密钥的旧初始化。失败保留原件并停止启动，不以空数据替代。正式库丢失且完成标记仍在时必须恢复备份。
 
-日常查询不再读取旧普通库、JSON 或 CSV。资源趋势的 `include_opsi=False` 仍保留原返回规则，从原生列排除大世界字段。交易认证历史继续使用独立安全库，不从普通观察值重建身份或认证链。
+日常查询使用总库。旧普通库、JSON 和 CSV 源文件供历史迁移使用。资源趋势的 `include_opsi=False` 仍从原生列排除大世界字段。交易认证历史继续使用独立安全库。
 
 ### 侵蚀1单轮与战斗计时（ship_exp_stats.py）
 
@@ -206,7 +206,7 @@ module/log_res/
 
 ### CL1 月度库（cl1_database.py）
 
-`cl1_months` 以 `(instance, month)` 为主键；计数、事件、分桶样本及收益分别投影到关联表。适配器继续返回原月度快照，字段存在标记保留部分记录、显式空值与空集合。公开快照的关键字段：
+`cl1_data` 以 `(instance, month)` 为主键。一次读改写在同一事务内更新该月份的一条记录，保留部分记录、显式空值与空集合。公开快照的关键字段：
 
 | 字段 | 说明 |
 | --- | --- |
@@ -423,7 +423,7 @@ stateDiagram-v2
 
 新增一项月度统计（以「塞壬研究装置」为参照）：
 
-1. 在版本化 SQL 和 `module.persistence.snapshots` 增加原生映射及公开字段位序，再在 `cl1_database.py` 的 `_empty_data()` 加默认字段，新增 `add_xxx`/`get_xxx` 方法——读改写必须包在 `_stats_transaction()` 里，并按需提供 `async_` 包装。
+1. 在 `cl1_database.py` 的 `_empty_data()` 加默认字段，新增 `add_xxx`/`get_xxx` 方法。读改写包在 `_stats_transaction()` 里，按需提供 `async_` 包装。
 2. 在 `opsi_runtime.py` 加运行期入口（或在对应任务里直接调用），任务代码只上报领域事件。
 3. 在 `module/api/statistics_service.py` 的对应 category 里把指标加进 `report()` 输出；API 模型变更后运行 `uv run python -m dev_tools.export_api_schema`。
 4. 需要进日报时，在 `DailySummaryService.build_facts()` 的 facts 里补字段并在 prompt 术语表加映射。

@@ -75,12 +75,12 @@ class TestAkashiAsyncPersistence(unittest.TestCase):
         self.assertEqual(self.db.get_stats('test', '2026-09')['akashi_encounters'], 1)
         self.assertEqual(self.db.get_stats('test', '2026-10')['akashi_encounters'], 0)
 
-    def test_purchase_appends_to_month_without_rewriting_existing_statistics(self):
+    def test_purchase_updates_month_without_deleting_existing_record(self):
         previous = {'akashi_ap': 20, 'akashi_ap_entries': [{'amount': 20}],
                     'yellow_coin_snapshots': [{'yellow_coin': 100}], 'legacy_field': {'keep': True}}
         self.db.save_stats('test', '2026-09', previous)
         with self.db.store.transaction() as connection:
-            connection.execute("""CREATE TRIGGER reject_month_delete BEFORE DELETE ON cl1_months
+            connection.execute("""CREATE TRIGGER reject_month_delete BEFORE DELETE ON cl1_data
                 BEGIN SELECT RAISE(ABORT, 'unexpected monthly rewrite'); END""")
 
         release = threading.Event()
@@ -110,7 +110,7 @@ class TestAkashiAsyncPersistence(unittest.TestCase):
         previous = {'akashi_ap': 20, 'akashi_ap_entries': [{'amount': 20}]}
         self.db.save_stats('test', '2026-09', previous)
         with self.db.store.transaction() as connection:
-            connection.execute("""CREATE TRIGGER reject_purchase BEFORE INSERT ON akashi_ap_purchases
+            connection.execute("""CREATE TRIGGER reject_purchase BEFORE INSERT ON cl1_data
                 BEGIN SELECT RAISE(ABORT, 'purchase write rejected'); END""")
 
         with self.assertRaisesRegex(IntegrityError, 'purchase write rejected'):

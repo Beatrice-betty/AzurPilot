@@ -10,7 +10,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from module.config.transaction import config_transaction
-from module.persistence.database import DEFAULT_DIRECTORY, VERSION, create_schema, get_database, register_instance
+from module.persistence.database import DEFAULT_DIRECTORY, SCHEMA_V1, create_schema, get_database, register_instance
 from module.persistence import scheduler as native
 from module.scheduler.history_store import AuthenticatedHistoryStore, HISTORY_ERRORS
 from module.scheduler.templates import default_program
@@ -151,7 +151,7 @@ class ProgramStore:
                 destination.execute('BEGIN IMMEDIATE')
                 register_instance(destination, instance)
                 native.copy_scheduler(source, destination, instance)
-                destination.execute('INSERT INTO storage_migrations VALUES(?,?,?)', (VERSION, datetime.now().isoformat(), 'scheduler-slice'))
+                destination.execute('INSERT INTO storage_migrations VALUES(?,?,?)', (SCHEMA_V1, datetime.now().isoformat(), 'scheduler-slice'))
                 destination.commit()
                 if destination.execute('PRAGMA foreign_key_check').fetchone():
                     raise ValueError('实例调度切片未通过外键检查')
@@ -176,7 +176,7 @@ class ProgramStore:
             original.row_factory = sqlite3.Row
             original.execute('PRAGMA foreign_keys=ON')
             original.execute('BEGIN')
-            if original.execute('PRAGMA user_version').fetchone()[0] != VERSION:
+            if original.execute('PRAGMA user_version').fetchone()[0] != SCHEMA_V1:
                 raise ValueError('调度切片版本不受支持')
             if original.execute('PRAGMA integrity_check').fetchone()[0] != 'ok' or original.execute('PRAGMA foreign_key_check').fetchone():
                 raise ValueError('调度切片未通过数据库检查')

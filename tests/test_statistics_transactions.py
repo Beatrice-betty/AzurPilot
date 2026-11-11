@@ -99,7 +99,7 @@ class TestStatisticsTransactions(unittest.TestCase):
 
     def rows(self):
         with closing(sqlite3.connect(self.path)) as conn:
-            return conn.execute("SELECT * FROM cl1_months ORDER BY instance, month").fetchall()
+            return conn.execute("SELECT * FROM cl1_data ORDER BY instance, month").fetchall()
 
     def assert_serialized(self, first, second, pause_target="_get_stats_in_connection", owner=None):
         """第一写者读完后暂停，确认第二写者等待同一写锁。"""
@@ -205,7 +205,7 @@ class TestStatisticsTransactions(unittest.TestCase):
 
     def test_all_mutations_reject_corrupt_rows_without_replacing_them(self):
         with closing(sqlite3.connect(self.path)) as conn, conn:
-            conn.execute("DELETE FROM typed_value_nodes WHERE parent_no IS NULL")
+            conn.execute("UPDATE cl1_data SET data_json='[invalid]'")
         before = self.rows()
         for name, args in MUTATIONS:
             with self.subTest(method=name), self.assertRaises(ValueError):
@@ -228,7 +228,7 @@ class TestStatisticsTransactions(unittest.TestCase):
 
     def test_all_mutations_roll_back_write_failures(self):
         with closing(sqlite3.connect(self.path)) as conn, conn:
-            conn.execute("""CREATE TRIGGER reject_write BEFORE INSERT ON cl1_months
+            conn.execute("""CREATE TRIGGER reject_write BEFORE INSERT ON cl1_data
                 BEGIN SELECT RAISE(ABORT, 'write rejected'); END""")
         before = self.rows()
         for name, args in MUTATIONS:
@@ -240,7 +240,7 @@ class TestStatisticsTransactions(unittest.TestCase):
         with closing(sqlite3.connect(self.path)) as conn, conn:
             conn.execute("CREATE TABLE parent (id INTEGER PRIMARY KEY)")
             conn.execute("CREATE TABLE child (id REFERENCES parent(id) DEFERRABLE INITIALLY DEFERRED)")
-            conn.execute("CREATE TRIGGER reject_commit BEFORE INSERT ON cl1_months BEGIN INSERT INTO child VALUES (1); END")
+            conn.execute("CREATE TRIGGER reject_commit BEFORE INSERT ON cl1_data BEGIN INSERT INTO child VALUES (1); END")
         before = self.rows()
         connect = sqlite3.connect
 
@@ -299,7 +299,7 @@ class TestStatisticsTransactions(unittest.TestCase):
     def test_json_migration_does_not_overwrite_new_commission_income(self):
         with closing(sqlite3.connect(self.path)) as conn, conn:
             conn.execute("PRAGMA foreign_keys=ON")
-            conn.execute("DELETE FROM cl1_months")
+            conn.execute("DELETE FROM cl1_data")
         source = self.path.parent.parent / "log" / "cl1" / "test" / "cl1_monthly.json"
         source.parent.mkdir(parents=True)
         source.write_text(json.dumps({MONTH: 42}), encoding='utf-8')
@@ -357,7 +357,7 @@ class Cl1SchemaRepairTests(unittest.TestCase):
         self.assertEqual(migrated.get_stats('test', '2026-01'), {'battle_count': 6})
         self.assertEqual(self.path.read_bytes(), before)
         with migrated.store.transaction(write=False) as conn:
-            self.assertEqual(conn.execute('SELECT count(*) FROM cl1_months').fetchone()[0], 1)
+            self.assertEqual(conn.execute('SELECT count(*) FROM cl1_data').fetchone()[0], 1)
 
     def test_intact_unique_key_is_left_alone(self):
         with closing(sqlite3.connect(self.path)) as conn, conn:

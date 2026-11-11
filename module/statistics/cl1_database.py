@@ -1,6 +1,6 @@
 """CL1 数据库模块。
 
-月度计数、事件与收益使用总库原生表；未知字段通过类型化兼容树保留。
+月度计数、事件与收益在总库中按实例及月份保存完整记录。
 旧存储的只读解码由安装级迁移器统一处理。
 """
 
@@ -422,9 +422,9 @@ class Cl1Database:
     def _list_stats_rows(self, instance: Optional[str] = None) -> List[Tuple[str, str]]:
         with self.store.transaction(write=False) as connection:
             if instance is None:
-                rows = connection.execute('SELECT instance,month FROM cl1_months ORDER BY instance,month')
+                rows = connection.execute('SELECT instance,month FROM cl1_data ORDER BY instance,month')
             else:
-                rows = connection.execute('SELECT instance,month FROM cl1_months WHERE instance=? ORDER BY month', (instance,))
+                rows = connection.execute('SELECT instance,month FROM cl1_data WHERE instance=? ORDER BY month', (instance,))
             return [(row[0], row[1]) for row in rows]
 
 
@@ -532,8 +532,6 @@ class Cl1Database:
         purchased_at: datetime = None,
     ):
         """在同一事务追加明石购买明细和月度累计。"""
-        from module.persistence.snapshots import append_akashi_ap_purchase
-
         purchased_at = purchased_at or datetime.now()
         month = purchased_at.strftime("%Y-%m")
         entry = {
@@ -544,8 +542,6 @@ class Cl1Database:
             "source": source,
         }
         with self._stats_transaction() as conn:
-            if append_akashi_ap_purchase(conn, instance, month, entry):
-                return
             data = self._get_stats_in_connection(conn, instance, month)
             entries = data.get("akashi_ap_entries", [])
             entries.append(entry)
@@ -621,7 +617,7 @@ class Cl1Database:
             stored: Dict[str, Dict[str, Any]] = {}
             with self.store.transaction(write=False) as reader:
                 for (month,) in reader.execute(
-                    'select month from cl1_months where instance = ? order by month', (instance,)
+                    'SELECT month FROM cl1_data WHERE instance=? ORDER BY month', (instance,)
                 ):
                     try:
                         stored[month] = self._get_stats_in_connection(reader, instance, month)
@@ -679,7 +675,7 @@ class Cl1Database:
             stored: Dict[str, Dict[str, Any]] = {}
             with self.store.transaction(write=False) as reader:
                 for (month,) in reader.execute(
-                    'select month from cl1_months where instance = ?', (instance,)
+                    'SELECT month FROM cl1_data WHERE instance=?', (instance,)
                 ):
                     try:
                         stored[month] = self._get_stats_in_connection(reader, instance, month)

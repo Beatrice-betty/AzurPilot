@@ -50,13 +50,13 @@ class TestCommissionSettlement(unittest.TestCase):
 
     def rows(self):
         with closing(sqlite3.connect(self.db.db_path)) as conn, conn:
-            return conn.execute("SELECT * FROM cl1_months ORDER BY month").fetchall()
+            return conn.execute("SELECT * FROM cl1_data ORDER BY month").fetchall()
 
     def fail_current_month(self):
         self.db.store.ensure_ready()
         with closing(sqlite3.connect(self.db.db_path)) as conn, conn:
             conn.execute("""
-                CREATE TRIGGER reject_archive BEFORE INSERT ON cl1_months
+                CREATE TRIGGER reject_archive BEFORE INSERT ON cl1_data
                 WHEN NEW.month = '2026-01'
                 BEGIN SELECT RAISE(ABORT, 'archive rejected'); END
             """)
@@ -132,7 +132,7 @@ class TestCommissionSettlement(unittest.TestCase):
         with closing(sqlite3.connect(self.db.db_path)) as conn, conn:
             conn.execute("CREATE TABLE guard_parent (id INTEGER PRIMARY KEY)")
             conn.execute("CREATE TABLE guard_child (parent_id INTEGER REFERENCES guard_parent(id) DEFERRABLE INITIALLY DEFERRED)")
-            conn.execute("CREATE TRIGGER fail_commit BEFORE INSERT ON cl1_months WHEN NEW.month = '2026-01' BEGIN INSERT INTO guard_child VALUES (1); END")
+            conn.execute("CREATE TRIGGER fail_commit BEFORE INSERT ON cl1_data WHEN NEW.month = '2026-01' BEGIN INSERT INTO guard_child VALUES (1); END")
         connect = sqlite3.connect
 
         def checked_connect(*args, **kwargs):
@@ -201,7 +201,7 @@ class TestCommissionSettlement(unittest.TestCase):
     def test_corrupt_data_is_not_overwritten_by_settlement(self):
         self.seed("2025-12", [commission()], unknown={"keep": True})
         with closing(sqlite3.connect(self.db.db_path)) as conn, conn:
-            conn.execute("DELETE FROM typed_value_nodes WHERE parent_no IS NULL")
+            conn.execute("UPDATE cl1_data SET data_json='[invalid]'")
         before = self.rows()
         with self.assertRaises(ValueError):
             self.db.settle_gem_commission("test", 60)
@@ -340,7 +340,7 @@ class TestCommissionIncomePersistence(unittest.TestCase):
         self.reward._recognize_commission_income.return_value[0]["Gem"] = 60
         with closing(sqlite3.connect(self.db.db_path)) as conn, conn:
             conn.execute("""
-                CREATE TRIGGER reject_income BEFORE INSERT ON cl1_months
+                CREATE TRIGGER reject_income BEFORE INSERT ON cl1_data
                 WHEN NEW.month = '2026-01'
                 BEGIN SELECT RAISE(ABORT, 'income rejected'); END
             """)

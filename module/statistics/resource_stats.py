@@ -86,8 +86,9 @@ def record_resource_snapshot(instance: str, resources: Dict[str, Any], *, observ
             return True
         with _local_lock, _database().transaction() as conn:
             register_instance(conn, instance)
-            latest = conn.execute('SELECT * FROM resource_snapshots WHERE instance = ? ORDER BY id DESC LIMIT 1',
-                                  (instance,)).fetchone()
+            latest = conn.execute('''SELECT * FROM resource_snapshots WHERE id = (
+                SELECT MAX(id) FROM resource_snapshots WHERE instance = ?
+            )''', (instance,)).fetchone()
             if latest is not None:
                 for name, column in RESOURCE_COLUMNS.items():
                     if name not in resources:

@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch
 
 from Crypto.Cipher import AES
 
-from module.persistence.database import BusinessDatabase
+from module.persistence.database import SCHEMA_V1, VERSION, BusinessDatabase, create_schema
 from module.persistence.migration import MigrationError, assert_no_workers
 from module.persistence.snapshots import read_month, read_ship, save_month
 from module.scheduler.store import ProgramStore, ConflictError
@@ -153,7 +153,7 @@ class MigrationProcessTests(unittest.TestCase):
                 report = json.loads(next((config / 'storage-backups').glob('*/unmigrated.json')).read_text(encoding='utf-8'))
                 self.assertEqual(report[0]['identity'], {'instance': 'inst', 'month': '2026-03'})
                 with closing(sqlite3.connect(config / 'azurpilot.db')) as connection:
-                    self.assertEqual(connection.execute('SELECT battle_count FROM cl1_months').fetchone()[0], 7)
+                    self.assertEqual(read_month(connection, 'inst', '2026-09'), {'battle_count': 7})
                     self.assertIsNone(read_month(connection, 'inst', '2026-03'))
                     self.assertEqual(connection.execute('PRAGMA foreign_key_check').fetchall(), [])
                     self.assertEqual(connection.execute('PRAGMA integrity_check').fetchone()[0], 'ok')
@@ -166,6 +166,71 @@ class MigrationTests(unittest.TestCase):
         self.config.mkdir()
         self.store = install_store(self, self.root)
         self.database = BusinessDatabase(self.config)
+
+    def seed_native_months(self, connection):
+        connection.row_factory = sqlite3.Row
+        connection.execute('PRAGMA foreign_keys=ON')
+        connection.execute('PRAGMA journal_mode=WAL')
+        connection.execute('PRAGMA wal_autocheckpoint=0')
+        create_schema(connection)
+        records = {
+            ('inst', '2026-09'): {
+                'akashi_ap_entries': [{'amount': 20, 'source': 'akashi'}],
+                'yellow_coin_snapshots': [{'yellow_coin': 50}, {'yellow_coin': 75}],
+                'research_drop_entries': [{'imgid': 'sample', 'items': {'Cube': 1}}],
+                'commission_income_entries': [{'items': {'Oil': 30}, 'screenshots': ['a.png']}],
+                'running_gem_commissions': [{'name': 'sample', 'duration': 8}],
+                'compatibility': [None, {}, 2 ** 90],
+            },
+            ('inst', '2026-10'): {'akashi_ap': 10},
+            ('other', '2026-09'): {},
+        }
+        with connection:
+            for (instance, month), data in records.items():
+                save_month(connection, instance, month, data)
+            connection.execute("INSERT INTO storage_migrations VALUES(1,'2026-10-01','native')")
+            connection.execute("INSERT INTO resource_snapshots(instance,ts,oil) VALUES('inst','2026-09-01',100)")
+        self.database.marker.write_text('1\nnative\n', encoding='utf-8')
+        return records
+
+    def test_existing_native_months_upgrade_and_preserve_committed_wal(self):
+        with closing(sqlite3.connect(self.database.path)) as previous:
+            records = self.seed_native_months(previous)
+            self.assertGreater(self.database.path.with_name('azurpilot.db-wal').stat().st_size, 0)
+            self.database.ensure_ready()
+            with self.database.transaction() as connection:
+                self.assertEqual(connection.execute('PRAGMA user_version').fetchone()[0], VERSION)
+                for key, data in records.items():
+                    self.assertEqual(read_month(connection, *key), data)
+                self.assertEqual(connection.execute('SELECT oil FROM resource_snapshots').fetchone()[0], 100)
+                save_month(connection, 'inst', '2026-10', {'akashi_ap': 40})
+
+        backups = list((self.config / 'storage-backups').glob('pre-v2-*/azurpilot.db'))
+        self.assertEqual(len(backups), 1)
+        with closing(sqlite3.connect(backups[0])) as backup:
+            backup.row_factory = sqlite3.Row
+            self.assertEqual(backup.execute('PRAGMA user_version').fetchone()[0], SCHEMA_V1)
+            for key, data in records.items():
+                self.assertEqual(read_month(backup, *key), data)
+        reopened = BusinessDatabase(self.config)
+        with reopened.transaction(write=False) as connection:
+            self.assertEqual(read_month(connection, 'inst', '2026-10'), {'akashi_ap': 40})
+        self.assertEqual(list((self.config / 'storage-backups').glob('pre-v2-*/azurpilot.db')), backups)
+        self.assertEqual(self.database.marker.read_text(encoding='utf-8').splitlines()[0], str(VERSION))
+
+    def test_native_upgrade_failure_leaves_original_months_and_version(self):
+        with closing(sqlite3.connect(self.database.path)) as previous:
+            records = self.seed_native_months(previous)
+        with patch('module.persistence.migration.verify_snapshot', side_effect=MigrationError('test mismatch')):
+            with self.assertRaisesRegex(MigrationError, 'test mismatch'):
+                self.database.ensure_ready()
+        with closing(sqlite3.connect(self.database.path)) as connection:
+            connection.row_factory = sqlite3.Row
+            self.assertEqual(connection.execute('PRAGMA user_version').fetchone()[0], SCHEMA_V1)
+            self.assertIsNone(connection.execute("SELECT name FROM sqlite_master WHERE name='cl1_data'").fetchone())
+            for key, data in records.items():
+                self.assertEqual(read_month(connection, *key), data)
+        self.assertEqual(self.database.marker.read_text(encoding='utf-8'), '1\nnative\n')
 
     def old_cl1(self, data):
         path = self.config / 'cl1_data.db'
@@ -567,7 +632,7 @@ class MigrationTests(unittest.TestCase):
             backup = self.root / 'backup.db'
             self.database.backup(backup)
             with closing(sqlite3.connect(backup)) as saved:
-                self.assertEqual(saved.execute('SELECT battle_count FROM cl1_months').fetchone()[0], 9)
+                self.assertEqual(read_month(saved, 'inst', '2026-09'), {'battle_count': 9})
 
     def test_new_flow_ids_follow_a_watermark_even_when_old_rows_were_cleaned(self):
         path = self.config / 'azurstats_local.db'
@@ -653,7 +718,7 @@ class MigrationTests(unittest.TestCase):
         export_statistics(self.database, 'inst', path)
         other = BusinessDatabase(self.root / 'restored')
         import_statistics(other, 'inst', path)
-        self.assertEqual(len(check(other)), 56)
+        self.assertEqual(check(other)['cl1_data'], 1)
         with other.transaction(write=False) as connection:
             self.assertEqual(read_month(connection, 'inst', '2026-09'), {'keep': [None, {}, [], 2 ** 100]})
             self.assertEqual(read_ship(connection, 'inst')['target_level'], None)

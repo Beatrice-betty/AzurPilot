@@ -12,6 +12,9 @@ from module.persistence.snapshots import read_month, read_ship, save_month, save
 from module.scheduler.store import ProgramStore
 
 
+STATISTICS_EXPORT_VERSION = 1
+
+
 def check(database):
     """只读检查正式库，不根据旧源创建数据库。"""
     with closing(sqlite3.connect(database.path.as_uri() + '?mode=ro', uri=True)) as connection:
@@ -26,8 +29,8 @@ def check(database):
         if connection.execute('PRAGMA foreign_key_check').fetchone():
             raise ValueError('总库外键检查失败')
         tables = connection.execute("SELECT name,strict FROM pragma_table_list WHERE schema='main' AND type='table' AND name NOT LIKE 'sqlite_%'").fetchall()
-        if len(tables) != 56 or any(strict != 1 for _, strict in tables):
-            raise ValueError('总库表结构与 v1 不符')
+        if len(tables) != 57 or any(strict != 1 for _, strict in tables) or not any(name == 'cl1_data' for name, _ in tables):
+            raise ValueError(f'总库表结构与 v{VERSION} 不符')
         return {name: connection.execute(f'SELECT COUNT(*) FROM "{name}"').fetchone()[0] for name, _ in tables}
 
 
@@ -35,8 +38,8 @@ def export_statistics(database, instance, target):
     """显式导出统计快照；缺失整份舰船记录用 None 表示。"""
     with database.transaction(write=False) as connection:
         months = {row[0]: read_month(connection, instance, row[0]) for row in connection.execute(
-            'SELECT month FROM cl1_months WHERE instance=? ORDER BY month', (instance,))}
-        data = dict(version=VERSION, instance=instance, months=months, ship_exp=read_ship(connection, instance))
+            'SELECT month FROM cl1_data WHERE instance=? ORDER BY month', (instance,))}
+        data = dict(version=STATISTICS_EXPORT_VERSION, instance=instance, months=months, ship_exp=read_ship(connection, instance))
     target = Path(target)
     if target.exists() or target.is_symlink():
         raise FileExistsError('导出目标已存在')
@@ -59,7 +62,7 @@ def import_statistics(database, instance, source):
     data = json.loads(Path(source).read_text(encoding='utf-8'))
     if not isinstance(data, dict) or set(data) != {'version', 'instance', 'months', 'ship_exp'}:
         raise ValueError('统计导入格式无效')
-    if data['version'] != VERSION or data['instance'] != instance or not isinstance(data['months'], dict):
+    if data['version'] != STATISTICS_EXPORT_VERSION or data['instance'] != instance or not isinstance(data['months'], dict):
         raise ValueError('统计版本或实例不匹配')
     if any(not isinstance(snapshot, dict) for snapshot in data['months'].values()) or (data['ship_exp'] is not None and not isinstance(data['ship_exp'], dict)):
         raise ValueError('统计快照必须是对象')
@@ -79,7 +82,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config-dir', type=Path, help='实际配置目录；默认使用当前安装配置目录')
     commands = parser.add_subparsers(dest='command', required=True)
-    commands.add_parser('migrate', help='停止旧 worker 后执行首次迁移；保留原件和恢复备份')
+    commands.add_parser('migrate', help='停止旧 worker 后初始化或迁移总库，保留恢复备份')
     commands.add_parser('check', help='只读检查正式库的版本、表结构、完整性和外键')
     backup = commands.add_parser('backup', help='导出包含已提交 WAL 的普通总库快照')
     backup.add_argument('--output', type=Path, required=True)
