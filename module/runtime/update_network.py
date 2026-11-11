@@ -7,14 +7,8 @@ when the configured CDN cannot provide a matching update.
 
 import subprocess
 
-from deploy.api_endpoints import FORCE_UPDATE_CONTROL_URL
 from deploy.git import GitManager
-from deploy.git_over_cdn.client import (
-    CLOUDFLARE_VERSION_KEY_HEADER,
-    DEVICE_ID_HEADER,
-    GitOverCdnClient,
-    _read_device_id,
-)
+from deploy.git_over_cdn.client import GitOverCdnClient
 from deploy.git_over_cdn.endpoints import CLOUDFLARE_UPDATE_URLS, FALLBACK_UPDATE_URLS
 from module.base import http
 from module.logger import logger
@@ -27,9 +21,6 @@ class RuntimeGitOverCdnClient(GitOverCdnClient):
     def _create_session(max_retries=3):
         session = http.Session(download=True, retries=max_retries)
         session.trust_env = False
-        device_id = _read_device_id()
-        session.headers[DEVICE_ID_HEADER] = device_id
-        session.headers[CLOUDFLARE_VERSION_KEY_HEADER] = device_id
         return session
 
     def close(self):
@@ -67,35 +58,6 @@ class RuntimeGitManager(GitManager):
         )
         client.logger = logger
         return client
-
-    @staticmethod
-    def cloud_force_update_enabled():
-        """Read the update policy through the runtime API transport."""
-        try:
-            with http.get(FORCE_UPDATE_CONTROL_URL, timeout=5,
-                          headers={'User-Agent': http.USER_AGENT}) as response:
-                response.raise_for_status()
-                try:
-                    policy = response.json()
-                except ValueError:
-                    policy = response.text.strip()
-        except http.RequestException as error:
-            logger.warning(f'Update policy is unavailable: {type(error).__name__}')
-            return None
-        if isinstance(policy, dict):
-            if policy.get('schema_version') != 2 or not isinstance(policy.get('force_update'), bool):
-                logger.warning('Invalid cloud update policy document')
-                return None
-            policy = policy['force_update']
-        if isinstance(policy, bool):
-            return policy
-        if isinstance(policy, str):
-            if policy.lower() in ('true', 'ture'):
-                return True
-            if policy.lower() in ('false', 'fales'):
-                return False
-        logger.warning('Invalid cloud update policy document')
-        return None
 
     def fetch_update(self, source='origin', branch=None, max_retry=3, delay=1):
         """Prepare a version check through CDN, falling back to the existing Git fetch."""

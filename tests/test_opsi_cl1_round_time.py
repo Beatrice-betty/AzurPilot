@@ -55,7 +55,6 @@ class FullRoundTimeTests(unittest.TestCase):
         self.runner._forced_move_enabled = Mock(return_value=True)
         self.runner._execute_fixed_patrol_scan = self.phase(12)
         self.runner.handle_after_auto_search = self.phase(9)
-        self.runner._cl1_handle_telemetry = self.phase(1)
         self.runner.consume_cached_action_point = Mock()
         self.enterContext(patch('module.base.debug_clip.cleanup_clips_if_due'))
         self.enterContext(patch('module.base.debug_clip.clip_recording', side_effect=lambda *args: nullcontext()))
@@ -94,13 +93,13 @@ class FullRoundTimeTests(unittest.TestCase):
         return self.now - started_at
 
     def test_preparation_sea_miles_patrol_and_repair_are_all_included(self):
-        self.assertEqual(self.run_once(), 91)
+        self.assertEqual(self.run_once(), 90)
         stats = self.stats()
-        self.assertEqual(stats.get_average_round_time(), 91)
+        self.assertEqual(stats.get_average_round_time(), 90)
         self.assertEqual(stats.get_average_battle_time(), 13.5)
         self.assertEqual(stats.get_today_stats()['total_run_time'], 27)
         self.assertEqual(stats.get_today_stats()['battle_count'], 2)
-        self.assertEqual(stats.get_exp_per_hour(), round(312 * 2 * 3600 / 91, 2))
+        self.assertEqual(stats.get_exp_per_hour(), round(312 * 2 * 3600 / 90, 2))
         self.runner.detect_and_record_sea_miles.assert_called_once()
         self.runner.map_rescan.assert_called_once()
         self.runner._execute_fixed_patrol_scan.assert_called_once()
@@ -149,15 +148,15 @@ class FullRoundTimeTests(unittest.TestCase):
         self.now += 10000
         with opsi_runtime.cl1_round_timer(self.config):
             self.complete_battle(20, source='meow')
-        self.assertEqual(self.run_once(), 91)
+        self.assertEqual(self.run_once(), 90)
         stats = self.stats()
-        self.assertEqual(stats.data['round_times']['samples'], [91, 91])
+        self.assertEqual(stats.data['round_times']['samples'], [90, 90])
         self.assertEqual(stats.get_today_stats()['battle_count'], 4)
 
     def test_nested_timer_does_not_record_the_same_battles_twice(self):
         with opsi_runtime.cl1_round_timer(self.config):
             self.run_once()
-        self.assertEqual(self.stats().data['round_times']['samples'], [91])
+        self.assertEqual(self.stats().data['round_times']['samples'], [90])
 
     def test_scheduling_and_overflow_proxies_keep_round_samples(self):
         self.config.bind = Mock()
@@ -171,7 +170,7 @@ class FullRoundTimeTests(unittest.TestCase):
                     self.run_once()
                 self.assertIs(self.config.task, owner)
                 self.assertFalse(hasattr(self.config, '_cl1_round_metrics'))
-        self.assertEqual(self.stats().data['round_times']['samples'], [91, 91])
+        self.assertEqual(self.stats().data['round_times']['samples'], [90, 90])
         self.assertEqual(self.stats().get_today_stats()['battle_count'], 4)
 
     def test_single_finished_battle_is_normalized_as_half_a_round(self):
@@ -229,7 +228,7 @@ class FullRoundTimeTests(unittest.TestCase):
         group = self.stats().data['round_times']
         self.assertEqual(group['legacy'], legacy)
         self.assertEqual(group['scope'], 'full_cycle')
-        self.assertEqual(group['average'], 91)
+        self.assertEqual(group['average'], 90)
 
     def test_average_is_weighted_by_round_count_across_different_search_lengths(self):
         stats = self.stats()

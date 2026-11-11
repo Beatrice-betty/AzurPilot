@@ -9,8 +9,7 @@ from json import JSONDecodeError
 
 from module.base import http
 
-from deploy.api_endpoints import API_BASE_URL
-from module.base.device_id import get_device_id
+from deploy.api_endpoints import ANONYMOUS_STATUS_HEADERS, API_BASE_URL
 from module.base.timer import Timer
 from module.config.server import VALID_SERVER_LIST as server_list
 from module.config.server import ServerInfo, get_server_info
@@ -79,7 +78,7 @@ class ServerChecker:
                 response = session.get(
                     url=f'{self._base}/api/v2/get/server',
                     params={'region': self._server_info.region, 'server_id': self._server_info.server_id},
-                    headers={'X-AzurPilot-ID': get_device_id()},
+                    headers=ANONYMOUS_STATUS_HEADERS,
                     timeout=(3, 3),
                 )
             finally:

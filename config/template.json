@@ -142,9 +142,8 @@
       "RetentionDays": 0,
       "BackUpMethod": "zip",
       "ZipMethod": "zip",
-      "CloudUpload": true,
-      "ResearchRecord": "upload",
-      "CommissionRecord": "upload",
+      "ResearchRecord": "do_not",
+      "CommissionRecord": "record",
       "CommissionIncomeScreenshot": "save",
       "CombatRecord": "do_not",
       "OpsiHazard1Leveling": "do_not",
@@ -156,8 +155,7 @@
       "OpsiExplore": "do_not",
       "OpsiOther": "do_not",
       "MeowfficerBuy": "do_not",
-      "MeowfficerTalent": "do_not",
-      "TelemetryReport": true
+      "MeowfficerTalent": "do_not"
     },
     "Backup": {
       "Enable": true,

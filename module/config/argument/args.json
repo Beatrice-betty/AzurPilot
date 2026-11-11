@@ -766,25 +766,21 @@
           "zip"
         ]
       },
-      "CloudUpload": {
-        "type": "checkbox",
-        "value": true
-      },
       "ResearchRecord": {
         "type": "select",
-        "value": "upload",
+        "value": "do_not",
         "option": [
-          "upload",
-          "save_and_upload",
+          "save",
           "do_not"
         ]
       },
       "CommissionRecord": {
         "type": "select",
-        "value": "upload",
+        "value": "record",
         "option": [
-          "upload",
-          "save_and_upload",
+          "record",
+          "save_and_record",
+          "save_only",
           "do_not"
         ]
       },
@@ -883,10 +879,6 @@
           "save",
           "do_not"
         ]
-      },
-      "TelemetryReport": {
-        "type": "checkbox",
-        "value": true
       }
     },
     "Backup": {

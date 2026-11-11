@@ -333,7 +333,6 @@ class BackgroundRuntimeTests(unittest.TestCase):
         self.runner.get_current_zone = Mock(side_effect=AssertionError('重复海域 OCR'))
         self.runner.fleet_set = Mock()
         self.runner._record_ap_and_coins = Mock()
-        self.runner._cl1_handle_telemetry = Mock()
         self.runner.interval_clear = Mock()
         opened = []
         self.runner.appear = Mock(side_effect=lambda *args, **kwargs: bool(opened))

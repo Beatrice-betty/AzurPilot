@@ -161,7 +161,8 @@ class ActionHistory:
                 latest_allowed = int((time.time() + 60) * 1000)
                 points = []
                 try:
-                    for row in read_ap_snapshots(path, record.get('legacyStatsName') or record['name'], [month]):
+                    for row in read_ap_snapshots(path, record.get('legacyStatsName') or record['name'], [month],
+                                                 root=self.root):
                         # 当前可用行动力 ap 不等于含箱总量，不能用它填造证券价格。
                         point = history_point(row.get('ap_total'), row.get('ts'))
                         if point and point[2] == month and point[0] <= latest_allowed:

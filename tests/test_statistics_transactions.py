@@ -15,6 +15,7 @@ from unittest.mock import patch
 from Crypto.Cipher import AES
 
 from module.statistics import cl1_database as database
+from module.statistics.cl1_legacy import derive_legacy_key
 from module.persistence import database as persistence
 
 
@@ -261,16 +262,19 @@ class TestStatisticsTransactions(unittest.TestCase):
     def encrypted_seed(self):
         """在另一个临时配置目录中迁移旧 AES 整行，确认原件保留。"""
         data = self.db.get_stats('test', MONTH)
-        key = b'x' * 32
-        cipher = AES.new(key, AES.MODE_GCM)
+        root = self.path.parent.parent
+        device_id = 'legacy-test-device'
+        identity = root / 'log' / 'device_id.json'
+        identity.parent.mkdir()
+        identity.write_text(json.dumps({'device_id': device_id}), encoding='utf-8')
+        cipher = AES.new(derive_legacy_key(device_id), AES.MODE_GCM)
         payload, tag = cipher.encrypt_and_digest(json.dumps(data).encode())
-        legacy = self.path.parent.parent / 'legacy' / 'cl1_data.db'
+        legacy = root / 'legacy' / 'cl1_data.db'
         legacy.parent.mkdir()
         with closing(sqlite3.connect(legacy)) as conn, conn:
             conn.execute('CREATE TABLE cl1_data(instance TEXT,month TEXT,data_json TEXT,encrypted_blob BLOB)')
             conn.execute('INSERT INTO cl1_data VALUES(?,?,NULL,?)', ('test', MONTH, cipher.nonce + tag + payload))
         original = legacy.read_bytes()
-        self.enterContext(patch('module.statistics.cl1_legacy.derive_legacy_key', return_value=key))
         self.db = database.Cl1Database(legacy)
         self.other = database.Cl1Database(legacy)
         self.path = self.db.db_path

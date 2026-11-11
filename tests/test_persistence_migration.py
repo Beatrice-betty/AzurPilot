@@ -338,9 +338,7 @@ class MigrationTests(unittest.TestCase):
         identity.parent.mkdir()
         identity.write_text('{"device_id":"old-device","keep":true}', encoding='utf-8')
         original, material = source.read_bytes(), identity.read_bytes()
-        with patch('module.base.device_id.get_device_id', side_effect=AssertionError('不得刷新设备 ID')), \
-                patch('module.base.device_id._start_refresh_timer', side_effect=AssertionError('不得启动刷新定时器')), \
-                patch('module.base.device_id.generate_device_id', return_value='current-device'):
+        with patch('module.base.device_id.get_device_id', side_effect=AssertionError('不得生成新统计标识')):
             self.database.ensure_ready()
         with self.database.transaction(write=False) as connection:
             self.assertEqual(read_month(connection, 'inst', '2026-09'), expected)
@@ -363,8 +361,7 @@ class MigrationTests(unittest.TestCase):
         identity.write_text('{"device_id":"current-device"}', encoding='utf-8')
         original, material = source.read_bytes(), identity.read_bytes()
         with self.assertLogs('alas', level='INFO') as captured, \
-                patch('module.base.device_id.get_device_id', side_effect=AssertionError('不得刷新设备 ID')), \
-                patch('module.base.device_id.generate_device_id', return_value='current-device'):
+                patch('module.base.device_id.get_device_id', side_effect=AssertionError('不得生成新统计标识')):
             self.database.ensure_ready()
         messages = '\n'.join(captured.output)
         self.assertIn('开始解密整行 AES 月度快照', messages)
@@ -400,18 +397,19 @@ class MigrationTests(unittest.TestCase):
         with closing(sqlite3.connect(source)) as connection, connection:
             connection.execute("INSERT INTO cl1_data VALUES('inst','2026-09','{}',NULL,NULL)")
         original = source.read_bytes()
-        with patch('module.base.device_id.generate_device_id', return_value='current-device'):
-            with self.assertRaisesRegex(MigrationError, '重复月份'):
-                self.database.ensure_ready()
+        with self.assertRaisesRegex(MigrationError, '重复月份'):
+            self.database.ensure_ready()
         self.assertFalse(self.database.path.exists())
         self.assertEqual(source.read_bytes(), original)
 
     def test_decodable_ciphertext_with_invalid_structure_is_not_silently_skipped(self):
         source = self.encrypted_cl1([], 'current-device')
+        identity = self.root / 'log' / 'device_id.json'
+        identity.parent.mkdir()
+        identity.write_text('{"device_id":"current-device"}', encoding='utf-8')
         original = source.read_bytes()
-        with patch('module.base.device_id.generate_device_id', return_value='current-device'):
-            with self.assertRaisesRegex(MigrationError, '快照不是有效对象'):
-                self.database.ensure_ready()
+        with self.assertRaisesRegex(MigrationError, '快照不是有效对象'):
+            self.database.ensure_ready()
         self.assertFalse(self.database.path.exists())
         self.assertEqual(source.read_bytes(), original)
 

@@ -36,8 +36,6 @@ class Updater(DeployConfig, RuntimeGitManager):
         state: 当前更新器状态（如 0, 1, "checking", "start", "wait", "run update", "reload", "failed", "cancel"）。
         event: 更新过程中的同步线程事件。
         _update_lock: 防止并发执行更新的互斥线程锁。
-        force_update: 是否强制执行更新。
-        _force_update_checking: 是否正在后台检查强制更新标记。
     """
 
     def __init__(self, file=DEPLOY_CONFIG):
@@ -50,8 +48,6 @@ class Updater(DeployConfig, RuntimeGitManager):
         self.state = 0
         self.event: threading.Event = None
         self._update_lock = threading.Lock()
-        self.force_update = False
-        self._force_update_checking = False
 
     def alas_kill(self):
         """强制终止当前进程。"""
@@ -126,14 +122,6 @@ class Updater(DeployConfig, RuntimeGitManager):
         else:
             return logs
 
-    def _check_cloud_force_update(self) -> bool:
-        """检查云端强制更新开关。
-
-        Returns:
-            若允许强制更新返回 True，否则返回 False 或 None。
-        """
-        return self.cloud_force_update_enabled()
-
     def _check_update(self) -> bool:
         """执行核心更新检测逻辑，比较远程分支与本地提交。
 
@@ -141,11 +129,6 @@ class Updater(DeployConfig, RuntimeGitManager):
             若有可用更新返回 True (或 1)，否则返回 False (或 0)。
         """
         self.state = "checking"
-
-        force_update = self._check_cloud_force_update()
-        self.force_update = force_update is True
-        if force_update is None:
-            logger.warning("强制更新开关不可访问，按关闭处理")
 
         if State.deploy_config.GitOverCdn:
             client = self.goc_client
@@ -267,27 +250,10 @@ class Updater(DeployConfig, RuntimeGitManager):
     def _check_update_thread(self):
         """在后台线程中执行更新检查。"""
         try:
-            result = self._check_update()
-            self.state = result
-            if result and self.force_update:
-                logger.info("强制更新开关已开启，立即执行更新")
-                self.run_update()
+            self.state = self._check_update()
         except Exception as e:
             logger.exception(e)
             self.state = 0
-
-    def _check_force_update_thread(self):
-        """已有更新时，在后台线程仅检查强制更新开关以保留前端状态。"""
-        try:
-            force_update = self._check_cloud_force_update()
-            self.force_update = force_update is True
-            if self.force_update:
-                logger.info("强制更新开关已开启，立即执行已检测到的更新")
-                self.run_update()
-        except Exception as e:
-            logger.exception(e)
-        finally:
-            self._force_update_checking = False
 
     def check_update(self):
         """触发更新检查线程。"""
@@ -301,15 +267,9 @@ class Updater(DeployConfig, RuntimeGitManager):
                 target=self._check_update_thread,
                 daemon=True
             ).start()
-        elif self.state == 1 and not self._force_update_checking:
-            self._force_update_checking = True
-            threading.Thread(
-                target=self._check_force_update_thread,
-                daemon=True,
-            ).start()
 
     def check_update_loop(self) -> Generator:
-        """按配置周期调度更新检查，强制更新仅影响发现更新后的执行。
+        """按配置周期检查并显示可用更新。
 
         Yields:
             生成器状态对象供调度器流转。

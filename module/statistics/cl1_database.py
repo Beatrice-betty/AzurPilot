@@ -1657,13 +1657,12 @@ class Cl1Database:
             "imgid": str(imgid or ''),
             "project": str(project or ''),
             "series": self._coerce_int(series or 0),
-            # 云端启用时也保留尚未取得服务器编号的物品。
             "items": items,
         }
         if source_items is not None:
-            from module.cloud.catalog import map_items
+            from module.statistics.reward_templates import summarize_items
             entry['source_items'] = source_items
-            entry['item_entries'] = map_items(source_items, [])
+            entry['item_entries'] = summarize_items(source_items)
         with self._stats_transaction() as conn:
             data = self._get_stats_in_connection(conn, instance, month)
             entries = data.get("research_drop_entries", [])
@@ -1677,39 +1676,8 @@ class Cl1Database:
             self._save_stats_in_connection(conn, instance, month, data)
         return entry
 
-    def apply_template_mappings(self, mappings, *, instance=None):
-        """Repair history atomically from immutable source IDs using storage abstractions."""
-        from module.cloud.catalog import map_items
-
-        rows = self._list_stats_rows(instance)
-        changed = 0
-        with self._stats_transaction() as connection:
-            for name, month in rows:
-                data = self._get_stats_in_connection(connection, name, month)
-                dirty = False
-                for field in ('research_drop_entries', 'commission_income_entries', 'cloud_commission_entries'):
-                    for entry in data.get(field, []):
-                        original = entry.get('source_items')
-                        if original is None:
-                            original = [{'item': key, 'amount': amount, 'tag': ''}
-                                        for key, amount in entry.get('items', {}).items()]
-                        mapped = map_items(original, mappings)
-                        items = {}
-                        for item in mapped:
-                            items[item['item']] = items.get(item['item'], 0) + item['amount']
-                        if items != entry.get('items', {}) or (
-                                'item_entries' in entry and mapped != entry['item_entries']):
-                            entry['source_items'] = original
-                            entry['items'] = items
-                            entry['item_entries'] = mapped
-                            dirty = True
-                            changed += 1
-                if dirty:
-                    self._save_stats_in_connection(connection, name, month, data)
-        return changed
-
-    def add_cloud_commission_drop(self, instance, record):
-        """Retain the complete tagged cloud event without changing local resource settlement."""
+    def add_commission_drop(self, instance, record):
+        """保存完整的委托掉落，沿用已有月度统计字段。"""
         stamp = datetime.fromisoformat(record['collected_at'])
         month = stamp.strftime('%Y-%m')
         with self._stats_transaction() as connection:

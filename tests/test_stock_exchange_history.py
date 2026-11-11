@@ -108,9 +108,10 @@ class HistoryTests(unittest.TestCase):
             db.execute('INSERT INTO cl1_data VALUES(?,?,NULL,?)',
                        ('test', self.month, cipher.nonce + tag + payload))
         original = path.read_bytes()
-        with patch('module.base.device_id.get_device_id', return_value='test-device'), \
-                patch('module.base.device_id.get_old_device_id', return_value=None):
-            self.journal.capture('test', {}, self.store.history.path('test'))
+        identity = self.root / 'log' / 'device_id.json'
+        identity.parent.mkdir(parents=True, exist_ok=True)
+        identity.write_text(json.dumps({'device_id': 'test-device'}), encoding='utf-8')
+        self.journal.capture('test', {}, self.store.history.path('test'))
         self.sync()
         self.assertEqual({history_point(6000, earlier.isoformat())[0]: 6000}, self.remote_points)
         self.assertEqual(original, path.read_bytes())
@@ -131,7 +132,7 @@ class HistoryTests(unittest.TestCase):
             db.execute('INSERT INTO cl1_data VALUES(?,?,NULL,?)', ('test', previous, b'unreadable-old-ciphertext'))
         original = path.read_bytes()
         self.store.observe('test', 'ActionPoint', {'Total': 8000}, self.now.isoformat(), 'fixture')
-        with patch('module.base.device_id.get_device_id') as device:
+        with patch('module.base.device_id.read_legacy_device_ids') as device:
             self.journal.capture('test', {}, self.store.history.path('test'))
         device.assert_not_called()
         self.sync()

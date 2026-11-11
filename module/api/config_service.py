@@ -20,7 +20,8 @@ from module.combat.emotion_state import EmotionRecoveryState
 from module.config.config_updater import campaign_event_options, refresh_campaign_events
 from module.config.fleet_legacy import LEGACY_PATHS
 from module.config.redirect_utils.utils import (
-    fleet_training_interval_redirect, meta_assist_limit_redirect, sea_miles_interval_redirect,
+    fleet_training_interval_redirect, local_drop_record_settings, meta_assist_limit_redirect,
+    sea_miles_interval_redirect,
 )
 from module.config.time_source import now as current_time
 from module.config.transaction import config_transaction
@@ -300,6 +301,8 @@ class ConfigService:
                             if 'RecordSeaMiles' in fields:
                                 merged[task][group]['RecordSeaMiles'] = sea_miles_interval_redirect(
                                     fields['RecordSeaMiles'])
+                        if task == 'Alas' and group == 'DropRecord':
+                            merged[task][group] = local_drop_record_settings(merged[task][group], fields)
         fleet = data.get('FleetInfo')
         if isinstance(fleet, dict):
             merged['FleetInfo']['FleetTraining']['CheckIntervalHours'] = fleet_training_interval_redirect(fleet)

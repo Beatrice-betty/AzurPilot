@@ -123,37 +123,6 @@ class OpsiHazard1Leveling(CoinTaskMixin, OSMap):
             STRATEGIC_SEARCH_MAP_OPTION_OFF, offset=(20, 20),
         )
 
-    def _cl1_handle_telemetry(self):
-        """在后台异步线程中提交侵蚀 1 遥测数据指标。"""
-        try:
-            if not getattr(self.config, "DropRecord_TelemetryReport", True):
-                logger.info("[大世界-侵蚀1练级] [错误] 遥测上报已关闭")
-            else:
-
-                def run_telemetry():
-                    try:
-                        from module.statistics.cl1_data_submitter import (
-                            get_cl1_submitter,
-                        )
-
-                        instance_name = getattr(self.config, "config_name", None)
-                        submitter = get_cl1_submitter(instance_name=instance_name)
-                        raw_data = submitter.collect_data()
-                        if raw_data.get("battle_count", 0) > 0:
-                            metrics = submitter.calculate_metrics(raw_data)
-                            submitter.submit_data(metrics)
-                            logger.info(
-                                f"侵蚀 1 数据提交已排队，实例名称: {instance_name}"
-                            )
-                    except Exception as e:
-                        logger.debug(f"[大世界-侵蚀1练级] 侵蚀 1 数据提交后台执行失败: {e}")
-
-                from module.base.async_executor import async_executor
-
-                async_executor.submit(run_telemetry)
-        except Exception as e:
-            logger.debug(f"[大世界-侵蚀1练级] 侵蚀 1 数据提交触发失败: {e}")
-
     def os_hazard1_leveling(self):
         """侵蚀 1 练级任务入口。"""
         self.run_hazard1_leveling()
@@ -278,9 +247,6 @@ class OpsiHazard1Leveling(CoinTaskMixin, OSMap):
 
         # ===== 执行侵蚀 1 战略搜索与战后处理 =====
         self._cl1_run_battle()
-
-        # ===== 处理遥测数据提交 =====
-        self._cl1_handle_telemetry()
 
     def os_check_leveling(self):
         """检查大世界阵容练级进度。"""

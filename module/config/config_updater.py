@@ -853,13 +853,10 @@ class ConfigUpdater:
 
         if not is_template:
             new = self.config_redirect(old, new)
-            # 在 OpsiRecord 拆分后统一清洗旧档位；只保存的科研/委托按新三档迁移。
-            drop = deep_get(new, 'Alas.DropRecord')
-            old_drop = deep_get(old, 'Alas.DropRecord', {})
-            for arg in ('ResearchRecord', 'CommissionRecord'):
-                # parse_value 已将不再合法的旧选项替换成默认值，迁移时需读原值。
-                if old_drop.get(arg) == 'save':
-                    drop[arg] = 'save_and_upload'
+            old_drop = deep_get(old, 'Alas.DropRecord', {}) or {}
+            # 旧档位须从原值迁移，parse_value 已将不再合法的选项替换为默认值。
+            drop = local_drop_record_settings(new['Alas']['DropRecord'], old_drop)
+            new['Alas']['DropRecord'] = drop
             for arg in (*OPSI_RECORD_ARGS, 'CombatRecord', 'MeowfficerTalent'):
                 value = old_drop.get(arg, drop[arg])
                 drop[arg] = 'save' if value in ('save', 'save_and_upload') else 'do_not'

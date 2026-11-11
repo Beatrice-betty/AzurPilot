@@ -44,7 +44,7 @@ class SeaMilesIntervalTests(unittest.TestCase):
         self.addCleanup(clock.stop)
 
     def run_once(self, result=123456, error=None):
-        """走真实单轮入口，只替换设备交互和统计提交。"""
+        """走真实单轮入口，替换设备交互与本地统计写入。"""
         with (
             patch.object(self.runner, '_prepare_scheduling_action_point', return_value=(1000, 120)),
             patch.object(self.runner, 'get_current_zone'),
@@ -54,7 +54,6 @@ class SeaMilesIntervalTests(unittest.TestCase):
                          side_effect=error) as detect,
             patch.object(self.runner, '_record_ap_and_coins') as record,
             patch.object(self.runner, '_cl1_run_battle') as battle,
-            patch.object(self.runner, '_cl1_handle_telemetry'),
         ):
             self.runner.run_hazard1_leveling_once(ap_preserve=0)
         battle.assert_called_once()

@@ -265,25 +265,12 @@ class LegacyDecoder:
         self._decoding_kinds = set()
 
     def legacy_device_ids(self):
-        """只读旧设备 ID 并计算当前硬件 ID，不调用覆写文件或启动定时器的初始化。"""
+        """只读已有的本地归属标识。"""
         if self._legacy_ids is None:
-            _log_progress('读取已有设备 ID，并只读计算当前硬件指纹')
-            from module.base import device_id
+            from module.base.device_id import read_legacy_device_ids
 
-            candidates = []
-            paths = (self.root / 'log' / 'device_id.json', self.root / 'log' / 'device_id.json.bak',
-                     self.root / 'log' / 'cl1' / 'cl1_monthly.json',
-                     self.root / 'log' / 'cl1' / 'cl1_monthly.json.bak')
-            for path in paths:
-                try:
-                    data = json.loads(path.read_text(encoding='utf-8'))
-                except (OSError, ValueError):
-                    continue
-                if isinstance(data, dict):
-                    candidates.append(data.get('device_id'))
-            candidates.extend((device_id._device_id, device_id.get_old_device_id(), device_id.generate_device_id()))
-            self._legacy_ids = tuple(dict.fromkeys(value for value in candidates if isinstance(value, str) and value))
-            _log_progress('设备 ID 读取完成，候选数量：%s', len(self._legacy_ids))
+            self._legacy_ids = read_legacy_device_ids(self.root)
+            _log_progress('本地统计标识读取完成，候选数量：%s', len(self._legacy_ids))
         return self._legacy_ids
 
     def legacy_keys(self):

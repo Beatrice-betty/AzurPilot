@@ -1,4 +1,4 @@
-"""Commission identity, page pairing and structured cloud records.
+"""Commission identity, page pairing and local drop records.
 
 Catalog provenance is embedded in assets/stats/commission_names.json. Names are
 resolved exactly after Unicode normalization; uncertain pairings remain local.
@@ -13,8 +13,9 @@ from functools import lru_cache
 from numbers import Integral
 from pathlib import Path
 
-from module.cloud.catalog import map_items
+from deploy.atomic import atomic_write
 from module.logger import logger
+from module.statistics.reward_templates import cached_reward_templates, local_drop_directory, summarize_items
 
 
 @lru_cache(maxsize=1)
@@ -105,7 +106,6 @@ class CommissionReader:
         from module.ocr.ocr import Ocr
         from module.statistics.get_items import GetItemsStatistics
         from module.statistics.item import ItemGrid
-        from module.statistics.cloud_upload import resolver_for
 
         server = 'cn' if config.SERVER.startswith('cn') else config.SERVER
         self.server = server
@@ -113,8 +113,8 @@ class CommissionReader:
         self.stats = GetItemsStatistics()
         self.stats.grid = ItemGrid(None, {})
         self.stats.grid.load_template_folder('./assets/stats_commission_items')
-        self.stats.grid.cloud_resolver = resolver_for(config, 'commission')
-        self.stats.grid.amount_ocr = CommissionAmount([], threshold=96, name='Commission_cloud_amount')
+        self.stats.grid.item_resolver = cached_reward_templates(local_drop_directory(config.config_name)).identify
+        self.stats.grid.amount_ocr = CommissionAmount([], threshold=96, name='Commission_drop_amount')
         self.stats.amount_area = (50, 72, 94, 94)
 
     classify = staticmethod(classify_frame)
@@ -148,7 +148,7 @@ def parse_commissions(images, reader):
         identity = current['identity']
         code = revise_identity(identity['code'], source) if identity['code'] else identity['name']
         events.append({'comm': code, 'name': identity['name'], 'status': current['status'],
-                       'source_items': source, 'items': map_items(source, [])})
+                       'source_items': source, 'items': summarize_items(source)})
 
     for image in images[:80]:
         kind = reader.classify(image)
@@ -181,9 +181,7 @@ def parse_commissions(images, reader):
 
 
 def record_commission_drops(images, config, *, collected_at=None):
-    from module.statistics.cloud_upload import enqueue_record, queue_for
     from module.statistics.cl1_database import db
-    from module.cloud.files import write_json
 
     events, diagnostics = parse_commissions(images, CommissionReader(config))
     stamp = collected_at or datetime.now(timezone.utc).isoformat()
@@ -194,13 +192,9 @@ def record_commission_drops(images, config, *, collected_at=None):
         for row in event['items']:
             amounts[row['item']] = amounts.get(row['item'], 0) + row['amount']
         local = {**event, 'items': amounts, 'item_entries': event['items']}
-        db.add_cloud_commission_drop(config.config_name, local)
-        try:
-            enqueue_record(config, 'commission', **event)
-        except Exception as error:
-            logger.warning(f'[云端统计] 委托上报入队失败，本地记录已保留: {error}')
+        db.add_commission_drop(config.config_name, local)
     if diagnostics:
-        path = queue_for(config).root / 'diagnostics' / (uuid.uuid4().hex + '.json')
-        write_json(path, {'collected_at': stamp, 'errors': diagnostics})
-        logger.warning(f'[云端统计] 委托配对需核对: {diagnostics}')
+        path = local_drop_directory(config.config_name) / 'diagnostics' / (uuid.uuid4().hex + '.json')
+        atomic_write(str(path), json.dumps({'collected_at': stamp, 'errors': diagnostics}))
+        logger.warning(f'[委托统计] 委托配对需核对: {diagnostics}')
     return events
