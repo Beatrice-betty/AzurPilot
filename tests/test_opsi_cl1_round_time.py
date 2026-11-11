@@ -2,12 +2,13 @@
 
 import tempfile
 import unittest
-from contextlib import nullcontext
+from contextlib import ExitStack, nullcontext
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from module.base.async_executor import async_executor
 from module.exception import GameStuckError
 from module.os.tasks.hazard_leveling import OpsiHazard1Leveling
 from module.os.tasks.task_context import opsi_task_context
@@ -54,10 +55,10 @@ class FullRoundTimeTests(unittest.TestCase):
         self.runner._forced_move_enabled = Mock(return_value=True)
         self.runner._execute_fixed_patrol_scan = self.phase(12)
         self.runner.handle_after_auto_search = self.phase(9)
-        self.runner._cl1_handle_telemetry = self.phase(1)
         self.runner.consume_cached_action_point = Mock()
         self.enterContext(patch('module.base.debug_clip.cleanup_clips_if_due'))
         self.enterContext(patch('module.base.debug_clip.clip_recording', side_effect=lambda *args: nullcontext()))
+        self.addCleanup(self.wait_for_statistics)
 
     def phase(self, seconds, result=None):
         def run(*args, **kwargs):
@@ -79,7 +80,11 @@ class FullRoundTimeTests(unittest.TestCase):
         self.complete_battle(14)
         return True
 
+    def wait_for_statistics(self):
+        async_executor.submit(lambda: None).result(timeout=5)
+
     def stats(self):
+        self.wait_for_statistics()
         return ShipExpStats(instance_name=self.config.config_name)
 
     def run_once(self):
@@ -88,13 +93,13 @@ class FullRoundTimeTests(unittest.TestCase):
         return self.now - started_at
 
     def test_preparation_sea_miles_patrol_and_repair_are_all_included(self):
-        self.assertEqual(self.run_once(), 91)
+        self.assertEqual(self.run_once(), 90)
         stats = self.stats()
-        self.assertEqual(stats.get_average_round_time(), 91)
+        self.assertEqual(stats.get_average_round_time(), 90)
         self.assertEqual(stats.get_average_battle_time(), 13.5)
         self.assertEqual(stats.get_today_stats()['total_run_time'], 27)
         self.assertEqual(stats.get_today_stats()['battle_count'], 2)
-        self.assertEqual(stats.get_exp_per_hour(), round(312 * 2 * 3600 / 91, 2))
+        self.assertEqual(stats.get_exp_per_hour(), round(312 * 2 * 3600 / 90, 2))
         self.runner.detect_and_record_sea_miles.assert_called_once()
         self.runner.map_rescan.assert_called_once()
         self.runner._execute_fixed_patrol_scan.assert_called_once()
@@ -143,17 +148,17 @@ class FullRoundTimeTests(unittest.TestCase):
         self.now += 10000
         with opsi_runtime.cl1_round_timer(self.config):
             self.complete_battle(20, source='meow')
-        self.assertEqual(self.run_once(), 91)
+        self.assertEqual(self.run_once(), 90)
         stats = self.stats()
-        self.assertEqual(stats.data['round_times']['samples'], [91, 91])
+        self.assertEqual(stats.data['round_times']['samples'], [90, 90])
         self.assertEqual(stats.get_today_stats()['battle_count'], 4)
 
     def test_nested_timer_does_not_record_the_same_battles_twice(self):
         with opsi_runtime.cl1_round_timer(self.config):
             self.run_once()
-        self.assertEqual(self.stats().data['round_times']['samples'], [91])
+        self.assertEqual(self.stats().data['round_times']['samples'], [90])
 
-    def test_scheduling_and_overflow_proxies_record_before_restoring_owner(self):
+    def test_scheduling_and_overflow_proxies_keep_round_samples(self):
         self.config.bind = Mock()
         for command in ('OpsiScheduling', 'OpsiPreventActionPointOverflow'):
             with self.subTest(command=command):
@@ -165,7 +170,7 @@ class FullRoundTimeTests(unittest.TestCase):
                     self.run_once()
                 self.assertIs(self.config.task, owner)
                 self.assertFalse(hasattr(self.config, '_cl1_round_metrics'))
-        self.assertEqual(self.stats().data['round_times']['samples'], [91, 91])
+        self.assertEqual(self.stats().data['round_times']['samples'], [90, 90])
         self.assertEqual(self.stats().get_today_stats()['battle_count'], 4)
 
     def test_single_finished_battle_is_normalized_as_half_a_round(self):
@@ -177,16 +182,41 @@ class FullRoundTimeTests(unittest.TestCase):
         self.assertEqual(self.stats().get_average_round_time(), 40)
 
     def test_recording_failure_does_not_mask_game_error_or_leave_active_timer(self):
-        stats = Mock()
-        stats.record_round_time.side_effect = RuntimeError('统计写入失败')
-        with patch('module.statistics.ship_exp_stats.get_ship_exp_stats', return_value=stats), \
+        with patch.object(ShipExpStats, 'record_round_time', side_effect=RuntimeError('统计写入失败')), \
                 patch.object(opsi_runtime.logger, 'exception') as failure:
             with self.assertRaisesRegex(GameStuckError, '游戏中断'):
                 with opsi_runtime.cl1_round_timer(self.config):
                     self.complete_battle(10)
                     raise GameStuckError('游戏中断')
+            self.wait_for_statistics()
         failure.assert_called_once()
         self.assertFalse(hasattr(self.config, '_cl1_round_metrics'))
+
+    def test_round_finishes_while_database_write_lock_is_held(self):
+        store = self.stats().store
+        with ExitStack() as lock, patch.object(opsi_runtime.logger, 'attr') as log_time:
+            with opsi_runtime.cl1_round_timer(self.config):
+                self.complete_battle(15)
+                self.now += 5
+                lock.enter_context(store.transaction())
+            log_time.assert_any_call('CL1单轮耗时', '40.00s/round')
+            self.assertNotIn('round_times', ShipExpStats(instance_name=self.config.config_name).data)
+
+        self.assertEqual(self.stats().get_average_round_time(), 40)
+
+    def test_round_and_ship_saves_keep_updates_made_after_their_initial_reads(self):
+        round_writer = self.stats()
+        self.complete_battle(15)
+        ship_writer = self.stats()
+
+        round_writer.record_round_time(80)
+        ship_writer.save_ship_data([], target_level=125, fleet_index=1, battle_count_at_check=1)
+
+        stats = self.stats()
+        self.assertEqual(stats.get_average_round_time(), 80)
+        self.assertEqual(stats.get_average_battle_time(), 15)
+        self.assertEqual(stats.get_today_stats()['battle_count'], 1)
+        self.assertEqual(stats.data['target_level'], 125)
 
     def test_new_scope_preserves_legacy_data_without_mixing_it_into_average(self):
         stats = get_ship_exp_stats('leveling')
@@ -198,7 +228,7 @@ class FullRoundTimeTests(unittest.TestCase):
         group = self.stats().data['round_times']
         self.assertEqual(group['legacy'], legacy)
         self.assertEqual(group['scope'], 'full_cycle')
-        self.assertEqual(group['average'], 91)
+        self.assertEqual(group['average'], 90)
 
     def test_average_is_weighted_by_round_count_across_different_search_lengths(self):
         stats = self.stats()

@@ -46,8 +46,7 @@ from datetime import datetime, timedelta, timezone
 
 from module.base import http
 
-from deploy.api_endpoints import MAINTENANCE_API_URL
-from module.base.device_id import get_device_id
+from deploy.api_endpoints import ANONYMOUS_STATUS_HEADERS, MAINTENANCE_API_URL
 from module.base.runtime_params import (
     HANDOVER_CONSUME_RETRY_MINUTES,
     HANDOVER_MAINTAIN_CHECK_MINUTES,
@@ -769,7 +768,7 @@ class OperationHandover(CampaignRun):
         server = self.config.SERVER
         try:
             result = http.get(HANDOVER_MAINTAIN_API, params={'server': server},
-                                  headers={'X-AzurPilot-ID': get_device_id()}, timeout=10)
+                              headers=ANONYMOUS_STATUS_HEADERS, timeout=10)
             result.raise_for_status()
             response = result.json()
             if response.get('schema_version') != 2 or response.get('server') != server or 'maintenance' not in response:

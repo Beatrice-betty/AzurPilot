@@ -4,7 +4,7 @@ import gc
 import tempfile
 import threading
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -13,6 +13,7 @@ from starlette.testclient import TestClient
 from alas import AzurLaneAutoScript
 from module.api.app import create_app
 from module.config.config import TaskEnd
+from module.config.schedule_time import schedule_local
 from module.exception import GameNotRunningError, GameStuckError
 from module.scheduler.engine import simulate
 from module.scheduler.models import ProgramDocument
@@ -71,7 +72,7 @@ class LiveLoopTests(unittest.TestCase):
         self.addCleanup(gc.collect)
 
     def virtual_wait(self, deadline):
-        self.time = max(self.time, deadline + timedelta(milliseconds=1))
+        self.time = max(self.time, schedule_local(deadline) + timedelta(milliseconds=1))
         if self.time > datetime(2026, 9, 28, 10, 5):
             raise BoundaryReached('程序未在五分钟虚拟时间内选出任务')
         return True
@@ -244,11 +245,11 @@ class LiveLoopTests(unittest.TestCase):
               patch('alas.handle_notify'), patch('alas.notify_webui')):
             self.script.loop()
         self.assertEqual(['Main', 'Restart', 'Research'], self.calls)
-        self.assertEqual({'Main': deadline}, self.script.task_restart_delays)
+        self.assertEqual({'Main': deadline.astimezone(timezone.utc)}, self.script.task_restart_delays)
         self.assertNotIn('Restart', self.script.task_restart_record)
         self.script._try_restart_emulator.assert_not_called()
         saved = json.loads(self.path.read_text(encoding='utf-8'))
-        self.assertEqual('2026-09-29 00:00:00', saved['Main']['Scheduler']['NextRun'])
+        self.assertEqual(str(deadline.astimezone(timezone.utc)), saved['Main']['Scheduler']['NextRun'])
 
     def test_apply_at_checkpoint_restarts_from_new_entry(self):
         self.apply(self.program())

@@ -116,8 +116,7 @@ def test_first_request_uses_http3_and_correct_headers(certificate, download, asy
                 def send():
                     if download == 'update':
                         from module.runtime.update_network import RuntimeGitOverCdnClient
-                        with patch('module.runtime.update_network._read_device_id', return_value='test-device'):
-                            session = RuntimeGitOverCdnClient._create_session(max_retries=0)
+                        session = RuntimeGitOverCdnClient._create_session(max_retries=0)
                     else:
                         session = http.Session(download=download)
                     with session:
@@ -130,6 +129,8 @@ def test_first_request_uses_http3_and_correct_headers(certificate, download, asy
             headers = response.json()
             assert headers['user-agent'] == (http.BROWSER_USER_AGENT if download else http.USER_AGENT)
             assert 'origin' not in headers
+            assert 'x-device-id' not in headers
+            assert 'cloudflare-workers-version-key' not in headers
             if download:
                 assert headers['accept-language'] == http.DOWNLOAD_HEADERS['Accept-Language']
             assert len(requests) == 1

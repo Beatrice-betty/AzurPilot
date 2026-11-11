@@ -1,5 +1,7 @@
 """将月度统计和舰船快照投影到业务表，保留扩展字段与字段存在性。"""
-from module.persistence.database import register_instance
+import json
+
+from module.persistence.database import SCHEMA_V1, register_instance
 from module.persistence.values import normalize, read_value, scalar, write_value
 
 MONTH_FIELDS = (
@@ -211,6 +213,9 @@ def load_meow_samples(connection, instance, month, kind, bucket):
 
 def save_month(connection, instance, month, data):
     """将实例月度统计快照保存到统一数据库。"""
+    if connection.execute('PRAGMA user_version').fetchone()[0] > SCHEMA_V1:
+        save_month_row(connection, instance, month, data)
+        return
     data = normalize(data, special=True)
     if type(data) is not dict:
         raise TypeError('月度快照必须是字典')
@@ -299,8 +304,30 @@ def save_month(connection, instance, month, data):
         insert(connection, 'cl1_compat_fields', dict(instance=instance, month=month, name=name, mode=mode, value_set_id=value_id))
 
 
+def save_month_row(connection, instance, month, data):
+    """在现有写事务中更新实例的单个月份记录。"""
+    if not isinstance(data, dict):
+        raise TypeError('月度快照必须是字典')
+    payload = json.dumps(data, ensure_ascii=False, separators=(',', ':'), allow_nan=True)
+    register_instance(connection, instance)
+    connection.execute('''INSERT INTO cl1_data(instance,month,data_json) VALUES(?,?,?)
+        ON CONFLICT(instance,month) DO UPDATE SET data_json=excluded.data_json''', (instance, month, payload))
+
+
+def read_month_row(connection, instance, month):
+    row = connection.execute('SELECT data_json FROM cl1_data WHERE instance=? AND month=?', (instance, month)).fetchone()
+    if row is None:
+        return None
+    data = json.loads(row[0])
+    if not isinstance(data, dict):
+        raise ValueError('月度快照必须是字典')
+    return data
+
+
 def read_month(connection, instance, month):
     """按实例与月份读取保存的统计快照。"""
+    if connection.execute('PRAGMA user_version').fetchone()[0] > SCHEMA_V1:
+        return read_month_row(connection, instance, month)
     row = connection.execute('SELECT * FROM cl1_months WHERE instance=? AND month=?', (instance, month)).fetchone()
     if row is None:
         return None

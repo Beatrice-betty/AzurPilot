@@ -1118,7 +1118,6 @@ class TestHazard1FreshActionPoint(unittest.TestCase):
             patch.object(runner, 'check_and_notify_action_point_threshold'),
             patch.object(runner, '_record_ap_and_coins'),
             patch.object(runner, '_cl1_run_battle'),
-            patch.object(runner, '_cl1_handle_telemetry'),
             patch.object(runner, 'action_point_set') as action_point_set,
         ):
             runner.run_hazard1_leveling_once(ap_preserve=200, fresh_ap=fresh_ap)

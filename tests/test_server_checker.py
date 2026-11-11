@@ -52,9 +52,6 @@ class ServerCheckerTestCase(unittest.TestCase):
         )
         self.session_patch.start()
         self.addCleanup(self.session_patch.stop)
-        device_patch = patch('module.server_checker.get_device_id', return_value='a' * 32)
-        device_patch.start()
-        self.addCleanup(device_patch.stop)
 
     def build_checker(self, server, response=None):
         """以指定首个响应构造检查器。"""
@@ -70,7 +67,7 @@ class ServerCheckerTestCase(unittest.TestCase):
         self.assertEqual(url, API_BASE)
         region, server_id = composite_id.rsplit('_', 1)
         self.assertEqual(kwargs.get('params'), {'region': region, 'server_id': int(server_id)})
-        self.assertEqual(kwargs.get('headers'), {'X-AzurPilot-ID': 'a' * 32})
+        self.assertEqual(kwargs.get('headers'), {'X-AzurPilot-ID': '0' * 32})
         self.assertEqual(kwargs.get("timeout"), (3, 3))
 
 

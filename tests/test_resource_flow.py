@@ -1,6 +1,7 @@
 """资源管理完整链路使用临时配置、SQLite、模拟帧及已有奖励截图。"""
 import json
 import tempfile
+import threading
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -287,6 +288,75 @@ class ResourceFlowTests(unittest.TestCase):
         result = self.report()
         self.assertEqual(140, next(row for row in result['resources'] if row['key'] == 'YellowCoin')['expense'])
         self.assertEqual(14, next(row for row in result['resources'] if row['key'] == 'Cube')['income'])
+
+    def test_cl1_akashi_purchase_continues_while_database_is_locked(self):
+        from module.base.async_executor import async_executor
+        from module.os_shop.assets import PORT_SUPPLY_CHECK
+        from module.os_shop.shop import OSShop
+        from module.persistence.database import get_database
+        from module.statistics.cl1_database import Cl1Database
+
+        self.config.task.command = 'OpsiScheduling'
+        self.config._bind_task_override = 'OpsiHazard1Leveling'
+        store = get_database(self.root / 'config')
+        database = Cl1Database(store=store)
+        shop = object.__new__(OSShop)
+        shop.config, shop.device = self.config, Mock()
+        shop.interval_clear = Mock()
+        shop.appear_then_click = shop.handle_popup_confirm = Mock(return_value=False)
+        shop.handle_map_get_items = Mock(side_effect=[False, True, False])
+        shop.appear = Mock(side_effect=lambda button, **kwargs: button is PORT_SUPPLY_CHECK)
+        item = SimpleNamespace(cost='YellowCoins', price=40, amount=2, name='ActionPoint20',
+                               is_known_item=lambda: True)
+        select = Mock(side_effect=[item, None])
+        saved = '[大世界商店] 已记录明石行动力购买数据到数据库'
+        with (
+            flow.task_session('testpilot', 'OpsiScheduling'),
+            patch('module.statistics.cl1_database.db', database),
+            patch('module.statistics.cl1_database.datetime') as clock,
+            patch('module.os_shop.shop.logger.info') as log,
+        ):
+            clock.now.return_value = self.time
+            flow.observe(self.config, 'YellowCoin', 100)
+            self.time += timedelta(seconds=1)
+            with store.transaction():
+                self.assertEqual(shop.os_shop_buy(select), 1)
+                self.assertEqual(select.call_count, 2)
+                self.assertEqual(self.config._opsi_ap_inventory_revision, 1)
+                self.assertEqual(self.config._opsi_coin_revision, 1)
+                self.assertNotIn(saved, [call.args[0] for call in log.call_args_list])
+                self.time += timedelta(seconds=1)
+                observed = async_executor.submit(flow.observe, self.config, 'YellowCoin', 60)
+            observed.result(timeout=5)
+            log.assert_any_call(saved)
+
+        self.assertEqual(database.get_stats('testpilot', '2026-10')['akashi_ap'], 40)
+        result = self.report()
+        self.assertEqual(40, next(row for row in result['resources'] if row['key'] == 'YellowCoin')['expense'])
+        self.assertEqual(2, next(row for row in result['resources'] if row['key'] == 'ActionPoint20')['income'])
+
+    def test_synchronous_inventory_read_reconciles_a_queued_purchase_from_previous_task(self):
+        from module.base.async_executor import async_executor
+
+        release = threading.Event()
+        async_executor.submit(release.wait, 5)
+        try:
+            with flow.task_session('testpilot', 'OpsiScheduling'):
+                flow.observe(self.config, 'YellowCoin', 100)
+                self.time += timedelta(seconds=1)
+                flow.record(self.config, {'YellowCoin': -40}, '购买行动力', defer=True)
+            with flow.task_session('testpilot', 'OpsiShop'):
+                self.time += timedelta(seconds=1)
+                flow.observe(self.config, 'YellowCoin', 60)
+        finally:
+            release.set()
+            async_executor.submit(lambda: None).result(timeout=5)
+
+        result = self.report()
+        self.assertEqual(result['total'], 1)
+        yellow = next(row for row in result['resources'] if row['key'] == 'YellowCoin')
+        self.assertEqual(yellow['expense'], 40)
+        self.assertEqual(yellow['adjustment'], 0)
 
     def test_build_confirmed_orders_attribute_cube_and_coin_spending(self):
         from module.gacha.gacha_reward import RewardGacha

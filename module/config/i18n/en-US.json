@@ -1352,23 +1352,19 @@
       "xz": "xz",
       "zip": "zip"
     },
-    "CloudUpload": {
-      "name": "Cloud statistics upload",
-      "help": "Master switch for research and commission submissions. Structured drops go to api.azurpilot.com; unknown item icons and their source frames go to templates-api.azurpilot.com. Failed work is retried from a local queue (up to 64 MiB and 10000 jobs). Disabling pauses uploads while local statistics and screenshot saving continue."
-    },
     "ResearchRecord": {
-      "name": "Research drop submission",
-      "help": "Upload submits to the cloud without keeping regular screenshots. Save and upload also keeps screenshots in the drop folder. Do not upload pauses submissions and queued retries for this scene. All options retain local statistics. Uploading also requires the cloud statistics master switch.",
-      "upload": "Upload",
-      "save_and_upload": "Save and upload",
-      "do_not": "Do not upload"
+      "name": "Save research screenshots",
+      "help": "Controls local copies of the research list and rewards. Both options record local research drop statistics.",
+      "save": "Save",
+      "do_not": "Do not save"
     },
     "CommissionRecord": {
-      "name": "Commission drop submission",
-      "help": "Upload submits to the cloud without keeping regular screenshots. Save and upload also keeps screenshots in the drop folder. Do not upload pauses submissions and queued retries for this scene. All options retain local statistics. Uploading also requires the cloud statistics master switch.",
-      "upload": "Upload",
-      "save_and_upload": "Save and upload",
-      "do_not": "Do not upload"
+      "name": "Commission drop records",
+      "help": "Choose whether to save reward screenshots, record detailed drops, or both. Commission income statistics run independently.",
+      "record": "Record only",
+      "save_and_record": "Save and record",
+      "save_only": "Save only",
+      "do_not": "Do not record"
     },
     "CommissionIncomeScreenshot": {
       "name": "Commission reward screenshot",
@@ -1441,10 +1437,6 @@
       "help": "Supports local screenshots only; no cloud submission.",
       "save": "Save",
       "do_not": "Do not save"
-    },
-    "TelemetryReport": {
-      "name": "Telemetry data reporting",
-      "help": "After being enabled, CL1 statistics (anonymous data such as the number of battles and Akashi encounter probability) will be reported anonymously to the server on a regular basis. For details on ID generation, please see the source code. For statistical information https://azurpilot.com/"
     }
   },
   "Backup": {

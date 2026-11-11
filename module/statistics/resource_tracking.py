@@ -105,7 +105,7 @@ def receipt_totals(config):
     return dict(state['rewards']) if state else {}
 
 
-def record_purchase(config, item, quantity=1, receipts=None):
+def record_purchase(config, item, quantity=1, receipts=None, *, defer=False):
     """仅在已确认购买结果后调用，价格与数量缺失时不推测支出。"""
     if str(getattr(item, 'name', '')).startswith('ActionPoint'):
         from module.os_handler.resource_state import invalidate_action_point_inventory
@@ -123,7 +123,7 @@ def record_purchase(config, item, quantity=1, receipts=None):
         name = resource_flow.canonical(item.name)
         recognized = max(0, receipt_totals(config).get(name, 0) - (receipts or {}).get(name, 0))
         changes[name] = changes.get(name, 0) + max(0, amount * quantity - recognized)
-    return resource_flow.record(config, changes, f'购买 {item.name} × {quantity}')
+    return resource_flow.record(config, changes, f'购买 {item.name} × {quantity}', defer=defer)
 
 
 def record_research_cost(config, project):

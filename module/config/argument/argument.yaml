@@ -530,13 +530,12 @@ DropRecord:
   ZipMethod:
     value: zip
     option: [ bz2, gzip, xz, zip ]
-  CloudUpload: true
   ResearchRecord:
-    value: upload
-    option: [upload, save_and_upload, do_not]
+    value: do_not
+    option: [save, do_not]
   CommissionRecord:
-    value: upload
-    option: [upload, save_and_upload, do_not]
+    value: record
+    option: [record, save_and_record, save_only, do_not]
   CommissionIncomeScreenshot:
     value: save
     option: [do_not, save]
@@ -575,7 +574,6 @@ DropRecord:
   MeowfficerTalent:
     value: do_not
     option: [save, do_not]
-  TelemetryReport: true
 Backup:
   Enable: true
   KeepDays:

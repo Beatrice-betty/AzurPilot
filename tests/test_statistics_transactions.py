@@ -15,6 +15,7 @@ from unittest.mock import patch
 from Crypto.Cipher import AES
 
 from module.statistics import cl1_database as database
+from module.statistics.cl1_legacy import derive_legacy_key
 from module.persistence import database as persistence
 
 
@@ -98,7 +99,7 @@ class TestStatisticsTransactions(unittest.TestCase):
 
     def rows(self):
         with closing(sqlite3.connect(self.path)) as conn:
-            return conn.execute("SELECT * FROM cl1_months ORDER BY instance, month").fetchall()
+            return conn.execute("SELECT * FROM cl1_data ORDER BY instance, month").fetchall()
 
     def assert_serialized(self, first, second, pause_target="_get_stats_in_connection", owner=None):
         """第一写者读完后暂停，确认第二写者等待同一写锁。"""
@@ -204,7 +205,7 @@ class TestStatisticsTransactions(unittest.TestCase):
 
     def test_all_mutations_reject_corrupt_rows_without_replacing_them(self):
         with closing(sqlite3.connect(self.path)) as conn, conn:
-            conn.execute("DELETE FROM typed_value_nodes WHERE parent_no IS NULL")
+            conn.execute("UPDATE cl1_data SET data_json='[invalid]'")
         before = self.rows()
         for name, args in MUTATIONS:
             with self.subTest(method=name), self.assertRaises(ValueError):
@@ -227,7 +228,7 @@ class TestStatisticsTransactions(unittest.TestCase):
 
     def test_all_mutations_roll_back_write_failures(self):
         with closing(sqlite3.connect(self.path)) as conn, conn:
-            conn.execute("""CREATE TRIGGER reject_write BEFORE INSERT ON cl1_months
+            conn.execute("""CREATE TRIGGER reject_write BEFORE INSERT ON cl1_data
                 BEGIN SELECT RAISE(ABORT, 'write rejected'); END""")
         before = self.rows()
         for name, args in MUTATIONS:
@@ -239,7 +240,7 @@ class TestStatisticsTransactions(unittest.TestCase):
         with closing(sqlite3.connect(self.path)) as conn, conn:
             conn.execute("CREATE TABLE parent (id INTEGER PRIMARY KEY)")
             conn.execute("CREATE TABLE child (id REFERENCES parent(id) DEFERRABLE INITIALLY DEFERRED)")
-            conn.execute("CREATE TRIGGER reject_commit BEFORE INSERT ON cl1_months BEGIN INSERT INTO child VALUES (1); END")
+            conn.execute("CREATE TRIGGER reject_commit BEFORE INSERT ON cl1_data BEGIN INSERT INTO child VALUES (1); END")
         before = self.rows()
         connect = sqlite3.connect
 
@@ -261,16 +262,19 @@ class TestStatisticsTransactions(unittest.TestCase):
     def encrypted_seed(self):
         """在另一个临时配置目录中迁移旧 AES 整行，确认原件保留。"""
         data = self.db.get_stats('test', MONTH)
-        key = b'x' * 32
-        cipher = AES.new(key, AES.MODE_GCM)
+        root = self.path.parent.parent
+        device_id = 'legacy-test-device'
+        identity = root / 'log' / 'device_id.json'
+        identity.parent.mkdir()
+        identity.write_text(json.dumps({'device_id': device_id}), encoding='utf-8')
+        cipher = AES.new(derive_legacy_key(device_id), AES.MODE_GCM)
         payload, tag = cipher.encrypt_and_digest(json.dumps(data).encode())
-        legacy = self.path.parent.parent / 'legacy' / 'cl1_data.db'
+        legacy = root / 'legacy' / 'cl1_data.db'
         legacy.parent.mkdir()
         with closing(sqlite3.connect(legacy)) as conn, conn:
             conn.execute('CREATE TABLE cl1_data(instance TEXT,month TEXT,data_json TEXT,encrypted_blob BLOB)')
             conn.execute('INSERT INTO cl1_data VALUES(?,?,NULL,?)', ('test', MONTH, cipher.nonce + tag + payload))
         original = legacy.read_bytes()
-        self.enterContext(patch('module.statistics.cl1_legacy.derive_legacy_key', return_value=key))
         self.db = database.Cl1Database(legacy)
         self.other = database.Cl1Database(legacy)
         self.path = self.db.db_path
@@ -295,7 +299,7 @@ class TestStatisticsTransactions(unittest.TestCase):
     def test_json_migration_does_not_overwrite_new_commission_income(self):
         with closing(sqlite3.connect(self.path)) as conn, conn:
             conn.execute("PRAGMA foreign_keys=ON")
-            conn.execute("DELETE FROM cl1_months")
+            conn.execute("DELETE FROM cl1_data")
         source = self.path.parent.parent / "log" / "cl1" / "test" / "cl1_monthly.json"
         source.parent.mkdir(parents=True)
         source.write_text(json.dumps({MONTH: 42}), encoding='utf-8')
@@ -353,7 +357,7 @@ class Cl1SchemaRepairTests(unittest.TestCase):
         self.assertEqual(migrated.get_stats('test', '2026-01'), {'battle_count': 6})
         self.assertEqual(self.path.read_bytes(), before)
         with migrated.store.transaction(write=False) as conn:
-            self.assertEqual(conn.execute('SELECT count(*) FROM cl1_months').fetchone()[0], 1)
+            self.assertEqual(conn.execute('SELECT count(*) FROM cl1_data').fetchone()[0], 1)
 
     def test_intact_unique_key_is_left_alone(self):
         with closing(sqlite3.connect(self.path)) as conn, conn:

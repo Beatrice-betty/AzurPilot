@@ -55,7 +55,7 @@ class RuntimeTests(unittest.TestCase):
                 'Main': {'Scheduler': {'Enable': True, 'NextRun': '2020-01-01 00:00:00'}},
                 'Commission': {'Scheduler': {'Enable': True, 'NextRun': '2099-01-01 00:00:00'}},
                 'Research': {'Scheduler': {'Enable': True, 'NextRun': '2099-01-01 00:00:00'}}}
-        configs = SimpleNamespace(read=lambda _: (data, 'revision'), translate=Mock())
+        configs = SimpleNamespace(read=Mock(return_value=(data, 'revision')), translate=Mock())
         manager = SimpleNamespace(state=1, current_task='Commission')
         with patch('module.api.runtime_service.ProcessManager._processes', {'pilot': manager}), \
                 patch('module.config.time_source.now', return_value=datetime(2026, 9, 13)):
@@ -70,7 +70,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_overview_preserves_action_point_total(self):
         data = {'Dashboard': {'ActionPoint': {'Value': 101, 'Total': 1301, 'Record': '2026-09-16 12:00:00'}}}
-        configs = SimpleNamespace(read=lambda _: (data, 'revision'), translate=Mock(return_value='行动力'))
+        configs = SimpleNamespace(read=Mock(return_value=(data, 'revision')), translate=Mock(return_value='行动力'))
         with patch('module.api.runtime_service.ProcessManager._processes', {}):
             resource = RuntimeService(configs).overview('pilot')['resources'][0]
         self.assertEqual('ActionPoint', resource['name'])

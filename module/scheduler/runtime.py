@@ -3,9 +3,10 @@ import copy
 import sqlite3
 from datetime import timedelta
 
+from module.config.schedule_time import refresh_local_timezone, schedule_local, schedule_utc
 from module.config.time_source import now
 from module.scheduler.context import snapshot
-from module.scheduler.engine import Engine, ProgramError
+from module.scheduler.engine import Engine, ProgramError, parse_time
 from module.scheduler.models import ProgramDocument
 from module.scheduler.state_channel import publish
 from module.scheduler.store import ProgramStore
@@ -23,6 +24,7 @@ class SchedulerRuntime:
         self.fault = ''
         self.overlay = {}
         self.last_saved = None
+        self._pending_wait = None
         from module.scheduler.oil_control import NativeOilControl
         self.oil_control = NativeOilControl(self)
 
@@ -46,6 +48,7 @@ class SchedulerRuntime:
             return False
         self.mode, self.generation = current['mode'], current['generation']
         self.overlay, self.invocation, self.fault = {}, None, ''
+        self._pending_wait = None
         from module.scheduler.oil_control import NativeOilControl
         self.oil_control = NativeOilControl(self)
         self.engine = None
@@ -77,16 +80,16 @@ class SchedulerRuntime:
 
     def context(self, config=None):
         config = config or self.script.config
+        # 复用原队列实现，保留固定优先级与囤积等待的语义。先刷新本地时区再生成快照。
+        config.get_next_task()
         context = snapshot(config.data, self.store.observations(self.script.config_name), now())
         context['requests'] = copy.deepcopy(self.requests)
-        # 复用原队列实现，保留固定优先级与囤积等待的语义。
-        config.get_next_task()
         business = {t['name'] for t in context['tasks']}
         # 系统恢复不能占住业务候选的首位；它由独立恢复通道派发。
         candidate = next((t for t in config.pending_task if t.command in business), None)
         context['nativeTask'] = next((t for t in context['tasks'] if candidate and t['name'] == candidate.command), None)
         waiting = next((t for t in config.waiting_task if t.command in business), None)
-        future = waiting.next_run + config.hoarding if waiting else now() + timedelta(minutes=5)
+        future = schedule_local(waiting.deadline + config.hoarding) if waiting else now() + timedelta(minutes=5)
         context['nativeDeadline'] = future.isoformat(sep=' ')
         from module.scheduler.context import original_order
         from module.config.config import AzurLaneConfig
@@ -116,9 +119,10 @@ class SchedulerRuntime:
 
     def wait(self, deadline):
         # 只在调度等待层轮询，游戏识别循环不使用固定休眠。
-        return self.script.wait_until(min(deadline, now() + timedelta(seconds=4)))
+        return self.script.wait_until(min(schedule_utc(deadline), schedule_utc(now()) + timedelta(seconds=4)))
 
     def next_task(self):
+        refresh_local_timezone()
         while True:
             try:
                 self.load_program()
@@ -139,6 +143,13 @@ class SchedulerRuntime:
                     self.engine = Engine(previous.document, previous.persistent())
                     self.engine.variables = copy.deepcopy(previous.variables)
                 effect = self.engine.advance(context)
+                if effect.kind == 'wait':
+                    if self._pending_wait is None or self._pending_wait[0] is not effect:
+                        self._pending_wait = (effect, schedule_utc(parse_time(effect.payload['deadline'])))
+                    deadline = self._pending_wait[1]
+                    self.engine.state.deadline = schedule_local(deadline).isoformat(sep=' ')
+                else:
+                    self._pending_wait = None
                 self.emit()
                 if effect.kind == 'execute':
                     from module.config.config import AzurLaneConfig
@@ -158,9 +169,7 @@ class SchedulerRuntime:
                     self.engine.resume(success)
                     continue
                 if effect.kind == 'wait':
-                    from module.scheduler.engine import parse_time
-                    deadline = parse_time(effect.payload['deadline'])
-                    if now() >= deadline:
+                    if schedule_utc(now()) >= deadline:
                         self.engine.resume()
                         continue
                     self.save()

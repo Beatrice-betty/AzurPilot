@@ -17,6 +17,7 @@ from module.combat.assets import GET_ITEMS_1
 from module.config.utils import get_os_reset_remain
 from module.exception import ScriptError
 from module.logger import logger
+from module.os_handler.resource_state import resource_fast_path
 from module.os_shop.akashi_shop import AkashiShop
 from module.os_shop.assets import PORT_SUPPLY_CHECK, SHOP_BUY_CONFIRM
 from module.os_shop.port_shop import PortShop
@@ -44,7 +45,7 @@ class OSShop(PortShop, AkashiShop):
         _shop_purple_coins (int): 当前紫币余额（由 os_shop_get_coins 设置）。
     """
 
-    def os_shop_buy_execute(self, button, skip_first_screenshot=True) -> bool:
+    def os_shop_buy_execute(self, button, skip_first_screenshot=True, *, defer_ledger=False) -> bool:
         """执行单个物品的购买操作。
 
         处理购买确认、数量选择、弹窗确认等交互流程。
@@ -52,6 +53,7 @@ class OSShop(PortShop, AkashiShop):
         Args:
             button (Button): 待购买的物品按钮。
             skip_first_screenshot (bool): 是否跳过首次截图。默认 True。
+            defer_ledger (bool): 后续库存复核已在后台时，购买收支也按顺序交给后台保存。
 
         Returns:
             bool: 购买成功返回 True，失败返回 False。
@@ -117,7 +119,7 @@ class OSShop(PortShop, AkashiShop):
 
         if success:
             from module.statistics.resource_tracking import record_purchase
-            record_purchase(self.config, button, button._resource_purchase_quantity, receipts)
+            record_purchase(self.config, button, button._resource_purchase_quantity, receipts, defer=defer_ledger)
         return success
 
     def os_shop_buy(self, select_func) -> int:
@@ -141,17 +143,19 @@ class OSShop(PortShop, AkashiShop):
                 logger.info('[大世界商店] 大世界商店+购买完成')
                 return count
             else:
-                if not self.os_shop_buy_execute(button):
+                name = str(getattr(button, 'name', '') or '')
+                name_l = name.lower()
+                is_action_point = 'actionpoint' in name_l or ('action' in name_l and 'point' in name_l)
+                is_cl1 = getattr(self, 'is_running_cl1_leveling', False)
+                defer_ledger = is_cl1 and is_action_point and resource_fast_path(self.config)
+                if not self.os_shop_buy_execute(button, defer_ledger=defer_ledger):
                     logger.warning(f'[大世界商店] 物品 {button.name} 无法购买，停止本轮选择')
                     continue
                 try:
-                    if not getattr(self, 'is_running_cl1_leveling', False) \
-                            and not getattr(self, '_meow_searching_active', False):
+                    if not is_cl1 and not getattr(self, '_meow_searching_active', False):
                         logger.debug('[大世界商店] 非侵蚀1/耄耋相接，跳过明石行动力购买记录')
                     else:
-                        name = str(getattr(button, 'name', '') or '')
-                        name_l = name.lower()
-                        if 'actionpoint' in name_l or ('action' in name_l and 'point' in name_l):
+                        if is_action_point:
                             import re
 
                             m = re.search(r"(\d+)", name)
@@ -163,15 +167,15 @@ class OSShop(PortShop, AkashiShop):
                             try:
                                 from module.statistics.cl1_database import db as cl1_db
 
-                                if getattr(self, 'is_running_cl1_leveling', False):
-                                    cl1_db.add_akashi_ap_entry(
+                                if is_cl1:
+                                    future = cl1_db.async_add_akashi_ap_entry(
                                         instance=instance_name,
                                         amount=int(bought_ap),
                                         base=int(base),
                                         count=int(amount),
                                         source='akashi'
                                     )
-                                    logger.info('[大世界商店] 已记录明石行动力购买数据到数据库')
+                                    future.add_done_callback(self._akashi_ap_purchase_finished)
                                 else:
                                     from module.statistics.opsi_runtime import meow_hazard_level_from_runtime
 
@@ -192,6 +196,15 @@ class OSShop(PortShop, AkashiShop):
 
         logger.warning('[大世界商店] 待购买物品过多，停止购买')
         return count
+
+    @staticmethod
+    def _akashi_ap_purchase_finished(future):
+        try:
+            future.result()
+        except Exception:
+            logger.exception('[大世界商店] 保存明石行动力购买数据失败')
+        else:
+            logger.info('[大世界商店] 已记录明石行动力购买数据到数据库')
 
     def close_shop_buy_confirm_amount(self, skip_first_screenshot=True):
         """关闭购买数量确认界面。

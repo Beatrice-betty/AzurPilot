@@ -127,6 +127,7 @@ class BackupSwitchTestCase(BackupTestCase):
         self.assertFalse((folder / 'backup_info.json').exists())
 
     def test_stats_backup_is_a_plain_readable_database(self):
+        from module.persistence.snapshots import read_month
         from tests.test_opsi_secure import make_cl1_db
         import sqlite3
         from contextlib import closing
@@ -135,8 +136,8 @@ class BackupSwitchTestCase(BackupTestCase):
         path = self.backup_root / self.date_name(0) / 'azurpilot.db'
         self.assertEqual(path.read_bytes()[:16], b'SQLite format 3\x00')
         with closing(sqlite3.connect(path)) as conn:
-            row = conn.execute('SELECT amount FROM akashi_ap_purchases').fetchone()
-        self.assertEqual(row[0], 20)
+            data = read_month(conn, 'inst', '2026-09')
+        self.assertEqual(data['akashi_ap_entries'][0]['amount'], 20)
 
     def test_old_stats_backup_expiry_is_removed(self):
         folder = make_backup_dir(self.backup_root, 30)

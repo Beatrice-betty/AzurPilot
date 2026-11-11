@@ -3,7 +3,7 @@
 import unittest
 from concurrent.futures import Future
 from contextlib import nullcontext
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import Mock, PropertyMock, patch
 
@@ -361,7 +361,8 @@ class TestOpsiTaskContext(unittest.TestCase):
                         self.run_overflow(runner, delay, nested=nested)
                 self.assertIs(caught.exception, end)
                 self.assertEqual(runner.config.modified, {
-                    'OpsiPreventActionPointOverflow.Scheduler.NextRun': now + timedelta(minutes=120),
+                    'OpsiPreventActionPointOverflow.Scheduler.NextRun':
+                        (now + timedelta(minutes=120)).astimezone(timezone.utc),
                 })
                 self.assert_restored(runner, owner, bound)
 

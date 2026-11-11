@@ -1,6 +1,6 @@
 # 统计与数据提交（module/statistics、module/azur_stats、module/log_res）
 
-> 把游戏运行期产生的掉落、战斗、资源与委托数据落成本地统计库，供 WebUI 统计页、LLM 日报与遥测提交消费。
+> 把游戏运行期产生的掉落、战斗、资源与委托数据落成本地统计库，供 WebUI 统计页和日报使用。
 
 ## 1. 模块概述
 
@@ -9,7 +9,7 @@ AzurPilot 在执行任务时天然经过大量战斗结算与资源画面。这�
 这一层由五条相对独立的链路组成：
 
 - **掉落统计链路**：战斗结算截图经 `AzurStats` 保存或解析入库。实时侧（`azurstats.py`）在战斗结束的上下文里收集截图；离线侧（`drop_statistics.py`）对历史截图文件夹做批量模板匹配与 OCR，导出 CSV。大世界掉落（除侵蚀1练级外）在「保存」与「不保存」两个档位都会解析入库，`opsi_drop_stats.py` 把它们按窗口聚合成「大世界掉落」页的金菜与彩图纸收益。
-- **CL1 统计链路**：`Cl1Database` 按「实例 × 月份」记录大世界侵蚀 1（CL1）与耄耋相接的战斗、明石、行动力等指标；`Cl1DataSubmitter` 把当月汇总匿名化后提交到官方遥测端点。
+- **CL1 统计链路**：`Cl1Database` 按「实例 × 月份」记录大世界侵蚀 1（CL1）与耄耋相接的战斗、明石、行动力等指标。
 - **日报链路**：`DailySummaryStore` 持续采集任务运行与侵蚀 1 战斗事件，`DailySummaryService` 在触发窗口聚合事实、调用 LLM 生成文案并经 OnePush 推送。
 - **仓库快照链路**：独立 `StorageStatistics` 任务进入普通仓库材料页，单遍完整浏览并逐格核对后，把已确认数量原子保存到 `config/azurpilot.db`；单格失败记为未知，不阻断其他物品。统计页面只读最近快照及成功扫描的历史趋势，刷新不启动游戏扫描。
 - **资源收支链路**：`resource_flow.py` 在现有本地统计库中维护实例隔离的交易账本与库存基线；`resource_tracking.py` 旁路解析任务已有奖励画面，并记录已确认购买和科研启动的明确消耗。`LogRes` 对库存差额扣除已记交易，同一运行范围内的净变化归给任务，离线、跨任务及活动重置单列待归因。独立资源管理页按完整区间聚合来源、用途及依据，规则与扩展入口见 [资源管理](../webui/resource-management.md)。
@@ -63,7 +63,6 @@ AzurPilot 在执行任务时天然经过大量战斗结算与资源画面。这�
 - 战斗/搜索结算截图的保存（`DropRecord_SaveFolder`）与本地解析入库（SQLite `config/azurpilot.db`）
 - 物品识别原语：`Item`/`ItemGrid`/`AmountOcr`（模板匹配 + 带上限验证的数量 OCR）——商店、委托、仓库等模块都复用这一层
 - CL1 月度统计库（`config/azurpilot.db`）的读写与旧数据迁移
-- 侵蚀 1 遥测提交（`Cl1DataSubmitter` → `ApiClient`）
 - 日报运行时事件采集、周期去重、LLM 文案生成与推送
 - 资源快照记录（`resource_stats`）与资源变动入口（`LogRes`）
 - 掉落截图按保留天数清理，过期后删除或备份到 `bak/`（`drop_cleanup`，后台线程执行）
@@ -85,7 +84,6 @@ AzurPilot 在执行任务时天然经过大量战斗结算与资源画面。这�
 module/statistics/
 ├── azurstats.py              # AzurStats：掉落记录提交、指挥喵 farming 汇总
 ├── cl1_database.py           # Cl1Database：月度统计库（单例 db）
-├── cl1_data_submitter.py     # CL1 遥测提交器
 ├── daily_summary.py          # DailySummaryService：日报触发与生成
 ├── daily_summary_store.py    # DailySummaryStore：日报事件库
 ├── daily_summary_text.py     # 日报 system prompt
@@ -180,15 +178,15 @@ module/log_res/
 
 ### 普通总库与旧数据迁移
 
-普通数据统一进入实际配置目录的 `azurpilot.db`，资源、掉落、仓库、月度事件、舰船与日报均使用原生列及关联表。自由参数和无法无损投影的兼容字段使用类型化树，不在数据库保存整行 JSON。完整结构、公开字段位序、迁移和恢复流程见 [普通业务数据存储](persistence.md)。
+普通数据统一进入实际配置目录的 `azurpilot.db`。科研、委托和大世界月度统计保存为每实例每月一条完整记录。资源快照、资源流水、仓库、舰船经验和日报使用原生列及关联表。完整结构、迁移和恢复流程见 [普通业务数据存储](persistence.md)。
 
 首次启动在业务 worker 之前锁定旧源，先通过 SQLite 备份接口保存含已提交 WAL 的源库及安全恢复材料，再在临时总库中转换、对照业务快照和检查完整性，成功后切换。`OPSIV1.`/`OPSIV2.`、旧 AES 月份及包装文件使用只读解码，不调用自动改写、隔离或撤销密钥的旧初始化。失败保留原件并停止启动，不以空数据替代。正式库丢失且完成标记仍在时必须恢复备份。
 
-日常查询不再读取旧普通库、JSON 或 CSV。资源趋势的 `include_opsi=False` 仍保留原返回规则，从原生列排除大世界字段。交易认证历史继续使用独立安全库，不从普通观察值重建身份或认证链。
+日常查询使用总库。旧普通库、JSON 和 CSV 源文件供历史迁移使用。资源趋势的 `include_opsi=False` 仍从原生列排除大世界字段。交易认证历史继续使用独立安全库。
 
 ### 侵蚀1单轮与战斗计时（ship_exp_stats.py）
 
-「平均每轮时长」覆盖 `OpsiHazard1Leveling.run_hazard1_leveling_once()` 的完整流程：开工检查、行动力补充、海里数检测、资源记录、战略搜索，以及搜索后的重扫找事件、强制移动、EMP/修理和遥测排队。计时使用单调时钟，退出本次调用时结算并清除状态；独立任务、智能调度和防溢出代理共用这个入口。
+「平均每轮时长」覆盖 `OpsiHazard1Leveling.run_hazard1_leveling_once()` 的完整流程：开工检查、行动力补充、海里数检测、资源记录、战略搜索，以及搜索后的重扫找事件、强制移动和 EMP/修理。计时使用单调时钟，退出本次调用时结算并清除状态；独立任务、智能调度和防溢出代理共用这个入口。
 
 一次计划作战可以连续打多轮，因此不能直接把整个调用耗时当作两场战斗。`opsi_runtime.finish_battle_timer(source='cl1')` 在返回地图后累计完成战斗，结算时使用：
 
@@ -208,7 +206,7 @@ module/log_res/
 
 ### CL1 月度库（cl1_database.py）
 
-`cl1_months` 以 `(instance, month)` 为主键；计数、事件、分桶样本及收益分别投影到关联表。适配器继续返回原月度快照，字段存在标记保留部分记录、显式空值与空集合。公开快照的关键字段：
+`cl1_data` 以 `(instance, month)` 为主键。一次读改写在同一事务内更新该月份的一条记录，保留部分记录、显式空值与空集合。公开快照的关键字段：
 
 | 字段 | 说明 |
 | --- | --- |
@@ -253,17 +251,13 @@ flowchart LR
     D --> I[cleanup_drop_screenshots_if_due<br/>节流 1 小时]
 ```
 
-`new()` 将截图保存、本地统计与云端提交分开处理。大世界掉落（`is_opsi_drop_genre()` 认可的任务，侵蚀1练级除外）的 `save` 与 `do_not` 都解析入库，后者仅表示不保留常规截图。战斗、侵蚀1练级与指挥喵截图仅支持本地保存；它们选择 `do_not` 时产生空的 `DropImage`。解析中发现只有数字代号的未识别物品时，把结算截图画上红框另存到 `screenshots/unknown_items/`，供人工补模板。
+`new()` 将截图保存与本地统计分开处理。大世界掉落（`is_opsi_drop_genre()` 认可的任务，侵蚀1练级除外）的 `save` 与 `do_not` 都解析入库，后者仅表示不保留常规截图。战斗、侵蚀1练级与指挥喵截图仅支持本地保存；它们选择 `do_not` 时产生空的 `DropImage`。解析中发现只有数字代号的未识别物品时，把结算截图画上红框另存到 `screenshots/unknown_items/`，供人工补模板。
 
-### 科研与委托云端提交（与本地统计并存）
+### 科研与委托掉落
 
-科研与委托使用 `upload` / `save_and_upload` / `do_not` 三档，界面依次显示「上传 / 保存并上传 / 不上传」，默认 `upload`。前两档在 `DropRecord_CloudUpload` 总开关开启时提交云端，只有 `save_and_upload` 额外保存常规截图。科研始终本地解析，委托原有收益统计及 `CommissionIncomeScreenshot` 独立生效。科研列表仅在「保存并上传」时本地留图，不进入云端奖励流。
+科研掉落始终在本地统计。`ResearchRecord` 控制列表及领奖截图是否另行保存。委托的 `CommissionRecord` 可以单独选择记录详细掉落、保存截图或两者。原有委托收益统计和 `CommissionIncomeScreenshot` 走独立链路。
 
-现有 v3 实现由 `cloud_upload.py` 接入 `CloudService`：结构化掉落提交到 `https://api.azurpilot.com/api/v3/post/drops`；未知物品图标通过 `templates-api.azurpilot.com/api/v3/post/templates/unknown` 登记，对应的完整 1280×720 原图通过 `/api/v3/post/templates/screenshots` 提交至同一模板服务。模板发布包从 `templates.azurpilot.com` 同步并校验签名与摘要。提交身份使用现有设备标识，旧 `AzurStatsID` 与线路选择 `API` 不再保留。
-
-持久队列位于实际配置目录的 `cloud/<设备与实例哈希>/`，由 `jobs`、`icons`、`screenshots` 保存待提交数据，容量上限为 64 MiB、10000 项。失败按退避时间重试，收到成功回执后移除对应任务。总开关关闭或两个场景都选择「不上传」时暂停网络工作；单个场景选择「不上传」时保留该场景的待处理任务，其他场景继续提交。重新启用后可补传，暂停任务不占其他场景的批量名额；共享未知图标可通过仍允许上传的场景登记。云端故障不阻断本地统计。
-
-迁移时，科研与委托旧 `save` 转为 `save_and_upload`，已选 `do_not` 与关闭的总开关保持原值。仅保存本地截图的场景将旧 `save_and_upload` 转为 `save`，旧 `upload` 转为 `do_not`，保留原有截图保存意图；大世界旧 `OpsiRecord` 先拆分到各任务，再统一迁移。本地统计独立于这些截图设置。
+旧上传选项在读取配置时转换为对应的本地保存与统计方式。已有模板缓存可以离线验签后用于识别，现有历史记录沿用原有存储格式。旧上传队列和回执留在原目录。
 
 ### 日报流程
 
@@ -303,7 +297,6 @@ flowchart TD
 | --- | --- |
 | `module/ocr` | `AlOcr`/`Ocr`/`Digit` 数量与地名识别 |
 | `module/os/globe_zone.ZoneManager` | OCR 地图名 → 标准区域（zone_id/hazard_level）映射 |
-| `module/base/api_client.py` | CL1 遥测 POST（双端点故障转移，仅含哈希 device_id） |
 | `module/base/async_executor` | 所有 `async_*` 统计写入的执行器 |
 | `module/notify` | 日报与委托收益推送（`handle_notify`） |
 | `openai` SDK | 日报文案生成（复用 Error 任务组的 LLM 配置） |
@@ -367,16 +360,15 @@ stateDiagram-v2
 | `Alas.DropRecord.SaveFolder` | str | ./screenshots | 掉落截图根目录（按 genre 分子目录） |
 | `Alas.DropRecord.RetentionDays` | int | 0 | 截图保留天数，0 = 不清理 |
 | `Alas.DropRecord.BackUpMethod` / `ZipMethod` | option | zip / zip | 过期截图的处理方式（delete / zip / copy）与压缩格式（bz2 / gzip / xz / zip）；备份落在各来源目录下的 `bak/` |
-| `Alas.DropRecord.CloudUpload` | bool | true | 科研、委托云端提交总开关，关闭时保留本地统计与截图保存 |
-| `Alas.DropRecord.ResearchRecord` / `CommissionRecord` | option | upload | 上传 / 保存并上传 / 不上传（upload / save_and_upload / do_not）；不上传仍保留本地收益统计 |
+| `Alas.DropRecord.ResearchRecord` | option | do_not | 保存 / 不保存科研截图，科研掉落始终统计 |
+| `Alas.DropRecord.CommissionRecord` | option | record | 仅统计 / 保存并统计 / 仅保存 / 不记录，委托收益独立统计 |
 | `Alas.DropRecord.CombatRecord` / `MeowfficerBuy` / `MeowfficerTalent` | option | do_not | 保存 / 不保存（save / do_not），只支持本地截图 |
 | `Alas.DropRecord.OpsiHazard1Leveling` / `OpsiMeowfficerFarming` / `OpsiDaily` / `OpsiObscure` / `OpsiAbyssal` / `OpsiStronghold` / `OpsiExplore` / `OpsiOther` | option | do_not | 按任务控制保存 / 不保存截图。跨月每日与大世界每日、档案坐标与隐秘海域、月度 Boss 与深渊海域共用开关，`OpsiOther` 兜底；由 `opsi_drop_record(config)` 按当前任务取值。两档均保留本地掉落统计，侵蚀1练级仅由大世界总结统计 |
 | `Alas.DropRecord.CommissionIncomeScreenshot` | option | save | 委托收益截图开关 |
-| `Alas.DropRecord.TelemetryReport` | bool | true | CL1 遥测提交开关（hazard_leveling 里检查） |
 | `Alas.Error.LlmApiKey/LlmApiBase/LlmModel` | str | "" | 日报 LLM 配置（与错误上报共用） |
 | `Alas.Error.OnePushConfig` | str | "" | 推送通道配置 |
 
-关联关系：日报的 LLM 与推送配置刻意复用 `Error` 组，避免两套密钥；掉落记录各场景设置决定 `DropImage.save/upload`，本地统计由场景解析能力决定。日报线程不持有完整配置对象——`alas.py` 只传 `SimpleNamespace` 快照并按配置文件 mtime 热读，避免与任务线程争用配置对象。
+关联关系：日报的 LLM 与推送配置刻意复用 `Error` 组，避免两套密钥；掉落记录各场景设置决定 `DropImage.save` 及部分场景的 `DropImage.analyze`。日报线程不持有完整配置对象——`alas.py` 只传 `SimpleNamespace` 快照并按配置文件 mtime 热读，避免与任务线程争用配置对象。
 
 ## 11. 异常与错误处理
 
@@ -388,7 +380,6 @@ stateDiagram-v2
 | 日报数据库写失败 | 磁盘/锁异常 | 记入 `daily_summary_collection_gaps`，该周期日报标「数据不完整」 |
 | LLM 空响应 / 调用失败 | 网络、配额 | 最多 3 次重试，仍失败置 `failed(error_kind='llm')`，本期不发送 |
 | OnePush 失败 | 配置错误、服务不可达 | 同一文案重发 3 次，仍失败置 `failed`，不重试整期 |
-| 遥测提交失败 | 网络不通 | 仅 debug 日志，下个 10 分钟窗口再试 |
 
 原则：**统计链路的异常一律不向游戏调度传播**。`record_task_start/finish`、资源快照、战斗计时等都有 try/except 包裹；只有 `Cl1Database.save_stats` 这类显式写接口会把异常传给调用方（由调用方决定回滚语义）。
 
@@ -426,13 +417,13 @@ stateDiagram-v2
 
 ## 14. 生命周期
 
-`Cl1Database.db`、日报 `DailySummaryStore`、遥测提交器 `_submitters` 都是进程级单例，随首次 import 惰性创建，无显式销毁。`AzurStats` 不是单例——每个 `ModuleBase` 持有自己的实例（只封装 config），共享的锁在类属性上。日报线程随调度器 `loop()` 启动、更新事件或进程退出时通过 `_stop_daily_summary_scheduler` 停止；日报关闭的实例从初始化起就不创建任何线程与数据库连接。
+`Cl1Database.db`、日报 `DailySummaryStore`都是进程级单例，随首次 import 惰性创建，无显式销毁。`AzurStats` 不是单例——每个 `ModuleBase` 持有自己的实例（只封装 config），共享的锁在类属性上。日报线程随调度器 `loop()` 启动、更新事件或进程退出时通过 `_stop_daily_summary_scheduler` 停止；日报关闭的实例从初始化起就不创建任何线程与数据库连接。
 
 ## 15. 扩展方式
 
 新增一项月度统计（以「塞壬研究装置」为参照）：
 
-1. 在版本化 SQL 和 `module.persistence.snapshots` 增加原生映射及公开字段位序，再在 `cl1_database.py` 的 `_empty_data()` 加默认字段，新增 `add_xxx`/`get_xxx` 方法——读改写必须包在 `_stats_transaction()` 里，并按需提供 `async_` 包装。
+1. 在 `cl1_database.py` 的 `_empty_data()` 加默认字段，新增 `add_xxx`/`get_xxx` 方法。读改写包在 `_stats_transaction()` 里，按需提供 `async_` 包装。
 2. 在 `opsi_runtime.py` 加运行期入口（或在对应任务里直接调用），任务代码只上报领域事件。
 3. 在 `module/api/statistics_service.py` 的对应 category 里把指标加进 `report()` 输出；API 模型变更后运行 `uv run python -m dev_tools.export_api_schema`。
 4. 需要进日报时，在 `DailySummaryService.build_facts()` 的 facts 里补字段并在 prompt 术语表加映射。
@@ -447,7 +438,6 @@ stateDiagram-v2
 - **删除是不可逆的**：`drop_cleanup` 只处理文件名匹配 `^\d{13}(_.+)?\.png$` 的文件，配置异常时按 0 处理（不清理）；`bak/` 内的备份不参与扫描（拷贝备份保留原修改时间，只看时间会被反复处理），压缩或拷贝失败时保留原文件。改清理逻辑时保持这些保守默认。清理入口 `cleanup_drop_screenshots_if_due()` 节流通过后交给后台线程执行并恒返回 0——积压时压缩备份耗时以分钟计（曾阻塞游戏主循环 2.5 分钟）；需要同步验证清理行为时直接调用 `cleanup_drop_screenshots()`。
 - **日报的 `period_key` 含服务器与时区信息**，改动 `get_daily_summary_window` 的窗口语义会让已存在库里的 period_key 失配，导致重复推送。
 - **数量识别先用真实切片回归**：`amount_digits` 的字形阈值、粘连拆分与 `remove_small_fragments` 的 OCR 兜底均需覆盖原生数字；不要把 OCR 旧输出作为真值，也不要凭删首位或末位修正超限值。回归包含重复数字、五位凭证、纸角和粗体图纸数字。
-- **遥测提交只发聚合指标**（battle_count/明石次数 + MD5 前缀 instance_id），不要往 `calculate_metrics` 里加可识别个人的字段。
 - `module/statistics/assets.py` 与 `module/azur_stats/assets.py` 是 `dev_tools.button_extract` 的生成物，改按钮资源后重新生成，不要手改。
 - **科研的期数只能看队列页卡片的罗马数字角标**（`research_drop._read_series`，复用 `module/research/series.py` 的模板）。项目代号在每一期都存在、判不了期；掉落物也判不了——只有彩装备与舰船图纸绑期数，金装备各期混着出，项目还会「额外赠送」别期的图纸。
 - **科研的列剖面只用于图纸的 OCR 兜底**：先匹配完整数量字形，图纸纸角粘连且完整匹配不确定时可核对最右单字；末位为 0 不返回单字数量，保留真实的 10。神经 OCR 兜底仅在上限 ≤10 时取最右数字簇，读空时提高阈值重读，仍超限则跳过本格。物资、心智单元不能按图纸切列，避免三位数丢失首位。
@@ -457,10 +447,8 @@ stateDiagram-v2
 
 ## 17. 已知限制
 
-- 原 AzurStats 远程地址已废弃；科研与委托使用现有 v3 云端提交及设备标识，大世界与指挥喵只保留本地截图选项。本地解析不受保存与上传选项影响，侵蚀1练级的统计例外不变。
 - `AzurStats.get_meow_loot_monthly_totals` / `get_meow_loot_available_months` 目前在仓库内没有调用方，属于预留接口。
 - 委托收益条目没有「已检查但零结算」的心跳记录，日报侧只能把空列表标为 `available=False` 而非零收益（`commission_income_stats` 有注释说明）。
-- 遥测域名 `ApiClient.PRIMARY_DOMAIN` 与 `FALLBACK_DOMAIN` 当前相同，故障转移实际未生效。
 - farming 汇总表（`farming_aggregates`）使用 SQL 全量重算而非增量，明细库很大时刷新会变慢。
 - `drop_statistics.py` 离线分析依赖手动重命名模板与改脚本常量，没有命令行参数化。
 - 科研模板库还缺 1~5 期几艘船的图纸（一期路易九世、三期柴郡、四期奥古斯特·冯·帕塞瓦尔与马可波罗、五期鲁普雷希特）：没有模板的掉落会在解析阶段被跳过，所以按期视图里看不到这几艘。
@@ -489,7 +477,7 @@ record_siren_research_device(self)          # opsi_runtime 内部决定来源与
 
 ## 19. 调试方法
 
-- 日志前缀：`[统计-物品]`（识别修正）、`[统计-资源]`、`[统计-经验]`、`[统计-大世界]`（运行期事件）、`[统计-解密]`（显式旧解码工具）、`[日报]`（日报全链路）、`[掉落记录]`（清理）、`[基础-API]`（遥测提交）。`logger.attr('CL1单轮耗时', ...)` 等属性行适合 grep 单轮耗时。
+- 日志前缀：`[统计-物品]`（识别修正）、`[统计-资源]`、`[统计-经验]`、`[统计-大世界]`（运行期事件）、`[统计-解密]`（显式旧解码工具）、`[日报]`（日报全链路）、`[掉落记录]`（清理）。`logger.attr('CL1单轮耗时', ...)` 等属性行适合 grep 单轮耗时。
 - 本地调试服务：`ALAS_DEBUG_SERVER=1` 启动调度器后，`module/debug/commission_debug.py` 可以不开游戏注入伪造委托收益并触发推送，验证统计口径与推送链路。
 - 测试：`tests/test_statistics_amount_digits.py` / `test_item_amount_area.py`（真实数量切片、严格上限、裁剪边界与单格失败保留其余物品）、`tests/test_statistics_transactions.py`（CL1 事务与并发）、`tests/test_daily_summary*.py`（日报窗口与聚合）、`tests/test_drop_cleanup.py`（清理、后台线程执行与 `AzurStats.new` 节流）、`tests/test_archive.py`（删除/拷贝/压缩三种过期处理方式）、`tests/test_commission_settlement.py`、`tests/test_research_stats.py` / `test_research_drop.py` / `test_research_drop_repair.py`（科研口径、角标识别与记录订正）。
 - 数据核查入口：使用 `uv run python -m dev_tools.business_storage --config-dir ./config check` 检查总库；farming 汇总查询 `farming_aggregates`。科研记录里出现「当前 `assets/stats/research_items/` 与名称表都没有的模板名」基本就是模板改名残留，用 `dev_tools/research_drop_repair.py` 拿原截图重放订正。

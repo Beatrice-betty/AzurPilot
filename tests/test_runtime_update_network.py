@@ -5,7 +5,7 @@ import json
 import subprocess
 import zipfile
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import niquests
 import pytest
@@ -17,45 +17,20 @@ from module.runtime.update_network import RuntimeGitManager, RuntimeGitOverCdnCl
 
 
 def test_runtime_cdn_uses_browser_headers_without_changing_deploy():
-    with patch('module.runtime.update_network._read_device_id', return_value='test-device'):
-        session = RuntimeGitOverCdnClient._create_session(max_retries=0)
+    session = RuntimeGitOverCdnClient._create_session(max_retries=0)
     with session, patch.object(niquests.Session, 'request', return_value=None) as request:
         session.get('https://update.azurpilot.com/latest.json')
     headers = request.call_args.kwargs['headers']
     assert headers['User-Agent'] == http.BROWSER_USER_AGENT
     assert 'Origin' not in headers
     assert session.trust_env is False
-    assert session.headers['X-Device-Id'] == 'test-device'
-    assert session.headers['Cloudflare-Workers-Version-Key'] == 'test-device'
+    assert 'X-Device-Id' not in session.headers
+    assert 'Cloudflare-Workers-Version-Key' not in session.headers
     with GitOverCdnClient._create_session(max_retries=0) as bootstrap:
         assert isinstance(bootstrap, requests.Session)
         assert not isinstance(bootstrap, niquests.Session)
-
-
-@pytest.mark.parametrize('enabled', [True, False])
-def test_policy_uses_runtime_api_headers(enabled):
-    response = MagicMock(text=json.dumps(enabled))
-    response.__enter__.return_value = response
-    response.json.return_value = {'schema_version': 2, 'force_update': enabled}
-    with patch.object(http, 'get', return_value=response) as get:
-        assert RuntimeGitManager.cloud_force_update_enabled() is enabled
-    assert get.call_args.args[0] == 'https://api.azurpilot.com/api/v2/get/update/data.json'
-    assert get.call_args.kwargs['headers']['User-Agent'] == 'AzurPilot/2.1'
-
-
-@pytest.mark.parametrize('policy', [None, {}, {'schema_version': 1, 'force_update': True},
-                                   {'schema_version': 2, 'force_update': 'true'}, 1])
-def test_invalid_policy_does_not_enable_force_update(policy):
-    response = MagicMock()
-    response.__enter__.return_value = response
-    response.json.return_value = policy
-    with patch.object(http, 'get', return_value=response):
-        assert RuntimeGitManager.cloud_force_update_enabled() is None
-
-
-def test_policy_network_failure_does_not_block_updates():
-    with patch.object(http, 'get', side_effect=http.exceptions.Timeout('timeout')):
-        assert RuntimeGitManager.cloud_force_update_enabled() is None
+        assert 'X-Device-Id' not in bootstrap.headers
+        assert 'Cloudflare-Workers-Version-Key' not in bootstrap.headers
 
 
 @pytest.mark.parametrize('operation', ['fetch', 'update'])

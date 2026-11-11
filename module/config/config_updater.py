@@ -39,6 +39,7 @@ from module.campaign.stage_name import normalize_event_stage
 from module.config.deep import deep_default, deep_get, deep_iter, deep_set
 from module.config.env import IS_ON_PHONE_CLOUD
 from module.config.fleet_legacy import LEGACY_PATHS
+from module.config.schedule_time import read_schedule_config
 from module.config.server import VALID_CHANNEL_PACKAGE, VALID_PACKAGE, VALID_SERVER_LIST, to_package, to_server
 from module.config.redirect_utils.shop import migrate_shop_options
 from module.config.task_priority import get_scheduler_tasks, merge_task_priority
@@ -853,13 +854,10 @@ class ConfigUpdater:
 
         if not is_template:
             new = self.config_redirect(old, new)
-            # 在 OpsiRecord 拆分后统一清洗旧档位；只保存的科研/委托按新三档迁移。
-            drop = deep_get(new, 'Alas.DropRecord')
-            old_drop = deep_get(old, 'Alas.DropRecord', {})
-            for arg in ('ResearchRecord', 'CommissionRecord'):
-                # parse_value 已将不再合法的旧选项替换成默认值，迁移时需读原值。
-                if old_drop.get(arg) == 'save':
-                    drop[arg] = 'save_and_upload'
+            old_drop = deep_get(old, 'Alas.DropRecord', {}) or {}
+            # 旧档位须从原值迁移，parse_value 已将不再合法的选项替换为默认值。
+            drop = local_drop_record_settings(new['Alas']['DropRecord'], old_drop)
+            new['Alas']['DropRecord'] = drop
             for arg in (*OPSI_RECORD_ARGS, 'CombatRecord', 'MeowfficerTalent'):
                 value = old_drop.get(arg, drop[arg])
                 drop[arg] = 'save' if value in ('save', 'save_and_upload') else 'do_not'
@@ -997,11 +995,9 @@ class ConfigUpdater:
         Returns:
             更新后的配置字典。
         """
-        old = read_file(filepath_config(config_name))
-        new = self.config_update(old, is_template=is_template)
-        # 更新后的配置未写回文件，出于性能考虑已注释掉写入操作
-        # self.write_file(config_name, new)
-        return new
+        path = filepath_config(config_name)
+        old = read_file(path) if is_template else read_schedule_config(path)
+        return self.config_update(old, is_template=is_template)
 
     @staticmethod
     def write_file(config_name, data, mod_name='alas'):

@@ -1,7 +1,7 @@
 """困难图每日调度的时间边界与旧配置兼容性。"""
 
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
 from module.config.config import AzurLaneConfig, TaskEnd, name_to_function
@@ -63,7 +63,7 @@ class HardScheduleTests(unittest.TestCase):
                     with self.assertRaises(TaskEnd):
                         runner.run()
                     self.assertEqual(runner.config.modified['Hard.Scheduler.NextRun'],
-                                     server_now.replace(hour=18, minute=0, second=0) + self.offset)
+                                     (server_now.replace(hour=18, minute=0, second=0) + self.offset).astimezone(timezone.utc))
                     runner.load_campaign.assert_not_called()
                     self.assertEqual(runner.device.mock_calls, [])
                     self.assertEqual(runner.campaign.mock_calls, [])
@@ -81,7 +81,7 @@ class HardScheduleTests(unittest.TestCase):
                     self.assertEqual(runner.campaign.run.call_count, 3)
                     runner.campaign.ensure_auto_search_exit.assert_called_once_with()
                     self.assertEqual(runner.config.modified['Hard.Scheduler.NextRun'],
-                                     datetime(2026, 10, 23, 18) + self.offset)
+                                     (datetime(2026, 10, 23, 18) + self.offset).astimezone(timezone.utc))
                     runner.config.task_call.assert_called_once_with('Reward', force_call=False)
 
     def test_default_still_runs_before_18_and_schedules_midnight(self):
@@ -89,7 +89,8 @@ class HardScheduleTests(unittest.TestCase):
         runner = self.runner()
         runner.run()
         self.assertEqual(runner.campaign.run.call_count, 3)
-        self.assertEqual(runner.config.modified['Hard.Scheduler.NextRun'], datetime(2026, 10, 23))
+        self.assertEqual(runner.config.modified['Hard.Scheduler.NextRun'],
+                         datetime(2026, 10, 23).astimezone(timezone.utc))
         runner.config.task_call.assert_called_once_with('Reward', force_call=False)
 
     def test_no_remaining_attempts_still_schedules_next_evening(self):
@@ -98,7 +99,8 @@ class HardScheduleTests(unittest.TestCase):
         runner = self.runner(RunAt18=True)
         runner.run()
         runner.campaign.run.assert_not_called()
-        self.assertEqual(runner.config.modified['Hard.Scheduler.NextRun'], datetime(2026, 10, 23, 18))
+        self.assertEqual(runner.config.modified['Hard.Scheduler.NextRun'],
+                         datetime(2026, 10, 23, 18).astimezone(timezone.utc))
 
 
 if __name__ == '__main__':

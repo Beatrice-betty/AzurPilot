@@ -16,9 +16,11 @@ from pathlib import Path
 from uuid import uuid4
 
 from module.config.transaction import config_transaction
-from module.persistence.database import VERSION, create_schema, register_instance
+from module.persistence.database import SCHEMA_V1, VERSION, create_month_rows, create_schema, register_instance
 from module.persistence.scheduler import save_persistent, save_program, write_observation
-from module.persistence.snapshots import insert, read_month, read_ship, save_month, save_ship
+from module.persistence.snapshots import (
+    insert, read_month, read_month_row, read_ship, save_month, save_month_row, save_ship,
+)
 
 DATABASE_KINDS = {'azurstats_local.db': 'statistics', 'cl1_data.db': 'cl1',
                   'storage_statistics.db': 'storage', 'daily_summary.db': 'daily'}
@@ -265,25 +267,12 @@ class LegacyDecoder:
         self._decoding_kinds = set()
 
     def legacy_device_ids(self):
-        """只读旧设备 ID 并计算当前硬件 ID，不调用覆写文件或启动定时器的初始化。"""
+        """只读已有的本地归属标识。"""
         if self._legacy_ids is None:
-            _log_progress('读取已有设备 ID，并只读计算当前硬件指纹')
-            from module.base import device_id
+            from module.base.device_id import read_legacy_device_ids
 
-            candidates = []
-            paths = (self.root / 'log' / 'device_id.json', self.root / 'log' / 'device_id.json.bak',
-                     self.root / 'log' / 'cl1' / 'cl1_monthly.json',
-                     self.root / 'log' / 'cl1' / 'cl1_monthly.json.bak')
-            for path in paths:
-                try:
-                    data = json.loads(path.read_text(encoding='utf-8'))
-                except (OSError, ValueError):
-                    continue
-                if isinstance(data, dict):
-                    candidates.append(data.get('device_id'))
-            candidates.extend((device_id._device_id, device_id.get_old_device_id(), device_id.generate_device_id()))
-            self._legacy_ids = tuple(dict.fromkeys(value for value in candidates if isinstance(value, str) and value))
-            _log_progress('设备 ID 读取完成，候选数量：%s', len(self._legacy_ids))
+            self._legacy_ids = read_legacy_device_ids(self.root)
+            _log_progress('本地统计标识读取完成，候选数量：%s', len(self._legacy_ids))
         return self._legacy_ids
 
     def legacy_keys(self):
@@ -610,6 +599,53 @@ def import_farming(connection, original, copy, decoder):
             effective_rounds=numbers[2], average_yellow_coin=numbers[3], average_plate=numbers[4], average_abyssal=numbers[5], average_obscure=numbers[6]))
 
 
+def migrate_month_rows(database):
+    """在单一事务内迁移现有总库的全部月度数据，并保留可恢复的原版备份。"""
+    assert_no_workers(database.directory.parent)
+    backup = database.directory / 'storage-backups' / (
+        'pre-v2-' + datetime.now().strftime('%Y%m%d-%H%M%S') + '-' + uuid4().hex[:8]
+    ) / database.path.name
+    temporary = backup.with_suffix('.tmp')
+    _log_progress('迁移月度统计到每实例每月一条记录，备份：%s', backup)
+    try:
+        with closing(sqlite3.connect(database.path.as_uri() + '?mode=rw', uri=True, timeout=10)) as connection:
+            connection.row_factory = sqlite3.Row
+            connection.execute('PRAGMA foreign_keys=ON')
+            connection.execute('PRAGMA synchronous=FULL')
+            connection.execute('BEGIN IMMEDIATE')
+            with connection:
+                if connection.execute('PRAGMA user_version').fetchone()[0] != SCHEMA_V1:
+                    raise MigrationError('迁移前总库版本发生变化')
+                snapshot_database(database.path, temporary)
+                with closing(sqlite3.connect(temporary.as_uri() + '?mode=ro', uri=True)) as saved:
+                    if saved.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
+                        raise MigrationError('迁移前备份未通过完整性检查')
+                os.replace(temporary, backup)
+                digest = fingerprint(backup)
+
+                create_month_rows(connection)
+                count = 0
+                for instance, month in _source_rows(connection, 'cl1_months',
+                                                     'SELECT instance,month FROM cl1_months ORDER BY instance,month'):
+                    data = read_month(connection, instance, month)
+                    save_month_row(connection, instance, month, data)
+                    verify_snapshot(data, read_month_row(connection, instance, month))
+                    count += 1
+                if connection.execute('SELECT COUNT(*) FROM cl1_data').fetchone()[0] != count:
+                    raise MigrationError('迁移后的月份数量与原库不一致')
+                if connection.execute('PRAGMA foreign_key_check').fetchone():
+                    raise MigrationError('迁移后的总库未通过外键检查')
+                insert(connection, 'storage_migrations', dict(
+                    version=VERSION, applied_at=datetime.now().isoformat(), source_digest=digest,
+                ))
+                connection.execute(f'PRAGMA user_version={VERSION}')
+        _log_progress('月度统计迁移完成，已核对 %s 份月度记录，原版备份：%s', count, backup)
+        return digest
+    finally:
+        for suffix in ('', '-wal', '-shm'):
+            temporary.with_name(temporary.name + suffix).unlink(missing_ok=True)
+
+
 def migrate(database):
     """备份并验证旧数据后原子发布统一业务数据库。"""
     started = time.perf_counter()
@@ -664,6 +700,8 @@ def migrate(database):
                 connection.execute('PRAGMA synchronous=FULL')
                 create_schema(connection)
                 connection.execute('BEGIN IMMEDIATE')
+                create_month_rows(connection)
+                connection.execute(f'PRAGMA user_version={VERSION}')
                 ordered = sorted(sources.items(), key=lambda pair: (pair[1] not in ('statistics', 'cl1', 'storage', 'daily', 'scheduler'), str(pair[0])))
                 for ordinal, (original, kind) in enumerate(ordered, 1):
                     copy = copies[original]

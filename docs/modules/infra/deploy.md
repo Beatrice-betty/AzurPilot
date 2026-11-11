@@ -96,7 +96,7 @@ Alas.bat → python -m deploy.installer
 成功 → start pythonw gui.py --electron
 ```
 
-`GitManager.git_install()` 按本地配置直接执行 Git/CDN 更新，不再请求云端更新总开关。云端仅保留运行期间的强制更新开关，其访问失败不阻止正常版本检查。
+`GitManager.git_install()` 按本地配置执行 Git/CDN 更新。WebUI 的周期检查显示可用版本，由手动操作或本机定时计划应用更新。
 
 ### 统一云 API 入口
 
@@ -104,16 +104,11 @@ Alas.bat → python -m deploy.installer
 
 | 用途 | 路径与协议 |
 | --- | --- |
-| CL1 月度累计上报 | `POST /api/v2/post/cl1`，UUID、采集时间、原始计数与设备头；派生指标由服务端计算 |
 | 公告 | `GET /api/v2/get/notice/data.json`，读取 `announcement`，撤回时清除本地公告缓存 |
-| 强制更新 | `GET /api/v2/get/update/data.json`，读取布尔字段 `force_update` |
 | 停服维护 | `GET /api/v2/get/maintenance?server=cn`，按当前区服查询；其他服不回退国服 |
 | 单服状态 | `GET /api/v2/get/server?region=cn&server_id=1`，保留网关直连后备逻辑 |
-| 截图 | `/api/v1/uploads/init` 获取 C 的 307 → 直接向 A 登记、逐文件 `PUT /api/v1/uploads/{id}/files/{index}` → `POST /api/v1/uploads/{id}/complete` |
 
-公告和更新策略读取 Worker 的 v2 文档；动态 v2 查询携带 `X-AzurPilot-ID`。已移除的 `/api/updata` 总开关不恢复。
-
-`掉落记录 → 云端统计上报` 控制截图上报（默认开启），具体类型仍按“上传 / 保存并上传”选项决定。科研同时采集五项项目列表与领奖截图；通用掉落沿用既有采集点，侵蚀1练级只保留独立 CL1 统计。云端开关关闭不影响本地统计。临时文件位于 `log/cloud_upload/<匿名实例ID>/`，单文件最多10 MiB、单组500 MiB、暂存512 MiB且最多128组。失败保留同一组ID，下次采集启动工作线程时恢复旧任务；完成回执成功后删除暂存，超过7天的失败任务清理。
+区服和停服维护接口要求 `X-AzurPilot-ID` 请求头。所有安装都发送相同的全零值。
 
 源码更新 CDN、远程连接注册、ATX 下载和交易所由各自服务配置管理，使用各自的地址。
 

@@ -3,7 +3,7 @@
 import copy
 import tempfile
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -67,7 +67,8 @@ class ConfigBatchTests(unittest.TestCase):
         config.write_file.assert_called_once()
         self.assertTrue(config.auto_update)
         self.assertEqual(self.disk['Main']['Test'], {'Value': 3, 'Other': 4})
-        self.assertEqual(self.disk['Main']['Scheduler']['NextRun'], self.now + timedelta(minutes=90))
+        self.assertEqual(self.disk['Main']['Scheduler']['NextRun'],
+                         (self.now + timedelta(minutes=90)).astimezone(timezone.utc))
         self.assertEqual(config.modified, {})
         self.assertEqual(config.Test_Value, 3)
 
@@ -85,7 +86,8 @@ class ConfigBatchTests(unittest.TestCase):
                 self.assertIs(caught.exception, error)
                 self.config.write_file.assert_called_once()
                 self.assertTrue(self.config.auto_update)
-                self.assertEqual(self.disk['Main']['Scheduler']['NextRun'], self.now + timedelta(minutes=90))
+                self.assertEqual(self.disk['Main']['Scheduler']['NextRun'],
+                                 (self.now + timedelta(minutes=90)).astimezone(timezone.utc))
                 self.assertEqual(self.disk['Main']['Test']['Value'], 5)
 
     def test_disabled_auto_update_remains_disabled_and_pending(self):
@@ -140,7 +142,8 @@ class ConfigBatchTests(unittest.TestCase):
         config.write_file.side_effect = self.write_file
         config.update()
         self.assertEqual(self.disk['Main']['Test']['Value'], 3)
-        self.assertEqual(self.disk['Main']['Scheduler']['NextRun'], self.now + timedelta(minutes=90))
+        self.assertEqual(self.disk['Main']['Scheduler']['NextRun'],
+                         (self.now + timedelta(minutes=90)).astimezone(timezone.utc))
         self.assertIs(config.modified, pending)
         self.assertEqual(pending, {})
 
@@ -170,10 +173,10 @@ class ConfigBatchTests(unittest.TestCase):
 
         with patch.object(config, 'config_override', side_effect=record_override):
             config.cross_set('Research.Scheduler.NextRun', invalid_next_run)
-        self.assertEqual(observed, [invalid_next_run])
+        self.assertEqual(observed, [invalid_next_run.astimezone(timezone.utc)])
         self.assertEqual(config.Scheduler_NextRun, self.now)
         # save 按原契约只合并 modified，调度夹限不擅自改写用户磁盘字段。
-        self.assertEqual(self.disk['Research']['Scheduler']['NextRun'], invalid_next_run)
+        self.assertEqual(self.disk['Research']['Scheduler']['NextRun'], invalid_next_run.astimezone(timezone.utc))
 
     def test_plain_load_keeps_override_before_pending_changes(self):
         config = self.config
@@ -197,7 +200,7 @@ class ConfigBatchTests(unittest.TestCase):
                 self.config.task_delay(minute=delay.total_seconds() / 60)
                 expected = self.now + delay
                 self.assertEqual(self.config.Scheduler_NextRun, expected)
-                self.assertEqual(self.disk[task]['Scheduler']['NextRun'], expected)
+                self.assertEqual(self.disk[task]['Scheduler']['NextRun'], expected.astimezone(timezone.utc))
 
     def test_update_preserves_proxy_binding_and_runtime_overrides(self):
         config = self.config
@@ -251,7 +254,7 @@ class ConfigBatchTests(unittest.TestCase):
         override.assert_called_once_with()
         self.config.write_file.assert_called_once()
         self.assertTrue(self.disk['OpsiScheduling']['Scheduler']['Enable'])
-        self.assertEqual(self.disk['OpsiScheduling']['Scheduler']['NextRun'], self.now)
+        self.assertEqual(self.disk['OpsiScheduling']['Scheduler']['NextRun'], self.now.astimezone(timezone.utc))
 
     def test_opsi_delay_joins_outer_batch(self):
         with self.config.multi_set():
@@ -262,7 +265,7 @@ class ConfigBatchTests(unittest.TestCase):
         self.assertEqual(self.disk['Main']['Test']['Value'], 3)
         self.assertEqual(
             deep_get(self.disk, 'OpsiMeowfficerFarming.Scheduler.NextRun'),
-            self.now + timedelta(minutes=90),
+            (self.now + timedelta(minutes=90)).astimezone(timezone.utc),
         )
 
     def test_foreign_edit_between_reload_and_save_is_preserved(self):

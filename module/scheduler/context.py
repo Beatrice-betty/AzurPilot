@@ -1,6 +1,7 @@
 """只读任务与资源快照；供 API 模拟器和 worker 共用。"""
 from datetime import datetime, timedelta
 
+from module.config.schedule_time import display_next_run
 from module.scheduler.catalog import REFRESHABLE, RESOURCES
 
 
@@ -38,7 +39,7 @@ def snapshot(data, observations, now):
         scheduler = groups.get('Scheduler', {})
         if scheduler.get('Command') and name not in ('Alas', 'Restart', 'General'):
             tasks.append({'name': name, 'enabled': bool(scheduler.get('Enable')),
-                          'nextRun': str(scheduler.get('NextRun', '')), 'command': scheduler['Command']})
+                          'nextRun': str(display_next_run(scheduler.get('NextRun', ''))), 'command': scheduler['Command']})
     resources = {}
     for name in RESOURCES:
         row = observations.get(name, {})

@@ -26,7 +26,7 @@
 - `Filter` 正则过滤系统：解析 `>` 分隔的优先级排序规则，应用于舰船/装备/商品对象列表。
 - `utils.py` 图像处理与随机坐标工具（点击点随机化、裁剪、颜色比较、OCR 预处理）。
 - 装饰器：`Config.when()` 按配置分发同名方法、`cached_property` 及配套删除工具。
-- 横切工具：`AsyncExecutor` 后台队列、`ApiClient` 远程 API 上报、`device_id` 硬件指纹、`backup` 每日备份、`retry` 通用重试、`ssh` 主机指纹清理、`debug_clip` 调试录屏。
+- 横切工具：`AsyncExecutor` 后台队列、`ApiClient` 公告查询、`device_id` 本地统计标识、`backup` 每日备份、`retry` 通用重试、`ssh` 主机指纹清理、`debug_clip` 调试录屏。
 
 ### 不负责
 
@@ -50,8 +50,8 @@ module/base/
 ├── decorator.py       # Config.when()、cached_property、run_once 等
 ├── utils.py           # 图像处理、随机坐标、颜色比较等工具函数
 ├── async_executor.py  # AsyncExecutor 单例：后台 asyncio 事件循环线程
-├── api_client.py      # ApiClient：遥测提交、公告获取
-├── device_id.py       # 硬件指纹设备 ID（匿名统计用）
+├── api_client.py      # ApiClient：公告获取
+├── device_id.py       # 本地统计归属标识
 ├── backup.py          # 每日备份（数据库 + 用户配置）
 ├── retry.py           # 通用重试装饰器（改自 retry 库）
 ├── ssh.py             # 清理 SSH known_hosts 指纹记录（非 SSH 连接）
@@ -68,9 +68,9 @@ module/base/
 | `filter.py` | `Filter` | 商店、退役、委托等选择器 |
 | `utils.py` | 图像/坐标工具 | 几乎所有模块（`from module.base.utils import *`） |
 | `decorator.py` | 装饰器全家桶 | 全仓（`Config.when` 是业务模块的核心分发手段） |
-| `async_executor.py` | 后台任务队列 | 统计写入、遥测提交 |
-| `api_client.py` | 远程 API 客户端 | 遥测提交器、公告服务 |
-| `device_id.py` | 设备 ID | 遥测、统计库 |
+| `async_executor.py` | 后台任务队列 | 统计写入 |
+| `api_client.py` | 远程 API 客户端 | 公告服务 |
+| `device_id.py` | 本地统计归属标识 | 统计库 |
 | `backup.py` | 每日备份 | `alas.py` 启动时 |
 | `retry.py` | 通用重试 | `module/runtime/updater.py` |
 | `ssh.py` | 清理 SSH 主机指纹 | 远程模拟器管理、远程访问 |
@@ -86,7 +86,7 @@ module/base/
 | `Button(...)` / `Template(file=...)` | 各模块 `assets.py` 中的资源常量构造，模块导入时即注册 |
 | `release_resources(next_task='')` | 调度器在任务切换/等待时调用，批量释放图像与 OCR 缓存 |
 | `Filter(regex, attr, preset)` | 各选择器模块定义过滤规则的入口 |
-| `async_executor`（全局实例） | 向后台线程投递阻塞操作（统计写入、上报） |
+| `async_executor`（全局实例） | 向后台线程投递阻塞操作（统计写入） |
 
 追代码建议从 `ModuleBase.appear()` 开始：它是理解「一次检测如何路由到颜色/模板/层级三种模式」的钥匙；再沿 `Button.match` / `Button.appear_on` 下探识别细节。
 
@@ -170,7 +170,7 @@ module/base/
 | `ssh.py` | 不是 SSH 连接库。`clear_ssh_host_key()` 先用 `ssh -G` 查询目标主机实际使用的 known_hosts 文件，再 `ssh-keygen -R` 只删该主机的指纹记录，供远程模拟器管理与远程访问场景避免主机指纹变更导致的交互卡死 |
 | `device_id.py` | Windows 用 WMIC 查主板/CPU/BIOS/磁盘序列号，Linux 用 machine-id，macOS 用硬件 UUID（已舍弃 MAC 地址），拼接后 SHA-256 取前 32 位。变更时把旧 ID 暂存内存供统计数据库热迁移；`log/device_id.json` 每 5 分钟由 daemon 线程覆写 |
 | `backup.py` | 每日备份：SQLite `backup()` 保存 `azurpilot.db` 的已提交 WAL，再锁定并备份安全数据库、注册信息、密钥材料、`deploy.yaml` 与用户配置 JSON（排除 `template*`）；外部安全密钥不自动导出。全部成功后原子发布目录，写入 `AzurPilot_Data_Backup/<日期>/`，按保留天数清理。`enable=False` 时直接返回，不动备份目录 |
-| `api_client.py` | 远程 API 客户端（CL1 遥测、公告拉取），遥测上报走 `async_executor` 异步化；`get_announcement` 同步。请求失败仅记日志，绝不阻断游戏流程 |
+| `api_client.py` | 远程公告客户端。`get_announcement` 同步读取公告，请求失败时保留缓存 |
 | `debug_clip.py` | 设备端 `screenrecord` 录制调试录像（30fps 输出、真实时间戳），`clip_recording()` 上下文管理器由侵蚀 1 练级与短猫相接使用。单段逻辑录像上限 5 分钟：设备端单进程只能录 180 秒，更长部分由后台轮转线程按段续录，收尾时转码并按顺序拼接（拼接失败则分段保存），到达上限自动停止。所有失败路径只记日志、优雅降级为不录，绝不影响游戏逻辑 |
 
 ## 6. 工作流程
@@ -222,7 +222,7 @@ flowchart TD
 | `alas.py`（调度器） | 每个任务实例化业务模块（间接构造 `ModuleBase`）；调用 `release_resources()` 控制内存；调用 `backup()`、`ApiClient`、`clear_ssh_host_key()` |
 | 业务功能模块（campaign、os、shop 等） | 全部经 `InfoHandler → UI → ModuleBase` 继承链获得本层能力 |
 | `module/config/server.py` | `set_server()` 触发 `release_resources()` |
-| `module/statistics/*` | 通过 `async_executor`、`ApiClient`、`device_id` 上报数据 |
+| `module/statistics/*` | 通过 `async_executor` 写入本地统计，沿用本地归属标识 |
 
 ### 下游
 
@@ -254,13 +254,6 @@ Device.screenshot() 产出 np.ndarray (720, 1280, 3) RGB
     → Filter.load() 切分与解析
     → apply(对象列表) 按优先级输出匹配对象
     → 业务代码按结果执行操作
-```
-
-上报链路（异步、不阻塞主流程）：
-
-```
-统计/错误事件 → ApiClient.submit_*() → async_executor.submit()
-    → 后台 loop 线程串行执行 HTTP POST（失败仅记日志）
 ```
 
 ## 9. 状态模型
@@ -302,7 +295,7 @@ stateDiagram-v2
 | `requests` 各类异常（`api_client.py`） | 网络失败、超时、非 2xx | 双域名依次重试，全部失败返回 `(False, 0, 原因)`，调用方忽略即可 |
 | 录屏任何失败（`debug_clip.py`） | adb/ffmpeg/设备不支持 | 只记日志，优雅降级为「本段未保存」，绝不抛回游戏流程 |
 
-本层的总原则：**识别与计时不抛异常**（返回 bool 交给状态循环决策），**横切服务吞异常降级**（上报、备份、录屏失败不影响游戏任务），**配置解析警告不中断**（Filter 无效规则跳过）。真正的致命流程错误（卡死、游戏退出）由设备层与异常体系（`module/exception.py`）负责。
+本层的总原则：**识别与计时不抛异常**（返回 bool 交给状态循环决策），**横切服务吞异常降级**（备份、录屏失败不影响游戏任务），**配置解析警告不中断**（Filter 无效规则跳过）。真正的致命流程错误（卡死、游戏退出）由设备层与异常体系（`module/exception.py`）负责。
 
 ## 12. 并发与线程模型
 
@@ -360,7 +353,7 @@ stateDiagram-v2
 
 ### 后台执行非阻塞任务
 
-优先 `ModuleBase.worker.submit(func, ...)`（模块级单线程池）；需要串行写库或 HTTP 上报则用 `async_executor`（统计与上报的事实标准）。
+优先 `ModuleBase.worker.submit(func, ...)`（模块级单线程池）；需要串行写入统计库时使用 `async_executor`。
 
 ## 16. 修改注意事项
 

@@ -1,7 +1,7 @@
 """使用真实调度循环验证恢复边界，所有设备、通知和后台服务均隔离。"""
 
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, call, patch
 
 from alas import AzurLaneAutoScript
@@ -523,8 +523,8 @@ class TestSchedulerRecovery(unittest.TestCase):
             self.run_tasks(script, ['Commission', 'Restart', 'Research',
                                     'Commission', 'Restart', 'Commission', 'Restart', 'Commission'])
 
-        script.config.task_delay.assert_called_once_with(target=tomorrow, task='Commission')
-        self.assertEqual(script.task_restart_delays, {'Commission': tomorrow})
+        script.config.task_delay.assert_called_once_with(target=tomorrow.astimezone(timezone.utc), task='Commission')
+        self.assertEqual(script.task_restart_delays, {'Commission': tomorrow.astimezone(timezone.utc)})
         self.assertNotIn('Commission', script.task_restart_record)
         self.assertEqual(script.restart.call_count, 3)
         self.assertEqual(script._try_restart_emulator.call_count, 3)
@@ -681,7 +681,7 @@ class TestSchedulerRecovery(unittest.TestCase):
             self.run_tasks(script, ['Commission'])
         script.commission.assert_not_called()
         runtime.task_finished.assert_called_once_with('Commission', False)
-        script.wait_until.assert_called_once_with(now + timedelta(seconds=4))
+        script.wait_until.assert_called_once_with((now + timedelta(seconds=4)).astimezone(timezone.utc))
         with patch('alas.current_time', return_value=deadline):
             self.run_tasks(script, ['Commission'])
         script.commission.assert_called_once_with()
@@ -694,7 +694,7 @@ class TestSchedulerRecovery(unittest.TestCase):
         tomorrow = datetime.now() + timedelta(days=1)
         with patch('alas.get_server_next_update', return_value=tomorrow):
             self.run_tasks(script, ['Commission', 'Commission', 'Commission'])
-        script.config.task_delay.assert_called_once_with(target=tomorrow, task='Commission')
+        script.config.task_delay.assert_called_once_with(target=tomorrow.astimezone(timezone.utc), task='Commission')
         self.assertEqual(script._try_restart_emulator.call_count, 2)
         self.assertEqual(script.config.task_call.call_args_list, [call('Restart')] * 3)
 
@@ -744,7 +744,7 @@ class TestSchedulerRecovery(unittest.TestCase):
         tomorrow = datetime.now() + timedelta(days=1)
         with patch('alas.get_server_next_update', return_value=tomorrow):
             self.assertTrue(script._record_task_restart('Commission', 'recoverable'))
-        self.assertEqual(script.task_restart_delays['Commission'], tomorrow)
+        self.assertEqual(script.task_restart_delays['Commission'], tomorrow.astimezone(timezone.utc))
         self.webui.assert_called_once()
         self.assertEqual(self.webui.call_args.args, ('test',))
         self.assertEqual(self.webui.call_args.kwargs['title'], '任务已延后至次日')
@@ -757,7 +757,7 @@ class TestSchedulerRecovery(unittest.TestCase):
         tomorrow = datetime.now() + timedelta(days=1)
         with patch('alas.get_server_next_update', return_value=tomorrow):
             self.assertTrue(script._record_task_restart('Commission', 'recoverable'))
-        self.assertEqual(script.task_restart_delays['Commission'], tomorrow)
+        self.assertEqual(script.task_restart_delays['Commission'], tomorrow.astimezone(timezone.utc))
         self.notify.assert_called_once()
         self.webui.assert_called_once()
 
@@ -769,7 +769,7 @@ class TestSchedulerRecovery(unittest.TestCase):
         with patch('alas.get_server_next_update', return_value=tomorrow):
             self.run_tasks(script, ['Commission'] * 9)
         self.assertEqual(script._try_restart_emulator.call_count, 2)
-        script.config.task_delay.assert_called_once_with(target=tomorrow, task='Commission')
+        script.config.task_delay.assert_called_once_with(target=tomorrow.astimezone(timezone.utc), task='Commission')
 
     def test_midnight_deferral_is_always_in_the_future(self):
         script = self.make_script()
@@ -781,7 +781,7 @@ class TestSchedulerRecovery(unittest.TestCase):
             script._record_task_restart('Commission', False)
         next_update.assert_called_once_with('00:00')
         script.config.task_delay.assert_called_once_with(
-            target=now + timedelta(days=1), task='Commission')
+            target=(now + timedelta(days=1)).astimezone(timezone.utc), task='Commission')
 
 
 if __name__ == '__main__':

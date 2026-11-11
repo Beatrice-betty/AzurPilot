@@ -11,7 +11,8 @@ from uuid import uuid4
 
 from module.config.transaction import config_transaction
 
-VERSION = 1
+VERSION = 2
+SCHEMA_V1 = 1
 DEFAULT_DIRECTORY = Path(__file__).resolve().parents[2] / 'config'
 _configured_directory = Path(os.environ.get('AZURPILOT_CONFIG_DIR', DEFAULT_DIRECTORY)).absolute()
 _directory = ContextVar('business_database_directory', default=None)
@@ -54,9 +55,14 @@ def register_instance(connection, instance):
 
 
 def create_schema(connection):
-    """执行版本化模式定义以初始化数据库。"""
+    """创建初始原生表结构，也用于独立调度切片。"""
     connection.executescript(Path(__file__).with_name('schema_v1.sql').read_text(encoding='utf-8'))
-    connection.execute(f'PRAGMA user_version={VERSION}')
+    connection.execute(f'PRAGMA user_version={SCHEMA_V1}')
+
+
+def create_month_rows(connection):
+    """在调用方的事务内创建第二版月度存储。"""
+    connection.execute(Path(__file__).with_name('schema_v2.sql').read_text(encoding='utf-8'))
 
 
 class BusinessDatabase:
@@ -93,14 +99,21 @@ class BusinessDatabase:
                 logger.info('[存储] 检查已有总库的版本与迁移记录：%s', self.path)
                 with closing(sqlite3.connect(self.path.as_uri() + '?mode=ro', uri=True)) as connection:
                     version = connection.execute('PRAGMA user_version').fetchone()[0]
-                    if version != VERSION:
+                    if version not in (SCHEMA_V1, VERSION):
                         raise ValueError(f'不支持的总库版本：{version}')
-                    row = connection.execute('SELECT source_digest FROM storage_migrations WHERE version=?', (VERSION,)).fetchone()
+                    row = connection.execute('SELECT source_digest FROM storage_migrations WHERE version=?', (version,)).fetchone()
                     if row is None or connection.execute('SELECT MAX(version) FROM storage_migrations').fetchone()[0] != version:
                         raise ValueError('总库缺少迁移完成记录')
-                    if not self.marker.exists():
-                        logger.info('[存储] 补齐迁移完成标记')
-                        self._write_marker(row[0])
+                    if version == VERSION:
+                        connection.execute('SELECT instance, month, data_json FROM cl1_data LIMIT 0')
+                digest = row[0]
+                if version == SCHEMA_V1:
+                    from module.persistence.migration import migrate_month_rows
+                    digest = migrate_month_rows(self)
+                marker = f'{VERSION}\n{digest}\n'
+                if not self.marker.is_file() or self.marker.read_text(encoding='utf-8') != marker:
+                    logger.info('[存储] 补齐迁移完成标记')
+                    self._write_marker(digest)
                 logger.info('[存储] 总库 v%s 已完成迁移，无需再次解密旧数据', VERSION)
             else:
                 if self.marker.exists():

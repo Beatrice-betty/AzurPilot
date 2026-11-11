@@ -5,9 +5,11 @@ import threading
 import unittest
 from concurrent.futures import Future
 from pathlib import Path
+from sqlite3 import IntegrityError
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from module.base.async_executor import async_executor
 from module.statistics import cl1_database as database
 from module.statistics import opsi_runtime
 from tests.opsi_test_support import install_store
@@ -72,6 +74,48 @@ class TestAkashiAsyncPersistence(unittest.TestCase):
         self.assertEqual(self.db.increment_akashi_encounter('test', '2026-09'), 1)
         self.assertEqual(self.db.get_stats('test', '2026-09')['akashi_encounters'], 1)
         self.assertEqual(self.db.get_stats('test', '2026-10')['akashi_encounters'], 0)
+
+    def test_purchase_updates_month_without_deleting_existing_record(self):
+        previous = {'akashi_ap': 20, 'akashi_ap_entries': [{'amount': 20}],
+                    'yellow_coin_snapshots': [{'yellow_coin': 100}], 'legacy_field': {'keep': True}}
+        self.db.save_stats('test', '2026-09', previous)
+        with self.db.store.transaction() as connection:
+            connection.execute("""CREATE TRIGGER reject_month_delete BEFORE DELETE ON cl1_data
+                BEGIN SELECT RAISE(ABORT, 'unexpected monthly rewrite'); END""")
+
+        release = threading.Event()
+        async_executor.submit(release.wait, 5)
+        purchased_at = database.datetime(2026, 9, 30, 23, 59, 59)
+        try:
+            with patch.object(database, 'datetime') as clock:
+                clock.now.return_value = purchased_at
+                future = self.db.async_add_akashi_ap_entry('test', 40, 20, 2, 'akashi')
+            self.assertFalse(future.done())
+        finally:
+            release.set()
+        self.wait_completed(future)
+
+        self.assertEqual(self.db.get_stats('test', '2026-09'), {
+            **previous,
+            'akashi_ap': 60,
+            'akashi_ap_entries': [
+                {'amount': 20},
+                {'ts': purchased_at.isoformat(), 'amount': 40, 'base': 20, 'count': 2, 'source': 'akashi'},
+            ],
+        })
+        self.assertEqual(self.db.get_stats('test', '2026-10')['akashi_ap'], 0)
+
+    def test_purchase_detail_failure_rolls_back_monthly_total(self):
+        purchased_at = database.datetime(2026, 9, 30)
+        previous = {'akashi_ap': 20, 'akashi_ap_entries': [{'amount': 20}]}
+        self.db.save_stats('test', '2026-09', previous)
+        with self.db.store.transaction() as connection:
+            connection.execute("""CREATE TRIGGER reject_purchase BEFORE INSERT ON cl1_data
+                BEGIN SELECT RAISE(ABORT, 'purchase write rejected'); END""")
+
+        with self.assertRaisesRegex(IntegrityError, 'purchase write rejected'):
+            self.db.add_akashi_ap_entry('test', 40, 20, 2, 'akashi', purchased_at=purchased_at)
+        self.assertEqual(self.db.get_stats('test', '2026-09'), previous)
 
     def make_meow(self, hazard_level=5):
         return SimpleNamespace(config=self.config, zone=SimpleNamespace(hazard_level=hazard_level))

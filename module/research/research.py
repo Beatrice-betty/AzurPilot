@@ -581,8 +581,6 @@ class RewardResearch(ResearchSelector, ResearchQueue, StorageHandler):
         with self.stat.new(
                 genre='research', method=self.config.DropRecord_ResearchRecord
         ) as drop:
-            # Project selection/reset frames are a local archive, not reward events.
-            drop.upload = False
             for _ in range(5):
                 if self.get_queue_slot() > 0:
                     success = self.research_queue_append(drop=drop)

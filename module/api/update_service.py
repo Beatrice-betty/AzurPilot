@@ -164,7 +164,7 @@ class UpdateService:
         mismatch = bool(local and upstream and ahead and behind)
         from module.runtime.setting import State
         state = self.updater.state
-        busy = self.operation is not None or state not in (0, 1, 'failed', 'finish') or getattr(self.updater, '_force_update_checking', False)
+        busy = self.operation is not None or state not in (0, 1, 'failed', 'finish')
         visible_state = {0: 'idle', 1: 'available'}.get(state, state)
         if self.operation == 'fetch' or self.operation == 'apply' and state in (0, 1, 'finish'):
             visible_state = self.operation

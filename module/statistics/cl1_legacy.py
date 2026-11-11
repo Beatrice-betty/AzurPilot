@@ -17,7 +17,7 @@ def decrypt_legacy_payload(blob, key):
     return json.loads(cipher.decrypt_and_verify(blob[32:], blob[16:32]).decode('utf-8'))
 
 
-def read_ap_snapshots(path, instance, months):
+def read_ap_snapshots(path, instance, months, *, root):
     """只读取所属实例的完整月快照，兼容已迁移 JSON 和旧 AES-GCM 行。"""
     keys = None
     with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=10)) as connection:
@@ -36,9 +36,8 @@ def read_ap_snapshots(path, instance, months):
                 data = None
             if not isinstance(data, dict) and blob:
                 if keys is None:
-                    from module.base.device_id import get_device_id, get_old_device_id
-                    ids = {get_device_id(), get_old_device_id()} - {None, ''}
-                    keys = [derive_legacy_key(value) for value in ids]
+                    from module.base.device_id import read_legacy_device_ids
+                    keys = [derive_legacy_key(value) for value in read_legacy_device_ids(root)]
                 for key in keys:
                     try:
                         data = decrypt_legacy_payload(blob, key)

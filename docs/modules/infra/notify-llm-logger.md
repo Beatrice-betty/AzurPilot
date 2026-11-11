@@ -13,7 +13,7 @@
 
 它们都被 [调度器](../entry/alas.md) 的异常恢复链调用：异常 → 记日志（error_context）→ 保存错误现场（触发 LLM 分析）→ 推送通知（OnePush + WebUI 双通道）→ 决定恢复或等待服务器。理解这条链是读懂任何崩溃日志的前提。
 
-普通统计数值日志与既有 CL1 遥测保留；所有 Rich 异常渲染关闭 `tracebacks_show_locals`，避免敏感运行状态随局部变量落盘。
+所有 Rich 异常渲染关闭 `tracebacks_show_locals`，避免敏感运行状态随局部变量落盘。
 
 ## 2. 模块职责
 
@@ -30,7 +30,7 @@
 - 错误现场的截图与日志归档（`alas.py` 的 `save_error_log` 负责，LLM 分析只是它最先执行的一步）
 - 日志的 WebSocket 推送与前端渲染（`module/api` / `module/runtime/process_manager` 负责传输）
 - 任务调度与错误恢复策略本身（只提供「服务器是否可用」这一个判断依据）
-- 用户数据统计上报（见 [统计与数据提交](statistics.md)）
+- 本地游戏统计（见 [统计与掉落记录](statistics.md)）
 
 ## 3. 模块位置
 

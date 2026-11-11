@@ -14,6 +14,33 @@
 """
 
 from module.config.server import to_server
+from module.config.utils import parse_value
+
+
+def local_drop_record_settings(current, legacy):
+    """将旧的上传档位转换为等价的本地截图和委托统计选项。"""
+    settings = dict(current)
+    research = legacy.get('ResearchRecord')
+    if research in ('upload', 'save_and_upload'):
+        settings['ResearchRecord'] = 'save' if research == 'save_and_upload' else 'do_not'
+
+    commission = legacy.get('CommissionRecord')
+    if commission not in ('save', 'upload', 'save_and_upload', 'record', 'save_and_record', 'save_only', 'do_not') \
+            and 'CloudUpload' in legacy:
+        commission = 'upload'
+    if commission in ('upload', 'save_and_upload', 'save'):
+        save = commission != 'upload'
+        old_switch = legacy.get('CloudUpload', True)
+        if old_switch in (None, ''):
+            old_switch = True
+        if parse_value(old_switch, {'type': 'checkbox'}) is True:
+            settings['CommissionRecord'] = 'save_and_record' if save else 'record'
+        else:
+            settings['CommissionRecord'] = 'save_only' if save else 'do_not'
+
+    settings.pop('CloudUpload', None)
+    settings.pop('TelemetryReport', None)
+    return settings
 
 
 def fleet_training_hours_redirect(value):

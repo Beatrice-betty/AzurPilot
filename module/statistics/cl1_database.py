@@ -1,6 +1,6 @@
 """CL1 数据库模块。
 
-月度计数、事件与收益使用总库原生表；未知字段通过类型化兼容树保留。
+月度计数、事件与收益在总库中按实例及月份保存完整记录。
 旧存储的只读解码由安装级迁移器统一处理。
 """
 
@@ -422,9 +422,9 @@ class Cl1Database:
     def _list_stats_rows(self, instance: Optional[str] = None) -> List[Tuple[str, str]]:
         with self.store.transaction(write=False) as connection:
             if instance is None:
-                rows = connection.execute('SELECT instance,month FROM cl1_months ORDER BY instance,month')
+                rows = connection.execute('SELECT instance,month FROM cl1_data ORDER BY instance,month')
             else:
-                rows = connection.execute('SELECT instance,month FROM cl1_months WHERE instance=? ORDER BY month', (instance,))
+                rows = connection.execute('SELECT instance,month FROM cl1_data WHERE instance=? ORDER BY month', (instance,))
             return [(row[0], row[1]) for row in rows]
 
 
@@ -528,21 +528,21 @@ class Cl1Database:
         return encounters
 
     def add_akashi_ap_entry(
-        self, instance: str, amount: int, base: int, count: int, source: str
+        self, instance: str, amount: int, base: int, count: int, source: str, *,
+        purchased_at: datetime = None,
     ):
-        """记录明石行动力购买条目"""
-        month = datetime.now().strftime("%Y-%m")
+        """在同一事务追加明石购买明细和月度累计。"""
+        purchased_at = purchased_at or datetime.now()
+        month = purchased_at.strftime("%Y-%m")
+        entry = {
+            "ts": purchased_at.isoformat(),
+            "amount": amount,
+            "base": base,
+            "count": count,
+            "source": source,
+        }
         with self._stats_transaction() as conn:
             data = self._get_stats_in_connection(conn, instance, month)
-
-            entry = {
-                "ts": datetime.now().isoformat(),
-                "amount": amount,
-                "base": base,
-                "count": count,
-                "source": source,
-            }
-
             entries = data.get("akashi_ap_entries", [])
             entries.append(entry)
             data["akashi_ap_entries"] = entries
@@ -617,7 +617,7 @@ class Cl1Database:
             stored: Dict[str, Dict[str, Any]] = {}
             with self.store.transaction(write=False) as reader:
                 for (month,) in reader.execute(
-                    'select month from cl1_months where instance = ? order by month', (instance,)
+                    'SELECT month FROM cl1_data WHERE instance=? ORDER BY month', (instance,)
                 ):
                     try:
                         stored[month] = self._get_stats_in_connection(reader, instance, month)
@@ -675,7 +675,7 @@ class Cl1Database:
             stored: Dict[str, Dict[str, Any]] = {}
             with self.store.transaction(write=False) as reader:
                 for (month,) in reader.execute(
-                    'select month from cl1_months where instance = ?', (instance,)
+                    'SELECT month FROM cl1_data WHERE instance=?', (instance,)
                 ):
                     try:
                         stored[month] = self._get_stats_in_connection(reader, instance, month)
@@ -1296,7 +1296,7 @@ class Cl1Database:
         from module.base.async_executor import async_executor
 
         return async_executor.submit(
-            self.add_akashi_ap_entry, instance, amount, base, count, source
+            self.add_akashi_ap_entry, instance, amount, base, count, source, purchased_at=datetime.now(),
         )
 
     def async_add_ap_snapshot(
@@ -1657,13 +1657,12 @@ class Cl1Database:
             "imgid": str(imgid or ''),
             "project": str(project or ''),
             "series": self._coerce_int(series or 0),
-            # 云端启用时也保留尚未取得服务器编号的物品。
             "items": items,
         }
         if source_items is not None:
-            from module.cloud.catalog import map_items
+            from module.statistics.reward_templates import summarize_items
             entry['source_items'] = source_items
-            entry['item_entries'] = map_items(source_items, [])
+            entry['item_entries'] = summarize_items(source_items)
         with self._stats_transaction() as conn:
             data = self._get_stats_in_connection(conn, instance, month)
             entries = data.get("research_drop_entries", [])
@@ -1677,39 +1676,8 @@ class Cl1Database:
             self._save_stats_in_connection(conn, instance, month, data)
         return entry
 
-    def apply_template_mappings(self, mappings, *, instance=None):
-        """Repair history atomically from immutable source IDs using storage abstractions."""
-        from module.cloud.catalog import map_items
-
-        rows = self._list_stats_rows(instance)
-        changed = 0
-        with self._stats_transaction() as connection:
-            for name, month in rows:
-                data = self._get_stats_in_connection(connection, name, month)
-                dirty = False
-                for field in ('research_drop_entries', 'commission_income_entries', 'cloud_commission_entries'):
-                    for entry in data.get(field, []):
-                        original = entry.get('source_items')
-                        if original is None:
-                            original = [{'item': key, 'amount': amount, 'tag': ''}
-                                        for key, amount in entry.get('items', {}).items()]
-                        mapped = map_items(original, mappings)
-                        items = {}
-                        for item in mapped:
-                            items[item['item']] = items.get(item['item'], 0) + item['amount']
-                        if items != entry.get('items', {}) or (
-                                'item_entries' in entry and mapped != entry['item_entries']):
-                            entry['source_items'] = original
-                            entry['items'] = items
-                            entry['item_entries'] = mapped
-                            dirty = True
-                            changed += 1
-                if dirty:
-                    self._save_stats_in_connection(connection, name, month, data)
-        return changed
-
-    def add_cloud_commission_drop(self, instance, record):
-        """Retain the complete tagged cloud event without changing local resource settlement."""
+    def add_commission_drop(self, instance, record):
+        """保存完整的委托掉落，沿用已有月度统计字段。"""
         stamp = datetime.fromisoformat(record['collected_at'])
         month = stamp.strftime('%Y-%m')
         with self._stats_transaction() as connection:

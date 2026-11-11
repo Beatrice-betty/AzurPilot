@@ -126,7 +126,6 @@ class TestSchedulingActionPointPanel(unittest.TestCase):
             patch.object(self.runner, 'is_running_smart_scheduling_task', return_value=True),
             patch.object(self.runner, '_record_ap_and_coins'),
             patch.object(self.runner, '_cl1_run_battle'),
-            patch.object(self.runner, '_cl1_handle_telemetry'),
             patch.object(self.runner, 'action_point_set') as reopen,
         ):
             self.runner.run_hazard1_leveling_once(ap_preserve=200, fresh_ap=fresh_ap)

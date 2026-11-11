@@ -458,7 +458,7 @@ def get_parser() -> ResearchDropParser:
 
 
 def record_research_drop(images: t.Sequence[np.ndarray], instance: str, imgid: str = '', *,
-                         config=None, collected_at=None, identity=None) -> t.Optional[dict]:
+                         identity=None) -> t.Optional[dict]:
     """解析一组科研掉落截图并写入本地库。
 
     Args:
@@ -471,14 +471,17 @@ def record_research_drop(images: t.Sequence[np.ndarray], instance: str, imgid: s
     """
     try:
         with _parser_lock:
+            from module.statistics.reward_templates import cached_reward_templates, local_drop_directory
+
             parser = get_parser()
             grid = parser.stats._target_grid()
-            from module.statistics.cloud_upload import resolver_for
-            grid.cloud_resolver = resolver_for(config, 'research') if config is not None else None
+            templates = cached_reward_templates(local_drop_directory(instance))
+            # 即使没有缓存，也在本地保留数量已确认的未知掉落。
+            grid.item_resolver = templates.identify
             try:
                 drop = parser.parse(images)
             finally:
-                grid.cloud_resolver = None
+                grid.item_resolver = None
     except Exception as e:
         logger.warning(f'[科研统计] 解析失败，跳过本次记录: {e}')
         return None
@@ -496,15 +499,6 @@ def record_research_drop(images: t.Sequence[np.ndarray], instance: str, imgid: s
     if entry is not None:
         detail = ', '.join(f'{name}x{amount}' for name, amount in drop.items.items())
         logger.info(f'[科研统计] {drop.project or "未知项目"} 记录入库: {detail}')
-        if config is not None:
-            try:
-                from module.statistics.cloud_upload import enqueue_record
-                from module.cloud.catalog import map_items
-                enqueue_record(config, 'research', map_items(drop.source_items, []),
-                               source_items=drop.source_items, project=drop.project,
-                               series=drop.series, collected_at=collected_at)
-            except Exception as error:
-                logger.warning(f'[云端统计] 科研上报入队失败，本地记录保留: {type(error).__name__}')
     return entry
 
 
