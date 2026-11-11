@@ -299,6 +299,32 @@ def save_month(connection, instance, month, data):
         insert(connection, 'cl1_compat_fields', dict(instance=instance, month=month, name=name, mode=mode, value_set_id=value_id))
 
 
+def append_akashi_ap_purchase(connection, instance, month, entry):
+    """追加到已初始化的明石购买统计，其余情况由月度快照接口处理。"""
+    mask = presence(('akashi_ap', 'akashi_ap_entries'), MONTH_FIELDS)
+    row = connection.execute('''SELECT akashi_ap FROM cl1_months
+        WHERE instance=? AND month=? AND (field_mask & ?)=? AND akashi_ap IS NOT NULL
+        AND NOT EXISTS (
+            SELECT 1 FROM cl1_compat_fields
+            WHERE instance=cl1_months.instance AND month=cl1_months.month
+            AND name IN ('akashi_ap', 'akashi_ap_entries')
+        )''', (instance, month, mask, mask)).fetchone()
+    if row is None:
+        return False
+    valid, total = scalar(row['akashi_ap'] + entry['amount'], 'I')
+    if not valid:
+        return False
+
+    ordinal = connection.execute('''SELECT COALESCE(MAX(ordinal), -1) + 1 FROM akashi_ap_purchases
+        WHERE instance=? AND month=?''', (instance, month)).fetchone()[0]
+    connection.execute('UPDATE cl1_months SET akashi_ap=? WHERE instance=? AND month=?',
+                       (total, instance, month))
+    owner = {'instance': instance, 'month': month}
+    table, fields = FAMILIES['akashi_ap_entries']
+    save_row(connection, table, dict(owner, ordinal=ordinal), entry, fields, owner, entry=True)
+    return True
+
+
 def read_month(connection, instance, month):
     """按实例与月份读取保存的统计快照。"""
     row = connection.execute('SELECT * FROM cl1_months WHERE instance=? AND month=?', (instance, month)).fetchone()

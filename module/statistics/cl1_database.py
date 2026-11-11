@@ -528,21 +528,25 @@ class Cl1Database:
         return encounters
 
     def add_akashi_ap_entry(
-        self, instance: str, amount: int, base: int, count: int, source: str
+        self, instance: str, amount: int, base: int, count: int, source: str, *,
+        purchased_at: datetime = None,
     ):
-        """记录明石行动力购买条目"""
-        month = datetime.now().strftime("%Y-%m")
+        """在同一事务追加明石购买明细和月度累计。"""
+        from module.persistence.snapshots import append_akashi_ap_purchase
+
+        purchased_at = purchased_at or datetime.now()
+        month = purchased_at.strftime("%Y-%m")
+        entry = {
+            "ts": purchased_at.isoformat(),
+            "amount": amount,
+            "base": base,
+            "count": count,
+            "source": source,
+        }
         with self._stats_transaction() as conn:
+            if append_akashi_ap_purchase(conn, instance, month, entry):
+                return
             data = self._get_stats_in_connection(conn, instance, month)
-
-            entry = {
-                "ts": datetime.now().isoformat(),
-                "amount": amount,
-                "base": base,
-                "count": count,
-                "source": source,
-            }
-
             entries = data.get("akashi_ap_entries", [])
             entries.append(entry)
             data["akashi_ap_entries"] = entries
@@ -1296,7 +1300,7 @@ class Cl1Database:
         from module.base.async_executor import async_executor
 
         return async_executor.submit(
-            self.add_akashi_ap_entry, instance, amount, base, count, source
+            self.add_akashi_ap_entry, instance, amount, base, count, source, purchased_at=datetime.now(),
         )
 
     def async_add_ap_snapshot(

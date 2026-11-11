@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime
 from pathlib import Path
+from threading import Lock
 from uuid import uuid4
 
 from module.config.time_source import now
@@ -13,6 +14,8 @@ from module.persistence.database import register_instance
 from module.statistics import resource_stats
 
 _session = ContextVar('resource_session', default=None)
+_pending_records = {}
+_pending_records_lock = Lock()
 ROOT = Path(__file__).resolve().parents[2]
 ALIASES = {
     'Coins': 'Coin', 'Gems': 'Gem', 'Cubes': 'Cube', 'CognitiveChips': 'Chip',
@@ -33,9 +36,9 @@ def canonical(name):
     return ALIASES.get(name, name)
 
 
-def connect():
+def connect(store=None):
     """共享总库连接；进入上下文时开始 IMMEDIATE 事务。"""
-    return resource_stats._database().connect()
+    return (store or resource_stats._database()).connect()
 
 
 @contextmanager
@@ -54,8 +57,8 @@ def session_for(config):
     return state if state and state['instance'] == getattr(config, 'config_name', None) else None
 
 
-def record(config, changes, operation, *, evidence='confirmed', event_key=None, task=None):
-    """只提交已确认的有符号变化；一次交易的各资源原子写入且支持幂等重放。"""
+def record(config, changes, operation, *, evidence='confirmed', event_key=None, task=None, defer=False):
+    """原子写入已确认的收支；defer=True 时返回是否已交给后台。"""
     instance = getattr(config, 'config_name', None)
     if not isinstance(instance, str):
         return False
@@ -68,16 +71,49 @@ def record(config, changes, operation, *, evidence='confirmed', event_key=None, 
             if isinstance(name, str) and name and not name.isdigit() and type(amount) is int and amount != 0]
     if not rows:
         return False
+    if defer:
+        from module.base.async_executor import async_executor
+        try:
+            store = resource_stats._database()
+            scope = (store, instance)
+            with _pending_records_lock:
+                future = async_executor.submit(_write_records, instance, rows, store)
+                _pending_records.setdefault(scope, {})[future] = rows
+        except Exception:
+            logger.exception('[资源管理] 提交后台收支记录失败')
+            return False
+        future.add_done_callback(lambda completed: _record_finished(completed, scope))
+        return True
+    return _write_records(instance, rows)
+
+
+def _insert_records(connection, rows):
+    connection.executemany('''INSERT OR IGNORE INTO resource_flows
+        (instance, ts, resource, amount, task, operation, evidence, run_id, event_key)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', rows)
+
+
+def _write_records(instance, rows, store=None):
     try:
-        with connect() as connection:
+        with connect(store) as connection:
             register_instance(connection, instance)
-            connection.executemany('''INSERT OR IGNORE INTO resource_flows
-                (instance, ts, resource, amount, task, operation, evidence, run_id, event_key)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', rows)
+            _insert_records(connection, rows)
         return True
     except (sqlite3.Error, OSError) as error:
         logger.warning(f'[资源管理] 收支记录失败：{type(error).__name__}')
         return False
+
+
+def _record_finished(future, scope):
+    with _pending_records_lock:
+        pending = _pending_records[scope]
+        del pending[future]
+        if not pending:
+            del _pending_records[scope]
+    try:
+        future.result()
+    except Exception:
+        logger.exception('[资源管理] 后台收支记录失败')
 
 
 def observe(config, resource, value, source=None, *, observed_at=None):
@@ -90,12 +126,19 @@ def observe(config, resource, value, source=None, *, observed_at=None):
     run_id = state['id'] if state else None
     stamp = (observed_at or now()).isoformat(sep=' ')
     try:
-        with connect() as connection:
+        store = resource_stats._database()
+        with connect(store) as connection:
             register_instance(connection, instance)
             baseline = connection.execute('SELECT * FROM resource_balances WHERE instance=? AND resource=?',
                                           (instance, resource)).fetchone()
             if baseline and baseline['ts'] > stamp:
                 return
+            # 同步库存复核可能先于后台购买记录。先补写已发生的交易，后台重放按事件键去重。
+            with _pending_records_lock:
+                pending = tuple(_pending_records.get((store, instance), {}).values())
+            for rows in pending:
+                if any(recorded_at <= stamp and key == resource for _, recorded_at, key, *_ in rows):
+                    _insert_records(connection, rows)
             if baseline:
                 known = connection.execute('''SELECT COALESCE(SUM(amount), 0) FROM resource_flows
                     WHERE instance=? AND resource=? AND (ts>? OR (ts=? AND id>?)) AND ts<=?''',
