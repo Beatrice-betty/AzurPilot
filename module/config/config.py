@@ -19,6 +19,13 @@ from module.config.config_generated import GeneratedConfig
 from module.config.config_manual import ManualConfig
 from module.config.config_updater import ConfigUpdater, ensure_time, get_server_next_update, nearest_future
 from module.config.deep import deep_get, deep_set
+from module.config.schedule_time import (
+    is_next_run_path,
+    normalize_next_run,
+    refresh_local_timezone,
+    schedule_local,
+    schedule_utc,
+)
 from module.config.time_source import now as current_time
 from module.config.utils import DEFAULT_TIME, dict_to_kv, filepath_config, get_os_reset_remain, path_to_arg, is_good_gpu
 from module.config.watcher import ConfigWatcher
@@ -54,6 +61,18 @@ class Function:
         self.command = deep_get(data, keys="Scheduler.Command", default="Unknown")
         self.next_run = deep_get(data, keys="Scheduler.NextRun", default=DEFAULT_TIME)
 
+    @property
+    def next_run(self):
+        return schedule_local(self._next_run)
+
+    @next_run.setter
+    def next_run(self, value):
+        self._next_run = normalize_next_run(value)
+
+    @property
+    def deadline(self):
+        return schedule_utc(self._next_run) if isinstance(self._next_run, datetime) else self._next_run
+
     def __str__(self):
         enable = "Enable" if self.enable else "Disable"
         return f"{self.command} ({enable}, {str(self.next_run)})"
@@ -64,7 +83,7 @@ class Function:
         if not isinstance(other, Function):
             return False
 
-        if self.command == other.command and self.next_run == other.next_run:
+        if self.command == other.command and self.deadline == other.deadline:
             return True
         else:
             return False
@@ -198,6 +217,7 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
         if self.is_template_config:
             return
 
+        refresh_local_timezone()
         self.load()
         if task is None:
             # 默认绑定 Alas，包含模拟器设置
@@ -321,21 +341,31 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
     def is_actual_task(self):
         return self.task.command.lower() not in ['alas', 'template']
 
+    @property
+    def Scheduler_NextRun(self):
+        return schedule_local(getattr(self, '_scheduler_next_run', GeneratedConfig.Scheduler_NextRun))
+
+    @Scheduler_NextRun.setter
+    def Scheduler_NextRun(self, value):
+        self._scheduler_next_run = normalize_next_run(value)
+
     def get_next_task(self):
         """计算任务队列，设置 pending_task 和 waiting_task。"""
+        refresh_local_timezone()
         pending = []
         waiting = []
         error = []
-        now = current_time()
+        now = schedule_utc(current_time())
         if AzurLaneConfig.is_hoarding_task:
             now -= self.hoarding
         for func in self.data.values():
             func = Function(func)
             if not func.enable:
                 continue
-            if not isinstance(func.next_run, datetime):
+            deadline = func.deadline
+            if not isinstance(deadline, datetime):
                 error.append(func)
-            elif func.next_run < now:
+            elif deadline < now:
                 pending.append(func)
             else:
                 waiting.append(func)
@@ -350,7 +380,7 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
             from module.os.tasks.smart_explore import apply_smart_explore_task_delay
             pending, waiting = apply_smart_explore_task_delay(self, pending, waiting)
         if waiting:
-            waiting = sorted(waiting, key=operator.attrgetter("next_run"))
+            waiting = sorted(waiting, key=operator.attrgetter("deadline"))
         if error:
             pending = error + pending
 
@@ -377,7 +407,7 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
         if self.waiting_task:
             logger.info("[配置] 没有待处理任务")
             task = copy.deepcopy(self.waiting_task[0])
-            task.next_run = (task.next_run + self.hoarding).replace(microsecond=0)
+            task.next_run = (task.deadline + self.hoarding).replace(microsecond=0)
             logger.attr("任务", task)
             return task
         else:
@@ -448,7 +478,7 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
         self.save()
 
     def override(self, **kwargs):
-        now = current_time().replace(microsecond=0)
+        now = schedule_utc(current_time()).replace(microsecond=0)
         limited = set()
 
         def limit_next_run(tasks, limit):
@@ -459,7 +489,7 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
                 next_run = deep_get(
                     self.data, keys=f"{task}.Scheduler.NextRun", default=None
                 )
-                if isinstance(next_run, datetime) and next_run > limit:
+                if isinstance(next_run, datetime) and schedule_utc(next_run) > limit:
                     deep_set(self.data, keys=f"{task}.Scheduler.NextRun", value=now)
 
         limit_next_run(["Commission", "Reward"], limit=now + timedelta(hours=12, seconds=-1))
@@ -539,7 +569,10 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
         Returns:
             Any: 配置值。
         """
-        return deep_get(self.data, keys=keys, default=default)
+        value = deep_get(self.data, keys=keys, default=default)
+        if is_next_run_path(keys):
+            return schedule_local(value)
+        return value
 
     def cross_set(self, keys, value):
         """设置其他任务的配置。
@@ -558,7 +591,10 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
         """
         overlay = self.__dict__.get('_scheduler_overrides', {})
         protected = {self.bound[key] for key in overlay if key in self.bound}
-        self.modified.update({path: value for path, value in values.items() if path not in protected})
+        self.modified.update({
+            path: normalize_next_run(value) if is_next_run_path(path) else value
+            for path, value in values.items() if path not in protected
+        })
         if self.auto_update:
             self.update()
 
@@ -592,17 +628,20 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
                 if success
                 else self.Scheduler_FailureInterval
             )
-            run.append(current_time() + ensure_delta(interval))
+            run.append(schedule_utc(current_time()) + ensure_delta(interval))
         if server_update is not None:
             if server_update is True:
                 server_update = self.Scheduler_ServerUpdate
-            run.append(get_server_next_update(server_update))
+            run.append(schedule_utc(get_server_next_update(server_update)))
         if target is not None:
             target = [target] if not isinstance(target, list) else target
-            target = nearest_future(target)
+            target = nearest_future([
+                schedule_utc(datetime.fromisoformat(value) if isinstance(value, str) else value)
+                for value in target
+            ])
             run.append(target)
         if minute is not None:
-            run.append(current_time() + ensure_delta(minute))
+            run.append(schedule_utc(current_time()) + ensure_delta(minute))
 
         if len(run):
             run = min(run).replace(microsecond=0)
@@ -610,14 +649,14 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
                 {
                     "success": success,
                     "server_update": server_update,
-                    "target": target,
+                    "target": schedule_local(target),
                     "minute": minute,
                 },
                 allow_none=False,
             )
             if task is None:
                 task = self.task.command
-            logger.info(f"[配置] 延迟任务 `{task}` 到 {run} ({kv})")
+            logger.info(f"[配置] 延迟任务 `{task}` 到 {schedule_local(run)} ({kv})")
             self.cross_set(f'{task}.Scheduler.NextRun', run)
         else:
             raise ScriptError(
@@ -657,14 +696,14 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
         changes = {}
 
         def delay_tasks(task_list, minutes):
-            next_run = current_time().replace(microsecond=0) + timedelta(
+            next_run = schedule_utc(current_time()).replace(microsecond=0) + timedelta(
                 minutes=minutes
             )
             for task in task_list:
                 keys = f"{task}.Scheduler.NextRun"
                 current = deep_get(self.data, keys=keys, default=DEFAULT_TIME)
-                if current < next_run:
-                    logger.info(f"[配置-大世界] 延迟任务 `{task}` 到 {next_run} ({kv})")
+                if schedule_utc(current) < next_run:
+                    logger.info(f"[配置-大世界] 延迟任务 `{task}` 到 {schedule_local(next_run)} ({kv})")
                     changes[keys] = next_run
 
         def is_submarine_call(task):

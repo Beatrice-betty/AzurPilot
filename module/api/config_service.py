@@ -23,6 +23,13 @@ from module.config.redirect_utils.utils import (
     fleet_training_interval_redirect, local_drop_record_settings, meta_assist_limit_redirect,
     sea_miles_interval_redirect,
 )
+from module.config.schedule_time import (
+    display_next_run,
+    encode_next_run,
+    map_next_runs,
+    read_schedule_config,
+    refresh_local_timezone,
+)
 from module.config.time_source import now as current_time
 from module.config.transaction import config_transaction
 
@@ -177,6 +184,17 @@ class ConfigService:
         return sorted(p.stem for p in self.directory.glob('*.json')
                       if accepts_name(p.stem) and not p.is_symlink() and self.is_instance(p))
 
+    def migrate_schedules(self):
+        """启动 WebUI 时固定旧实例的排程，包括尚未启动的实例。"""
+        refresh_local_timezone()
+        for name in self.names():
+            try:
+                read_schedule_config(str(self.path(name, exists=False)))
+            except (ApiError, OSError, ValueError) as exc:
+                from module.logger import logger
+
+                logger.warning(f'[{name}] 旧排程迁移失败，将在任务启动时重试：{exc}')
+
     def save_import(self, name, content):
         """把上传的配置写进导入目录；先解成 JSON 并确认有 Alas 段，坏文件不入库。
 
@@ -257,11 +275,12 @@ class ConfigService:
             raise ApiError('NOT_FOUND', '导入文件不存在')
         return self.read_json(path)
 
-    def read(self, name):
+    def read(self, name, *, localize_schedule=True):
         """读取指定实例的配置内容与文件版本校验值。
 
         Args:
             name (str): 实例名称。
+            localize_schedule (bool): 展示本地时间，存盘和复制时保留实际时刻。
 
         Returns:
             tuple[dict, str]: 补全模板后的完整配置字典与 sha256 校验哈希。
@@ -269,6 +288,7 @@ class ConfigService:
         Raises:
             ApiError: 文件损坏或无 Alas 根节点时抛出 CONFIG_INVALID。
         """
+        refresh_local_timezone()
         path = self.path(name)
         try:
             raw = path.read_bytes()
@@ -318,6 +338,8 @@ class ConfigService:
             for task, reason in shop_warnings:
                 logger.warning(f'{task}：{reason}，已暂停任务，请检查购买配置后重新启用')
         refresh_campaign_events(merged, self.args)
+        if localize_schedule:
+            map_next_runs(merged, display_next_run)
         return merged, hashlib.sha256(raw).hexdigest()
 
     def schema(self, language='zh-CN'):
@@ -357,7 +379,8 @@ class ConfigService:
     def export(self, name):
         """配置导出携带方案，排除调度运行变量和资源历史。"""
         from module.scheduler.store import ProgramStore
-        data, _ = self.read(name)
+        data, _ = self.read(name, localize_schedule=False)
+        map_next_runs(data, encode_next_run)
         from module.runtime.game_data import INSTANCE_FIELD
         data.pop(INSTANCE_FIELD, None)
         store = ProgramStore(self.directory, store=self.database)
@@ -381,6 +404,7 @@ class ConfigService:
         """
         # 先归一化，落盘名与返回给客户端的实例名才是同一个。
         name = validate_name(name)
+        refresh_local_timezone()
         with self.lock, config_transaction(self.path(name, exists=False)):
             from module.runtime.fleet_database import FleetDatabase
             path = self.path(name, exists=False)
@@ -392,7 +416,7 @@ class ConfigService:
             if import_file:
                 data = self.read_import(import_file)
             elif source:
-                data = self.read(source)[0]
+                data = self.read(source, localize_schedule=False)[0]
             else:
                 data = copy.deepcopy(self.template)
             bundle = data.pop('_schedulerProgram', None)
@@ -407,6 +431,7 @@ class ConfigService:
                 except (ValueError, KeyError, TypeError) as exc:
                     raise ApiError('INVALID_PARAMS', f'调度方案导入失败：{exc}') from exc
             path = self.path(name, exists=False)
+            map_next_runs(data, encode_next_run)
             # 排他创建避免不同会话覆盖已有配置。
             try:
                 with path.open('x', encoding='utf-8') as file:
@@ -557,7 +582,7 @@ class ConfigService:
             ApiError: 版本冲突、重复修改同一参数或校验失败时抛出。
         """
         with self.lock, config_transaction(self.path(name)):
-            data, current = self.read(name)
+            data, current = self.read(name, localize_schedule=False)
             if require_revision and revision != current:
                 raise ApiError('CONFLICT', '配置已变化，请重新读取 revision 后再提交')
             seen = set()
@@ -604,16 +629,18 @@ class ConfigService:
                         elif any(prefix + suffix in args for suffix in ('Recover', 'Oath', 'Onsen')):
                             fields[prefix + 'RecoveryState'] = None
             if dry_run:
+                map_next_runs(data, display_next_run)
                 return {'instance': name, 'revision': current, 'values': data,
                         'options': {f'{task}.Campaign.Event': candidates
                                     for task, candidates in campaign_event_options(data, self.args).items()}}
+            map_next_runs(data, encode_next_run)
             atomic_write(str(self.path(name)), json.dumps(data, ensure_ascii=False, indent=2))
             return self.get(name)
 
     def reset_fleet_training(self, name, revision):
         """原子清空培养记录、编队快照及中断操作状态，保留全部用户设置。"""
         with self.lock, config_transaction(self.path(name)):
-            data, current = self.read(name)
+            data, current = self.read(name, localize_schedule=False)
             if revision != current:
                 raise ApiError('CONFLICT', '配置已变化，请重新载入后刷新状态')
             fleet = data.setdefault('FleetInfo', {})

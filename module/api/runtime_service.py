@@ -157,11 +157,14 @@ class RuntimeService:
         Returns:
             dict: 实例总览数据字典。
         """
-        data, revision = self.configs.read(instance)
+        data, revision = self.configs.read(instance, localize_schedule=False)
         manager = ProcessManager._processes.get(instance)
         tasks = []
+        deadlines = {}
+        from module.config.schedule_time import display_next_run, parse_next_run, schedule_utc
         from module.config.time_source import now as current_time
-        now = current_time().isoformat(sep=' ')
+        now = current_time()
+        utc_now = schedule_utc(now)
         running = getattr(manager, 'current_task', None) if manager and manager.state == 1 else None
         for task, groups in data.items():
             # 根节点也包含实例身份等内部元数据，只有参数组字典才属于任务。
@@ -169,14 +172,23 @@ class RuntimeService:
                 continue
             scheduler = groups.get('Scheduler', {})
             if scheduler.get('Enable') or task == running:
-                next_run = str(scheduler.get('NextRun', ''))
-                tasks.append({'name': task, 'nextRun': next_run, 'pending': next_run.replace('T', ' ') <= now,
-                              'state': 'running' if task == running else 'pending' if next_run.replace('T', ' ') <= now else 'waiting'})
+                value = scheduler.get('NextRun', '')
+                next_run = str(display_next_run(value))
+                moment = parse_next_run(value)
+                if moment is not None:
+                    deadline = schedule_utc(moment)
+                    pending = deadline <= utc_now
+                    deadlines[task] = deadline.isoformat()
+                else:
+                    pending = next_run.replace('T', ' ') <= now.isoformat(sep=' ')
+                    deadlines[task] = next_run
+                tasks.append({'name': task, 'nextRun': next_run, 'pending': pending,
+                              'state': 'running' if task == running else 'pending' if pending else 'waiting'})
         from module.config.task_priority import parse_task_priority
         priority = parse_task_priority(data.get('General', {}).get('YukikazeTaskManager', {}).get('TaskPriorityAdjustment'))
         order = {task: index for index, task in enumerate(priority)}
         tasks.sort(key=lambda item: (-1, 0) if item['state'] == 'running' else
-                   (0, order.get(item['name'], len(order))) if item['pending'] else (1, item['nextRun']))
+                   (0, order.get(item['name'], len(order))) if item['pending'] else (1, deadlines[item['name']]))
         resources = [{'name': name, 'label': self.configs.translate(f'{name}._info.name'),
                       'value': values.get('Value'), 'limit': values.get('Limit'), 'total': values.get('Total'),
                       'record': values.get('Record')}

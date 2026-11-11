@@ -2,6 +2,7 @@
 import time
 from datetime import datetime, timedelta
 
+from module.config.schedule_time import schedule_utc
 from module.config.time_source import now
 from module.logger import logger
 
@@ -56,7 +57,8 @@ class NativeOilControl:
     def recovery_due(self):
         config = self.config
         deadline = config.cross_get('Restart.Scheduler.NextRun')
-        return config.is_task_enabled('Restart') and isinstance(deadline, datetime) and deadline <= now()
+        return (config.is_task_enabled('Restart') and isinstance(deadline, datetime)
+                and schedule_utc(deadline) <= schedule_utc(now()))
 
     def request_blocked(self, task):
         """领奖受阻后让出队首；每轮最多三次清理，之后延后五分钟。"""
@@ -142,11 +144,12 @@ class NativeOilControl:
         order = Filter(regex=r'(.*)', attr=['command'])
         order.load(config.SCHEDULER_PRIORITY)
         tasks = [Function(config.data.get(name, {})) for name in FARM_TASKS]
+        current = schedule_utc(now())
         for task in order.apply(tasks):
             groups = config.data.get(task.command, {})
             deadline = self.runtime.script.task_restart_delays.get(task.command)
-            if (task.enable and isinstance(task.next_run, datetime) and task.next_run <= now()
-                    and task.command not in self.tried and (deadline is None or deadline <= now())
+            if (task.enable and isinstance(task.deadline, datetime) and task.deadline <= current
+                    and task.command not in self.tried and (deadline is None or schedule_utc(deadline) <= current)
                     and groups.get('Campaign', {}).get('Mode') == 'normal'):
                 yield task.command
 
@@ -215,7 +218,7 @@ class NativeOilControl:
         if self.recovery_due():
             return 'Restart'
         deadline = self.config.cross_get(f'{task}.Scheduler.NextRun') if task else None
-        return None if isinstance(deadline, datetime) and deadline > now() else task
+        return None if isinstance(deadline, datetime) and schedule_utc(deadline) > schedule_utc(now()) else task
 
     def should_yield(self, config):
         if self.is_farming(config):
@@ -228,7 +231,8 @@ class NativeOilControl:
             if not self.enabled or self.runtime.program_changed() or self.recovery_due():
                 return True
             deadline = config.cross_get(f'{config.task.command}.Scheduler.NextRun')
-            if not config.is_task_enabled(config.task.command) or (isinstance(deadline, datetime) and deadline > now()):
+            if (not config.is_task_enabled(config.task.command)
+                    or (isinstance(deadline, datetime) and schedule_utc(deadline) > schedule_utc(now()))):
                 return True
             oil = self.latest_oil()
             return oil is not None and oil < self.goal

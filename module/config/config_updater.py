@@ -39,6 +39,7 @@ from module.campaign.stage_name import normalize_event_stage
 from module.config.deep import deep_default, deep_get, deep_iter, deep_set
 from module.config.env import IS_ON_PHONE_CLOUD
 from module.config.fleet_legacy import LEGACY_PATHS
+from module.config.schedule_time import read_schedule_config
 from module.config.server import VALID_CHANNEL_PACKAGE, VALID_PACKAGE, VALID_SERVER_LIST, to_package, to_server
 from module.config.redirect_utils.shop import migrate_shop_options
 from module.config.task_priority import get_scheduler_tasks, merge_task_priority
@@ -994,11 +995,9 @@ class ConfigUpdater:
         Returns:
             更新后的配置字典。
         """
-        old = read_file(filepath_config(config_name))
-        new = self.config_update(old, is_template=is_template)
-        # 更新后的配置未写回文件，出于性能考虑已注释掉写入操作
-        # self.write_file(config_name, new)
-        return new
+        path = filepath_config(config_name)
+        old = read_file(path) if is_template else read_schedule_config(path)
+        return self.config_update(old, is_template=is_template)
 
     @staticmethod
     def write_file(config_name, data, mod_name='alas'):

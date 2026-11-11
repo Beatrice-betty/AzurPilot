@@ -23,6 +23,7 @@ from module.base.runtime_params import (
 from module.base.ssh import clear_ssh_host_key
 from module.config.config import AzurLaneConfig, TaskEnd
 from module.config.deep import deep_get, deep_set
+from module.config.schedule_time import refresh_local_timezone, schedule_utc
 from module.config.time_source import now as current_time
 from module.config.utils import (
     DEFAULT_CONFIG_NAME,
@@ -2233,10 +2234,11 @@ class AzurLaneAutoScript:
         Returns:
             bool: 正常等到返回 True，检测到配置变更返回 False。
         """
-        future = future + timedelta(seconds=1)
+        future = schedule_utc(future) + timedelta(seconds=1)
         self.config.start_watching()
         while 1:
-            if current_time() > future:
+            if schedule_utc(current_time()) > future:
+                refresh_local_timezone()
                 return True
             if self.stop_event is not None:
                 if self.stop_event.is_set():
@@ -2299,8 +2301,9 @@ class AzurLaneAutoScript:
         next_run = get_server_next_update('00:00')
         if next_run <= current_time():
             next_run += timedelta(days=1)
-        self.config.task_delay(target=next_run, task=task)
-        self.task_restart_delays[task] = next_run
+        deadline = schedule_utc(next_run)
+        self.config.task_delay(target=deadline, task=task)
+        self.task_restart_delays[task] = deadline
         self.task_restart_record.pop(task, None)
         self.failure_record.pop(task, None)
         display = _get_task_display_name(task)
@@ -2333,7 +2336,7 @@ class AzurLaneAutoScript:
         if deadline is None:
             return False
         next_run = self.config.cross_get(keys=[task, 'Scheduler', 'NextRun'], default=None)
-        if next_run != deadline:
+        if not isinstance(next_run, datetime) or schedule_utc(next_run) != schedule_utc(deadline):
             return False
         self.config.cross_set(f'{task}.Scheduler.NextRun', current_time().replace(microsecond=0))
         logger.info(f'[配置] 已解除任务 `{task}` 的连续重启冷却')
@@ -2389,11 +2392,12 @@ class AzurLaneAutoScript:
             if self.config.task.command != 'Alas':
                 release_resources(next_task=task.command)
 
-            if task.next_run > current_time():
+            deadline = task.deadline
+            if deadline > schedule_utc(current_time()):
                 logger.info(f'[AzurPilot] 等待直到 {task.next_run} 执行任务 `{task.command}`')
                 self.is_first_task = False
                 method = self.config.Optimization_WhenTaskQueueEmpty
-                wait_duration = task.next_run - current_time()
+                wait_duration = deadline - schedule_utc(current_time())
                 warmup_enable = bool(getattr(self.config, 'Optimization_WarmupEnable', True))
 
                 # 任务预热可用性：仅对非 Restart 任务预热（Restart 任务自身会启动
@@ -2404,7 +2408,7 @@ class AzurLaneAutoScript:
                     if not warmup_enable or task.command == 'Restart':
                         return False
                     lead = self._warmup_lead_seconds(cold)
-                    return task.next_run - current_time() > timedelta(seconds=lead)
+                    return deadline - schedule_utc(current_time()) > timedelta(seconds=lead)
 
                 if (
                     self.config.Optimization_CloseEmulatorDuringLongWait
@@ -2436,12 +2440,12 @@ class AzurLaneAutoScript:
                         # 时不会二次关闭/二次预热，无需额外防抖状态。关闭模拟器后、
                         # 到达预热点前绝不触碰 self.device，以免 Device.__init__
                         # 自动把模拟器提前拉起、破坏省资源等待。
-                        if not self.wait_until(task.next_run - timedelta(
+                        if not self.wait_until(deadline - timedelta(
                                 seconds=self._warmup_lead_seconds(True))):
                             del_cached_property(self, 'config')
                             continue
                         if self._warmup_prestart(cold=True):
-                            if not self.wait_until(task.next_run):
+                            if not self.wait_until(deadline):
                                 del_cached_property(self, 'config')
                                 continue
                             break
@@ -2450,7 +2454,7 @@ class AzurLaneAutoScript:
                         del_cached_property(self, 'config')
                         continue
                     # 原逻辑（未启用预热 / Restart 任务 / 关闭模拟器失败）
-                    if not self.wait_until(task.next_run):
+                    if not self.wait_until(deadline):
                         del_cached_property(self, 'config')
                         continue
                     self._start_emulator_after_long_wait()
@@ -2465,12 +2469,12 @@ class AzurLaneAutoScript:
                         self.device.app_stop()
                         release_resources()
                         self.device.release_during_wait()
-                        if not self.wait_until(task.next_run - timedelta(
+                        if not self.wait_until(deadline - timedelta(
                                 seconds=self._warmup_lead_seconds(False))):
                             del_cached_property(self, 'config')
                             continue
                         if self._warmup_prestart(cold=False):
-                            if not self.wait_until(task.next_run):
+                            if not self.wait_until(deadline):
                                 del_cached_property(self, 'config')
                                 continue
                             break
@@ -2484,14 +2488,14 @@ class AzurLaneAutoScript:
                         # 则保持关闭等待，结束后交由 Restart 重新拉起，避免带着已
                         # 关闭的游戏直接执行任务。
                         if self.device.app_is_running_bounded():
-                            remaining = task.next_run - current_time()
+                            remaining = deadline - schedule_utc(current_time())
                             logger.info(
                                 f'[AzurPilot] 预热开启但剩余等待 {remaining} 不超过提前量，'
                                 '跳过关闭游戏，原地等待'
                             )
                             release_resources()
                             self.device.release_during_wait()
-                            if not self.wait_until(task.next_run):
+                            if not self.wait_until(deadline):
                                 del_cached_property(self, 'config')
                                 continue
                         else:
@@ -2501,7 +2505,7 @@ class AzurLaneAutoScript:
                             )
                             release_resources()
                             self.device.release_during_wait()
-                            if not self.wait_until(task.next_run):
+                            if not self.wait_until(deadline):
                                 del_cached_property(self, 'config')
                                 continue
                             self.config.task_call('Restart')
@@ -2513,7 +2517,7 @@ class AzurLaneAutoScript:
                         self.device.app_stop()
                         release_resources()
                         self.device.release_during_wait()
-                        if not self.wait_until(task.next_run):
+                        if not self.wait_until(deadline):
                             del_cached_property(self, 'config')
                             continue
                         if task.command != 'Restart':
@@ -2525,20 +2529,20 @@ class AzurLaneAutoScript:
                     self.run('goto_main')
                     release_resources()
                     self.device.release_during_wait()
-                    if not self.wait_until(task.next_run):
+                    if not self.wait_until(deadline):
                         del_cached_property(self, 'config')
                         continue
                 elif method == 'stay_there':
                     release_resources()
                     self.device.release_during_wait()
-                    if not self.wait_until(task.next_run):
+                    if not self.wait_until(deadline):
                         del_cached_property(self, 'config')
                         continue
                 else:
                     logger.warning(f'[AzurPilot] 无效的 Optimization_WhenTaskQueueEmpty: {method}, 回退到 stay_there')
                     release_resources()
                     self.device.release_during_wait()
-                    if not self.wait_until(task.next_run):
+                    if not self.wait_until(deadline):
                         del_cached_property(self, 'config')
                         continue
             break
@@ -2654,13 +2658,15 @@ class AzurLaneAutoScript:
                     self.task_restart_delays.pop(task, None)
                 deadline = self.task_restart_delays.get(task)
                 if deadline is not None:
-                    if deadline > current_time():
+                    deadline = schedule_utc(deadline)
+                    now = schedule_utc(current_time())
+                    if deadline > now:
                         # 自定义调度卡片或任务调用也不能绕过本轮故障冷却。
                         self.config.task_delay(target=deadline, task=task)
                         runtime = self.__dict__.get('_program_runtime')
                         if runtime is not None:
                             runtime.task_finished(task, False)
-                        self.wait_until(min(deadline, current_time() + timedelta(seconds=4)))
+                        self.wait_until(min(deadline, now + timedelta(seconds=4)))
                         continue
                     self.task_restart_delays.pop(task, None)
                 # 初始化设备并更改服务器

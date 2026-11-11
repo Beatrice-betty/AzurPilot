@@ -1,6 +1,6 @@
 """仓库统计运行间隔：只验证调度、配置迁移和输入校验，不连接游戏。"""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import tempfile
@@ -47,7 +47,8 @@ class StorageScheduleTests(unittest.TestCase):
                 self.config.cross_set.reset_mock()
                 self.task.run()
                 self.config.cross_set.assert_called_once_with(
-                    'StorageStatistics.Scheduler.NextRun', self.now + timedelta(days=days))
+                    'StorageStatistics.Scheduler.NextRun',
+                    (self.now + timedelta(days=days)).astimezone(timezone.utc))
         # 保留旧配置的 1440 分钟，证明它不会截短自定义的 7/14 天间隔。
         self.assertEqual(self.config.Scheduler_SuccessInterval, 1440)
 
@@ -57,7 +58,8 @@ class StorageScheduleTests(unittest.TestCase):
             self.task.run()
         self.writer.assert_not_called()
         self.config.cross_set.assert_called_once_with(
-            'StorageStatistics.Scheduler.NextRun', self.now + timedelta(minutes=60))
+            'StorageStatistics.Scheduler.NextRun',
+            (self.now + timedelta(minutes=60)).astimezone(timezone.utc))
 
     def test_invalid_local_interval_stops_before_scanning(self):
         for value in (0, -1, True, 1.5, '7', 3651):
@@ -67,7 +69,8 @@ class StorageScheduleTests(unittest.TestCase):
                 with self.assertRaisesRegex(StorageStatisticsError, '整数天数'):
                     self.task.run()
                 self.config.cross_set.assert_called_once_with(
-                    'StorageStatistics.Scheduler.NextRun', self.now + timedelta(minutes=60))
+                    'StorageStatistics.Scheduler.NextRun',
+                    (self.now + timedelta(minutes=60)).astimezone(timezone.utc))
         self.task.ui_goto_storage.assert_not_called()
         self.task._scan_pass.assert_not_called()
         self.writer.assert_not_called()
