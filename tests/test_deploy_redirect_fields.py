@@ -32,8 +32,7 @@ class DeployRedirectFieldsTests(unittest.TestCase):
                 template_patch = (patch.object(module, 'get_deploy_template', return_value=str(template))
                                   if module is deploy_config
                                   else patch.object(module, 'DEPLOY_TEMPLATE', str(template)))
-                with template_patch, patch.object(module.DeployConfig, 'show_config'), \
-                        patch.object(module, 'get_country_code', side_effect=AssertionError('不得联网')):
+                with template_patch, patch.object(module.DeployConfig, 'show_config'):
                     config = module.DeployConfig(str(file))
                 self.assertEqual(config.AllowedRedirectHosts, 'custom.example')
                 self.assertEqual(config.MaxRedirects, 0)

@@ -133,6 +133,11 @@ class UpdateService:
         Returns:
             tuple[str, str]: (本地提交哈希, 远程提交哈希)。
         """
+        from deploy import independent
+        if independent.enabled():
+            current = independent.read_json(self.root / independent.RECEIPT)['revision']
+            offer = self.updater.independent_offer
+            return current, offer[0]['revision'] if offer else current
         local = self.git('rev-parse', '--verify', 'HEAD', optional=True)
         upstream = self.git('rev-parse', '--verify', f'refs/remotes/origin/{self.updater.Branch}', optional=True)
         return local, upstream
@@ -152,8 +157,12 @@ class UpdateService:
                     'busy': False, 'error': '', 'canApply': False, 'canCancel': False,
                     'shaMismatch': False, 'managedByAndroid': True}
         local, upstream = self.heads()
+        from deploy import independent
+        packaged = independent.enabled()
         ahead = behind = 0
-        if local and upstream:
+        if packaged:
+            behind = int(bool(upstream and upstream != local))
+        elif local and upstream:
             ahead, behind = map(int, self.git('rev-list', '--left-right', '--count', f'{local}...{upstream}').split())
             # 上游重写历史后，停在旧版上游历史的分支会被算成 ahead，但那不是用户
             # 自己的提交，按"只是落后"处理，让前端可以正常确认更新。
@@ -171,7 +180,8 @@ class UpdateService:
         return {'state': visible_state,
                 'localHead': local or None, 'upstreamHead': upstream or None,
                 'branch': self.updater.Branch, 'ahead': ahead, 'behind': behind,
-                'available': behind > 0 or state == 1, 'busy': busy, 'error': self.error,
+                'available': behind > 0 or state == 1, 'busy': busy,
+                'error': (self.updater.independent_error or self.error) if packaged else self.error,
                 'shaMismatch': mismatch,
                 'canApply': bool(local and upstream and behind and not busy
                                  and State.restart_event is not None and State.dependency_sync_event is not None),
@@ -194,6 +204,9 @@ class UpdateService:
             return {'entries': [], 'total': 0, 'hasMore': False,
                     'localHead': local, 'upstreamHead': local}
         local, upstream = self.heads()
+        from deploy import independent
+        if independent.enabled():
+            return {'entries': [], 'total': 0, 'hasMore': False, 'localHead': local, 'upstreamHead': upstream}
         refs = list(dict.fromkeys(ref for ref in (local, upstream) if ref))
         entries = []
         if refs:
@@ -253,10 +266,14 @@ class UpdateService:
                         raise ApiError('UPDATE_BUSY', '更新器正在处理其他操作')
                     self.updater.state = 'checking'
                     owns_check = True
-                    self.updater.fetch_update('origin', self.updater.Branch, max_retry=3, delay=1)
-                    local, upstream = self.heads()
-                    behind = int(self.git('rev-list', '--count', f'{local}..{upstream}')) if local and upstream else 0
-                    self.updater.state = bool(behind)
+                    from deploy import independent
+                    if independent.enabled():
+                        self.updater.state = self.updater._check_update()
+                    else:
+                        self.updater.fetch_update('origin', self.updater.Branch, max_retry=3, delay=1)
+                        local, upstream = self.heads()
+                        behind = int(self.git('rev-list', '--count', f'{local}..{upstream}')) if local and upstream else 0
+                        self.updater.state = bool(behind)
             else:
                 if self.updater.state == 'finish':
                     self.updater.state = 0

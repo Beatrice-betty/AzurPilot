@@ -8,7 +8,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'reac
 import { getLayout, subscribeLayout } from './layout'
 import {usesMaterial} from './theme'
 import {NavHandle} from './NavHandle'
-import { ArrowRight, CalendarClock, Cat, ChartNoAxesCombined, CirclePause, CirclePlay, Code2, Compass, Download, ExternalLink, FileJson, GalleryHorizontal, Globe, House, LayoutDashboard, LoaderCircle, Maximize2, Megaphone, Menu, Minimize2, Palette, PanelTop, Settings2, WifiOff, X } from 'lucide-react'
+import { ArrowRight, CalendarClock, ChartNoAxesCombined, CirclePause, CirclePlay, Code2, Compass, Download, ExternalLink, FileJson, GalleryHorizontal, Globe, House, LayoutDashboard, LoaderCircle, Maximize2, Megaphone, Menu, Minimize2, Palette, PanelTop, Settings2, WifiOff, X } from 'lucide-react'
 import { api } from '../api/client'
 import { editor } from '../config/editors'
 import {bulkAction, bulkTargets} from './instanceBulk'
@@ -154,7 +154,6 @@ export function App() {
   const currentTask = taskMatch ? taskMatch[1] : null
   /* 图形调度是系统编辑页，不伪装成可执行的游戏任务。 */
   const schedulerEditor = currentTask === SCHEDULER_EDITOR
-  const stockExchange = location.pathname.endsWith('/stock-exchange')
   const currentTaskLabel = currentTask ? taskLabel(currentTask, ui, t) : ''
   const activeSection = location.pathname.includes('/task/') ? ui('nav.taskConfig') : location.pathname.endsWith('/resources') ? ui('nav.resources') : location.pathname.endsWith('/statistics') ? ui('nav.statistics') : location.pathname.endsWith('/announcement') ? ui('nav.announcement') : location.pathname.endsWith('/settings') ? ui('nav.settings') : location.pathname.endsWith('/interface') ? ui('nav.interface') : location.pathname.endsWith('/remote') ? ui('nav.remote') : location.pathname.endsWith('/updater') ? ui('nav.updater') : location.pathname.endsWith('/configs') ? ui('nav.configs') : location.pathname.endsWith('/dev') ? ui('nav.developer') : instance ? instance : ui('nav.home')
   function handleBrandLogoClick(event: MouseEvent<HTMLImageElement>) {
@@ -198,14 +197,14 @@ export function App() {
     if (connection !== 'ready') return
     /* notifications 与当前实例无关：任何工作区都要订，任务出错时才能弹系统通知。 */
     const launcherTopics = ['127.0.0.1', 'localhost', '[::1]'].includes(window.location.hostname) ? ['launcher'] as const : []
-    void api.request('events.subscribe', {instance: instance ?? null, topics: instance ? stockExchange ? ['notifications', 'instances', ...launcherTopics, 'stock'] : previewEnabled ? ['notifications', 'instances', ...launcherTopics, 'overview', 'logs', 'preview'] : ['notifications', 'instances', ...launcherTopics, 'overview', 'logs'] : ['notifications', 'instances', ...launcherTopics]}).catch(error => notify(error.message, true))
-  }, [instance, connection, notify, previewEnabled, stockExchange])
+    void api.request('events.subscribe', {instance: instance ?? null, topics: instance ? previewEnabled ? ['notifications', 'instances', ...launcherTopics, 'overview', 'logs', 'preview'] : ['notifications', 'instances', ...launcherTopics, 'overview', 'logs'] : ['notifications', 'instances', ...launcherTopics]}).catch(error => notify(error.message, true))
+  }, [instance, connection, notify, previewEnabled])
   // 旧版主题下点进实例后，外壳回到「顶栏跨全宽 + 单列侧栏」；主页视图一律沿用新版外壳。
   const legacyShell = usesLegacyShell(theme, instance)
   /* 主页与五个二级菜单也走旧版外壳：它们没有实例内容，顶栏只写居中的页名。 */
   const legacyHomeShell = (location.pathname === '/' || PRIMARY_NAV_PATHS.includes(location.pathname)) && usesLegacyLayout(theme) && instancesLoaded
   // 旧版把调度器与任务计划放进实例页左列，右栏整体让位，否则同一块内容会出现两处。
-  const showRail = showsRightRail(theme, instance) && !schedulerEditor && currentTask !== FLEET_ANALYSIS && currentTask !== FLEET_SWITCH && currentTask !== FLEET_TRAINING && currentTask !== FLEET_LEVEL_TRAINING && currentTask !== FLEET_AFFINITY_TRAINING && currentTask !== FLEET_EQUIPMENT && currentTask !== FLEET_ROTATION && !stockExchange && !location.pathname.endsWith('/resources') && !location.pathname.endsWith('/task/FleetInfo') && !(location.pathname.endsWith('/statistics') && new URLSearchParams(location.search).get('view') === 'management')
+  const showRail = showsRightRail(theme, instance) && !schedulerEditor && currentTask !== FLEET_ANALYSIS && currentTask !== FLEET_SWITCH && currentTask !== FLEET_TRAINING && currentTask !== FLEET_LEVEL_TRAINING && currentTask !== FLEET_AFFINITY_TRAINING && currentTask !== FLEET_EQUIPMENT && currentTask !== FLEET_ROTATION && !location.pathname.endsWith('/resources') && !location.pathname.endsWith('/task/FleetInfo') && !(location.pathname.endsWith('/statistics') && new URLSearchParams(location.search).get('view') === 'management')
   /* 紧凑主题可把调度与任务计划栏换到内容区左侧。换位走 DOM 顺序而不是 CSS order，
      键盘 Tab 的顺序才会跟看到的顺序一致；列宽与顶栏跨栏方向由 compact.css 按同一偏好调整。 */
   const railFirst = theme === 'extreme' && compactRailSide === 'left'
@@ -305,7 +304,7 @@ export function App() {
       <div className={`sidebar-brand ${legacyShell || legacyHomeShell ? 'legacy-sidebar-actions' : ''}`.trim()}><div className="sidebar-brand-left">{brand}</div><button className="mobile-close icon-button" aria-label={ui('nav.close')} onClick={() => setMobileOpen(false)}><X size={18}/></button></div>
       <SidebarTransition viewKey={instance ? `instance:${instance}` : 'global'}>
         <nav className="primary-nav" aria-label={ui('nav.primary')}>
-          {instance ? <><NavLink to={`${base}/overview`} onClick={closeDrawer}><LayoutDashboard size={17}/>{ui('nav.overview')}</NavLink><NavLink to={`${base}/statistics`} onClick={closeDrawer}><ChartNoAxesCombined size={17}/>{ui('nav.statistics')}</NavLink><NavLink to={`${base}/stock-exchange`} onClick={closeDrawer}><Cat size={17}/>{ui('stock.name')}</NavLink></> : <><NavLink to="/" end onClick={closeDrawer}><House size={17}/>{ui('nav.home')}</NavLink><NavLink to="/announcement" onClick={closeDrawer}><Megaphone size={17}/>{ui('nav.announcement')}{announcement.unread && <span className="tiny-dot red"/>}</NavLink><NavLink to="/updater" onClick={closeDrawer}><Download size={17}/>{ui('nav.updater')}{updateAvailable && <span className="tiny-dot teal"/>}</NavLink><NavLink to="/interface" onClick={closeDrawer}><Palette size={17}/>{ui('nav.interface')}</NavLink><NavLink to="/remote" onClick={closeDrawer}><Globe size={17}/>{ui('nav.remote')}</NavLink><NavLink to="/configs" onClick={closeDrawer}><FileJson size={17}/>{ui('nav.configs')}</NavLink><NavLink to="/settings" onClick={closeDrawer}><Settings2 size={17}/>{ui('nav.settings')}</NavLink><NavLink to="/dev" onClick={closeDrawer}><Code2 size={17}/>{ui('nav.developer')}</NavLink><a className="nav-open-source" href="https://github.com/wess09/AzurPilot" target="_blank" rel="noreferrer" onClick={closeDrawer}><ExternalLink size={17}/>{ui('nav.openSource')}</a></>}
+          {instance ? <><NavLink to={`${base}/overview`} onClick={closeDrawer}><LayoutDashboard size={17}/>{ui('nav.overview')}</NavLink><NavLink to={`${base}/statistics`} onClick={closeDrawer}><ChartNoAxesCombined size={17}/>{ui('nav.statistics')}</NavLink></> : <><NavLink to="/" end onClick={closeDrawer}><House size={17}/>{ui('nav.home')}</NavLink><NavLink to="/announcement" onClick={closeDrawer}><Megaphone size={17}/>{ui('nav.announcement')}{announcement.unread && <span className="tiny-dot red"/>}</NavLink><NavLink to="/updater" onClick={closeDrawer}><Download size={17}/>{ui('nav.updater')}{updateAvailable && <span className="tiny-dot teal"/>}</NavLink><NavLink to="/interface" onClick={closeDrawer}><Palette size={17}/>{ui('nav.interface')}</NavLink><NavLink to="/remote" onClick={closeDrawer}><Globe size={17}/>{ui('nav.remote')}</NavLink><NavLink to="/configs" onClick={closeDrawer}><FileJson size={17}/>{ui('nav.configs')}</NavLink><NavLink to="/settings" onClick={closeDrawer}><Settings2 size={17}/>{ui('nav.settings')}</NavLink><NavLink to="/dev" onClick={closeDrawer}><Code2 size={17}/>{ui('nav.developer')}</NavLink><a className="nav-open-source" href="https://github.com/Beatrice-betty/AzurPilot" target="_blank" rel="noreferrer" onClick={closeDrawer}><ExternalLink size={17}/>{ui('nav.openSource')}</a></>}
         </nav>
         {instance && <TaskNav onNavigate={closeDrawer}/>}
       </SidebarTransition>

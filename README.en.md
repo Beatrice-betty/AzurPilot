@@ -13,40 +13,40 @@
 </p>
 
 <p align="center">
-  <strong><a href="https://azurpilot.com/">AzurPilot Official Website</a></strong> ｜ Azur Lane Automation Script · OS Erosion Cycle · Multi-Platform Support
+  <strong><a href="https://github.com/Beatrice-betty/AzurPilot">AzurPilot Official Website</a></strong> ｜ Azur Lane Automation Script · OS Erosion Cycle · Multi-Platform Support
 </p>
 
 <p align="center">
-  <a href="https://deepwiki.com/wess09/AzurPilot"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
+  <a href="https://deepwiki.com/Beatrice-betty/AzurPilot"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.14-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/github/license/wess09/AzurPilot?style=flat-square&label=License&color=2ea44f" alt="License">
-  <img src="https://img.shields.io/github/stars/wess09/AzurPilot?style=flat-square&label=Stars&color=ffcc00" alt="Stars">
-  <img src="https://img.shields.io/github/forks/wess09/AzurPilot?style=flat-square&label=Forks&color=58a6ff" alt="Forks">
-  <img src="https://img.shields.io/github/issues/wess09/AzurPilot?style=flat-square&label=Issues&color=f85149" alt="Issues">
+  <img src="https://img.shields.io/github/license/Beatrice-betty/AzurPilot?style=flat-square&label=License&color=2ea44f" alt="License">
+  <img src="https://img.shields.io/github/stars/Beatrice-betty/AzurPilot?style=flat-square&label=Stars&color=ffcc00" alt="Stars">
+  <img src="https://img.shields.io/github/forks/Beatrice-betty/AzurPilot?style=flat-square&label=Forks&color=58a6ff" alt="Forks">
+  <img src="https://img.shields.io/github/issues/Beatrice-betty/AzurPilot?style=flat-square&label=Issues&color=f85149" alt="Issues">
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/github/last-commit/wess09/AzurPilot?style=flat-square&label=Last%20Commit&color=8b949e" alt="Last Commit">
-  <img src="https://img.shields.io/github/commit-activity/m/wess09/AzurPilot?style=flat-square&label=Commit%20Activity&color=8957e5" alt="Commit Activity">
-  <img src="https://img.shields.io/github/repo-size/wess09/AzurPilot?style=flat-square&label=Repo%20Size&color=orange" alt="Repo Size">
-  <img src="https://img.shields.io/github/languages/top/wess09/AzurPilot?style=flat-square&label=Top%20Language&color=3776AB" alt="Top Language">
+  <img src="https://img.shields.io/github/last-commit/Beatrice-betty/AzurPilot?style=flat-square&label=Last%20Commit&color=8b949e" alt="Last Commit">
+  <img src="https://img.shields.io/github/commit-activity/m/Beatrice-betty/AzurPilot?style=flat-square&label=Commit%20Activity&color=8957e5" alt="Commit Activity">
+  <img src="https://img.shields.io/github/repo-size/Beatrice-betty/AzurPilot?style=flat-square&label=Repo%20Size&color=orange" alt="Repo Size">
+  <img src="https://img.shields.io/github/languages/top/Beatrice-betty/AzurPilot?style=flat-square&label=Top%20Language&color=3776AB" alt="Top Language">
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/github/contributors/wess09/AzurPilot?style=flat-square&label=Contributors&color=00b4d8" alt="Contributors">
-  <img src="https://img.shields.io/github/issues-pr/wess09/AzurPilot?style=flat-square&label=Pull%20Requests&color=ffb703" alt="Pull Requests">
-  <img src="https://img.shields.io/github/issues-pr-closed/wess09/AzurPilot?style=flat-square&label=PRs%20Closed&color=2ea44f" alt="Closed Pull Requests">
+  <img src="https://img.shields.io/github/contributors/Beatrice-betty/AzurPilot?style=flat-square&label=Contributors&color=00b4d8" alt="Contributors">
+  <img src="https://img.shields.io/github/issues-pr/Beatrice-betty/AzurPilot?style=flat-square&label=Pull%20Requests&color=ffb703" alt="Pull Requests">
+  <img src="https://img.shields.io/github/issues-pr-closed/Beatrice-betty/AzurPilot?style=flat-square&label=PRs%20Closed&color=2ea44f" alt="Closed Pull Requests">
 </p>
 
 <div align="center">
-  <a href="https://azurpilot.com/">
+  <a href="https://github.com/Beatrice-betty/AzurPilot">
     <img src="https://img.shields.io/badge/Web-Download-blue?style=for-the-badge&logo=google-chrome&logoColor=white" />
   </a>
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://join.nanoda.work/#/">
+  <a href="https://github.com/Beatrice-betty/AzurPilot/issues">
     <img src="https://img.shields.io/badge/Community-QQ-red?style=for-the-badge&logo=tencent-qq&logoColor=white" />
   </a>
 </div>
@@ -55,9 +55,9 @@
 
 AzurPilot is an Azur Lane automation assistant modified from [AzurLaneAutoScript](https://github.com/LmeSzinc/AzurLaneAutoScript), retaining the core capabilities of the original project while integrating multiple branches, feature improvements, and experimental features. It controls Android emulators via ADB/uiautomator2, automatically executing game tasks through screenshot recognition, image matching, and OCR, with support for the CN/EN/JP/TW servers.
 
-> **Note**: The code of this project is largely generated and assisted by AI, so there may be significant uncertainty. Pull requests to fix issues are welcome at [AzurPilot Pull Requests](https://github.com/wess09/AzurPilot/pulls).
+> **Note**: The code of this project is largely generated and assisted by AI, so there may be significant uncertainty. Pull requests to fix issues are welcome at [AzurPilot Pull Requests](https://github.com/Beatrice-betty/AzurPilot/pulls).
 
-Visit the **[AzurPilot Official Website](https://azurpilot.com/)** for more feature details, or go to the **[Download Page](https://azurpilot.com/download.html)** to get the latest version.
+Visit the **[AzurPilot Official Website](https://github.com/Beatrice-betty/AzurPilot)** for more feature details, or go to the **[Download Page](https://github.com/Beatrice-betty/alas-launcher/releases)** to get the latest version.
 
 ## GUI Preview
 
@@ -67,12 +67,11 @@ Visit the **[AzurPilot Official Website](https://azurpilot.com/)** for more feat
 
 ## Quick Start
 
-> 💡 **Recommended**: Download the launcher for your platform from the [AzurPilot download page](https://azurpilot.com/download.html). It bundles a Python environment and is ready to use out of the box.
+> 💡 **Recommended**: Download the launcher for your platform from the [AzurPilot download page](https://github.com/Beatrice-betty/alas-launcher/releases). It bundles a Python environment and is ready to use out of the box.
 
 ### Linux One-Click Deployment
 
 ```shell
-curl -fsSL https://azurpilot.com/install/deploy-image.sh | sudo -E bash
 ```
 
 ### Running from Source
@@ -215,7 +214,7 @@ Every tool declares `inputSchema` / `outputSchema`, returns structured results a
 
 ## Multi-Platform Launcher
 
-> 📥 Download the Windows / macOS / Linux launchers from the [AzurPilot Official Website](https://azurpilot.com/download.html)
+> 📥 Download the Windows / macOS / Linux launchers from the [AzurPilot Official Website](https://github.com/Beatrice-betty/alas-launcher/releases)
 
 <div align="center">
   <img src="doc/loading.png" alt="loading" width="500" />
@@ -232,7 +231,7 @@ Every tool declares `inputSchema` / `outputSchema`, returns structured results a
   <p>macOS client UI</p>
 </div>
 
-Launcher project: [GitHub](https://github.com/wess09/alas-launcher) · Original project [ALAS Launcher: A New Type of AzurLaneAutoScript Launcher](https://github.com/swordfeng/alas-launcher)
+Launcher project: [GitHub](https://github.com/Beatrice-betty/alas-launcher) · Original project [ALAS Launcher: A New Type of AzurLaneAutoScript Launcher](https://github.com/swordfeng/alas-launcher)
 
 Changes:
 
@@ -248,14 +247,14 @@ Since this project continues development based on AzurLaneAutoScript and its com
 
 *Contributors to this project
 
-<a href="https://github.com/wess09/AzurPilot/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=wess09/AzurPilot&max=1000" alt="AzurPilot Contributors">
+<a href="https://github.com/Beatrice-betty/AzurPilot/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Beatrice-betty/AzurPilot&max=1000" alt="AzurPilot Contributors">
 </a>
 
 *Contributors to the launcher project
 
-<a href="https://github.com/wess09/alas-launcher/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=wess09/alas-launcher&max=1000" alt="Launcher Contributors">
+<a href="https://github.com/Beatrice-betty/alas-launcher/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Beatrice-betty/alas-launcher&max=1000" alt="Launcher Contributors">
 </a>
 
 *Contributors to the original ALAS project
@@ -266,10 +265,10 @@ Since this project continues development based on AzurLaneAutoScript and its com
 
 ## Related Links
 
-- [AzurPilot Official Website](https://azurpilot.com/) — Project introduction, feature details, Azur Lane automation solutions
-- [AzurPilot Download Page](https://azurpilot.com/download.html) — Download the Azur Lane script tool for Windows / macOS / Linux
-- [GitHub Repository](https://github.com/wess09/AzurPilot) — Source code, Issues, Pull Requests
-- [QQ Community Group](https://join.nanoda.work/#/) — Azur Lane automation community
+- [AzurPilot Official Website](https://github.com/Beatrice-betty/AzurPilot) — Project introduction, feature details, Azur Lane automation solutions
+- [AzurPilot Download Page](https://github.com/Beatrice-betty/alas-launcher/releases) — Download the Azur Lane script tool for Windows / macOS / Linux
+- [GitHub Repository](https://github.com/Beatrice-betty/AzurPilot) — Source code, Issues, Pull Requests
+- [QQ Community Group](https://github.com/Beatrice-betty/AzurPilot/issues) — Azur Lane automation community
 - [AzurLaneAutoScript Upstream](https://github.com/LmeSzinc/AzurLaneAutoScript) — The original ALAS
 
 ### Derived Projects & Community Links
@@ -325,13 +324,3 @@ This project follows the license requirements of the original project and relate
 The licenses of the projects this project depends on are located in /licenses.
 
 When using, modifying, or distributing this project, please comply with the license requirements of the relevant upstream projects as well.
-
-## Sponsorship
-
-<p align="center">
-  <a href="https://afdian.com/a/miaonaa">
-    <img src="doc/afdian.jfif" alt="爱发电" width="200">
-  </a>
-  <br>
-  <b>Support this project (for server costs or training new models, etc.?)</b>
-</p>

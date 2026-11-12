@@ -1,7 +1,9 @@
 """设备方法层通用工具。包含 ADB 错误处理、重试策略、序列号解析、
 UI 层级解析（HierarchyButton）和 Shell 命令辅助函数。"""
 
+import hashlib
 import os
+import shutil
 import random
 import re
 import socket
@@ -10,13 +12,13 @@ import tempfile
 import time
 import typing as t
 import zlib
+from pathlib import Path
 
 import requests
 import uiautomator2 as u2
 import uiautomator2cache
 from adbutils import AdbTimeout
 from lxml import etree
-from urllib3.exceptions import HTTPError as Urllib3HTTPError
 
 from module.base import http
 from module.device.method.remove_warning import remove_shell_warning
@@ -139,29 +141,6 @@ u2.setup_logger = setup_logger
 u2.init.setup_logger = setup_logger
 
 
-_u2_mirror_download = u2.init.mirror_download
-
-
-def mirror_download(url, filename=None, logger=u2_logger):
-    """优先下载 ATX 镜像，失败时使用同版本、同架构的 GitHub 发布包。"""
-    if not url.startswith('https://atx.azurpilot.com/'):
-        return _u2_mirror_download(url, filename, logger=logger)
-
-    storepath = u2.init.gen_cachepath(url)
-    try:
-        return http.download_file(url, storepath)
-    except (http.RequestException, requests.RequestException, Urllib3HTTPError,
-            FileNotFoundError, AssertionError, TypeError, ValueError) as exc:
-        logger.warning('ATX Agent 镜像下载失败，回退 GitHub：%s', exc)
-
-    github_url = u2.init.GITHUB_BASEURL + '/atx-agent/releases/download/%s/%s' % (
-        u2.version.__atx_agent_version__, os.path.basename(url))
-    return u2.init.cache_download(github_url, filename, storepath=storepath, logger=logger)
-
-
-u2.init.mirror_download = mirror_download
-
-
 # Patch Initer
 class PatchedIniter(u2.init.Initer):
     @property
@@ -183,8 +162,8 @@ class PatchedIniter(u2.init.Initer):
             raise Exception(
                 "arch(%s) need to be supported yet, please report an issue in github"
                 % self.abis)
-        return 'https://atx.azurpilot.com/%s' % (
-            name.format(v=u2.version.__atx_agent_version__))
+        return u2.init.GITHUB_BASEURL + '/atx-agent/releases/download/%s/%s' % (
+            u2.version.__atx_agent_version__, name.format(v=u2.version.__atx_agent_version__))
 
     @staticmethod
     def _atx_archive_valid(path):
@@ -202,42 +181,31 @@ class PatchedIniter(u2.init.Initer):
             return False
 
     def _cache_atx_agent(self, url):
-        """预填上游缓存，避免下载器的固定 Origin 触发 CNB 跨域拒绝。"""
-        path = u2.init.gen_cachepath(url)
-        if self._atx_archive_valid(path):
+        # 独立包优先用随包交付的固定版本，首次连接也不需要从外网下载 Agent。
+        if os.environ.get('AZURPILOT_INDEPENDENT') != '1':
             return
-
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        version = u2.version.__atx_agent_version__
-        official = f'https://github.com/openatx/atx-agent/releases/download/{version}/{os.path.basename(url)}'
-        last_error = None
-        for source in (url, official):
-            partial = None
-            try:
-                self.logger.info(f'[设备-ATX] 下载 {source}')
-                # 上游固定发送 Origin: https://github.com，重定向到 CNB 后会得到 403。
-                with http.get(source, download=True, stream=True, headers={'Accept-Encoding': 'identity'},
-                              timeout=(5, 30)) as response:
-                    response.raise_for_status()
-                    with tempfile.NamedTemporaryFile(dir=os.path.dirname(path), suffix='.part',
-                                                     delete=False) as output:
-                        partial = output.name
-                        for chunk in response.iter_content(64 * 1024):
-                            output.write(chunk)
-                    expected = response.headers.get('Content-Length')
-                    if expected is not None and os.path.getsize(partial) != int(expected):
-                        raise ValueError('atx-agent 下载长度不完整')
-                if not self._atx_archive_valid(partial):
-                    raise ValueError('atx-agent 下载内容不是有效的 agent 归档')
-                os.replace(partial, path)
-                return
-            except (http.RequestException, ValueError) as error:
-                self.logger.warning(f'[设备-ATX] 下载失败 {source}: {error}')
-                last_error = error
-            finally:
-                if partial is not None and os.path.exists(partial):
-                    os.unlink(partial)
-        raise last_error
+        name = os.path.basename(url)
+        hashes = {
+            'atx-agent_0.10.0_linux_386.tar.gz': '358d450001afe253339f0d1070b2a20ec758addfe163264ab265a74fcf16a6f7',
+            'atx-agent_0.10.0_linux_arm64.tar.gz': 'f4eaa26d65f93fd4342ad61dfc7e8f3eb5ee5ea4071597ea94458bd1e045d8f7',
+            'atx-agent_0.10.0_linux_armv6.tar.gz': 'b2a0d01843fe168ab974eac025ff0c0b6681b9697318df152c2f88e2167fbf33',
+            'atx-agent_0.10.0_linux_armv7.tar.gz': 'e398b7a570610a890f63e8cdde61e7c3a8c16a49ecb19a5fe5cc473142822647',
+        }
+        bundled = Path('runtime/atx') / name
+        if not bundled.is_file():
+            raise FileNotFoundError(f'离线包缺少设备组件 {name}')
+        with bundled.open('rb') as stream:
+            if hashlib.file_digest(stream, 'sha256').hexdigest() != hashes.get(name):
+                raise ValueError(f'离线包设备组件校验不符 {name}')
+        path = Path(u2.init.gen_cachepath(url))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as stream:
+            partial = Path(stream.name)
+        try:
+            shutil.copyfile(bundled, partial)
+            os.replace(partial, path)
+        finally:
+            partial.unlink(missing_ok=True)
 
     def push_url(self, url, dest=None, mode=0o755, tgz=False, extract_name=None):
         """仅修正 agent 下载，解包、推送及其他资源沿用上游安装流程。"""

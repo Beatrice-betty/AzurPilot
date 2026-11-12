@@ -1,7 +1,7 @@
 """API 客户端模块。
 
 负责获取公告，
-默认统一使用 api.azurpilot.com，保留既有的主备端点请求流程。
+配置自有 API 地址后才查询公告。
 """
 from typing import Any, Dict, List, Tuple, Optional
 
@@ -34,10 +34,9 @@ class ApiClient:
         Returns:
             list[str]: 端点完整 URL 列表。
         """
-        return list(dict.fromkeys([
-            f'{cls.PRIMARY_DOMAIN}{path}',
-            f'{cls.FALLBACK_DOMAIN}{path}'
-        ]))
+        return list(dict.fromkeys(
+            f'{domain}{path}' for domain in (cls.PRIMARY_DOMAIN, cls.FALLBACK_DOMAIN) if domain
+        ))
     
     @classmethod
     def _get_with_fallback(cls, path: str, params: Dict[str, Any] = None, timeout: int = 10,
@@ -106,6 +105,8 @@ class ApiClient:
         Returns:
             dict[str, Any] | None: 公告数据字典；若无更新或获取失败则返回 None。
         """
+        if not cls.PRIMARY_DOMAIN and not cls.FALLBACK_DOMAIN:
+            return None
         import time
         try:
             # 添加时间戳参数以绕过缓存

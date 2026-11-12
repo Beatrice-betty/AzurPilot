@@ -231,6 +231,10 @@ def ensure_frontend(root=None):
     """
     from module.logger import logger
     directory = (Path(root) if root else Path(__file__).resolve().parents[1]) / 'frontend'
+    if os.environ.get('AZURPILOT_INDEPENDENT') == '1':
+        if (directory / 'dist/index.html').is_file() and (directory / 'dist/assets').is_dir():
+            return
+        raise RuntimeError('安装包缺少预构建网页，请用完整安装包修复')
     marker = directory / 'dist/.source-fingerprint'
     fingerprint = source_fingerprint(directory)
     if (directory / 'dist/index.html').is_file() and marker.is_file() and marker.read_text().strip() == fingerprint:

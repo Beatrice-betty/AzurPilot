@@ -188,9 +188,6 @@ export interface Results {
   'mind.import': {ships: MindShip[]}
   'mind.recognize': {ships: MindShip[]}
   'statistics.resourceFlows': ResourceFlowReport
-  'stock.status': StockExchangeStatus
-  'stock.rebuild': StockExchangeRebuild
-  'stock.register': StockExchangeStatus
   'opsi.simulator.status': OpsiSimulatorStatus
   'opsi.simulator.start': OpsiSimulatorStatus
   'opsi.simulator.stop': OpsiSimulatorStatus
@@ -266,8 +263,6 @@ export interface ResourceFlowReport {
   glossary?: StatGlossary
 }
 
-export interface StockExchangeStatus {url:string;instance:string;instanceId:string;registered:boolean;deleted?:boolean;bound:boolean;stock:{id:number;symbol:string;name:string;price:number;observedAt:number;bound:boolean}|null;bindingCode:string;message:string;lastObservedAt:number}
-export interface StockExchangeRebuild {instance:string;scope:'instance'|'all';affectedInstances:string[];rebuilt:boolean}
 
 export interface AccountStatus {
   destroyed?: boolean

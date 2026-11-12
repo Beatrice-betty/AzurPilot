@@ -30,9 +30,6 @@ export interface Parameters {
   "mind.plan": { instance: string; revision: string; ship_ids: Array<number>; target_level?: 120 | 125 }
   "mind.import": { instance: string; filename: string; content: string }
   "mind.recognize": { instance: string; filename: string; content: string }
-  "stock.status": { instance: string }
-  "stock.rebuild": { instance: string; confirm?: boolean; scope?: "instance" | "all" }
-  "stock.register": { instance: string; username: string; noticeVersion?: string }
   "scheduler.start": { instance: string }
   "scheduler.stop": { instance: string }
   "scheduler.program.catalog": { instance: string }
@@ -79,7 +76,7 @@ export interface Parameters {
   "background.gallery.open": Record<string, never>
   "auth.login": { password?: string }
   "auth.launcher": { ticket: string }
-  "events.subscribe": { instance?: string | null; topics: Array<"instances" | "overview" | "logs" | "preview" | "stock" | "notifications" | "launcher"> }
+  "events.subscribe": { instance?: string | null; topics: Array<"instances" | "overview" | "logs" | "preview" | "notifications" | "launcher"> }
 }
 export interface SchedulerModels {
   ProgramDocument: { entry: string; nodes: Array<{ id: string; type: string; label?: string; comment?: string; params?: Record<string, unknown>; position?: Record<string, unknown> }>; edges?: Array<{ id: string; source: string; sourcePort: string; target: string; targetPort?: string; kind?: "control" | "data" }>; schemaVersion?: number; name?: string; subgraphs?: Array<{ entry: string; nodes: Array<{ id: string; type: string; label?: string; comment?: string; params?: Record<string, unknown>; position?: Record<string, unknown> }>; edges?: Array<{ id: string; source: string; sourcePort: string; target: string; targetPort?: string; kind?: "control" | "data" }>; id: string; name: string; pure?: boolean; inputs?: Array<{ name: string; type?: "any" | "number" | "boolean" | "string" | "time" | "duration" | "resource" | "task" | "tasks" | "result" | "list" | "object"; required?: boolean }>; outputs?: Array<{ name: string; type?: "any" | "number" | "boolean" | "string" | "time" | "duration" | "resource" | "task" | "tasks" | "result" | "list" | "object"; required?: boolean }> }>; variables?: Array<{ name: string; type?: "any" | "number" | "boolean" | "string" | "time" | "duration" | "resource" | "task" | "tasks" | "result" | "list" | "object"; initial?: unknown; persistent?: boolean }>; viewport?: Record<string, unknown> }

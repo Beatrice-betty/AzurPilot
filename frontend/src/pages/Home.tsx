@@ -96,8 +96,8 @@ export function Home() {
             <div className="home-stat"><dt>{ui('status.error')}</dt><dd>{errored}</dd></div>
           </dl>
           <div className="home-deck-links">
-            <a className="home-deck-link" href="https://azurpilot.com/" target="_blank" rel="noreferrer"><Globe size={14}/>{ui('home.website')}</a>
-            <a className="home-deck-link" href="https://github.com/wess09/AzurPilot" target="_blank" rel="noreferrer"><ExternalLink size={14}/>{ui('home.openSource')}</a>
+            <a className="home-deck-link" href="https://github.com/Beatrice-betty/AzurPilot/releases" target="_blank" rel="noreferrer"><Globe size={14}/>{ui('home.website')}</a>
+            <a className="home-deck-link" href="https://github.com/Beatrice-betty/AzurPilot" target="_blank" rel="noreferrer"><ExternalLink size={14}/>{ui('home.openSource')}</a>
             <button type="button" className="home-deck-link home-legacy-toggle" onClick={toggleLegacyUi}><History size={14}/>{ui(legacyUi ? 'home.modernUi' : 'home.legacyUi')}</button>
           </div>
         </div>

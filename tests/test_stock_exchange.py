@@ -17,6 +17,9 @@ from module.scheduler.store import ProgramStore
 
 class StockExchangeTests(unittest.TestCase):
     def setUp(self):
+        endpoint = patch.dict('os.environ', {'STOCK_EXCHANGE_URL': 'https://stock.example.invalid'})
+        endpoint.start()
+        self.addCleanup(endpoint.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name).resolve()
@@ -159,7 +162,8 @@ class StockExchangeTests(unittest.TestCase):
 
     def test_default_origin_and_origin_validation(self):
         with patch.dict('os.environ', {}, clear=True):
-            self.assertEqual('https://stock.azurpilot.com', exchange_url())
+            with self.assertRaises(ApiError):
+                exchange_url()
         for value in ('http://example.com', 'https://user:secret@example.com', 'https://example.com/path', 'https://example.com?x=1'):
             with self.subTest(value=value), patch.dict('os.environ', {'STOCK_EXCHANGE_URL': value}):
                 with self.assertRaises(ApiError):

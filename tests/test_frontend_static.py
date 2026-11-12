@@ -49,7 +49,7 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn('text/plain', response.headers['content-type'])
         self.assertIn('User-agent: *', response.text)
         self.assertIn('Disallow: /', response.text)
-        self.assertIn('https://azurpilot.com/', response.text)
+        self.assertIn('https://github.com/Beatrice-betty/AzurPilot', response.text)
 
     def test_missing_and_private_resources_are_not_pages(self):
         for path in ['/missing.webp', '/assets/missing.js', '/.source-fingerprint',

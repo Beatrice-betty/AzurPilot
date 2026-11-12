@@ -849,6 +849,8 @@ def _complete_pending_dependency_sync(
     Returns:
         bool: 无待处理或同步完成返回 True，读取失败或同步失败返回 False。
     """
+    if os.environ.get('AZURPILOT_INDEPENDENT') == '1':
+        return True, service, request_queue, response_queue
     try:
         pending = is_dependency_sync_pending()
     except OSError as exc:
@@ -891,6 +893,8 @@ def _prepare_dependency_sync_before_webui_start(
         tuple[bool, Process | None, Queue | None, Queue | None]:
             就绪状态、服务进程、请求队列、响应队列。
     """
+    if os.environ.get('AZURPILOT_INDEPENDENT') == '1':
+        return True, service, request_queue, response_queue
     try:
         pending = is_dependency_sync_pending()
     except OSError as exc:
@@ -990,6 +994,8 @@ def run_webui_supervisor(watch_sources: bool = False) -> int:
         return fatal_error.exit_code
     try:
         while not should_exit:
+            from deploy import independent
+            trial = independent.enabled() and independent.trial_pending()
             logger.info('[GUI] 检查依赖同步状态，准备 WebUI 启动环境')
             stage_started = time.perf_counter()
             (
@@ -1019,6 +1025,10 @@ def run_webui_supervisor(watch_sources: bool = False) -> int:
                 ensure_frontend()
                 logger.info('[GUI] 前端静态资源已就绪，耗时 %.2f 秒', time.perf_counter() - stage_started)
             except Exception as exc:
+                if trial:
+                    logger.warning('[GUI] 新版网页未就绪，恢复上一版')
+                    independent.recover()
+                    continue
                 logger.exception_context(
                     title='React 前端构建失败',
                     exc=exc,
@@ -1043,7 +1053,11 @@ def run_webui_supervisor(watch_sources: bool = False) -> int:
                 )
                 process.start()
             except Exception as exc:
-                _stop_webui_process_tree(process)
+                stopped = _stop_webui_process_tree(process)
+                if stopped and trial:
+                    logger.warning('[GUI] 新版进程未能启动，恢复上一版')
+                    independent.recover()
+                    continue
                 startup_failures += 1
                 logger.exception_context(
                     title='WebUI 子进程启动失败',
@@ -1073,6 +1087,10 @@ def run_webui_supervisor(watch_sources: bool = False) -> int:
 
             if not ready:
                 stopped = _stop_webui_process_tree(process)
+                if stopped and trial:
+                    logger.warning('[GUI] 新版服务未就绪，恢复上一版')
+                    independent.recover()
+                    continue
                 startup_failures += 1
                 if not stopped:
                     logger.error_context(
@@ -1106,6 +1124,8 @@ def run_webui_supervisor(watch_sources: bool = False) -> int:
                     time.sleep(startup_failures)
                 continue
 
+            if trial:
+                independent.confirm()
             startup_failures = 0
             ready_at = time.monotonic()
             logger.info(f"[GUI] WebUI 服务已就绪 (PID: {process.pid})")

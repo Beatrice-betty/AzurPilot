@@ -13,6 +13,7 @@ import time
 from typing import Generator, List, Tuple
 
 import requests
+from deploy import independent
 from deploy.atomic import atomic_write
 from deploy.config import ExecutionError
 from deploy.utils import DEPLOY_CONFIG
@@ -48,6 +49,9 @@ class Updater(DeployConfig, RuntimeGitManager):
         self.state = 0
         self.event: threading.Event = None
         self._update_lock = threading.Lock()
+        self.independent_offer = None
+        self.independent_ready = None
+        self.independent_error = ''
 
     def alas_kill(self):
         """强制终止当前进程。"""
@@ -129,6 +133,16 @@ class Updater(DeployConfig, RuntimeGitManager):
             若有可用更新返回 True (或 1)，否则返回 False (或 0)。
         """
         self.state = "checking"
+        if independent.enabled():
+            self.independent_offer = None
+            self.independent_error = ''
+            try:
+                self.independent_offer = independent.check()
+            except (OSError, RuntimeError, ValueError, KeyError) as error:
+                self.independent_error = str(error)
+                logger.warning(self.independent_error)
+                return False
+            return self.independent_offer is not None
 
         if State.deploy_config.GitOverCdn:
             client = self.goc_client
@@ -298,7 +312,12 @@ class Updater(DeployConfig, RuntimeGitManager):
         """
         logger.hr("[WebUI-更新] 执行更新")
         try:
-            self.git_install()
+            if independent.enabled():
+                independent.apply(self.independent_ready)
+                self.independent_offer = None
+                self.independent_ready = None
+            else:
+                self.git_install()
         except ExecutionError:
             return False
         except Exception as exc:
@@ -336,6 +355,18 @@ class Updater(DeployConfig, RuntimeGitManager):
                     self.state = "failed"
                     logger.critical("依赖同步服务不可用，拒绝执行无法安全恢复的更新")
                     return False
+                if independent.enabled():
+                    if self.independent_offer is None:
+                        return False
+                    self.state = "run update"
+                    self.independent_error = ''
+                    try:
+                        self.independent_ready = independent.prepare(self.independent_offer)
+                    except (OSError, RuntimeError, ValueError) as error:
+                        self.independent_error = str(error)
+                        logger.warning(self.independent_error)
+                        self.state = "failed"
+                        return False
                 return self._start_update()
 
     def _start_update(self) -> bool:
@@ -430,7 +461,8 @@ class Updater(DeployConfig, RuntimeGitManager):
             # 更新前先持久化恢复计划。Git 的 reset/pull 即使报错也可能已修改源码，
             # 因而一旦开始更新，worker 只能由父进程完成依赖同步后恢复。
             try:
-                mark_dependency_sync_pending()
+                if not independent.enabled():
+                    mark_dependency_sync_pending()
                 atomic_write("./config/reloadalas", "".join(names))
             except Exception as exc:
                 self.state = "failed"
@@ -457,7 +489,8 @@ class Updater(DeployConfig, RuntimeGitManager):
 
             try:
                 State._restart_requested = True
-                State.dependency_sync_event.set()
+                if not independent.enabled():
+                    State.dependency_sync_event.set()
             except Exception as exc:
                 logger.exception_context(
                     title='无法通知依赖同步服务',
@@ -519,7 +552,12 @@ class Updater(DeployConfig, RuntimeGitManager):
         th._task.delay = get_next_time(self.schedule_time)
         yield
         while True:
-            self.check_update()
+            if independent.enabled():
+                with self._update_lock:
+                    if self.state in (0, 1, 'failed', 'finish'):
+                        self.state = self._check_update()
+            else:
+                self.check_update()
             if self.state != 1:
                 th._task.delay = get_next_time(self.schedule_time)
                 yield

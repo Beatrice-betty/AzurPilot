@@ -1076,92 +1076,6 @@
         "type": "object"
       }
     },
-    "stock.status": {
-      "mutates": false,
-      "params": {
-        "additionalProperties": false,
-        "description": "单实例操作通用入参模型。",
-        "properties": {
-          "instance": {
-            "maxLength": 64,
-            "minLength": 1,
-            "title": "Instance",
-            "type": "string"
-          }
-        },
-        "required": [
-          "instance"
-        ],
-        "title": "InstanceParams",
-        "type": "object"
-      }
-    },
-    "stock.rebuild": {
-      "mutates": true,
-      "params": {
-        "additionalProperties": false,
-        "description": "先返回实际重建范围，用户确认后才重建本地股票身份。",
-        "properties": {
-          "instance": {
-            "maxLength": 64,
-            "minLength": 1,
-            "title": "Instance",
-            "type": "string"
-          },
-          "confirm": {
-            "default": false,
-            "title": "Confirm",
-            "type": "boolean"
-          },
-          "scope": {
-            "default": "instance",
-            "enum": [
-              "instance",
-              "all"
-            ],
-            "title": "Scope",
-            "type": "string"
-          }
-        },
-        "required": [
-          "instance"
-        ],
-        "title": "StockRebuildParams",
-        "type": "object"
-      }
-    },
-    "stock.register": {
-      "mutates": true,
-      "params": {
-        "additionalProperties": false,
-        "description": "只注册实例股票；交易账户由群内官方机器人注册。",
-        "properties": {
-          "instance": {
-            "maxLength": 64,
-            "minLength": 1,
-            "title": "Instance",
-            "type": "string"
-          },
-          "username": {
-            "maxLength": 32,
-            "minLength": 2,
-            "title": "Username",
-            "type": "string"
-          },
-          "noticeVersion": {
-            "default": "",
-            "title": "Noticeversion",
-            "type": "string"
-          }
-        },
-        "required": [
-          "instance",
-          "username"
-        ],
-        "title": "StockRegisterParams",
-        "type": "object"
-      }
-    },
     "scheduler.start": {
       "mutates": true,
       "params": {
@@ -3301,13 +3215,12 @@
                 "overview",
                 "logs",
                 "preview",
-                "stock",
                 "notifications",
                 "launcher"
               ],
               "type": "string"
             },
-            "maxItems": 7,
+            "maxItems": 6,
             "title": "Topics",
             "type": "array"
           }

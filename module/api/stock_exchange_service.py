@@ -16,7 +16,7 @@ from module.runtime.game_data import GameDataProtector, damaged
 
 
 def exchange_url():
-    value = os.environ.get('STOCK_EXCHANGE_URL', 'https://stock.azurpilot.com').rstrip('/')
+    value = os.environ.get('STOCK_EXCHANGE_URL', '').rstrip('/')
     try:
         parsed = urlparse(value)
         parsed.port

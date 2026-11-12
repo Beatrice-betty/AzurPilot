@@ -111,22 +111,14 @@ class DeploySettingsTransactionsTests(unittest.TestCase):
         self.assertEqual(second, {'updated': ['WebuiPort']})
         self.assert_saved(Theme='dark', WebuiPort=30001)
 
-    def test_parallel_startup_does_not_hold_config_lock_during_location_lookup(self):
+    def test_parallel_startup_preserves_explicit_owned_github_source(self):
         for config_module in (deploy_config, windows_config):
             with self.subTest(config_module=config_module.__name__):
                 text = TEMPLATE.replace('https://example.invalid/custom', config_module.GITHUB_REPOSITORY)
                 self.file.write_text(text)
                 self.template.write_text(text)
-                barrier = threading.Barrier(8, timeout=5)
-
-                def lookup():
-                    barrier.wait()
-                    return 'us'
-
-                with patch.object(config_module, 'get_country_code', side_effect=lookup) as locate, \
-                        ThreadPoolExecutor(max_workers=8) as executor:
+                with ThreadPoolExecutor(max_workers=8) as executor:
                     configs = list(executor.map(lambda _: config_module.DeployConfig(str(self.file)), range(8)))
-                self.assertEqual(locate.call_count, 8)
                 self.assertTrue(all(config.Repository == config_module.GITHUB_REPOSITORY for config in configs))
                 self.assertEqual(poor_yaml_read(str(self.file))['Repository'], config_module.GITHUB_REPOSITORY)
 
@@ -206,9 +198,9 @@ class DeploySettingsTransactionsTests(unittest.TestCase):
         config = RuntimeDeployConfig(str(self.file))
         config.Theme = 'dark'
         self.assertEqual(poor_yaml_read(str(self.file))['Repository'],
-                         deploy_config.GIT_OVER_CDN_REPOSITORY)
-        self.assertIn(config.Repository, deploy_config.GIT_OVER_CDN_FALLBACK_REPOSITORIES)
-        self.assertTrue(config.GitOverCdn)
+                         deploy_config.GITCODE_REPOSITORY)
+        self.assertEqual(config.Repository, deploy_config.GITCODE_REPOSITORY)
+        self.assertFalse(config.GitOverCdn)
         self.assertEqual(config.Theme, 'dark')
 
     def test_nested_transaction_and_attribute_assignment_commit_together(self):

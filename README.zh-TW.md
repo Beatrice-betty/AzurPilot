@@ -13,40 +13,40 @@
 </p>
 
 <p align="center">
-  <strong><a href="https://azurpilot.com/">AzurPilot 官網</a></strong> ｜ 碧藍航線自動化腳本 · 大型作戰侵蝕循環 · 多平台支援
+  <strong><a href="https://github.com/Beatrice-betty/AzurPilot">AzurPilot 官網</a></strong> ｜ 碧藍航線自動化腳本 · 大型作戰侵蝕循環 · 多平台支援
 </p>
 
 <p align="center">
-  <a href="https://deepwiki.com/wess09/AzurPilot"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
+  <a href="https://deepwiki.com/Beatrice-betty/AzurPilot"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.14-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/github/license/wess09/AzurPilot?style=flat-square&label=License&color=2ea44f" alt="License">
-  <img src="https://img.shields.io/github/stars/wess09/AzurPilot?style=flat-square&label=Stars&color=ffcc00" alt="Stars">
-  <img src="https://img.shields.io/github/forks/wess09/AzurPilot?style=flat-square&label=Forks&color=58a6ff" alt="Forks">
-  <img src="https://img.shields.io/github/issues/wess09/AzurPilot?style=flat-square&label=Issues&color=f85149" alt="Issues">
+  <img src="https://img.shields.io/github/license/Beatrice-betty/AzurPilot?style=flat-square&label=License&color=2ea44f" alt="License">
+  <img src="https://img.shields.io/github/stars/Beatrice-betty/AzurPilot?style=flat-square&label=Stars&color=ffcc00" alt="Stars">
+  <img src="https://img.shields.io/github/forks/Beatrice-betty/AzurPilot?style=flat-square&label=Forks&color=58a6ff" alt="Forks">
+  <img src="https://img.shields.io/github/issues/Beatrice-betty/AzurPilot?style=flat-square&label=Issues&color=f85149" alt="Issues">
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/github/last-commit/wess09/AzurPilot?style=flat-square&label=Last%20Commit&color=8b949e" alt="Last Commit">
-  <img src="https://img.shields.io/github/commit-activity/m/wess09/AzurPilot?style=flat-square&label=Commit%20Activity&color=8957e5" alt="Commit Activity">
-  <img src="https://img.shields.io/github/repo-size/wess09/AzurPilot?style=flat-square&label=Repo%20Size&color=orange" alt="Repo Size">
-  <img src="https://img.shields.io/github/languages/top/wess09/AzurPilot?style=flat-square&label=Top%20Language&color=3776AB" alt="Top Language">
+  <img src="https://img.shields.io/github/last-commit/Beatrice-betty/AzurPilot?style=flat-square&label=Last%20Commit&color=8b949e" alt="Last Commit">
+  <img src="https://img.shields.io/github/commit-activity/m/Beatrice-betty/AzurPilot?style=flat-square&label=Commit%20Activity&color=8957e5" alt="Commit Activity">
+  <img src="https://img.shields.io/github/repo-size/Beatrice-betty/AzurPilot?style=flat-square&label=Repo%20Size&color=orange" alt="Repo Size">
+  <img src="https://img.shields.io/github/languages/top/Beatrice-betty/AzurPilot?style=flat-square&label=Top%20Language&color=3776AB" alt="Top Language">
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/github/contributors/wess09/AzurPilot?style=flat-square&label=Contributors&color=00b4d8" alt="Contributors">
-  <img src="https://img.shields.io/github/issues-pr/wess09/AzurPilot?style=flat-square&label=Pull%20Requests&color=ffb703" alt="Pull Requests">
-  <img src="https://img.shields.io/github/issues-pr-closed/wess09/AzurPilot?style=flat-square&label=PRs%20Closed&color=2ea44f" alt="Closed Pull Requests">
+  <img src="https://img.shields.io/github/contributors/Beatrice-betty/AzurPilot?style=flat-square&label=Contributors&color=00b4d8" alt="Contributors">
+  <img src="https://img.shields.io/github/issues-pr/Beatrice-betty/AzurPilot?style=flat-square&label=Pull%20Requests&color=ffb703" alt="Pull Requests">
+  <img src="https://img.shields.io/github/issues-pr-closed/Beatrice-betty/AzurPilot?style=flat-square&label=PRs%20Closed&color=2ea44f" alt="Closed Pull Requests">
 </p>
 
 <div align="center">
-  <a href="https://azurpilot.com/">
+  <a href="https://github.com/Beatrice-betty/AzurPilot">
     <img src="https://img.shields.io/badge/Web-下載-blue?style=for-the-badge&logo=google-chrome&logoColor=white" />
   </a>
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://join.nanoda.work/#/">
+  <a href="https://github.com/Beatrice-betty/AzurPilot/issues">
     <img src="https://img.shields.io/badge/交流群-QQ-red?style=for-the-badge&logo=tencent-qq&logoColor=white" />
   </a>
 </div>
@@ -55,9 +55,9 @@
 
 AzurPilot 是基於 [AzurLaneAutoScript](https://github.com/LmeSzinc/AzurLaneAutoScript) 修改而來的碧藍航線自動化輔助工具，保留原專案的核心能力，並在此基礎上整合了多個分支、功能改進和實驗性特性。透過 ADB/uiautomator2 控制 Android 模擬器，以截圖識別、影像比對與 OCR 自動執行遊戲任務，支援 CN/EN/JP/TW 四服。
 
-> **請注意**：本專案程式碼基本上由 AI 產生並輔助編寫，存在較大的不確定性，歡迎提交 [Pull Request](https://github.com/wess09/AzurPilot/pulls) 修正。
+> **請注意**：本專案程式碼基本上由 AI 產生並輔助編寫，存在較大的不確定性，歡迎提交 [Pull Request](https://github.com/Beatrice-betty/AzurPilot/pulls) 修正。
 
-前往 **[AzurPilot 官網](https://azurpilot.com/)** 了解更完整的功能說明，或前往 **[下載頁面](https://azurpilot.com/download.html)** 取得最新版本。
+前往 **[AzurPilot 官網](https://github.com/Beatrice-betty/AzurPilot)** 了解更完整的功能說明，或前往 **[下載頁面](https://github.com/Beatrice-betty/alas-launcher/releases)** 取得最新版本。
 
 ## GUI 預覽
 
@@ -67,12 +67,11 @@ AzurPilot 是基於 [AzurLaneAutoScript](https://github.com/LmeSzinc/AzurLaneAut
 
 ## 快速開始
 
-> 💡 **建議方式**：直接從 [AzurPilot 官網下載頁](https://azurpilot.com/download.html) 下載對應平台的啟動器，內建 Python 環境，開箱即用。
+> 💡 **建議方式**：直接從 [AzurPilot 官網下載頁](https://github.com/Beatrice-betty/alas-launcher/releases) 下載對應平台的啟動器，內建 Python 環境，開箱即用。
 
 ### Linux 一鍵部署
 
 ```shell
-curl -fsSL https://azurpilot.com/install/deploy-image.sh | sudo -E bash
 ```
 
 ### 原始碼執行
@@ -215,7 +214,7 @@ MCP 沿用 WebUI 的密碼（`--key` / `config/deploy.yaml` 的 `Password`），
 
 ## 多平台啟動器
 
-> 📥 從 [AzurPilot 官網](https://azurpilot.com/download.html) 下載 Windows / macOS / Linux 啟動器
+> 📥 從 [AzurPilot 官網](https://github.com/Beatrice-betty/alas-launcher/releases) 下載 Windows / macOS / Linux 啟動器
 
 <div align="center">
   <img src="doc/loading.png" alt="loading" width="500" />
@@ -232,7 +231,7 @@ MCP 沿用 WebUI 的密碼（`--key` / `config/deploy.yaml` 的 `Password`），
   <p>Mac 用戶端介面</p>
 </div>
 
-啟動器專案：[GitHub](https://github.com/wess09/alas-launcher) · 原始專案 [ALAS Launcher: 新型態的 AzurLaneAutoScript 啟動器](https://github.com/swordfeng/alas-launcher)
+啟動器專案：[GitHub](https://github.com/Beatrice-betty/alas-launcher) · 原始專案 [ALAS Launcher: 新型態的 AzurLaneAutoScript 啟動器](https://github.com/swordfeng/alas-launcher)
 
 更改內容：
 
@@ -248,14 +247,14 @@ MCP 沿用 WebUI 的密碼（`--key` / `config/deploy.yaml` 的 `Password`），
 
 *本專案的貢獻名單
 
-<a href="https://github.com/wess09/AzurPilot/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=wess09/AzurPilot&max=1000" alt="AzurPilot Contributors">
+<a href="https://github.com/Beatrice-betty/AzurPilot/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Beatrice-betty/AzurPilot&max=1000" alt="AzurPilot Contributors">
 </a>
 
 *啟動器專案的貢獻名單
 
-<a href="https://github.com/wess09/alas-launcher/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=wess09/alas-launcher&max=1000" alt="Launcher Contributors">
+<a href="https://github.com/Beatrice-betty/alas-launcher/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Beatrice-betty/alas-launcher&max=1000" alt="Launcher Contributors">
 </a>
 
 *ALAS 原專案的功能名單
@@ -266,10 +265,10 @@ MCP 沿用 WebUI 的密碼（`--key` / `config/deploy.yaml` 的 `Password`），
 
 ## 相關連結
 
-- [AzurPilot 官網](https://azurpilot.com/) — 專案介紹、功能說明、碧藍航線自動化解決方案
-- [AzurPilot 下載頁](https://azurpilot.com/download.html) — 下載 Windows / macOS / Linux 版本的碧藍航線腳本工具
-- [GitHub 儲存庫](https://github.com/wess09/AzurPilot) — 原始碼、Issue、Pull Request
-- [QQ 交流群](https://join.nanoda.work/#/) — 碧藍航線自動化社群交流
+- [AzurPilot 官網](https://github.com/Beatrice-betty/AzurPilot) — 專案介紹、功能說明、碧藍航線自動化解決方案
+- [AzurPilot 下載頁](https://github.com/Beatrice-betty/alas-launcher/releases) — 下載 Windows / macOS / Linux 版本的碧藍航線腳本工具
+- [GitHub 儲存庫](https://github.com/Beatrice-betty/AzurPilot) — 原始碼、Issue、Pull Request
+- [QQ 交流群](https://github.com/Beatrice-betty/AzurPilot/issues) — 碧藍航線自動化社群交流
 - [AzurLaneAutoScript 上游專案](https://github.com/LmeSzinc/AzurLaneAutoScript) — ALAS 原版
 
 ### 衍生專案與友鏈
@@ -325,13 +324,3 @@ uv run -m module.config.config_updater
 本專案依賴的相關專案授權位於 /licenses
 
 使用、修改或散佈本專案時，請同時遵守相關上游專案的授權要求。
-
-## 贊助支持
-
-<p align="center">
-  <a href="https://afdian.com/a/miaonaa">
-    <img src="doc/afdian.jfif" alt="愛發電" width="200">
-  </a>
-  <br>
-  <b>支持本專案（用於支付伺服器費用或訓練新模型等？）</b>
-</p>

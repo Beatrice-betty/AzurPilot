@@ -766,6 +766,8 @@ class OperationHandover(CampaignRun):
                 (维护公告, 公告时间所用的兜底时区, 失败原因)。取不到公告时公告为 None。
         """
         server = self.config.SERVER
+        if not HANDOVER_MAINTAIN_API:
+            return {}, SERVER_TO_TIMEZONE.get(server, SERVER_TO_TIMEZONE['cn']), ''
         try:
             result = http.get(HANDOVER_MAINTAIN_API, params={'server': server},
                               headers=ANONYMOUS_STATUS_HEADERS, timeout=10)

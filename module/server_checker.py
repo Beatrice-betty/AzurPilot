@@ -1,6 +1,6 @@
 """游戏服务器状态检查器。
 
-通过统一云 API 查询碧蓝航线服务器状态。在任务调度前
+通过游戏网关查询碧蓝航线服务器状态。在任务调度前
 检查所选服务器是否可用，避免在维护或尚未开放期间执行无效操作。
 """
 
@@ -71,6 +71,10 @@ class ServerChecker:
             return
 
         assert self._server_info is not None
+        if not self._base:
+            if not self._load_gateway_server():
+                self._state.append(False if self._retry else self.fast_retry())
+            return
         try:
             session = http.Session()
             session.trust_env = False

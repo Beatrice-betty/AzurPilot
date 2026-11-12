@@ -14,40 +14,40 @@
 </p>
 
 <p align="center">
-  <strong><a href="https://azurpilot.com/">AzurPilot 官网</a></strong> ｜ 碧蓝航线自动化脚本 · 大世界侵蚀循环 · 多平台支持
+  <strong><a href="https://github.com/Beatrice-betty/AzurPilot">AzurPilot 官网</a></strong> ｜ 碧蓝航线自动化脚本 · 大世界侵蚀循环 · 多平台支持
 </p>
 
 <p align="center">
-  <a href="https://deepwiki.com/wess09/AzurPilot"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
+  <a href="https://deepwiki.com/Beatrice-betty/AzurPilot"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.14-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/github/license/wess09/AzurPilot?style=flat-square&label=License&color=2ea44f" alt="License">
-  <img src="https://img.shields.io/github/stars/wess09/AzurPilot?style=flat-square&label=Stars&color=ffcc00" alt="Stars">
-  <img src="https://img.shields.io/github/forks/wess09/AzurPilot?style=flat-square&label=Forks&color=58a6ff" alt="Forks">
-  <img src="https://img.shields.io/github/issues/wess09/AzurPilot?style=flat-square&label=Issues&color=f85149" alt="Issues">
+  <img src="https://img.shields.io/github/license/Beatrice-betty/AzurPilot?style=flat-square&label=License&color=2ea44f" alt="License">
+  <img src="https://img.shields.io/github/stars/Beatrice-betty/AzurPilot?style=flat-square&label=Stars&color=ffcc00" alt="Stars">
+  <img src="https://img.shields.io/github/forks/Beatrice-betty/AzurPilot?style=flat-square&label=Forks&color=58a6ff" alt="Forks">
+  <img src="https://img.shields.io/github/issues/Beatrice-betty/AzurPilot?style=flat-square&label=Issues&color=f85149" alt="Issues">
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/github/last-commit/wess09/AzurPilot?style=flat-square&label=Last%20Commit&color=8b949e" alt="Last Commit">
-  <img src="https://img.shields.io/github/commit-activity/m/wess09/AzurPilot?style=flat-square&label=Commit%20Activity&color=8957e5" alt="Commit Activity">
-  <img src="https://img.shields.io/github/repo-size/wess09/AzurPilot?style=flat-square&label=Repo%20Size&color=orange" alt="Repo Size">
-  <img src="https://img.shields.io/github/languages/top/wess09/AzurPilot?style=flat-square&label=Top%20Language&color=3776AB" alt="Top Language">
+  <img src="https://img.shields.io/github/last-commit/Beatrice-betty/AzurPilot?style=flat-square&label=Last%20Commit&color=8b949e" alt="Last Commit">
+  <img src="https://img.shields.io/github/commit-activity/m/Beatrice-betty/AzurPilot?style=flat-square&label=Commit%20Activity&color=8957e5" alt="Commit Activity">
+  <img src="https://img.shields.io/github/repo-size/Beatrice-betty/AzurPilot?style=flat-square&label=Repo%20Size&color=orange" alt="Repo Size">
+  <img src="https://img.shields.io/github/languages/top/Beatrice-betty/AzurPilot?style=flat-square&label=Top%20Language&color=3776AB" alt="Top Language">
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/github/contributors/wess09/AzurPilot?style=flat-square&label=Contributors&color=00b4d8" alt="Contributors">
-  <img src="https://img.shields.io/github/issues-pr/wess09/AzurPilot?style=flat-square&label=Pull%20Requests&color=ffb703" alt="Pull Requests">
-  <img src="https://img.shields.io/github/issues-pr-closed/wess09/AzurPilot?style=flat-square&label=PRs%20Closed&color=2ea44f" alt="Closed Pull Requests">
+  <img src="https://img.shields.io/github/contributors/Beatrice-betty/AzurPilot?style=flat-square&label=Contributors&color=00b4d8" alt="Contributors">
+  <img src="https://img.shields.io/github/issues-pr/Beatrice-betty/AzurPilot?style=flat-square&label=Pull%20Requests&color=ffb703" alt="Pull Requests">
+  <img src="https://img.shields.io/github/issues-pr-closed/Beatrice-betty/AzurPilot?style=flat-square&label=PRs%20Closed&color=2ea44f" alt="Closed Pull Requests">
 </p>
 
 <div align="center">
-  <a href="https://azurpilot.com/">
+  <a href="https://github.com/Beatrice-betty/AzurPilot">
     <img src="https://img.shields.io/badge/Web-下载-blue?style=for-the-badge&logo=google-chrome&logoColor=white" />
   </a>
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://join.nanoda.work/#/">
+  <a href="https://github.com/Beatrice-betty/AzurPilot/issues">
     <img src="https://img.shields.io/badge/交流群-QQ-red?style=for-the-badge&logo=tencent-qq&logoColor=white" />
   </a>
 </div>
@@ -56,9 +56,9 @@
 
 AzurPilot 是基于 AzurLaneAutoScript 修改而来的碧蓝航线自动化辅助工具，保留原项目的核心能力，并在此基础上整合了多个分支、功能改进和实验性特性。通过 ADB/uiautomator2 控制安卓模拟器，以截图识别、图像匹配与 OCR 自动执行游戏任务，支持 CN/EN/JP/TW 四服。
 
-> **请注意**：本项目代码基本由 AI 代码生成与辅助编写，存在较大的不确定性，欢迎提交 [Pull Request](https://github.com/wess09/AzurPilot/pulls) 改正。
+> **请注意**：本项目代码基本由 AI 代码生成与辅助编写，存在较大的不确定性，欢迎提交 [Pull Request](https://github.com/Beatrice-betty/AzurPilot/pulls) 改正。
 
-访问 **[AzurPilot 官网](https://azurpilot.com/)** 了解更多功能详情，或前往 **[下载页面](https://azurpilot.com/download.html)** 获取最新版本。
+访问 **[AzurPilot 官网](https://github.com/Beatrice-betty/AzurPilot)** 了解更多功能详情，或前往 **[下载页面](https://github.com/Beatrice-betty/alas-launcher/releases)** 获取最新版本。
 
 ## GUI 预览
 
@@ -68,12 +68,11 @@ AzurPilot 是基于 AzurLaneAutoScript 修改而来的碧蓝航线自动化辅�
 
 ## 快速开始
 
-> 💡 **推荐方式**：直接从 [AzurPilot 官网下载页](https://azurpilot.com/download.html) 下载对应平台的启动器，内置 Python 环境，开箱即用。
+> 💡 **推荐方式**：直接从 [AzurPilot 官网下载页](https://github.com/Beatrice-betty/alas-launcher/releases) 下载对应平台的启动器，内置 Python 环境，开箱即用。
 
 ### Linux 一键部署
 
 ```shell
-curl -fsSL https://azurpilot.com/install/deploy-image.sh | sudo -E bash
 ```
 
 ### 源码运行
@@ -224,7 +223,7 @@ MCP 复用 WebUI 的密码（`--key` / `config/deploy.yaml` 的 `Password`），
 
 ## 多平台启动器
 
-> 📥 从 [AzurPilot 官网](https://azurpilot.com/download.html) 下载 Windows / macOS / Linux 启动器
+> 📥 从 [AzurPilot 官网](https://github.com/Beatrice-betty/alas-launcher/releases) 下载 Windows / macOS / Linux 启动器
 
 <div align="center">
   <img src="doc/loading.png" alt="loading" width="500" />
@@ -241,7 +240,7 @@ MCP 复用 WebUI 的密码（`--key` / `config/deploy.yaml` 的 `Password`），
   <p>Mac 客户端界面</p>
 </div>
 
-启动器项目地：[GitHub](https://github.com/wess09/alas-launcher) · 源项目 [ALAS Launcher: 一种新型的 AzurLaneAutoScript 启动器](https://github.com/swordfeng/alas-launcher)
+启动器项目地：[GitHub](https://github.com/Beatrice-betty/alas-launcher) · 源项目 [ALAS Launcher: 一种新型的 AzurLaneAutoScript 启动器](https://github.com/swordfeng/alas-launcher)
 
 更改内容：
 
@@ -257,14 +256,14 @@ MCP 复用 WebUI 的密码（`--key` / `config/deploy.yaml` 的 `Password`），
 
 *本项目的贡献名单
 
-<a href="https://github.com/wess09/AzurPilot/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=wess09/AzurPilot&max=1000" alt="AzurPilot Contributors">
+<a href="https://github.com/Beatrice-betty/AzurPilot/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Beatrice-betty/AzurPilot&max=1000" alt="AzurPilot Contributors">
 </a>
 
 *启动器项目的贡献名单
 
-<a href="https://github.com/wess09/alas-launcher/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=wess09/alas-launcher&max=1000" alt="Launcher Contributors">
+<a href="https://github.com/Beatrice-betty/alas-launcher/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Beatrice-betty/alas-launcher&max=1000" alt="Launcher Contributors">
 </a>
 
 *ALAS原项目的功能名单
@@ -275,10 +274,10 @@ MCP 复用 WebUI 的密码（`--key` / `config/deploy.yaml` 的 `Password`），
 
 ## 相关链接
 
-- [AzurPilot 官网](https://azurpilot.com/) — 项目介绍、功能详情、碧蓝航线自动化方案
-- [AzurPilot 下载页](https://azurpilot.com/download.html) — 下载 Windows / macOS / Linux 版本的碧蓝航线脚本工具
-- [GitHub 仓库](https://github.com/wess09/AzurPilot) — 源码、Issue、Pull Request
-- [QQ 交流群](https://join.nanoda.work/#/) — 碧蓝航线自动化社区交流
+- [AzurPilot 官网](https://github.com/Beatrice-betty/AzurPilot) — 项目介绍、功能详情、碧蓝航线自动化方案
+- [AzurPilot 下载页](https://github.com/Beatrice-betty/alas-launcher/releases) — 下载 Windows / macOS / Linux 版本的碧蓝航线脚本工具
+- [GitHub 仓库](https://github.com/Beatrice-betty/AzurPilot) — 源码、Issue、Pull Request
+- [QQ 交流群](https://github.com/Beatrice-betty/AzurPilot/issues) — 碧蓝航线自动化社区交流
 - [AzurLaneAutoScript 上游项目](https://github.com/LmeSzinc/AzurLaneAutoScript) — ALAS 原版
 
 ### 衍生项目与友链
@@ -334,13 +333,3 @@ uv run -m module.config.config_updater
 本项目依赖的相关项目许可证位于 /licenses
 
 使用、修改或分发本项目时，请同时遵守相关上游项目的许可证要求。
-
-## 赞助支持
-
-<p align="center">
-  <a href="https://afdian.com/a/miaonaa">
-    <img src="doc/afdian.jfif" alt="爱发电" width="200">
-  </a>
-  <br>
-  <b>支持本项目（用于支付服务器费用或训练新模型等？）</b>
-</p>

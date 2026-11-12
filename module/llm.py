@@ -65,9 +65,9 @@ def analyze_exception(config, e):
     if error_hash in _analyzed_errors_cache:
         cached_result = _analyzed_errors_cache[error_hash]
         model = getattr(config, 'Error_LlmModel', 'gpt-4o-mini')
-        logger.hr('[LLM] LLM 错误分析（严禁提交此模块的相关日志 群内机器人检测到将自动移出群聊）', level=1)
-        logger.info('[LLM] 该错误已被 LLM 分析过，直接复用上次的分析结果以节省 API （严禁提交此模块的相关日志 群内机器人检测到将自动移出群聊） ...')
-        logger.info(f"[LLM] \n[LLM 分析报告 (由 {model} 提供, 复用缓存)（严禁提交此模块的相关日志 群内机器人检测到将自动移出群聊）]\n{cached_result}\n")
+        logger.hr('[LLM] LLM 错误分析（分享日志前请移除个人信息和凭据）', level=1)
+        logger.info('[LLM] 该错误已被 LLM 分析过，直接复用上次的分析结果以节省 API （分享日志前请移除个人信息和凭据） ...')
+        logger.info(f"[LLM] \n[LLM 分析报告 (由 {model} 提供, 复用缓存)（分享日志前请移除个人信息和凭据）]\n{cached_result}\n")
         logger.hr('[LLM] LLM 分析结束', level=1)
         return
 
@@ -80,12 +80,12 @@ def analyze_exception(config, e):
         logger.warning(LLM_CONFIG_WARNING)
         return
 
-    _analyzed_errors_cache[error_hash] = "该错误正在被 LLM 分析中，暂无结果。（严禁提交此模块的相关日志 群内机器人检测到将自动移出群聊）"
+    _analyzed_errors_cache[error_hash] = "该错误正在被 LLM 分析中，暂无结果。（分享日志前请移除个人信息和凭据）"
     if len(_analyzed_errors_cache) > 50:
         _analyzed_errors_cache.clear()
-        _analyzed_errors_cache[error_hash] = "该错误正在被 LLM 分析中，暂无结果。（严禁提交此模块的相关日志 群内机器人检测到将自动移出群聊）"
+        _analyzed_errors_cache[error_hash] = "该错误正在被 LLM 分析中，暂无结果。（分享日志前请移除个人信息和凭据）"
 
-    logger.hr('[LLM] LLM 错误分析（严禁提交此模块的相关日志 群内机器人检测到将自动移出群聊）', level=1)
+    logger.hr('[LLM] LLM 错误分析（分享日志前请移除个人信息和凭据）', level=1)
     logger.info('[LLM] 正在调用 LLM 分析异常原因...')
 
     try:
@@ -156,5 +156,5 @@ def analyze_exception(config, e):
     except Exception as ex:
         _analyzed_errors_cache.pop(error_hash, None)
         # 避免循环日志问题，LLM 本身失败时使用简化的错误日志
-        logger.error(f'[LLM] LLM 分析调用失败（严禁提交此模块的相关日志 群内机器人检测到将自动移出群聊）: {ex}')
+        logger.error(f'[LLM] LLM 分析调用失败（分享日志前请移除个人信息和凭据）: {ex}')
         logger.warning(LLM_CONFIG_WARNING)

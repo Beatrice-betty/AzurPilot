@@ -50,8 +50,6 @@ class Router:
         self._scheduler_programs = None
         self._opsi_simulator = None
         self._opsi_simulator_lock = threading.Lock()
-        self._stock_exchange = None
-        self._stock_exchange_lock = threading.Lock()
         self.access_password = ''
         self.background_token = secrets.token_urlsafe(32)
         self.methods = {
@@ -87,9 +85,6 @@ class Router:
             'mind.plan': Method(p.CultivationParams, lambda x: self.mind.plan(x.instance, x.revision, x.ship_ids, x.target_level)),
             'mind.import': Method(p.MindFileParams, lambda x: self.mind.import_file(x.instance, x.filename, x.content)),
             'mind.recognize': Method(p.MindFileParams, lambda x: self.mind.recognize(x.instance, x.filename, x.content)),
-            'stock.status': Method(p.InstanceParams, lambda x: self.stock_exchange.status(x.instance)),
-            'stock.rebuild': Method(p.StockRebuildParams, lambda x: self.stock_exchange.rebuild(x.instance, x.confirm, x.scope), True),
-            'stock.register': Method(p.StockRegisterParams, lambda x: self.stock_exchange.register(x.instance, x.username, x.noticeVersion), True),
             'scheduler.start': Method(p.InstanceParams, lambda x: runtime.start(x.instance), True),
             'scheduler.stop': Method(p.InstanceParams, lambda x: runtime.stop(x.instance), True),
             'scheduler.program.catalog': Method(p.InstanceParams, lambda x: self.programs.catalog(x.instance)),
@@ -167,18 +162,6 @@ class Router:
         """回收离线模拟线程，不触发游戏任务。"""
         if self._opsi_simulator is not None:
             self._opsi_simulator.manager.close()
-        if self._stock_exchange is not None:
-            self._stock_exchange.close()
-
-    @property
-    def stock_exchange(self):
-        """按需加载行动力同步服务，普通页面不会发起远端请求。"""
-        with self._stock_exchange_lock:
-            if self._stock_exchange is None:
-                from module.api.stock_exchange_service import StockExchangeService
-                self._stock_exchange = StockExchangeService(self.configs)
-                self._stock_exchange.start()
-            return self._stock_exchange
 
     @property
     def accounts(self):
@@ -335,10 +318,6 @@ class Router:
             if self._opsi_simulator is not None and self._opsi_simulator.manager.status(params.instance)['running']:
                 raise p.ApiError('SIMULATOR_RUNNING', '请先中断大世界模拟器再删除实例')
             result = self.configs.delete(params.instance, params.revision)
-            if self._stock_exchange is not None:
-                # 配置删除只撤销股票同步监视；身份检查留给茗交所自身。
-                with self._stock_exchange.lock:
-                    self._stock_exchange.monitors.discard(params.instance)
             if self._opsi_simulator is not None:
                 self._opsi_simulator.manager.discard(params.instance)
             from module.runtime.account_vault import OPERATIONS

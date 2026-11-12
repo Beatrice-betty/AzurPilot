@@ -42,7 +42,9 @@ def test_invalid_registry_and_corrupted_identity_fail_closed():
         with pytest.raises(ValueError):
             registry_url(url)
     assert registry_url('http://127.0.0.1:18882/') == 'http://127.0.0.1:18882'
-    assert registry_url('https://ap-remote.108-186-180-52.sslip.io:8443/') == 'https://remote.azurpilot.com'
+    for old in ('', 'https://ap-remote.108-186-180-52.sslip.io:8443/', 'https://remote.azurpilot.com'):
+        with pytest.raises(ValueError):
+            registry_url(old)
     with tempfile.TemporaryDirectory() as directory:
         store = RemoteIdentity(directory)
         store.load()

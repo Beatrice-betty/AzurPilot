@@ -13,7 +13,7 @@ from module.exception import ScriptError
 from module.server_checker import ServerChecker
 from module.server_status import GatewayServer, ServerStatusQueryError
 
-API_BASE = "https://api.azurpilot.com/api/v2/get/server"
+API_BASE = "https://status.example.invalid/api/v2/get/server"
 
 
 def make_response(status_code=200, payload=None, text=""):
@@ -43,6 +43,9 @@ class ServerCheckerTestCase(unittest.TestCase):
     """为每个测试提供不会访问网络的 requests.Session。"""
 
     def setUp(self):
+        endpoint = patch('module.server_checker.SERVER_API_BASE', 'https://status.example.invalid')
+        endpoint.start()
+        self.addCleanup(endpoint.stop)
         self.session = Mock()
         self.session.get.return_value = make_response(
             payload=make_server_payload(1, "测试服务器", "normal")
@@ -331,6 +334,18 @@ class TestServerApiTimeout(unittest.TestCase):
         self.assertLess(elapsed, 5)
         query.assert_called_once_with('cn', 1)
         retry.assert_not_called()
+
+
+class TestDirectGameGateway(ServerCheckerTestCase):
+    def test_default_uses_game_gateway_without_external_status_api(self):
+        with patch('module.server_checker.SERVER_API_BASE', ''), patch(
+            'module.server_checker.query_server',
+            return_value=GatewayServer(1, '莱茵演习', 0, 0, 1),
+        ) as query:
+            checker = self.build_checker('cn_android-0')
+        self.assertTrue(checker.is_available())
+        query.assert_called_once_with('cn', 1)
+        self.session.get.assert_not_called()
 
 
 if __name__ == "__main__":

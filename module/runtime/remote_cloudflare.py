@@ -20,7 +20,7 @@ from module.base import http
 from deploy.atomic import atomic_write
 from module.logger import logger
 
-DEFAULT_REGISTRY = 'https://remote.azurpilot.com'
+DEFAULT_REGISTRY = ''
 LEGACY_REGISTRY = 'https://ap-remote.108-186-180-52.sslip.io:8443'
 _store_lock = threading.RLock()
 _pyflared_import_lock = threading.RLock()
@@ -105,8 +105,8 @@ class RemoteIdentity:
 
 def registry_url(value):
     """要求注册 API 使用 HTTPS；回环地址例外用于隔离测试。"""
-    if value.rstrip('/') == LEGACY_REGISTRY:
-        value = DEFAULT_REGISTRY
+    if value.rstrip('/') in ('', LEGACY_REGISTRY, 'https://remote.azurpilot.com'):
+        raise ValueError('请填写自己管理的远程注册服务地址')
     parsed = urlsplit(value)
     if (not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment
             or (parsed.scheme != 'https' and not (

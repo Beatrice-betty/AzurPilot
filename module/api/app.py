@@ -63,9 +63,6 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
                 from module.persistence.database import initialize
                 await asyncio.to_thread(initialize, configs.directory)
                 await asyncio.to_thread(configs.migrate_schedules)
-            if ((root / 'cache' / 'stock-exchange').exists()
-                    or (root / 'config' / 'stock-exchange' / 'stocks-v2.json').is_file()):
-                gateway.router.stock_exchange.start()
             if manage_runtime:
                 from module.api.lifecycle import startup
                 from module.runtime.deploy_settings import parse_run_config
@@ -119,7 +116,7 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
 
     ROBOTS_TXT_CONTENT = (
         '# AzurPilot WebUI - Private Control Console\n'
-        '# Official Website: https://azurpilot.com/\n\n'
+        '# Official Website: https://github.com/Beatrice-betty/AzurPilot\n\n'
         'User-agent: *\n'
         'Disallow: /\n'
     )

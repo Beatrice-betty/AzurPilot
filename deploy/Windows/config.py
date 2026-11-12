@@ -1,27 +1,18 @@
 import os
-import random
 import subprocess
 import sys
 from typing import Optional, Union
 
-from deploy.geo import get_country_code
 from deploy.config_transaction import DeployConfigTransaction
 from deploy.Windows.logger import logger
 from deploy.Windows.utils import DEPLOY_CONFIG, DEPLOY_TEMPLATE, cached_property, poor_yaml_read
 
 
 GIT_OVER_CDN_REPOSITORY = 'git://git.pull/AzurPilot'
-GITHUB_REPOSITORY = 'https://github.com/wess09/AzurPilot'
-GIT_OVER_CDN_FALLBACK_REPOSITORIES = [
-    'https://cnb.cool/AzurPilot/AzurPilot',
-    'https://gitcode.com/ddl2/AzurPilot',
-]
-GIT_OVER_CDN_FALLBACK_REPOSITORY = GIT_OVER_CDN_FALLBACK_REPOSITORIES[1]
-
-
-def choose_fallback_repository() -> str:
-    """在可用的国内镜像源（CNB 与 GitCode）之间分流，避免单一镜像源流量过大引发风控。"""
-    return random.choice(GIT_OVER_CDN_FALLBACK_REPOSITORIES)
+GITHUB_REPOSITORY = 'https://github.com/Beatrice-betty/AzurPilot'
+GITCODE_REPOSITORY = 'https://gitcode.com/Beatrice-betty/AzurPilot'
+GIT_OVER_CDN_FALLBACK_REPOSITORIES = [GITHUB_REPOSITORY, GITCODE_REPOSITORY]
+GIT_OVER_CDN_FALLBACK_REPOSITORY = GITCODE_REPOSITORY
 
 
 class ExecutionError(Exception):
@@ -35,11 +26,11 @@ class ExecutionError(Exception):
 class ConfigModel:
     """Windows 部署配置模型，定义所有配置项及其默认值。"""
     # Git 配置
-    Repository: str = GITHUB_REPOSITORY
-    Branch: str = "master"
+    Repository: str = GITCODE_REPOSITORY
+    Branch: str = "dev"
     GitExecutable: str = "./.venv/Scripts/git/cmd/git.exe"
     GitProxy: Optional[str] = None
-    SSLVerify: bool = False
+    SSLVerify: bool = True
 
     # Python 配置
     PythonExecutable: str = "./.venv/Scripts/python.exe"
@@ -69,7 +60,7 @@ class ConfigModel:
     # 远程访问
     EnableRemoteAccess: bool = False
     RemoteAccessMode: str = "auto"
-    CloudflareRegistry: str = "https://remote.azurpilot.com"
+    CloudflareRegistry: str = ""
     CloudflareDeviceId: str = ""
     SSHUser: Optional[str] = None
     SSHServer: Optional[str] = None
@@ -113,11 +104,6 @@ class DeployConfig(DeployConfigTransaction, ConfigModel):
         self.template_file = DEPLOY_TEMPLATE
         self.config = {}
         self.config_template = {}
-        self._github_location_checked = False
-        # 网络查询不持有配置文件锁，避免多个进程启动时串行等待网络。
-        values = {**poor_yaml_read(self.template_file), **poor_yaml_read(self.file)}
-        self._github_country_code = (get_country_code()
-                                     if values.get('Repository') == GITHUB_REPOSITORY else None)
         self.read()
 
         self.show_config()
@@ -140,33 +126,23 @@ class DeployConfig(DeployConfigTransaction, ConfigModel):
         每次 `read()` 之后必须调用。
         """
         self.config.pop('AutoUpdate', None)
-        self._redirect_github_repository()
-        # 绕过 webui.config.DeployConfig.__setattr__()，不写入 deploy.yaml
-        super().__setattr__('GitOverCdn', self.Repository in ['cn', GIT_OVER_CDN_REPOSITORY])
-        if self.Repository in ['global']:
-            super().__setattr__('Repository', 'https://github.com/wess09/AzurPilot')
-        if self.Repository in ['cn', GIT_OVER_CDN_REPOSITORY]:
-            super().__setattr__('Repository', choose_fallback_repository())
-        if self.Repository in ['cnb']:
-            super().__setattr__('Repository', GIT_OVER_CDN_FALLBACK_REPOSITORIES[0])
-        if self.Repository in ['gitcode']:
-            super().__setattr__('Repository', GIT_OVER_CDN_FALLBACK_REPOSITORIES[1])
-
-    def _redirect_github_repository(self):
-        """为官方 GitHub 源一次性选择适合当前网络的更新镜像。"""
-        if self._github_location_checked or self.Repository != GITHUB_REPOSITORY:
-            return
-
-        self._github_location_checked = True
-        country_code = self._github_country_code
-        if country_code == 'cn':
-            logger.info('检测到中国大陆网络，切换至国内 Git 更新源')
-            object.__setattr__(self, 'Repository', GIT_OVER_CDN_REPOSITORY)
-            self.config['Repository'] = GIT_OVER_CDN_REPOSITORY
-        elif country_code is None:
-            logger.warning('无法检测网络所在国家，保留 GitHub 更新源')
-        else:
-            logger.info('当前网络不在中国大陆，保留 GitHub 更新源')
+        repository = str(self.Repository).strip().rstrip('/').removesuffix('.git')
+        if repository in ('cn', 'cnb', 'gitcode', GIT_OVER_CDN_REPOSITORY,
+                          'https://github.com/wess09/AzurPilot', 'https://cnb.cool/AzurPilot/AzurPilot',
+                          'https://gitcode.com/ddl2/AzurPilot', 'https://git.nanoda.work/git/AzurPilot',
+                          'https://git.nanoda.work/git/AzurLaneAutoScript', 'https://git.nanoda.work'):
+            object.__setattr__(self, 'Repository', GITCODE_REPOSITORY)
+            self.config['Repository'] = GITCODE_REPOSITORY
+        elif repository == 'global':
+            object.__setattr__(self, 'Repository', GITHUB_REPOSITORY)
+        object.__setattr__(self, 'GitOverCdn', False)
+        if (self.CloudflareRegistry or '').rstrip('/') in (
+                'https://remote.azurpilot.com', 'https://ap-remote.108-186-180-52.sslip.io:8443'):
+            object.__setattr__(self, 'CloudflareRegistry', '')
+            self.config['CloudflareRegistry'] = ''
+        if self.SSHServer == 'remote.nanoda.work:1022':
+            object.__setattr__(self, 'SSHServer', None)
+            self.config['SSHServer'] = None
 
     def filepath(self, path):
         """获取绝对文件路径。
