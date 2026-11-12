@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import socket
+import sqlite3
 import stat
 import subprocess
 import sys
@@ -16,14 +17,17 @@ import tempfile
 import time
 import urllib.request
 import zipfile
+from contextlib import closing
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 
+GITCODE_REPOSITORY = 'https://gitcode.com/Beatrice-betty/AzurPilot.git'
+RELEASE_BRANCH = 'refs/heads/independent-windows'
+MAX_FRONTEND_SIZE = 40 * 1024 * 1024
 SOURCES = (
-    ('https://raw.gitcode.com/Beatrice-betty/AzurPilot/raw/independent-windows/',
-     'https://gitcode.com/Beatrice-betty/AzurPilot.git'),
+    ('https://raw.gitcode.com/Beatrice-betty/AzurPilot/raw/independent-windows/', GITCODE_REPOSITORY),
     ('https://raw.githubusercontent.com/Beatrice-betty/AzurPilot/independent-windows/',
      'https://github.com/Beatrice-betty/AzurPilot.git'),
 )
@@ -149,7 +153,10 @@ def check(root=None):
     valid = False
     for source, repository in SOURCES:
         try:
-            document = json.loads(fetch(source + 'release.json', 64 * 1024))
+            manifest = source + 'release.json'
+            if repository == GITCODE_REPOSITORY:
+                manifest += '?download=1'
+            document = json.loads(fetch(manifest, 64 * 1024))
             candidate = verify_manifest(document, current['publicKey'])
             valid = True
             if candidate['sequence'] > current['sequence'] and candidate['revision'] != current['revision']:
@@ -161,7 +168,7 @@ def check(root=None):
     return None
 
 
-def git(root, cwd, *args):
+def git(root, cwd, *args, stdout=subprocess.DEVNULL):
     env = {key: value for key, value in os.environ.items() if not key.startswith('GIT_')}
     env.update(GIT_TERMINAL_PROMPT='0', GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull)
     subprocess.run(
@@ -169,7 +176,7 @@ def git(root, cwd, *args):
          '-c', 'credential.helper=', '-c', 'http.lowSpeedLimit=1024', '-c', 'http.lowSpeedTime=20',
          '-c', 'http.userAgent=Mozilla/5.0 AzurPilotIndependent', *args],
         cwd=cwd, check=True, timeout=210, env=env, creationflags=CREATE_FLAGS,
-        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+        stdout=stdout, stderr=subprocess.PIPE,
     )
 
 
@@ -215,6 +222,22 @@ def probe(root, staged):
         child.wait(timeout=5)
 
 
+def fetch_frontend(root, base, repository, temporary, frontend):
+    if repository != GITCODE_REPOSITORY:
+        frontend.write_bytes(fetch(base + 'frontend.zip', MAX_FRONTEND_SIZE))
+        return
+
+    # GitCode 的 raw 预览不提供 ZIP，直接读发布分支里的 Git 文件。
+    release = temporary / 'release'
+    release.mkdir()
+    git(root, release, 'init', '-q')
+    git(root, release, 'fetch', '--depth=1', '--no-tags', repository, RELEASE_BRANCH)
+    with frontend.open('wb') as stream:
+        git(root, release, 'show', 'FETCH_HEAD:frontend.zip', stdout=stream)
+    if frontend.stat().st_size > MAX_FRONTEND_SIZE:
+        raise ValueError('网页包超过预期大小')
+
+
 def prepare(offer, root=None):
     root = Path(root or Path.cwd()).resolve()
     candidate, source, repository = offer
@@ -228,7 +251,7 @@ def prepare(offer, root=None):
             with tempfile.TemporaryDirectory(prefix='download-', dir=directory) as temp:
                 temp = Path(temp)
                 frontend = temp / 'frontend.zip'
-                frontend.write_bytes(fetch(base + 'frontend.zip', 40 * 1024 * 1024))
+                fetch_frontend(root, base, repo, temp, frontend)
                 if digest(frontend) != candidate['frontendSha256']:
                     raise ValueError('网页包校验不符')
                 checkout = temp / 'git'
@@ -279,6 +302,21 @@ def _transaction(root):
     return directory / 'transaction.json'
 
 
+def backup_config(config, destination):
+    database = config / 'azurpilot.db'
+    sidecars = {'azurpilot.db', 'azurpilot.db-wal', 'azurpilot.db-shm', 'azurpilot.db-journal'}
+
+    def ignore_database(directory, names):
+        return sidecars.intersection(names) if Path(directory) == config and database.is_file() else ()
+
+    shutil.copytree(config, destination, ignore=ignore_database)
+    if database.is_file():
+        # 存储服务可能还在提交 WAL，使用 SQLite 的一致快照作为回退副本。
+        with closing(sqlite3.connect(database.as_uri() + '?mode=ro', uri=True)) as source:
+            with closing(sqlite3.connect(destination / database.name)) as backup:
+                source.backup(backup)
+
+
 def apply(ready, root=None):
     root = Path(root or Path.cwd()).resolve()
     journal = _transaction(root)
@@ -299,7 +337,7 @@ def apply(ready, root=None):
             if any((Path(dirpath) / name).is_symlink() or (Path(dirpath) / name).is_junction()
                    for name in (*names, *files)):
                 raise ValueError('配置包含链接，当前安装保留原状')
-        shutil.copytree(config, backup / 'config')
+        backup_config(config, backup / 'config')
     for name in changed:
         target = root / name
         if target.is_file():
@@ -360,14 +398,19 @@ def recover(root=None):
     for name in (RECEIPT, FILES):
         restore_file(backup / name, root / name)
     journal.unlink()
+    shutil.rmtree(backup.parent / 'app', ignore_errors=True)
     return True
 
 
 def confirm(root=None):
     root = Path(root or Path.cwd()).resolve()
     journal = _transaction(root)
-    if journal.is_file() and read_json(journal)['phase'] == 'trial':
-        journal.unlink()
+    if journal.is_file():
+        record = read_json(journal)
+        if record['phase'] == 'trial':
+            backup = _previous(root, record)
+            journal.unlink()
+            shutil.rmtree(backup.parent / 'app', ignore_errors=True)
 
 
 def trial_pending(root=None):

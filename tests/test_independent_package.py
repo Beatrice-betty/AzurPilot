@@ -1,6 +1,7 @@
 """离线验证独立更新的验签、选源和文件恢复。"""
 
 import base64
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -42,7 +43,23 @@ class TestIndependentPackage(unittest.TestCase):
                 offer = independent.check(self.root)
                 self.assertEqual('2' * 40, offer[0]['revision'])
                 self.assertEqual(independent.SOURCES[1][0], offer[1])
-                self.assertEqual(independent.SOURCES[0][0] + 'release.json', fetch.call_args_list[0].args[0])
+                manifest = independent.SOURCES[0][0] + 'release.json?download=1'
+                self.assertEqual(manifest, fetch.call_args_list[0].args[0])
+
+    def test_gitcode_frontend_uses_git_instead_of_raw_preview(self):
+        base, repo = independent.SOURCES[0]
+        zip_path = self.root / 'frontend.zip'
+
+        def git(_root, _cwd, *args, stdout=None):
+            if args == ('show', 'FETCH_HEAD:frontend.zip'):
+                stdout.write(b'frontend archive')
+
+        with patch.object(independent, 'git', side_effect=git) as runner, patch.object(independent, 'fetch') as raw:
+            independent.fetch_frontend(self.root, base, repo, self.root, zip_path)
+        self.assertEqual(b'frontend archive', zip_path.read_bytes())
+        self.assertEqual(('fetch', '--depth=1', '--no-tags', repo, independent.RELEASE_BRANCH),
+                         runner.call_args_list[1].args[2:])
+        raw.assert_not_called()
 
     def test_unavailable_release_keeps_installed_receipt(self):
         with patch.object(independent, 'fetch', side_effect=TimeoutError):
@@ -80,6 +97,25 @@ class TestIndependentPackage(unittest.TestCase):
         self.assertEqual('new data', (ready / 'config-after-failed-update/player.json').read_text())
         self.assertFalse((self.root / 'assets/new.txt').exists())
         self.assertEqual(self.current, independent.read_json(self.root / independent.RECEIPT))
+
+    def test_commit_clears_staged_app_and_retains_consistent_database_backup(self):
+        ready = self.ready()
+        database = self.root / 'config/azurpilot.db'
+        writer = sqlite3.connect(database)
+        self.addCleanup(writer.close)
+        writer.execute('PRAGMA journal_mode=WAL')
+        writer.execute('CREATE TABLE history (value TEXT)')
+        writer.execute('INSERT INTO history VALUES (?)', ('saved',))
+        writer.commit()
+        independent.apply(ready, self.root)
+        independent.confirm(self.root)
+        self.assertFalse(independent.trial_pending(self.root))
+        self.assertFalse((ready / 'app').exists())
+        backup = sqlite3.connect(ready / 'previous/config/azurpilot.db')
+        try:
+            self.assertEqual([('saved',)], backup.execute('SELECT value FROM history').fetchall())
+        finally:
+            backup.close()
 
     def test_local_edit_refuses_replacement(self):
         ready = self.ready()
