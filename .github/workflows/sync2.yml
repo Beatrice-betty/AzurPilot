@@ -1,19 +1,26 @@
 name: sync2mirror
+
 on:
   push:
-    branches:
-      - master
-      - dev
-      - dev_frontend
+    branches: [master, dev, dev_frontend, independent-windows]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 要从 GitHub 覆盖同步的分支
+        type: choice
+        options: [dev, master, dev_frontend, independent-windows]
+        default: dev
+
+permissions:
+  contents: read
+
 jobs:
   repo-sync:
-    env:
-      gitcode_token: ${{ secrets.GITCODE_TOKEN }}
-      gitcode_user: ${{ secrets.GITCODE_USER }}
-      gitcode_repo: ${{ secrets.GITCODE_REPO_NAME }}
+    if: github.repository == 'Beatrice-betty/AzurPilot'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     concurrency:
-      group: gitcode-sync-${{ github.ref }}
+      group: gitcode-sync-${{ github.event.inputs.branch || github.ref_name }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
@@ -21,37 +28,45 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - name: Mask sensitive values
-        env:
-          MASK_OWNER: ${{ github.repository_owner }}
-          MASK_REPO: ${{ github.event.repository.name }}
-          MASK_TARGET: ${{ secrets.GITCODE_REPO_NAME }}
-        run: |
-          echo "::add-mask::${MASK_OWNER}"
-          echo "::add-mask::${MASK_REPO}"
-          echo "::add-mask::${MASK_TARGET}"
-
       - name: sync
-        if: env.gitcode_token && env.gitcode_user && env.gitcode_repo
+        env:
+          MIRROR_BRANCH: ${{ github.event.inputs.branch || github.ref_name }}
+          GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+          GIT_TERMINAL_PROMPT: "0"
         run: |
-          # 直接同步源提交，GitHub、GitCode 与 CDN 使用相同 SHA。
-          git remote remove upstream-mirror 2>/dev/null || true
-          git remote add upstream-mirror "https://${GITCODE_USER}:${GITCODE_TOKEN}@gitcode.com/${GITCODE_USER}/${REPO_NAME}.git"
-          # GitCode 会对默认 Git UA 返回 418，与本地更新器采用相同的 UA 重试方式。
+          if [ -z "$GITCODE_TOKEN" ]; then
+            echo "::error::请配置 GitCode 仓库写入凭据 GITCODE_TOKEN"
+            exit 1
+          fi
+          case "$MIRROR_BRANCH" in
+            master|dev|dev_frontend|independent-windows) ;;
+            *) exit 1 ;;
+          esac
+          # 旧的排队任务也读取 GitHub 最新分支，避免把 GitCode 推回旧提交。
+          branch_ref="refs/heads/$MIRROR_BRANCH"
+          git fetch --no-tags origin "$branch_ref"
+          revision="$(git rev-parse --verify FETCH_HEAD)"
+          mirror=https://Beatrice-betty@gitcode.com/Beatrice-betty/AzurPilot.git
+          askpass="$(mktemp)"
+          trap 'rm -f "$askpass"' EXIT
+          cat > "$askpass" <<'ASKPASS'
+          #!/bin/sh
+          printf '%s\n' "$GITCODE_TOKEN"
+          ASKPASS
+          chmod 700 "$askpass"
+          export GIT_ASKPASS="$askpass"
           for attempt in 1 2 3 4 5; do
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$((120 + RANDOM % 20)).0.$RANDOM.0 Safari/537.36"
-            if git -c "http.userAgent=$user_agent" push --force --progress upstream-mirror "HEAD:refs/heads/${GITHUB_REF_NAME}"; then
+            if git -c credential.helper= -c "http.userAgent=$user_agent" push "$mirror" "+$revision:$branch_ref" &&
+              remote="$(git -c credential.helper= -c "http.userAgent=$user_agent" ls-remote --exit-code "$mirror" "$branch_ref")" &&
+              [ "${remote%%[[:space:]]*}" = "$revision" ]; then
+              echo "GitCode 分支已核对，提交 $revision"
               exit 0
-            else
-              status=$?
             fi
-            if [ "$attempt" -eq 5 ]; then
-              exit "$status"
+            if [ "$attempt" -lt 5 ]; then
+              echo "GitCode 同步或提交核对失败，准备第 $((attempt + 1))/5 次尝试"
+              sleep "$((attempt * 2))"
             fi
-            echo "GitCode 推送失败，准备第 $((attempt + 1))/5 次尝试"
-            sleep "$((attempt * 2))"
           done
-        env:
-          GITCODE_USER: ${{ secrets.GITCODE_USER }}
-          GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
-          REPO_NAME: ${{ secrets.GITCODE_REPO_NAME }}
+          echo "::error::GitCode 分支未同步到 GitHub 的指定提交"
+          exit 1
