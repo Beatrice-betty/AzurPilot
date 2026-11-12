@@ -24,13 +24,12 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 
 GITCODE_REPOSITORY = 'https://gitcode.com/Beatrice-betty/AzurPilot.git'
+GITHUB_REPOSITORY = 'https://github.com/Beatrice-betty/AzurPilot.git'
+GITHUB_RELEASE = 'https://raw.githubusercontent.com/Beatrice-betty/AzurPilot/independent-windows/'
+SOURCES = (GITCODE_REPOSITORY, GITHUB_REPOSITORY)
 RELEASE_BRANCH = 'refs/heads/independent-windows'
+MAX_MANIFEST_SIZE = 64 * 1024
 MAX_FRONTEND_SIZE = 40 * 1024 * 1024
-SOURCES = (
-    ('https://raw.gitcode.com/Beatrice-betty/AzurPilot/raw/independent-windows/', GITCODE_REPOSITORY),
-    ('https://raw.githubusercontent.com/Beatrice-betty/AzurPilot/independent-windows/',
-     'https://github.com/Beatrice-betty/AzurPilot.git'),
-)
 APP_DIRS = ('assets', 'bin', 'campaign', 'deploy', 'module', 'submodule', 'licenses')
 APP_FILES = ('alas.py', 'gui.py', 'mcp_server_sse.py', 'tui.py', 'pyproject.toml', 'uv.lock', 'LICENSE')
 RECEIPT = Path('.azurpilot/independent.json')
@@ -151,16 +150,19 @@ def check(root=None):
     current = read_json(root / RECEIPT)
     error = None
     valid = False
-    for source, repository in SOURCES:
+    for repository in SOURCES:
         try:
-            manifest = source + 'release.json'
+            revision = None
             if repository == GITCODE_REPOSITORY:
-                manifest += '?download=1'
-            document = json.loads(fetch(manifest, 64 * 1024))
-            candidate = verify_manifest(document, current['publicKey'])
+                checkout = gitcode_checkout(root)
+                revision = fetch_gitcode_release(root, checkout)
+                manifest = gitcode_release_file(root, checkout, revision, 'release.json', MAX_MANIFEST_SIZE)
+            else:
+                manifest = fetch(GITHUB_RELEASE + 'release.json', MAX_MANIFEST_SIZE)
+            candidate = verify_manifest(json.loads(manifest), current['publicKey'])
             valid = True
             if candidate['sequence'] > current['sequence'] and candidate['revision'] != current['revision']:
-                return candidate, source, repository
+                return candidate, revision, repository
         except Exception as exc:
             error = exc
     if not valid:
@@ -168,14 +170,14 @@ def check(root=None):
     return None
 
 
-def git(root, cwd, *args, stdout=subprocess.DEVNULL):
+def git(root, cwd, *args, stdout=subprocess.DEVNULL, timeout=210):
     env = {key: value for key, value in os.environ.items() if not key.startswith('GIT_')}
     env.update(GIT_TERMINAL_PROMPT='0', GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull)
-    subprocess.run(
+    return subprocess.run(
         [str(root / 'runtime/git/cmd/git.exe'), '-c', 'http.sslVerify=true',
          '-c', 'credential.helper=', '-c', 'http.lowSpeedLimit=1024', '-c', 'http.lowSpeedTime=20',
          '-c', 'http.userAgent=Mozilla/5.0 AzurPilotIndependent', *args],
-        cwd=cwd, check=True, timeout=210, env=env, creationflags=CREATE_FLAGS,
+        cwd=cwd, check=True, timeout=timeout, env=env, creationflags=CREATE_FLAGS,
         stdout=stdout, stderr=subprocess.PIPE,
     )
 
@@ -222,36 +224,59 @@ def probe(root, staged):
         child.wait(timeout=5)
 
 
-def fetch_frontend(root, base, repository, temporary, frontend):
-    if repository != GITCODE_REPOSITORY:
-        frontend.write_bytes(fetch(base + 'frontend.zip', MAX_FRONTEND_SIZE))
-        return
+def gitcode_checkout(root):
+    # 缓存发布分支的 Git 对象，重复检查时可以复用已经下载的网页包。
+    checkout = _transaction(root).parent / 'gitcode-release'
+    checkout.mkdir(parents=True, exist_ok=True)
+    if checkout.resolve() != checkout:
+        raise ValueError('GitCode 发布缓存不能是链接')
+    if not (checkout / '.git').is_dir():
+        git(root, checkout, 'init', '-q')
+    return checkout
 
-    # GitCode 的 raw 预览不提供 ZIP，直接读发布分支里的 Git 文件。
-    release = temporary / 'release'
-    release.mkdir()
-    git(root, release, 'init', '-q')
-    git(root, release, 'fetch', '--depth=1', '--no-tags', repository, RELEASE_BRANCH)
-    with frontend.open('wb') as stream:
-        git(root, release, 'show', 'FETCH_HEAD:frontend.zip', stdout=stream)
-    if frontend.stat().st_size > MAX_FRONTEND_SIZE:
-        raise ValueError('网页包超过预期大小')
+
+def fetch_gitcode_release(root, checkout):
+    git(root, checkout, 'fetch', '--depth=1', '--no-tags', GITCODE_REPOSITORY, RELEASE_BRANCH, timeout=25)
+    revision = git(root, checkout, 'rev-parse', '--verify', 'FETCH_HEAD', stdout=subprocess.PIPE).stdout
+    revision = revision.decode('ascii').strip()
+    if not re.fullmatch('[0-9a-f]{40}', revision):
+        raise ValueError('GitCode 发布提交无效')
+    return revision
+
+
+def gitcode_release_file(root, checkout, revision, name, limit):
+    object_name = f'{revision}:{name}'
+    size = int(git(root, checkout, 'cat-file', '-s', object_name, stdout=subprocess.PIPE).stdout)
+    if not 0 < size <= limit:
+        raise ValueError('发布文件超过预期大小')
+    return git(root, checkout, 'show', object_name, stdout=subprocess.PIPE).stdout
+
+
+def fetch_frontend(root, repository, revision, frontend):
+    if repository == GITCODE_REPOSITORY:
+        checkout = gitcode_checkout(root)
+        revision = revision or fetch_gitcode_release(root, checkout)
+        data = gitcode_release_file(root, checkout, revision, 'frontend.zip', MAX_FRONTEND_SIZE)
+    else:
+        data = fetch(GITHUB_RELEASE + 'frontend.zip', MAX_FRONTEND_SIZE)
+    frontend.write_bytes(data)
 
 
 def prepare(offer, root=None):
     root = Path(root or Path.cwd()).resolve()
-    candidate, source, repository = offer
+    candidate, revision, repository = offer
     current = read_json(root / RECEIPT)
     if candidate['dependencies'] != current['dependencies'] or dependency_id(root) != current['dependencies']:
         raise RuntimeError('这个版本需要新的完整安装包，当前版本可以继续运行')
     directory = root / WORK
     directory.mkdir(parents=True, exist_ok=True)
-    for base, repo in ((source, repository), *(pair for pair in SOURCES if pair[0] != source)):
+    attempts = ((repository, revision), *((repo, None) for repo in SOURCES if repo != repository))
+    for repo, release_revision in attempts:
         try:
             with tempfile.TemporaryDirectory(prefix='download-', dir=directory) as temp:
                 temp = Path(temp)
                 frontend = temp / 'frontend.zip'
-                fetch_frontend(root, base, repo, temp, frontend)
+                fetch_frontend(root, repo, release_revision, frontend)
                 if digest(frontend) != candidate['frontendSha256']:
                     raise ValueError('网页包校验不符')
                 checkout = temp / 'git'

@@ -37,32 +37,44 @@ class TestIndependentPackage(unittest.TestCase):
         for first in (self.signed(self.key, revision='0', sequence=9),
                       self.signed(Ed25519PrivateKey.generate(), revision='9', sequence=50)):
             with self.subTest(first=first), patch.object(
-                independent, 'fetch',
-                side_effect=[first, self.signed(self.key, revision='2', sequence=11)],
+                independent, 'gitcode_checkout', return_value=self.root,
+            ), patch.object(
+                independent, 'fetch_gitcode_release', return_value='a' * 40,
+            ), patch.object(
+                independent, 'gitcode_release_file', return_value=first,
+            ), patch.object(
+                independent, 'fetch', return_value=self.signed(self.key, revision='2', sequence=11),
             ) as fetch:
                 offer = independent.check(self.root)
                 self.assertEqual('2' * 40, offer[0]['revision'])
-                self.assertEqual(independent.SOURCES[1][0], offer[1])
-                manifest = independent.SOURCES[0][0] + 'release.json?download=1'
-                self.assertEqual(manifest, fetch.call_args_list[0].args[0])
+                self.assertEqual(independent.GITHUB_REPOSITORY, offer[2])
+                fetch.assert_called_once_with(
+                    independent.GITHUB_RELEASE + 'release.json', independent.MAX_MANIFEST_SIZE,
+                )
 
-    def test_gitcode_frontend_uses_git_instead_of_raw_preview(self):
-        base, repo = independent.SOURCES[0]
+    def test_gitcode_frontend_uses_same_release_commit_as_manifest(self):
+        revision = 'a' * 40
+        manifest = self.signed(self.key, revision='2', sequence=11)
         zip_path = self.root / 'frontend.zip'
-
-        def git(_root, _cwd, *args, stdout=None):
-            if args == ('show', 'FETCH_HEAD:frontend.zip'):
-                stdout.write(b'frontend archive')
-
-        with patch.object(independent, 'git', side_effect=git) as runner, patch.object(independent, 'fetch') as raw:
-            independent.fetch_frontend(self.root, base, repo, self.root, zip_path)
+        with patch.object(independent, 'gitcode_checkout', return_value=self.root), patch.object(
+            independent, 'fetch_gitcode_release', return_value=revision,
+        ) as fetch_git, patch.object(
+            independent, 'gitcode_release_file', side_effect=[manifest, b'frontend archive'],
+        ) as read_git, patch.object(independent, 'fetch') as raw:
+            _, reference, repository = independent.check(self.root)
+            independent.fetch_frontend(self.root, repository, reference, zip_path)
         self.assertEqual(b'frontend archive', zip_path.read_bytes())
-        self.assertEqual(('fetch', '--depth=1', '--no-tags', repo, independent.RELEASE_BRANCH),
-                         runner.call_args_list[1].args[2:])
+        fetch_git.assert_called_once_with(self.root, self.root)
+        self.assertEqual(
+            [call.args[2:4] for call in read_git.call_args_list],
+            [(revision, 'release.json'), (revision, 'frontend.zip')],
+        )
         raw.assert_not_called()
 
     def test_unavailable_release_keeps_installed_receipt(self):
-        with patch.object(independent, 'fetch', side_effect=TimeoutError):
+        with patch.object(independent, 'gitcode_checkout', side_effect=TimeoutError), patch.object(
+            independent, 'fetch', side_effect=TimeoutError,
+        ):
             with self.assertRaisesRegex(RuntimeError, '当前版本'):
                 independent.check(self.root)
         self.assertEqual(self.current, independent.read_json(self.root / independent.RECEIPT))
