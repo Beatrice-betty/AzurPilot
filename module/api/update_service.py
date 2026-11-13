@@ -137,7 +137,10 @@ class UpdateService:
         if independent.enabled():
             current = independent.read_json(self.root / independent.RECEIPT)['revision']
             offer = self.updater.independent_offer
-            return current, offer[0]['revision'] if offer else current
+            upstream = offer.release['revision'] if offer else (
+                None if self.updater.independent_error else current
+            )
+            return current, upstream
         local = self.git('rev-parse', '--verify', 'HEAD', optional=True)
         upstream = self.git('rev-parse', '--verify', f'refs/remotes/origin/{self.updater.Branch}', optional=True)
         return local, upstream
@@ -207,18 +210,31 @@ class UpdateService:
                     'localHead': local, 'upstreamHead': local}
         local, upstream = self.heads()
         from deploy import independent
-        if independent.enabled():
-            return {'entries': [], 'total': 0, 'hasMore': False, 'localHead': local, 'upstreamHead': upstream}
         refs = list(dict.fromkeys(ref for ref in (local, upstream) if ref))
+        read_git = self.git
+        if independent.enabled() and refs:
+            try:
+                cache, refs = independent.history_refs(self.root, refs)
+            except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
+                raise ApiError('UPDATE_FAILED', '提交记录暂不可用，请检查更新源或网络后重试') from exc
+
+            def read_git(*args):
+                try:
+                    result = independent.git(self.root.resolve(), cache, '--no-lazy-fetch', *args,
+                                             stdout=subprocess.PIPE, timeout=5)
+                except (OSError, subprocess.SubprocessError) as exc:
+                    raise ApiError('UPDATE_FAILED', '无法读取提交记录') from exc
+                return result.stdout.decode('utf-8', errors='replace').strip()
+
         entries = []
         if refs:
-            raw = self.git('log', '--topo-order', f'--skip={offset}', f'--max-count={limit + 1}',
+            raw = read_git('log', '--topo-order', f'--skip={offset}', f'--max-count={limit + 1}',
                            '--format=%H%x00%an%x00%aI%x00%B%x00', *refs, '--')
             fields = raw.split('\x00')
             for index in range(0, len(fields) - 3, 4):
                 sha, author, date, message = fields[index:index + 4]
                 entries.append({'sha': sha.strip(), 'author': author, 'date': date, 'message': message.strip()})
-        total = int(self.git('rev-list', '--count', *refs, '--')) if refs else 0
+        total = int(read_git('rev-list', '--count', *refs, '--')) if refs else 0
         return {'entries': entries[:limit], 'total': total, 'hasMore': len(entries) > limit,
                 'localHead': local or None, 'upstreamHead': upstream or None}
 

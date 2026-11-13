@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from deploy import independent
 from module.api.protocol import ApiError, CommitsParams
 from module.api.router import Router
 from module.api.update_service import UpdateService
@@ -48,6 +49,42 @@ class UpdateServiceTest(unittest.TestCase):
         self.assertFalse(second['hasMore'])
         self.assertIn('保留完整正文与 --- 分隔符。', first['entries'][0]['message'])
         self.assertEqual(second['entries'][0]['sha'], self.base)
+
+    def test_independent_history_paginates_without_installation_git(self):
+        install = self.root / 'installed'
+        install.mkdir()
+        independent.write_json(install / independent.RECEIPT, {'revision': self.base})
+        self.updater.independent_offer = independent.GitOffer(
+            {'revision': self.remote}, independent.GITCODE_REPOSITORY, 'dev',
+        )
+        self.updater.independent_error = ''
+        service = UpdateService(install, self.updater)
+
+        def read_cache(_root, cwd, *args, **kwargs):
+            return subprocess.run(['git', *args], cwd=cwd, check=True, **kwargs)
+
+        with patch.dict(os.environ, {'AZURPILOT_INDEPENDENT': '1'}), patch.object(
+            independent, 'history_refs', return_value=(self.root, [self.base, self.remote]),
+        ) as cached, patch.object(independent, 'git', side_effect=read_cache):
+            first = service.commits(0, 1)
+            second = service.commits(1, 1)
+        cached.assert_called_with(install, [self.base, self.remote])
+        self.assertFalse((install / '.git').exists())
+        self.assertEqual((first['localHead'], first['upstreamHead']), (self.base, self.remote))
+        self.assertEqual(first['total'], 2)
+        self.assertTrue(first['hasMore'])
+        self.assertEqual(first['entries'][0]['sha'], self.remote)
+        self.assertEqual(second['entries'][0]['sha'], self.base)
+
+    def test_independent_failed_check_retains_local_head_without_claiming_latest(self):
+        independent.write_json(self.root / independent.RECEIPT, {'revision': self.base})
+        self.updater.independent_offer = None
+        self.updater.independent_error = '无法连接更新源'
+        with patch.dict(os.environ, {'AZURPILOT_INDEPENDENT': '1'}):
+            status = self.service.status()
+        self.assertEqual(status['localHead'], self.base)
+        self.assertIsNone(status['upstreamHead'])
+        self.assertFalse(status['canApply'])
 
     def test_diverged_history_reports_mismatch_and_allows_confirmed_apply(self):
         """本地与上游历史互不包含时报告 SHA 不匹配；更新改由前端弹窗确认放行。"""

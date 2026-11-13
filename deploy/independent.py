@@ -14,6 +14,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.request
 import zipfile
@@ -38,6 +39,7 @@ RECEIPT = Path('.azurpilot/independent.json')
 FILES = Path('.azurpilot/independent-files.json')
 WORK = Path('.azurpilot/independent-update')
 CREATE_FLAGS = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+_history_lock = threading.Lock()
 
 
 class GitOffer(NamedTuple):
@@ -226,6 +228,50 @@ def git(root, cwd, *args, stdout=subprocess.DEVNULL, timeout=210):
         cwd=cwd, check=True, timeout=timeout, env=env, creationflags=CREATE_FLAGS,
         stdout=stdout, stderr=subprocess.PIPE,
     )
+
+
+def history_refs(root, revisions):
+    """按需缓存可达的提交对象，供没有工作区 Git 的独立版分页使用。"""
+    root = root.resolve()
+    cache = _transaction(root).parent / 'history.git'
+    with _history_lock:
+        deadline = time.monotonic() + 25
+        if cache.resolve() != cache:
+            raise ValueError('提交历史缓存不能是链接')
+        cache.mkdir(parents=True, exist_ok=True)
+        if not (cache / 'HEAD').is_file():
+            git(root, cache, 'init', '--bare', '-q')
+
+        refs = []
+        source = None
+        for revision in dict.fromkeys(revisions):
+            if not re.fullmatch(r'[0-9a-f]{40}', revision):
+                continue
+            try:
+                git(root, cache, '--no-lazy-fetch', 'cat-file', '-e', f'{revision}^{{commit}}', timeout=5)
+            except subprocess.CalledProcessError:
+                if source is None:
+                    source, _ = update_source(root)
+                mirrors = SOURCES if source == GITCODE_REPOSITORY else (source,)
+                for mirror in mirrors:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    try:
+                        git(root, cache, '-c', 'protocol.version=2', 'fetch', '--no-tags', '--filter=tree:0',
+                            '--no-write-fetch-head', mirror, f'{revision}:refs/azurpilot/history/{revision}',
+                            timeout=min(10, remaining))
+                    except (OSError, subprocess.SubprocessError):
+                        continue
+                    break
+                try:
+                    git(root, cache, '--no-lazy-fetch', 'cat-file', '-e', f'{revision}^{{commit}}', timeout=3)
+                except subprocess.CalledProcessError:
+                    continue
+            refs.append(revision)
+        if not refs:
+            raise RuntimeError('提交记录暂不可用，请检查更新源或网络后重试')
+        return cache, refs
 
 
 def probe(root, staged):
