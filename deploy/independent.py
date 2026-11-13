@@ -220,14 +220,35 @@ def check(root=None):
 def git(root, cwd, *args, stdout=subprocess.DEVNULL, timeout=210):
     env = {key: value for key, value in os.environ.items() if not key.startswith('GIT_')}
     env.update(GIT_TERMINAL_PROMPT='0', GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull)
-    return subprocess.run(
-        [str(root / 'runtime/git/cmd/git.exe'), '-c', 'http.sslVerify=true',
-         '-c', 'credential.helper=', '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always',
-         '-c', 'http.lowSpeedLimit=1024', '-c', 'http.lowSpeedTime=20',
-         '-c', 'http.userAgent=Mozilla/5.0 AzurPilotIndependent', *args],
-        cwd=cwd, check=True, timeout=timeout, env=env, creationflags=CREATE_FLAGS,
-        stdout=stdout, stderr=subprocess.PIPE,
-    )
+    command = [str(root / 'runtime/git/cmd/git.exe'), '-c', 'http.sslVerify=true',
+               '-c', 'credential.helper=', '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always',
+               '-c', 'http.lowSpeedLimit=1024', '-c', 'http.lowSpeedTime=20',
+               '-c', 'http.userAgent=Mozilla/5.0 AzurPilotIndependent', *args]
+    # MinGit 启动的 HTTPS 和解包子进程也可能持有输出管道。超时后直接回收进程树。
+    with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
+        capture = stdout == subprocess.PIPE
+        with subprocess.Popen(command, cwd=cwd, env=env, creationflags=CREATE_FLAGS,
+                              stdout=output if capture else stdout, stderr=errors) as child:
+            try:
+                child.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                if os.name == 'nt' and child.poll() is None:
+                    taskkill = Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'System32/taskkill.exe'
+                    try:
+                        subprocess.run([str(taskkill), '/PID', str(child.pid), '/T', '/F'], timeout=5,
+                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                       creationflags=CREATE_FLAGS)
+                    except (OSError, subprocess.TimeoutExpired):
+                        pass
+                if child.poll() is None:
+                    child.kill()
+                raise
+            output.seek(0)
+            errors.seek(0)
+            result = subprocess.CompletedProcess(command, child.returncode,
+                                                 output.read() if capture else None, errors.read())
+            result.check_returncode()
+            return result
 
 
 def history_refs(root, revisions):
@@ -366,13 +387,23 @@ def _matching_frontend(root, repository, revision, frontend):
 
 def _fetch_source(root, checkout, offer):
     mirrors = SOURCES if offer.repository == GITCODE_REPOSITORY else (offer.repository,)
+    revision = offer.release['revision']
     for repo in mirrors:
+        args = ('fetch', '--depth=1', '--no-tags', repo, revision)
         try:
-            revision = offer.release['revision']
-            git(root, checkout, 'fetch', '--depth=1', '--no-tags', repo, revision)
+            git(root, checkout, *args)
             return repo
-        except (OSError, subprocess.SubprocessError) as exc:
+        except OSError as exc:
             failure = exc
+            continue
+        except subprocess.SubprocessError as exc:
+            failure = exc
+        if repo == GITHUB_REPOSITORY:
+            try:
+                git(root, checkout, '-c', 'http.version=HTTP/1.1', *args)
+                return repo
+            except (OSError, subprocess.SubprocessError) as exc:
+                failure = exc
     raise RuntimeError('无法从所选仓库下载 ALAS 提交，当前版本可以继续运行') from failure
 
 

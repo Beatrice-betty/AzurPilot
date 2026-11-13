@@ -56,6 +56,31 @@ class TestIndependentPackage(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, '更新源已更改'):
             independent.prepare(offer, self.root)
 
+    def test_github_download_retries_same_revision_over_http1(self):
+        offer = independent.GitOffer({'revision': '2' * 40}, independent.GITHUB_REPOSITORY, 'dev')
+        with patch.object(independent, 'git', side_effect=[subprocess.TimeoutExpired('fetch', 1), None]) as git:
+            self.assertEqual(offer.repository, independent._fetch_source(self.root, self.root, offer))
+        self.assertEqual(git.call_count, 2)
+        first, retry = git.call_args_list
+        self.assertEqual(first.args[2:], ('fetch', '--depth=1', '--no-tags', offer.repository, '2' * 40))
+        self.assertEqual(retry.args[2:], ('-c', 'http.version=HTTP/1.1', *first.args[2:]))
+
+    @unittest.skipUnless(independent.os.name == 'nt', 'Windows MinGit timeout')
+    def test_git_timeout_terminates_windows_process_tree_before_waiting(self):
+        timeout = subprocess.TimeoutExpired('fetch', 1)
+        with patch.object(independent.subprocess, 'Popen') as popen, patch.object(
+            independent.subprocess, 'run',
+        ) as taskkill:
+            child = popen.return_value.__enter__.return_value
+            child.pid = 100
+            child.wait.side_effect = timeout
+            child.poll.return_value = None
+            with self.assertRaises(subprocess.TimeoutExpired):
+                independent.git(self.root, self.root, 'fetch', timeout=1)
+        taskkill.assert_called_once()
+        self.assertEqual(taskkill.call_args.args[0][1:], ['/PID', '100', '/T', '/F'])
+        child.kill.assert_called_once()
+
     def test_gitcode_frontend_uses_same_release_commit_as_manifest(self):
         revision = 'a' * 40
         manifest = independent.canonical({'release': {
