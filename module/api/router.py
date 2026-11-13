@@ -290,6 +290,10 @@ class Router:
         validated = entry.params.model_validate(params)
         if entry.mutates and os.environ.get('DEMO') == '1':
             raise p.ApiError('READ_ONLY', '演示模式下禁止修改配置或运行任务')
+        if method == 'settings.patch' and not local:
+            from deploy import independent
+            if independent.enabled() and {'Repository', 'Branch'} & validated.values.keys():
+                raise p.ApiError('LOCAL_ONLY', '独立版更新源只能在本机控制台中设置')
         return entry.handler(validated)
 
     def reset_fleet_training(self, params: p.RevisionParams):

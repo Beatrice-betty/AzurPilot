@@ -1,3 +1,4 @@
+import os
 import sys
 from typing import Optional, Union
 
@@ -139,7 +140,7 @@ class DeployConfig(DeployConfigTransaction, ConfigModel):
         """
         self.config.pop('AutoUpdate', None)
         repository = str(self.Repository).strip().rstrip('/').removesuffix('.git')
-        if repository in ('cn', 'cnb', 'gitcode', GIT_OVER_CDN_REPOSITORY,
+        if os.environ.get('AZURPILOT_INDEPENDENT') != '1' and repository in ('cn', 'cnb', 'gitcode', GIT_OVER_CDN_REPOSITORY,
                           'https://github.com/wess09/AzurPilot', 'https://cnb.cool/AzurPilot/AzurPilot',
                           'https://gitcode.com/ddl2/AzurPilot', 'https://git.nanoda.work/git/AzurPilot',
                           'https://git.nanoda.work/git/AzurLaneAutoScript', 'https://git.nanoda.work',

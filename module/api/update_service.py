@@ -179,7 +179,9 @@ class UpdateService:
             visible_state = self.operation
         return {'state': visible_state,
                 'localHead': local or None, 'upstreamHead': upstream or None,
-                'branch': self.updater.Branch, 'ahead': ahead, 'behind': behind,
+                'branch': (self.updater.independent_offer.branch
+                           if packaged and self.updater.independent_offer else self.updater.Branch),
+                'ahead': ahead, 'behind': behind,
                 'available': behind > 0 or state == 1, 'busy': busy,
                 'error': (self.updater.independent_error or self.error) if packaged else self.error,
                 'shaMismatch': mismatch,

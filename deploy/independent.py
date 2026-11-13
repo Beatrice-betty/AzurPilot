@@ -1,4 +1,4 @@
-"""本地安装包与已签名的 ALAS 发布包。运行环境独立于应用文件。"""
+"""独立安装包的 ALAS 更新与恢复。运行环境独立于应用文件。"""
 
 import base64
 import hashlib
@@ -19,15 +19,17 @@ import urllib.request
 import zipfile
 from contextlib import closing
 from pathlib import Path, PurePosixPath, PureWindowsPath
+from typing import NamedTuple
+from urllib.parse import urlsplit
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-
 
 GITCODE_REPOSITORY = 'https://gitcode.com/Beatrice-betty/AzurPilot.git'
 GITHUB_REPOSITORY = 'https://github.com/Beatrice-betty/AzurPilot.git'
 GITHUB_RELEASE = 'https://raw.githubusercontent.com/Beatrice-betty/AzurPilot/independent-windows/'
 SOURCES = (GITCODE_REPOSITORY, GITHUB_REPOSITORY)
 RELEASE_BRANCH = 'refs/heads/independent-windows'
+DEFAULT_BRANCH = 'dev'
 MAX_MANIFEST_SIZE = 64 * 1024
 MAX_FRONTEND_SIZE = 40 * 1024 * 1024
 APP_DIRS = ('assets', 'bin', 'campaign', 'deploy', 'module', 'submodule', 'licenses')
@@ -36,6 +38,12 @@ RECEIPT = Path('.azurpilot/independent.json')
 FILES = Path('.azurpilot/independent-files.json')
 WORK = Path('.azurpilot/independent-update')
 CREATE_FLAGS = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+
+
+class GitOffer(NamedTuple):
+    release: dict
+    repository: str
+    branch: str
 
 
 def enabled():
@@ -73,7 +81,7 @@ def write_json(path, value):
         temp.unlink(missing_ok=True)
 
 
-def app_path(name, *, frontend=False):
+def app_path(name, *, frontend=False, build_frontend=False):
     posix = PurePosixPath(name)
     win = PureWindowsPath(name)
     if (posix.as_posix() != name or posix.is_absolute() or win.drive or '\\' in name
@@ -83,6 +91,8 @@ def app_path(name, *, frontend=False):
         return False
     if frontend:
         return len(posix.parts) > 2 and posix.parts[:2] == ('frontend', 'dist')
+    if build_frontend:
+        return len(posix.parts) > 1 and posix.parts[0] == 'frontend'
     if len(posix.parts) == 1:
         return name in APP_FILES
     if posix.parts[0] == 'config':
@@ -102,7 +112,7 @@ def check_target(root, name):
     return path
 
 
-def unpack(archive, target, *, frontend=False):
+def unpack(archive, target, *, frontend=False, build_frontend=False):
     hashes = {}
     seen = set()
     with zipfile.ZipFile(archive) as bundle:
@@ -110,7 +120,7 @@ def unpack(archive, target, *, frontend=False):
             if member.is_dir():
                 continue
             name = member.filename
-            if not app_path(name, frontend=frontend):
+            if not app_path(name, frontend=frontend, build_frontend=build_frontend):
                 continue
             if name.casefold() in seen or stat.S_ISLNK(member.external_attr >> 16):
                 raise ValueError(f'更新包包含重复路径或链接 {name}')
@@ -145,29 +155,64 @@ def fetch(url, limit):
     return body
 
 
+def update_source(root):
+    from deploy.utils import poor_yaml_read
+
+    values = poor_yaml_read(root / 'config/deploy.yaml')
+    repository = str(values.get('Repository') or GITCODE_REPOSITORY).strip().strip('"')
+    branch = str(values.get('Branch') or DEFAULT_BRANCH).strip().strip('"')
+    if repository in ('cn', 'cnb', 'gitcode'):
+        repository = GITCODE_REPOSITORY
+    elif repository == 'global':
+        repository = GITHUB_REPOSITORY
+    url = urlsplit(repository)
+    if (url.scheme != 'https' or not url.hostname or url.username is not None
+            or any(char in repository for char in ('?', '#', '%')) or not url.path.strip('/')
+            or re.search(r'[\s\\]', repository)):
+        raise ValueError('更新仓库需要使用不带账号或令牌的 HTTPS Git 地址')
+    try:
+        _ = url.port
+    except ValueError as exc:
+        raise ValueError('更新仓库的端口无效') from exc
+    if (not re.fullmatch(r'[A-Za-z0-9_][\w./-]*', branch, flags=re.ASCII)
+            or '..' in branch or any(not part or part.startswith('.') or part.endswith(('.', '.lock'))
+                                     for part in branch.split('/'))):
+        raise ValueError('更新分支名称无效')
+    repository = repository.rstrip('/')
+    for official in SOURCES:
+        if repository.removesuffix('.git') == official.removesuffix('.git'):
+            repository = official
+            break
+    return repository, branch
+
+
+def _remote_revision(root, repository, branch):
+    ref = f'refs/heads/{branch}'
+    listing = git(root, gitcode_checkout(root), 'ls-remote', '--exit-code', '--refs', repository, ref,
+                  stdout=subprocess.PIPE, timeout=15).stdout.decode('ascii')
+    for line in listing.splitlines():
+        revision, _, name = line.partition('\t')
+        if name == ref and re.fullmatch('[0-9a-f]{40}', revision):
+            return revision
+    raise ValueError('没有找到配置的更新分支')
+
+
 def check(root=None):
     root = Path(root or Path.cwd()).resolve()
     current = read_json(root / RECEIPT)
-    error = None
-    valid = False
-    for repository in SOURCES:
+    repository, branch = update_source(root)
+    mirrors = SOURCES if repository == GITCODE_REPOSITORY else (repository,)
+    revision = None
+    for mirror in mirrors:
         try:
-            revision = None
-            if repository == GITCODE_REPOSITORY:
-                checkout = gitcode_checkout(root)
-                revision = fetch_gitcode_release(root, checkout)
-                manifest = gitcode_release_file(root, checkout, revision, 'release.json', MAX_MANIFEST_SIZE)
-            else:
-                manifest = fetch(GITHUB_RELEASE + 'release.json', MAX_MANIFEST_SIZE)
-            candidate = verify_manifest(json.loads(manifest), current['publicKey'])
-            valid = True
-            if candidate['sequence'] > current['sequence'] and candidate['revision'] != current['revision']:
-                return candidate, revision, repository
-        except Exception as exc:
-            error = exc
-    if not valid:
-        raise RuntimeError('两个发布源暂时不可用，当前版本可以继续运行') from error
-    return None
+            # 这对镜像由 GitHub 单向同步。不同步时以 GitHub 的提交为准，防止退回旧镜像。
+            revision = _remote_revision(root, mirror, branch)
+        except (OSError, ValueError, subprocess.SubprocessError):
+            continue
+    if revision is None:
+        raise RuntimeError('无法读取所选仓库的分支，当前版本可以继续运行')
+    if revision != current['revision']:
+        return GitOffer({'revision': revision}, repository, branch)
 
 
 def git(root, cwd, *args, stdout=subprocess.DEVNULL, timeout=210):
@@ -175,7 +220,8 @@ def git(root, cwd, *args, stdout=subprocess.DEVNULL, timeout=210):
     env.update(GIT_TERMINAL_PROMPT='0', GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull)
     return subprocess.run(
         [str(root / 'runtime/git/cmd/git.exe'), '-c', 'http.sslVerify=true',
-         '-c', 'credential.helper=', '-c', 'http.lowSpeedLimit=1024', '-c', 'http.lowSpeedTime=20',
+         '-c', 'credential.helper=', '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always',
+         '-c', 'http.lowSpeedLimit=1024', '-c', 'http.lowSpeedTime=20',
          '-c', 'http.userAgent=Mozilla/5.0 AzurPilotIndependent', *args],
         cwd=cwd, check=True, timeout=timeout, env=env, creationflags=CREATE_FLAGS,
         stdout=stdout, stderr=subprocess.PIPE,
@@ -252,56 +298,150 @@ def gitcode_release_file(root, checkout, revision, name, limit):
     return git(root, checkout, 'show', object_name, stdout=subprocess.PIPE).stdout
 
 
-def fetch_frontend(root, repository, revision, frontend):
+def _matching_frontend(root, repository, revision, frontend):
+    """可选发布分支只用来取与当前源码提交匹配的预构建网页。"""
     if repository == GITCODE_REPOSITORY:
         checkout = gitcode_checkout(root)
-        revision = revision or fetch_gitcode_release(root, checkout)
-        data = gitcode_release_file(root, checkout, revision, 'frontend.zip', MAX_FRONTEND_SIZE)
+        release = fetch_gitcode_release(root, checkout)
+        manifest = json.loads(gitcode_release_file(root, checkout, release, 'release.json', MAX_MANIFEST_SIZE))
+        if manifest['release']['revision'] != revision:
+            return False
+        data = gitcode_release_file(root, checkout, release, 'frontend.zip', MAX_FRONTEND_SIZE)
     else:
+        manifest = json.loads(fetch(GITHUB_RELEASE + 'release.json', MAX_MANIFEST_SIZE))
+        if manifest['release']['revision'] != revision:
+            return False
         data = fetch(GITHUB_RELEASE + 'frontend.zip', MAX_FRONTEND_SIZE)
+    if hashlib.sha256(data).hexdigest() != manifest['release']['frontendSha256']:
+        raise ValueError('网页包校验不符')
     frontend.write_bytes(data)
+    return True
+
+
+def _fetch_source(root, checkout, offer):
+    mirrors = SOURCES if offer.repository == GITCODE_REPOSITORY else (offer.repository,)
+    for repo in mirrors:
+        try:
+            revision = offer.release['revision']
+            git(root, checkout, 'fetch', '--depth=1', '--no-tags', repo, revision)
+            return repo
+        except (OSError, subprocess.SubprocessError) as exc:
+            failure = exc
+    raise RuntimeError('无法从所选仓库下载 ALAS 提交，当前版本可以继续运行') from failure
+
+
+def _node_command(root):
+    bundled = root / 'runtime/nodejs'
+    node = bundled / 'node.exe'
+    cli = bundled / 'node_modules/npm/bin/npm-cli.js'
+    if node.is_file() and cli.is_file():
+        return [str(node), str(cli)]
+    from deploy.frontend import npm_command
+
+    return npm_command()
+
+
+def _build_frontend(root, archive, temp, staged):
+    build = temp / 'build'
+    build.mkdir()
+    unpack(archive, build, build_frontend=True)
+    project = build / 'frontend'
+    for name in ('package.json', 'package-lock.json'):
+        if not (project / name).is_file():
+            raise ValueError('仓库没有兼容的预构建网页或前端源码')
+    command = _node_command(root)
+    env = os.environ.copy()
+    env.pop('NODE_OPTIONS', None)
+    env['PATH'] = str(Path(command[0]).parent) + os.pathsep + env.get('PATH', '')
+    env['npm_config_cache'] = str(temp / 'npm-cache')
+    try:
+        for registry in ('https://registry.npmmirror.com', 'https://registry.npmjs.org'):
+            try:
+                subprocess.run([*command, 'ci', '--no-audit', '--no-fund', f'--registry={registry}'],
+                               cwd=project, env=env, check=True, timeout=300, creationflags=CREATE_FLAGS,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                break
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                if registry == 'https://registry.npmjs.org':
+                    raise
+        subprocess.run([*command, 'run', 'build'], cwd=project, env=env, check=True, timeout=180,
+                       creationflags=CREATE_FLAGS, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RuntimeError('所选仓库的网页构建失败，当前版本可以继续运行') from exc
+    dist = project / 'dist'
+    if not (dist / 'index.html').is_file() or not (dist / 'assets').is_dir():
+        raise RuntimeError('所选仓库的构建没有生成完整网页，当前版本可以继续运行')
+    files = {}
+    for path in dist.rglob('*'):
+        name = path.relative_to(build).as_posix()
+        if path.is_symlink() or path.is_junction():
+            raise ValueError('网页构建目录包含链接')
+        if path.is_file():
+            if not app_path(name, frontend=True):
+                raise ValueError('网页构建生成了无效路径')
+            target = staged / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, target)
+            files[name] = digest(target)
+    return files
+
+
+def _frontend_for_commit(root, repo, revision, archive, temp, staged):
+    files = unpack(archive, staged, frontend=True)
+    if files:
+        return files
+    if repo in SOURCES:
+        frontend = temp / 'frontend.zip'
+        for mirror in (repo, *(url for url in SOURCES if url != repo)):
+            try:
+                matched = _matching_frontend(root, mirror, revision, frontend)
+            except (OSError, ValueError, KeyError, subprocess.SubprocessError):
+                continue
+            if matched:
+                return unpack(frontend, staged, frontend=True)
+    return _build_frontend(root, archive, temp, staged)
 
 
 def prepare(offer, root=None):
     root = Path(root or Path.cwd()).resolve()
-    candidate, revision, repository = offer
+    if update_source(root) != (offer.repository, offer.branch):
+        raise RuntimeError('更新源已更改，请重新检查更新')
     current = read_json(root / RECEIPT)
-    if candidate['dependencies'] != current['dependencies'] or dependency_id(root) != current['dependencies']:
-        raise RuntimeError('这个版本需要新的完整安装包，当前版本可以继续运行')
-    directory = root / WORK
+    if dependency_id(root) != current['dependencies']:
+        raise RuntimeError('本机依赖清单已经改变，请用完整安装包修复')
+    directory = _transaction(root).parent
     directory.mkdir(parents=True, exist_ok=True)
-    attempts = ((repository, revision), *((repo, None) for repo in SOURCES if repo != repository))
-    for repo, release_revision in attempts:
+    with tempfile.TemporaryDirectory(prefix='download-', dir=directory) as temp:
+        temp = Path(temp)
+        checkout = temp / 'git'
+        checkout.mkdir()
+        git(root, checkout, 'init', '-q')
+        repo = _fetch_source(root, checkout, offer)
+        revision = offer.release['revision']
+        archive = temp / 'source.zip'
+        git(root, checkout, 'archive', '--format=zip', f'--output={archive}', revision)
+        staged = temp / 'app'
+        staged.mkdir()
+        files = unpack(archive, staged)
+        if not all(name in files for name in ('gui.py', 'uv.lock', 'pyproject.toml', 'deploy/independent.py')):
+            raise RuntimeError('仓库不兼容此独立版，当前版本可以继续运行')
+        if dependency_id(staged) != current['dependencies']:
+            raise RuntimeError('所选版本需要不同的 Python 依赖，请使用对应完整安装包')
+        if update_source(root) != (offer.repository, offer.branch):
+            raise RuntimeError('更新源已更改，请重新检查更新')
         try:
-            with tempfile.TemporaryDirectory(prefix='download-', dir=directory) as temp:
-                temp = Path(temp)
-                frontend = temp / 'frontend.zip'
-                fetch_frontend(root, repo, release_revision, frontend)
-                if digest(frontend) != candidate['frontendSha256']:
-                    raise ValueError('网页包校验不符')
-                checkout = temp / 'git'
-                checkout.mkdir()
-                git(root, checkout, 'init', '-q')
-                git(root, checkout, 'fetch', '--depth=1', '--no-tags', repo, candidate['revision'])
-                source_archive = temp / 'source.zip'
-                git(root, checkout, 'archive', '--format=zip', f'--output={source_archive}', candidate['revision'])
-                staged = temp / 'app'
-                staged.mkdir()
-                files = unpack(source_archive, staged)
-                files.update(unpack(frontend, staged, frontend=True))
-                if not all(name in files for name in ('gui.py', 'frontend/dist/index.html', 'uv.lock')):
-                    raise ValueError('应用包缺少必要文件')
-                if dependency_id(staged) != current['dependencies']:
-                    raise ValueError('候选应用与运行环境不匹配')
-                probe(root, staged)
-                ready = Path(tempfile.mkdtemp(prefix='ready-', dir=directory))
-                os.replace(staged, ready / 'app')
-                write_json(ready / 'files.json', files)
-                write_json(ready / 'version.json', {**current, **candidate})
-                return ready
-        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
-            failure = exc
-    raise RuntimeError('ALAS 更新包下载或启动检查失败，当前版本可以继续运行') from failure
+            files.update(_frontend_for_commit(root, repo, revision, archive, temp, staged))
+        except zipfile.BadZipFile as exc:
+            raise RuntimeError('网页包无效，当前版本可以继续运行') from exc
+        if not all(name in files for name in ('gui.py', 'frontend/dist/index.html', 'uv.lock')):
+            raise ValueError('应用包缺少必要文件')
+        probe(root, staged)
+        ready = Path(tempfile.mkdtemp(prefix='ready-', dir=directory))
+        os.replace(staged, ready / 'app')
+        write_json(ready / 'files.json', files)
+        write_json(ready / 'version.json', {**current, 'revision': revision})
+        write_json(ready / 'source.json', [offer.repository, offer.branch])
+        return ready
 
 
 def backup_file(source, destination):
@@ -344,6 +484,9 @@ def backup_config(config, destination):
 
 def apply(ready, root=None):
     root = Path(root or Path.cwd()).resolve()
+    if (ready / 'source.json').is_file():
+        if read_json(ready / 'source.json') != list(update_source(root)):
+            raise RuntimeError('更新源已更改，请重新检查更新')
     journal = _transaction(root)
     if journal.exists():
         raise RuntimeError('正在恢复上一轮更新')

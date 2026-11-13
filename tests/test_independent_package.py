@@ -1,7 +1,9 @@
-"""离线验证独立更新的验签、选源和文件恢复。"""
+"""离线验证独立更新的选源、包完整性和文件恢复。"""
 
 import base64
+import hashlib
 import sqlite3
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -25,44 +27,49 @@ class TestIndependentPackage(unittest.TestCase):
         }
         independent.write_json(self.root / independent.RECEIPT, self.current)
 
-    def signed(self, key, *, revision, sequence):
-        data = {**self.current, 'revision': revision * 40, 'sequence': sequence}
-        data.pop('publicKey')
-        return independent.canonical({
-            'release': data,
-            'signature': base64.b64encode(key.sign(independent.canonical(data))).decode(),
-        })
+    def test_default_mirror_delay_uses_github_head_and_tries_domestic_download_first(self):
+        with patch.object(independent, '_remote_revision', side_effect=['1' * 40, '2' * 40]) as remote:
+            offer = independent.check(self.root)
+        self.assertEqual('2' * 40, offer.release['revision'])
+        self.assertEqual(independent.GITCODE_REPOSITORY, offer.repository)
+        self.assertEqual([call.args[1] for call in remote.call_args_list], list(independent.SOURCES))
+        with patch.object(independent, 'git', side_effect=[subprocess.TimeoutExpired('fetch', 1), None]) as git:
+            self.assertEqual(independent.GITHUB_REPOSITORY, independent._fetch_source(self.root, self.root, offer))
+            self.assertEqual([call.args[-2] for call in git.call_args_list], list(independent.SOURCES))
 
-    def test_old_or_invalid_domestic_manifest_uses_github(self):
-        for first in (self.signed(self.key, revision='0', sequence=9),
-                      self.signed(Ed25519PrivateKey.generate(), revision='9', sequence=50)):
-            with self.subTest(first=first), patch.object(
-                independent, 'gitcode_checkout', return_value=self.root,
-            ), patch.object(
-                independent, 'fetch_gitcode_release', return_value='a' * 40,
-            ), patch.object(
-                independent, 'gitcode_release_file', return_value=first,
-            ), patch.object(
-                independent, 'fetch', return_value=self.signed(self.key, revision='2', sequence=11),
-            ) as fetch:
-                offer = independent.check(self.root)
-                self.assertEqual('2' * 40, offer[0]['revision'])
-                self.assertEqual(independent.GITHUB_REPOSITORY, offer[2])
-                fetch.assert_called_once_with(
-                    independent.GITHUB_RELEASE + 'release.json', independent.MAX_MANIFEST_SIZE,
-                )
+    def test_deploy_repository_and_branch_select_unsigned_git_update(self):
+        config = self.root / 'config'
+        config.mkdir()
+        repository = 'https://git.example.com/other/AzurPilot.git'
+        deploy = config / 'deploy.yaml'
+        deploy.write_text(f'Deploy:\n  Git:\n    Repository: "{repository}"\n    Branch: preview/test\n',
+                          encoding='utf-8')
+        with patch.object(independent, '_remote_revision', return_value='2' * 40) as remote:
+            offer = independent.check(self.root)
+        remote.assert_called_once_with(self.root, repository, 'preview/test')
+        self.assertEqual(offer.release, {'revision': '2' * 40})
+        with patch.object(independent, 'git', side_effect=subprocess.TimeoutExpired('fetch', 1)) as git:
+            with self.assertRaisesRegex(RuntimeError, '所选仓库'):
+                independent._fetch_source(self.root, self.root, offer)
+            git.assert_called_once()
+        deploy.write_text(f'Repository: {repository}\nBranch: other\n', encoding='utf-8')
+        with self.assertRaisesRegex(RuntimeError, '更新源已更改'):
+            independent.prepare(offer, self.root)
 
     def test_gitcode_frontend_uses_same_release_commit_as_manifest(self):
         revision = 'a' * 40
-        manifest = self.signed(self.key, revision='2', sequence=11)
+        manifest = independent.canonical({'release': {
+            'revision': '2' * 40, 'frontendSha256': hashlib.sha256(b'frontend archive').hexdigest(),
+        }})
         zip_path = self.root / 'frontend.zip'
         with patch.object(independent, 'gitcode_checkout', return_value=self.root), patch.object(
             independent, 'fetch_gitcode_release', return_value=revision,
         ) as fetch_git, patch.object(
             independent, 'gitcode_release_file', side_effect=[manifest, b'frontend archive'],
         ) as read_git, patch.object(independent, 'fetch') as raw:
-            _, reference, repository = independent.check(self.root)
-            independent.fetch_frontend(self.root, repository, reference, zip_path)
+            self.assertTrue(independent._matching_frontend(
+                self.root, independent.GITCODE_REPOSITORY, '2' * 40, zip_path,
+            ))
         self.assertEqual(b'frontend archive', zip_path.read_bytes())
         fetch_git.assert_called_once_with(self.root, self.root)
         self.assertEqual(
@@ -72,9 +79,7 @@ class TestIndependentPackage(unittest.TestCase):
         raw.assert_not_called()
 
     def test_unavailable_release_keeps_installed_receipt(self):
-        with patch.object(independent, 'gitcode_checkout', side_effect=TimeoutError), patch.object(
-            independent, 'fetch', side_effect=TimeoutError,
-        ):
+        with patch.object(independent, '_remote_revision', side_effect=TimeoutError):
             with self.assertRaisesRegex(RuntimeError, '当前版本'):
                 independent.check(self.root)
         self.assertEqual(self.current, independent.read_json(self.root / independent.RECEIPT))
