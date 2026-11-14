@@ -385,25 +385,25 @@ def _matching_frontend(root, repository, revision, frontend):
     return True
 
 
-def _fetch_source(root, checkout, offer):
+def _fetch_source(root, directory, offer):
     mirrors = SOURCES if offer.repository == GITCODE_REPOSITORY else (offer.repository,)
     revision = offer.release['revision']
     for repo in mirrors:
         args = ('fetch', '--depth=1', '--no-tags', repo, revision)
-        try:
-            git(root, checkout, *args)
-            return repo
-        except OSError as exc:
-            failure = exc
-            continue
-        except subprocess.SubprocessError as exc:
-            failure = exc
-        if repo == GITHUB_REPOSITORY:
+        tls_options = ((), ('-c', 'http.version=HTTP/1.1')) if repo == GITHUB_REPOSITORY else ((),)
+        for options in tls_options:
+            # 一次中断的 fetch 可能留下 shallow.lock，重试时使用干净的 Git 目录。
+            checkout = Path(tempfile.mkdtemp(prefix='git-', dir=directory))
+            git(root, checkout, 'init', '-q')
             try:
-                git(root, checkout, '-c', 'http.version=HTTP/1.1', *args)
-                return repo
-            except (OSError, subprocess.SubprocessError) as exc:
+                git(root, checkout, *options, *args)
+            except OSError as exc:
                 failure = exc
+                break
+            except subprocess.SubprocessError as exc:
+                failure = exc
+                continue
+            return repo, checkout
     raise RuntimeError('无法从所选仓库下载 ALAS 提交，当前版本可以继续运行') from failure
 
 
@@ -488,12 +488,10 @@ def prepare(offer, root=None):
         raise RuntimeError('本机依赖清单已经改变，请用完整安装包修复')
     directory = _transaction(root).parent
     directory.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix='download-', dir=directory) as temp:
+    # Windows 可能暂时占用已中断的 Git 目录，保留原始更新错误供调用方显示。
+    with tempfile.TemporaryDirectory(prefix='download-', dir=directory, ignore_cleanup_errors=True) as temp:
         temp = Path(temp)
-        checkout = temp / 'git'
-        checkout.mkdir()
-        git(root, checkout, 'init', '-q')
-        repo = _fetch_source(root, checkout, offer)
+        repo, checkout = _fetch_source(root, temp, offer)
         revision = offer.release['revision']
         archive = temp / 'source.zip'
         git(root, checkout, 'archive', '--format=zip', f'--output={archive}', revision)

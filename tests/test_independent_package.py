@@ -33,9 +33,13 @@ class TestIndependentPackage(unittest.TestCase):
         self.assertEqual('2' * 40, offer.release['revision'])
         self.assertEqual(independent.GITCODE_REPOSITORY, offer.repository)
         self.assertEqual([call.args[1] for call in remote.call_args_list], list(independent.SOURCES))
-        with patch.object(independent, 'git', side_effect=[subprocess.TimeoutExpired('fetch', 1), None]) as git:
-            self.assertEqual(independent.GITHUB_REPOSITORY, independent._fetch_source(self.root, self.root, offer))
-            self.assertEqual([call.args[-2] for call in git.call_args_list], list(independent.SOURCES))
+        with patch.object(independent, 'git', side_effect=[None, subprocess.TimeoutExpired('fetch', 1), None, None]) as git:
+            repository, checkout = independent._fetch_source(self.root, self.root, offer)
+        first, fallback = git.call_args_list[1::2]
+        self.assertEqual(repository, independent.GITHUB_REPOSITORY)
+        self.assertEqual([first.args[-2], fallback.args[-2]], list(independent.SOURCES))
+        self.assertEqual(checkout, fallback.args[1])
+        self.assertNotEqual(first.args[1], checkout)
 
     def test_deploy_repository_and_branch_select_unsigned_git_update(self):
         config = self.root / 'config'
@@ -48,20 +52,32 @@ class TestIndependentPackage(unittest.TestCase):
             offer = independent.check(self.root)
         remote.assert_called_once_with(self.root, repository, 'preview/test')
         self.assertEqual(offer.release, {'revision': '2' * 40})
-        with patch.object(independent, 'git', side_effect=subprocess.TimeoutExpired('fetch', 1)) as git:
+        with patch.object(independent, 'git', side_effect=[None, subprocess.TimeoutExpired('fetch', 1)]) as git:
             with self.assertRaisesRegex(RuntimeError, '所选仓库'):
                 independent._fetch_source(self.root, self.root, offer)
-            git.assert_called_once()
+            self.assertEqual(git.call_count, 2)
+            self.assertEqual(git.call_args.args[-2], repository)
         deploy.write_text(f'Repository: {repository}\nBranch: other\n', encoding='utf-8')
         with self.assertRaisesRegex(RuntimeError, '更新源已更改'):
             independent.prepare(offer, self.root)
 
     def test_github_download_retries_same_revision_over_http1(self):
         offer = independent.GitOffer({'revision': '2' * 40}, independent.GITHUB_REPOSITORY, 'dev')
-        with patch.object(independent, 'git', side_effect=[subprocess.TimeoutExpired('fetch', 1), None]) as git:
-            self.assertEqual(offer.repository, independent._fetch_source(self.root, self.root, offer))
-        self.assertEqual(git.call_count, 2)
-        first, retry = git.call_args_list
+
+        def git_fetch(root, cwd, *args):
+            lock = cwd / 'shallow.lock'
+            if args[0] == 'fetch':
+                lock.touch()
+                raise subprocess.TimeoutExpired('fetch', 1)
+            self.assertFalse(lock.exists())
+
+        with patch.object(independent, 'git', side_effect=git_fetch) as git:
+            repository, checkout = independent._fetch_source(self.root, self.root, offer)
+        self.assertEqual(git.call_count, 4)
+        first, retry = git.call_args_list[1::2]
+        self.assertEqual(repository, offer.repository)
+        self.assertEqual(checkout, retry.args[1])
+        self.assertNotEqual(first.args[1], checkout)
         self.assertEqual(first.args[2:], ('fetch', '--depth=1', '--no-tags', offer.repository, '2' * 40))
         self.assertEqual(retry.args[2:], ('-c', 'http.version=HTTP/1.1', *first.args[2:]))
 
