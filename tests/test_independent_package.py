@@ -2,10 +2,13 @@
 
 import base64
 import hashlib
+import os
+import shutil
 import sqlite3
 import subprocess
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -61,25 +64,72 @@ class TestIndependentPackage(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, '更新源已更改'):
             independent.prepare(offer, self.root)
 
-    def test_github_download_retries_same_revision_over_http1(self):
-        offer = independent.GitOffer({'revision': '2' * 40}, independent.GITHUB_REPOSITORY, 'dev')
+    def test_cached_github_download_clears_stale_locks_and_retries_over_http1(self):
+        revision = '2' * 40
+        offer = independent.GitOffer({'revision': revision}, independent.GITHUB_REPOSITORY, 'dev')
+        stale_locks = [self.root / 'shallow.lock', self.root / f'{independent.SOURCE_REF}.lock']
+        stale_locks[1].parent.mkdir(parents=True)
+        for lock in stale_locks:
+            lock.touch()
 
         def git_fetch(root, cwd, *args):
-            lock = cwd / 'shallow.lock'
+            self.assertEqual(cwd, self.root)
+            self.assertTrue(all(not lock.exists() for lock in stale_locks))
             if args[0] == 'fetch':
-                lock.touch()
+                for lock in stale_locks:
+                    lock.touch()
                 raise subprocess.TimeoutExpired('fetch', 1)
-            self.assertFalse(lock.exists())
 
         with patch.object(independent, 'git', side_effect=git_fetch) as git:
-            repository, checkout = independent._fetch_source(self.root, self.root, offer)
-        self.assertEqual(git.call_count, 4)
-        first, retry = git.call_args_list[1::2]
+            repository, checkout = independent._fetch_source(self.root, self.root, offer, cache=self.root)
+        first, retry = git.call_args_list
         self.assertEqual(repository, offer.repository)
-        self.assertEqual(checkout, retry.args[1])
-        self.assertNotEqual(first.args[1], checkout)
-        self.assertEqual(first.args[2:], ('fetch', '--depth=1', '--no-tags', offer.repository, '2' * 40))
+        self.assertEqual(checkout, self.root)
+        self.assertEqual(first.args[-2:], (offer.repository, f'+{revision}:{independent.SOURCE_REF}'))
         self.assertEqual(retry.args[2:], ('-c', 'http.version=HTTP/1.1', *first.args[2:]))
+
+    def test_source_archive_reuses_objects_from_previous_update(self):
+        executable = shutil.which('git')
+        if not executable:
+            self.skipTest('Git unavailable')
+        env = {key: value for key, value in os.environ.items() if not key.startswith('GIT_')}
+        env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull)
+
+        def run_git(root, cwd, *args):
+            return subprocess.run(
+                [executable, '-c', 'fetch.unpackLimit=1', *args], cwd=cwd, env=env,
+                capture_output=True, check=True, timeout=20,
+            )
+
+        upstream = self.root / 'upstream'
+        upstream.mkdir()
+        run_git(self.root, upstream, 'init', '-q')
+        (upstream / 'asset.bin').write_bytes(os.urandom(256 * 1024))
+        archive = self.root / 'source.zip'
+
+        def archive_update(contents):
+            (upstream / 'changed.txt').write_bytes(contents)
+            run_git(self.root, upstream, 'add', '.')
+            run_git(self.root, upstream, '-c', 'user.name=Test', '-c', 'user.email=test@example.test',
+                    'commit', '-qm', 'test update')
+            revision = run_git(self.root, upstream, 'rev-parse', 'HEAD').stdout.decode().strip()
+            offer = independent.GitOffer({'revision': revision}, upstream.as_uri(), 'dev')
+            with patch.object(independent, 'git', side_effect=run_git):
+                self.assertEqual(independent._archive_source(self.root, self.root, offer, archive), offer.repository)
+            with zipfile.ZipFile(archive) as source:
+                self.assertEqual(source.read('changed.txt'), contents)
+
+        archive_update(b'first version')
+        cache, = self.root.glob('source-*.git')
+        packs = cache / 'objects/pack'
+        previous = set(packs.glob('*.pack'))
+        downloaded = sum(path.stat().st_size for path in previous)
+        self.assertGreater(downloaded, 256 * 1024)
+
+        archive_update(b'second version')
+        added = sum(path.stat().st_size for path in set(packs.glob('*.pack')) - previous)
+        self.assertGreater(added, 0)
+        self.assertLess(added, downloaded // 10)
 
     @unittest.skipUnless(independent.os.name == 'nt', 'Windows MinGit timeout')
     def test_git_timeout_terminates_windows_process_tree_before_waiting(self):

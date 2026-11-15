@@ -38,6 +38,7 @@ APP_FILES = ('alas.py', 'gui.py', 'mcp_server_sse.py', 'tui.py', 'pyproject.toml
 RECEIPT = Path('.azurpilot/independent.json')
 FILES = Path('.azurpilot/independent-files.json')
 WORK = Path('.azurpilot/independent-update')
+SOURCE_REF = 'refs/azurpilot/source'
 CREATE_FLAGS = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 _history_lock = threading.Lock()
 
@@ -385,17 +386,31 @@ def _matching_frontend(root, repository, revision, frontend):
     return True
 
 
-def _fetch_source(root, directory, offer):
+def _fetch_source(root, directory, offer, *, cache=None):
     mirrors = SOURCES if offer.repository == GITCODE_REPOSITORY else (offer.repository,)
     revision = offer.release['revision']
+    flags = ()
+    if cache is not None:
+        # 保留上次下载的引用，供 Git 协商已有对象。浅提交之间可以更新此缓存引用。
+        revision = f'+{revision}:{SOURCE_REF}'
+        flags = ('--no-write-fetch-head', '--no-auto-maintenance')
     for repo in mirrors:
-        args = ('fetch', '--depth=1', '--no-tags', repo, revision)
+        args = ('fetch', '--depth=1', '--no-tags', *flags, repo, revision)
         tls_options = ((), ('-c', 'http.version=HTTP/1.1')) if repo == GITHUB_REPOSITORY else ((),)
         for options in tls_options:
-            # 一次中断的 fetch 可能留下 shallow.lock，重试时使用干净的 Git 目录。
-            checkout = Path(tempfile.mkdtemp(prefix='git-', dir=directory))
-            git(root, checkout, 'init', '-q')
+            checkout = cache
+            if checkout is None:
+                # 初装的每次尝试使用干净的临时目录，避开上次中断留下的 Git 锁。
+                checkout = Path(tempfile.mkdtemp(prefix='git-', dir=directory))
+                git(root, checkout, 'init', '-q')
             try:
+                if cache is not None:
+                    # 调用方持有缓存锁。清理中断留下的 Git 锁，保留已下载的对象。
+                    for name in ('shallow.lock', f'{SOURCE_REF}.lock'):
+                        lock = cache / name
+                        if lock.resolve() != lock:
+                            raise ValueError('源码缓存锁不能是链接')
+                        lock.unlink(missing_ok=True)
                 git(root, checkout, *options, *args)
             except OSError as exc:
                 failure = exc
@@ -405,6 +420,23 @@ def _fetch_source(root, directory, offer):
                 continue
             return repo, checkout
     raise RuntimeError('无法从所选仓库下载 ALAS 提交，当前版本可以继续运行') from failure
+
+
+def _archive_source(root, directory, offer, archive):
+    from deploy.config_transaction import config_transaction
+
+    # 同一个更新源的两个镜像共用对象，自定义源各用自己的缓存。
+    source_id = hashlib.sha256(offer.repository.encode()).hexdigest()[:16]
+    cache = directory / f'source-{source_id}.git'
+    if cache.resolve() != cache:
+        raise ValueError('源码缓存不能是链接')
+    with config_transaction(cache):
+        cache.mkdir(exist_ok=True)
+        if not (cache / 'HEAD').is_file() or not (cache / 'config').is_file():
+            git(root, cache, 'init', '--bare', '-q')
+        repo, checkout = _fetch_source(root, archive.parent, offer, cache=cache)
+        git(root, checkout, 'archive', '--format=zip', f'--output={archive}', offer.release['revision'])
+    return repo
 
 
 def _node_command(root):
@@ -491,10 +523,9 @@ def prepare(offer, root=None):
     # Windows 可能暂时占用已中断的 Git 目录，保留原始更新错误供调用方显示。
     with tempfile.TemporaryDirectory(prefix='download-', dir=directory, ignore_cleanup_errors=True) as temp:
         temp = Path(temp)
-        repo, checkout = _fetch_source(root, temp, offer)
         revision = offer.release['revision']
         archive = temp / 'source.zip'
-        git(root, checkout, 'archive', '--format=zip', f'--output={archive}', revision)
+        repo = _archive_source(root, directory, offer, archive)
         staged = temp / 'app'
         staged.mkdir()
         files = unpack(archive, staged)
