@@ -393,8 +393,6 @@
 .commit-detail details {margin-top: 6px; color: var(--muted); font-size: 12px}
 .commit-detail summary {cursor: pointer}
 .commit-detail pre {white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.8; color: var(--text)}
-.commit-pagination {display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 18px 24px; border-top: 1px solid var(--border)}
-.commit-pagination > span {margin-right: auto; color: var(--muted); font-size: 12px}
 @media (max-width: 950px) {
   .instance-tabs {display: none}
   .topbar {gap: 8px}
@@ -409,7 +407,6 @@
   .head-grid {grid-template-columns: 1fr}
   .head-card {padding: 18px}
   .commit-row {padding: 16px; gap: 10px}
-  .commit-pagination {padding: 16px; gap: 8px}
   .home-editorial {grid-template-columns: 1fr}
   .home-deck {min-height: 248px; padding: 26px 30px}
   .home-deck.home-deck-with-announcement,

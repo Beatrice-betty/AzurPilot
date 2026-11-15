@@ -192,21 +192,22 @@ class UpdateService:
                                  and State.restart_event is not None and State.dependency_sync_event is not None),
                 'canCancel': state in ('start', 'wait'), 'managedByAndroid': False}
 
-    def commits(self, offset: int = 0, limit: int = 50) -> dict:
+    def commits(self, offset: int = 0, limit: int = 50, *, include_total: bool = True) -> dict:
         """分页获取本地与上游可达的提交历史记录。
 
-        合并本地和上游可达历史，不截断总记录数，保留完整提交正文。
+        合并本地和上游可达历史，并保留完整提交正文。
 
         Args:
             offset: 分页偏移量。
             limit: 每页获取的提交数量上限。
+            include_total: 是否遍历完整历史并统计提交总数。
 
         Returns:
-            dict: 包含提交条目列表、历史总数、是否还有更多以及两端 HEAD 哈希的字典。
+            dict: 包含提交条目列表、总数（未统计时为 None）、是否还有更多以及两端 HEAD 哈希的字典。
         """
         if self.android:
             local = self.android_manifest().get('azurpilot_commit')
-            return {'entries': [], 'total': 0, 'hasMore': False,
+            return {'entries': [], 'total': 0 if include_total else None, 'hasMore': False,
                     'localHead': local, 'upstreamHead': local}
         local, upstream = self.heads()
         from deploy import independent
@@ -234,7 +235,9 @@ class UpdateService:
             for index in range(0, len(fields) - 3, 4):
                 sha, author, date, message = fields[index:index + 4]
                 entries.append({'sha': sha.strip(), 'author': author, 'date': date, 'message': message.strip()})
-        total = int(read_git('rev-list', '--count', *refs, '--')) if refs else 0
+        total = None
+        if include_total:
+            total = int(read_git('rev-list', '--count', *refs, '--')) if refs else 0
         return {'entries': entries[:limit], 'total': total, 'hasMore': len(entries) > limit,
                 'localHead': local or None, 'upstreamHead': upstream or None}
 

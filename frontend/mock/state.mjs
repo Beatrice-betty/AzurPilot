@@ -482,7 +482,11 @@ export function createMockState({ empty = false } = {}) {
     if (name != null) get(name)
     switch (method) {
       case 'updater.status': return updateStatus()
-      case 'updater.commits': return { entries: commits.slice(params.offset, params.offset + params.limit), total: commits.length, hasMore: params.offset + params.limit < commits.length, localHead, upstreamHead }
+      case 'updater.commits': {
+        const {offset = 0, limit = 50, includeTotal = true} = params
+        return {entries: commits.slice(offset, offset + limit), total: includeTotal ? commits.length : null,
+          hasMore: offset + limit < commits.length, localHead, upstreamHead}
+      }
       case 'updater.fetch': return { accepted: true }
       case 'updater.apply': localHead = upstreamHead; divergedUpdater = false; return { accepted: true }
       case 'updater.cancel': return { accepted: true }

@@ -50,6 +50,14 @@ class UpdateServiceTest(unittest.TestCase):
         self.assertIn('保留完整正文与 --- 分隔符。', first['entries'][0]['message'])
         self.assertEqual(second['entries'][0]['sha'], self.base)
 
+    def test_history_can_skip_total(self):
+        with patch.object(self.service, 'git', wraps=self.service.git) as read_git:
+            recent = self.service.commits(limit=1, include_total=False)
+        self.assertEqual([entry['sha'] for entry in recent['entries']], [self.remote])
+        self.assertIsNone(recent['total'])
+        self.assertTrue(recent['hasMore'])
+        self.assertFalse(any(call.args[0] == 'rev-list' for call in read_git.call_args_list))
+
     def test_independent_history_paginates_without_installation_git(self):
         install = self.root / 'installed'
         install.mkdir()

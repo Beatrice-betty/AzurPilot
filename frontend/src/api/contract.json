@@ -3008,6 +3008,11 @@
             "minimum": 1,
             "title": "Limit",
             "type": "integer"
+          },
+          "includeTotal": {
+            "default": true,
+            "title": "Includetotal",
+            "type": "boolean"
           }
         },
         "title": "CommitsParams",

@@ -119,7 +119,8 @@ class Router:
             'accounts.status': Method(p.InstanceParams, lambda x: self.accounts.status(x)),
             'accounts.manage': Method(p.AccountParams, lambda x: self.accounts.manage(x, self.access_password), True),
             'updater.status': Method(p.Params, lambda _: self.updates.status()),
-            'updater.commits': Method(p.CommitsParams, lambda x: self.updates.commits(x.offset, x.limit)),
+            'updater.commits': Method(p.CommitsParams, lambda x: self.updates.commits(
+                x.offset, x.limit, include_total=x.includeTotal)),
             'updater.fetch': Method(p.Params, lambda _: self.updates.start('fetch'), True),
             'updater.apply': Method(p.Params, lambda _: self.updates.start('apply'), True),
             'updater.cancel': Method(p.Params, lambda _: self.updates.cancel(), True),

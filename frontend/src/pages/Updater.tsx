@@ -12,30 +12,30 @@ import { useApp, useConnection } from '../app/context'
 import { Empty, ErrorBox, Loading, Modal, PageTitle } from '../components/ui'
 import { localeForLanguage, type UiKey } from '../i18n'
 
+const RECENT_COMMIT_LIMIT = 20
+
 const states: Record<string, UiKey> = {idle: 'updater.state.idle', android: 'updater.state.android', available: 'updater.state.available', fetch: 'updater.state.fetch', checking: 'updater.state.checking', apply: 'updater.state.apply', start: 'updater.state.start', wait: 'updater.state.wait', 'run update': 'updater.state.apply', reload: 'updater.state.reload', failed: 'updater.state.failed', finish: 'updater.state.finish', cancel: 'updater.state.cancel'}
 
 export function Updater() {
   const {data, error: statusError, refresh} = useOutletContext<UpdaterState>()
   const {ui, language} = useApp()
   const connection = useConnection()
-  const [history, setHistory] = useState<CommitHistory>()
-  const [offset, setOffset] = useState(0)
+  const [commits, setCommits] = useState<CommitHistory['entries']>([])
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [retry, setRetry] = useState(0)
   const [confirmMismatch, setConfirmMismatch] = useState(false)
   const local = data?.localHead, upstream = data?.upstreamHead
-  useEffect(() => {setOffset(0)}, [local, upstream])
   useEffect(() => {
     if (connection !== 'ready' || local === undefined || data?.managedByAndroid) return
     let active = true
     setLoading(true); setError('')
-    void api.request('updater.commits', {offset, limit: 50}).then(value => {
-      if (active) setHistory(value)
+    void api.request('updater.commits', {limit: RECENT_COMMIT_LIMIT, includeTotal: false}).then(value => {
+      if (active) setCommits(value.entries)
     }).catch(error => {if (active) setError(error.message)}).finally(() => {if (active) setLoading(false)})
     return () => {active = false}
-  }, [connection, data?.managedByAndroid, local, upstream, offset, retry])
+  }, [connection, data?.managedByAndroid, local, upstream, retry])
   async function act(method: 'updater.fetch' | 'updater.apply' | 'updater.cancel') {
     setBusy(true); setError('')
     try {await api.request(method, {}); refresh()}
@@ -69,15 +69,14 @@ export function Updater() {
       </div>)}</div>
       {data.shaMismatch ? <p className="mismatch-note" role="alert"><TriangleAlert size={15}/><span>{ui('updater.shaMismatch.banner')}</span></p>
         : data.ahead > 0 && <p className="muted">{ui('updater.aheadCommits', {count: data.ahead})}</p>}
-      {!data.managedByAndroid && <section className="panel commit-panel"><div className="panel-heading"><div><GitCommitHorizontal size={18}/><h2>{ui('updater.commits')}</h2><span className="count-badge">{history?.total ?? '—'}</span></div>
+      {!data.managedByAndroid && <section className="panel commit-panel"><div className="panel-heading"><div><GitCommitHorizontal size={18}/><h2>{ui('updater.commits', {count: RECENT_COMMIT_LIMIT})}</h2></div>
         <div className="branch-summary"><GitBranch size={16}/><span>{data.branch}</span></div>
       </div>
-        {loading ? <Loading/> : history?.entries.length ? <div className="commit-list">{history.entries.map(commit => <article className="commit-row" key={commit.sha}>
+        {loading ? <Loading/> : commits.length ? <div className="commit-list">{commits.map(commit => <article className="commit-row" key={commit.sha}>
           <GitCommitHorizontal className="commit-node" size={18}/><div className="commit-detail"><div className="commit-subject">{commit.message.split('\n')[0]}{commit.sha === local && <span className="commit-ref">{ui('updater.localHead')}</span>}{commit.sha === upstream && <span className="commit-ref upstream">{ui('updater.upstreamHead')}</span>}</div>
           {commit.message.includes('\n') && <details><summary>{ui('updater.expandDetails')}</summary><pre>{commit.message.slice(commit.message.indexOf('\n')).trim()}</pre></details>}
           <div className="commit-meta"><code title={commit.sha}>{commit.sha.slice(0, 10)}</code><span>{commit.author}</span><time dateTime={commit.date}>{new Date(commit.date).toLocaleString(localeForLanguage(language))}</time></div></div>
         </article>)}</div> : <Empty title={ui('updater.noCommits')}/>}
-        <div className="commit-pagination"><span>{history?.total ? `${offset + 1}–${Math.min(offset + 50, history.total)} / ${history.total}` : '0'}</span><button className="button" disabled={loading || offset === 0} onClick={() => setOffset(value => Math.max(0, value - 50))}>{ui('common.previous')}</button><button className="button" disabled={loading || !history?.hasMore} onClick={() => setOffset(value => value + 50)}>{ui('common.next')}</button></div>
       </section>}
       {confirmMismatch && <Modal title={ui('updater.shaMismatch.title')} onClose={() => setConfirmMismatch(false)}>
         <p>{ui('updater.shaMismatch.body', {count: data?.ahead ?? 0})}</p>

@@ -339,6 +339,7 @@ class CommitsParams(Params):
     """Git 提交记录查询参数模型。"""
     offset: StrictInt = Field(default=0, ge=0)
     limit: StrictInt = Field(default=50, ge=1, le=100)
+    includeTotal: StrictBool = True
 
 
 class StartupParams(InstanceParams):

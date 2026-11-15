@@ -76,7 +76,7 @@
 | `startup.get` | instance | 当前实例是否启动时自动运行、是否启动时记忆运行 |
 | `startup.set` | instance、enabled?、remember? | 修改启动时自动运行 / 启动时记忆运行 |
 | `updater.status` | 无 | 全局更新状态、localHead、upstreamHead、branch、ahead/behind、available、busy、canApply、canCancel、error |
-| `updater.commits` | offset（默认 0）、limit（默认 50，上限 100） | 本地与上游完整可达历史，含完整 SHA、作者、时间、提交正文、total、hasMore 与两端 HEAD |
+| `updater.commits` | offset（默认 0）、limit（默认 50，上限 100）、includeTotal（默认 true） | 本地与上游可达历史的一页，含完整 SHA、作者、时间、提交正文、total、hasMore 与两端 HEAD。includeTotal 为 false 时跳过总数统计并将 total 设为 null |
 | `updater.fetch` | 无 | 后台获取远程更新，返回 accepted；不修改本地 HEAD |
 | `updater.apply` | 无 | 后台复用原更新器，等待任务退出、更新代码、同步依赖并重启 |
 | `updater.cancel` | 无 | 仅在等待任务结束阶段取消更新 |

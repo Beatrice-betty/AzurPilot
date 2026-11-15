@@ -487,7 +487,10 @@ class SocketApiTests(unittest.TestCase):
                                                 'localHead': None, 'upstreamHead': None}
                 response = self.call(ws, 'updater.commits', {'offset': 50, 'limit': 50})
                 self.assertTrue(response['ok'])
-                updates.commits.assert_called_once_with(50, 50)
+                updates.commits.assert_called_once_with(50, 50, include_total=True)
+                response = self.call(ws, 'updater.commits', {'limit': 20, 'includeTotal': False})
+                self.assertTrue(response['ok'])
+                updates.commits.assert_called_with(0, 20, include_total=False)
 
     def test_untrusted_origin_is_rejected_before_upgrade(self):
         with self.assertRaises(WebSocketDisconnect):
