@@ -52,6 +52,22 @@ class StatisticsReadingTests(unittest.TestCase):
         self.assertTrue(self.database.backfill_meow_stats('inst', 2026, 9))
         self.assertEqual(self.database.get_stats('inst', '2026-09')['meow_battle_raw_count'], result['battle_count'])
 
+    def test_opsi_report_reads_mixed_meow_battle_times(self):
+        data = self.database.get_stats('inst', '2026-09')
+        samples = [20.5, {'duration': 40.5, 'hazard_level': 3}, {'duration': None}]
+        data['meow_battle_times'] = samples
+        data['meow_hazard_stats']['3']['battle_times'] = [20.0, {'duration': 30.0}]
+        self.database.save_stats('inst', '2026-09', data)
+        before = self.database.db_path.read_bytes()
+
+        result = self.get_report()
+        meow_table = next(table for table in result['tables'] if table['key'] == 'meow_runs')
+        self.assertEqual(meow_table['rows'][0][:5], [3, 4, 2.0, 25.0, 60.0])
+        stats = self.database.get_meow_stats('inst', 2026, 9)
+        self.assertEqual(stats['avg_battle_time'], 30.5)
+        self.assertEqual(stats['battle_times'], samples)
+        self.assertEqual(self.database.db_path.read_bytes(), before)
+
     def test_fingerprint_tracks_wal_changes_without_overview_events(self):
         original = get_statistics_fingerprint('inst', self.root / 'config')
         stat = Path.stat

@@ -230,11 +230,17 @@ class Cl1Database:
 
         return normalized_times
 
-    def _extract_meow_round_durations(self, round_times: List[Any]) -> List[float]:
-        """提取耄耋相接轮次耗时，兼容旧格式浮点样本。"""
-        return [
-            entry["duration"] for entry in self._normalize_meow_round_times(round_times)
-        ]
+    @staticmethod
+    def _extract_meow_durations(samples: Any) -> List[float]:
+        """提取耄耋相接耗时，兼容纯秒数和带字段的历史样本。"""
+        if not isinstance(samples, list):
+            return []
+        durations = []
+        for entry in samples:
+            duration = entry.get("duration") if isinstance(entry, dict) else entry
+            if isinstance(duration, (int, float)):
+                durations.append(float(duration))
+        return durations
 
     @staticmethod
     def _get_meow_battles_per_round(hazard_level: Optional[int]) -> Optional[int]:
@@ -258,29 +264,8 @@ class Cl1Database:
             if hazard_level not in {2, 3, 4, 5, 6} or not isinstance(bucket, dict):
                 continue
 
-            round_times = bucket.get("round_times", [])
-            if not isinstance(round_times, list):
-                round_times = []
-            normalized_round_times: List[float] = []
-            for entry in round_times:
-                if isinstance(entry, (int, float)):
-                    normalized_round_times.append(float(entry))
-                elif isinstance(entry, dict) and isinstance(
-                    duration := entry.get("duration"), (int, float)
-                ):
-                    normalized_round_times.append(float(duration))
-
-            battle_times = bucket.get("battle_times", [])
-            if not isinstance(battle_times, list):
-                battle_times = []
-            normalized_battle_times: List[float] = []
-            for entry in battle_times:
-                if isinstance(entry, (int, float)):
-                    normalized_battle_times.append(float(entry))
-                elif isinstance(entry, dict) and isinstance(
-                    duration := entry.get("duration"), (int, float)
-                ):
-                    normalized_battle_times.append(float(duration))
+            normalized_round_times = self._extract_meow_durations(bucket.get("round_times"))
+            normalized_battle_times = self._extract_meow_durations(bucket.get("battle_times"))
 
             try:
                 battle_raw_count = int(bucket.get("battle_raw_count", 0) or 0)
@@ -1127,9 +1112,10 @@ class Cl1Database:
             avg_round_time = round(sum(round_durations) / len(round_durations), 2)
 
         # 计算平均单场战斗时间
+        battle_durations = self._extract_meow_durations(battle_times)
         avg_battle_time = 0.0
-        if battle_times:
-            avg_battle_time = round(sum(battle_times) / len(battle_times), 2)
+        if battle_durations:
+            avg_battle_time = round(sum(battle_durations) / len(battle_durations), 2)
 
         # 按侵蚀等级拆分统计（重点展示 3 级与 5 级）
         hazard_stats = self._normalize_meow_hazard_stats(data)
