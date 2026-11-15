@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { ArrowDown, ArrowUp, Check, CircleAlert, Download, GitBranch, GitCommitHorizontal, RefreshCw, TriangleAlert, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, CircleAlert, Download, ExternalLink, GitBranch, GitCommitHorizontal, RefreshCw, TriangleAlert, X } from 'lucide-react'
 import { api } from '../api/client'
 import type { CommitHistory } from '../api/types'
 import type { UpdaterState } from '../app/updater'
@@ -49,7 +49,10 @@ export function Updater() {
   const disabled = busy || connection !== 'ready' || !data || data.busy
   const statusLabel = !local || !upstream ? ui('updater.noVersion') : data?.state === 'failed' ? ui('updater.state.failed') : data?.available && !data.busy ? ui('updater.state.available') : states[data?.state ?? ''] ? ui(states[data?.state ?? '']) : data?.state
   return <>
-    <PageTitle title={ui('nav.updater')} actions={data?.managedByAndroid ? undefined : <><button className="button" disabled={disabled} onClick={() => void act('updater.fetch')}><RefreshCw size={16} className={data?.state === 'fetch' || data?.state === 'checking' ? 'spin' : ''}/>{ui('updater.fetch')}</button><button className="button primary" disabled={disabled || !data?.canApply} onClick={requestUpdate}><Download size={16}/>{ui('updater.update')}</button>{data?.canCancel && <button className="button" disabled={busy || connection !== 'ready'} onClick={() => void act('updater.cancel')}><X size={16}/>{ui('updater.cancel')}</button>}</>}/>
+    <PageTitle title={ui('nav.updater')} actions={<>
+      <a className="button" href="https://github.com/Beatrice-betty/AzurPilot/releases" target="_blank" rel="noreferrer"><ExternalLink size={16}/>GitHub Releases</a>
+      {!data?.managedByAndroid && <><button className="button" disabled={disabled} onClick={() => void act('updater.fetch')}><RefreshCw size={16} className={data?.state === 'fetch' || data?.state === 'checking' ? 'spin' : ''}/>{ui('updater.fetch')}</button><button className="button primary" disabled={disabled || !data?.canApply} onClick={requestUpdate}><Download size={16}/>{ui('updater.update')}</button>{data?.canCancel && <button className="button" disabled={busy || connection !== 'ready'} onClick={() => void act('updater.cancel')}><X size={16}/>{ui('updater.cancel')}</button>}</>}
+    </>}/>
     {(error || statusError || data?.error) && <ErrorBox message={error || statusError || data?.error || ''} retry={() => {refresh(); setRetry(value => value + 1)}}/>}
     {!data ? <Loading/> : <>
       {data.managedByAndroid && <section className="panel"><p>{ui('updater.androidManaged')}</p></section>}
