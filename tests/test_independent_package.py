@@ -149,6 +149,7 @@ class TestIndependentPackage(unittest.TestCase):
         index = 'frontend/dist/index.html'
         asset = 'frontend/dist/assets/index.js'
         webui_root = b'<div id="root"></div>'
+        branch = 'preview/test'
 
         def build_frontend(root, temp, staged, *, previous):
             content = (temp / 'build/frontend/src/index.ts').read_bytes()
@@ -167,7 +168,7 @@ class TestIndependentPackage(unittest.TestCase):
             run_git(self.root, upstream, '-c', 'user.name=Test', '-c', 'user.email=test@example.test',
                     'commit', '-qm', 'test update')
             revision = run_git(self.root, upstream, 'rev-parse', 'HEAD').stdout.decode().strip()
-            offer = independent.GitOffer({'revision': revision}, upstream.as_uri(), 'dev')
+            offer = independent.GitOffer({'revision': revision}, upstream.as_uri(), branch)
             ready = independent.prepare(offer, self.root)
             self.addCleanup(independent.discard_ready, ready, self.root)
             self.assertEqual({path.relative_to(ready / 'app').as_posix()
@@ -175,6 +176,8 @@ class TestIndependentPackage(unittest.TestCase):
             self.assertEqual((ready / 'app/gui.py').read_bytes(), contents)
             independent.apply(ready, self.root)
             independent.confirm(self.root)
+            installed = independent.read_json(self.root / independent.RECEIPT)
+            self.assertEqual((installed['branch'], installed['revision']), (branch, revision))
             self.assertFalse(ready.exists())
             self.assertFalse(list((self.root / independent.WORK).glob('download-*')))
             if (upstream / 'assets/asset.bin').is_file():
@@ -184,7 +187,7 @@ class TestIndependentPackage(unittest.TestCase):
 
         with (
             patch.object(independent, 'git', side_effect=run_git),
-            patch.object(independent, 'update_source', return_value=(upstream.as_uri(), 'dev')),
+            patch.object(independent, 'update_source', return_value=(upstream.as_uri(), branch)),
             patch.object(independent, '_build_frontend', side_effect=build_frontend) as build,
         ):
             first = update(b'version = 1\n', {'gui.py', 'assets/asset.bin', 'deploy/independent.py', index, asset})

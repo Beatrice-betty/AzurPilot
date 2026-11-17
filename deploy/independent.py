@@ -808,7 +808,7 @@ def _prepare_update(offer, root, ready):
             raise ValueError('候选版启动入口无效，继续使用当前版本') from exc
     write_json(ready / 'files.json', files)
     write_json(ready / 'version.json', {
-        **current, 'revision': revision,
+        **current, 'revision': revision, 'branch': offer.branch,
         'frontendSources': [revision, frontend_sources] if frontend_sources is not None else None,
     })
     write_json(ready / 'source.json', [offer.repository, offer.branch])

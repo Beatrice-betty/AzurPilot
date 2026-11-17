@@ -34,6 +34,14 @@ def _safe_source(value):
     return ' '.join(value.split())[:256]
 
 
+def _read_version_metadata(path):
+    try:
+        metadata = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
+    return metadata if isinstance(metadata, dict) else {}
+
+
 def collect_source_watermark(root=None):
     """读取本机版本信息；只读 Git，全部命令共享三秒预算，不访问网络。"""
     root = Path(root) if root is not None else Path(__file__).resolve().parents[2]
@@ -81,14 +89,23 @@ def collect_source_watermark(root=None):
         if status is not None:
             modified = '有' if status else '无'
     else:
-        # Android 整包没有 .git；只采用宿主清单里明确记录的提交，不推断修改状态。
-        try:
-            manifest = json.loads((root / 'BUILD_MANIFEST').read_text(encoding='utf-8'))
-            actual_commit = manifest.get('azurpilot_commit')
+        # 独立版的更新缓存可能比实际安装更新，以安装回执为准。
+        receipt = _read_version_metadata(root / '.azurpilot/independent.json')
+        revision = receipt.get('revision')
+        if isinstance(revision, str) and re.fullmatch(r'[0-9a-fA-F]{40}', revision):
+            commit = revision[:12]
+            installed_branch = receipt.get('branch')
+            if isinstance(installed_branch, str) and installed_branch.strip():
+                branch = ' '.join(installed_branch.split())[:128]
+            else:
+                configured_branch = ' '.join(str(settings.get('Branch') or '').strip('"').split())[:128]
+                if configured_branch:
+                    branch = f'{configured_branch}（配置）'
+        else:
+            # Android 整包使用宿主清单记录的提交。
+            actual_commit = _read_version_metadata(root / 'BUILD_MANIFEST').get('azurpilot_commit')
             if isinstance(actual_commit, str) and re.fullmatch(r'[0-9a-fA-F]{40,64}', actual_commit):
                 commit = actual_commit[:12]
-        except (OSError, ValueError, AttributeError):
-            pass
 
     return f'[来源水印] 源: {source} | 分支: {branch} | 提交: {commit} | 本地修改: {modified}'
 

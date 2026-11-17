@@ -14,6 +14,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 
 from alas import AzurLaneAutoScript
+from deploy import independent
 from module.base import log_watermark
 from module.config.config_updater import ConfigUpdater
 from module.config.config_generated import GeneratedConfig
@@ -112,6 +113,19 @@ class TestSourceWatermark(unittest.TestCase):
         self.assertEqual(run.call_count, 1)
         self.assertIn('本地修改: 未知', result)
 
+    def test_independent_package_reports_installed_commit_and_branch(self):
+        root = self.root / 'installed'
+        (root / 'config').mkdir(parents=True)
+        (root / 'config/deploy.yaml').write_text('Branch: "dev"\n', encoding='utf-8')
+        for fields, expected_branch in (({}, 'dev（配置）'), ({'branch': 'preview/test'}, 'preview/test')):
+            with self.subTest(fields=fields), patch.object(log_watermark.subprocess, 'run') as run:
+                independent.write_json(root / independent.RECEIPT, {'revision': self.commit, **fields})
+                result = log_watermark.collect_source_watermark(root)
+                run.assert_not_called()
+                self.assertIn(f'分支: {expected_branch} |', result)
+                self.assertIn(f'提交: {self.commit[:12]} |', result)
+                self.assertIn('本地修改: 未知', result)
+
     def test_archive_without_git_can_report_manifest_commit_but_not_clean_status(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -122,6 +136,16 @@ class TestSourceWatermark(unittest.TestCase):
         self.assertIn(f'提交: {self.commit[:12]}', result)
         self.assertIn('分支: 未知', result)
         self.assertIn('本地修改: 未知', result)
+
+    def test_invalid_independent_receipt_does_not_supply_version(self):
+        root = self.root / 'installed'
+        for receipt in ('{', '[]', '{"revision": "invalid", "branch": "wrong"}'):
+            with self.subTest(receipt=receipt):
+                version_file = root / independent.RECEIPT
+                version_file.parent.mkdir(parents=True, exist_ok=True)
+                version_file.write_text(receipt, encoding='utf-8')
+                result = log_watermark.collect_source_watermark(root)
+                self.assertIn('分支: 未知 | 提交: 未知', result)
 
     def test_safe_source_hides_local_paths_and_ssh_credentials(self):
         self.assertEqual(log_watermark._safe_source(r'C:\Users\private\repo'), '本地仓库')
