@@ -387,6 +387,34 @@ class TestIndependentPackage(unittest.TestCase):
         self.assertFalse(independent.trial_pending(self.root))
         self.assertFalse(ready.exists())
 
+    def test_already_installed_files_only_update_the_version_record(self):
+        ready = self.ready()
+        for name in ('gui.py', 'assets/new.txt'):
+            independent.backup_file(ready / 'app' / name, self.root / name)
+        with (
+            patch.object(independent, 'restore_file') as write_file,
+            patch.object(independent, 'backup_config') as backup_config,
+        ):
+            independent.apply(ready, self.root)
+        write_file.assert_not_called()
+        backup_config.assert_not_called()
+        self.assertEqual('2' * 40, independent.read_json(self.root / independent.RECEIPT)['revision'])
+        self.assertEqual(independent.digest(self.root / 'gui.py'),
+                         independent.read_json(self.root / independent.FILES)['gui.py'])
+        self.assertFalse(independent.trial_pending(self.root))
+        self.assertFalse(ready.exists())
+
+    def test_rollback_keeps_matching_files_that_were_already_present(self):
+        ready = self.ready()
+        independent.backup_file(ready / 'app/gui.py', self.root / 'gui.py')
+        independent.apply(ready, self.root)
+        journal = independent.read_json(self.root / independent.WORK / 'transaction.json')
+        self.assertEqual(['assets/new.txt'], journal['changed'])
+        self.assertTrue(independent.recover(self.root))
+        self.assertEqual('new', (self.root / 'gui.py').read_text())
+        self.assertFalse((self.root / 'assets/new.txt').exists())
+        self.assertEqual(self.current, independent.read_json(self.root / independent.RECEIPT))
+
     def test_local_edit_refuses_replacement(self):
         ready = self.ready()
         (self.root / 'gui.py').write_text('local edit', encoding='utf-8')

@@ -970,6 +970,29 @@ def apply(ready, root=None):
         _release_prepared(ready)
 
 
+def _files_to_replace(root, ready, old, new):
+    pending = []
+    for name in sorted(old.keys() | new.keys()):
+        before, after = old.get(name), new.get(name)
+        if before == after:
+            continue
+        target = check_target(root, name)
+        actual = None
+        if target.exists():
+            if not target.is_file():
+                raise RuntimeError(f'检测到本机修改，保留现有文件 {name}')
+            actual = digest(target)
+        # 本机可能已经收到完全相同的文件，保留现有内容并更新安装记录。
+        if actual == after:
+            continue
+        if actual is not None and actual != before:
+            raise RuntimeError(f'检测到本机修改，保留现有文件 {name}')
+        if after is not None and digest(ready / 'app' / name) != after:
+            raise RuntimeError(f'候选文件校验失败 {name}')
+        pending.append(name)
+    return pending
+
+
 def _apply(ready, root):
     if (ready / 'source.json').is_file():
         if read_json(ready / 'source.json') != list(update_source(root)):
@@ -981,16 +1004,10 @@ def _apply(ready, root):
     if base.is_file() and read_json(base) != read_json(root / RECEIPT)['revision']:
         raise RuntimeError('本地版本已改变，请重新检查更新')
     old, new = read_json(root / FILES), read_json(ready / 'files.json')
-    changed = sorted(name for name in old.keys() | new.keys() if old.get(name) != new.get(name))
-    for name in changed:
-        target = check_target(root, name)
-        if target.exists() and (name not in old or not target.is_file() or digest(target) != old[name]):
-            raise RuntimeError(f'检测到本机修改，保留现有文件 {name}')
-        if name in new and digest(ready / 'app' / name) != new[name]:
-            raise RuntimeError(f'候选文件校验失败 {name}')
+    changed = _files_to_replace(root, ready, old, new)
     backup = ready / 'previous'
     config = root / 'config'
-    if config.is_dir():
+    if changed and config.is_dir():
         if config.resolve() != config:
             raise ValueError('配置目录不能是链接')
         for dirpath, names, files in os.walk(config, followlinks=False):
@@ -1022,10 +1039,15 @@ def _apply(ready, root):
                 target.unlink(missing_ok=True)
         write_json(root / FILES, new)
         write_json(root / RECEIPT, read_json(ready / 'version.json'))
-        write_json(journal, {'ready': ready.name, 'changed': changed, 'phase': 'trial'})
+        if changed:
+            write_json(journal, {'ready': ready.name, 'changed': changed, 'phase': 'trial'})
+        else:
+            journal.unlink()
     except BaseException:
         recover(root)
         raise
+    if not changed:
+        _discard_ready(ready, root)
 
 
 def _previous(root, record):
