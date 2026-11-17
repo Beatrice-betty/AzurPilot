@@ -272,6 +272,21 @@ class TestUpdaterReload(unittest.TestCase):
 
         updater._start_update.assert_not_called()
 
+    def test_cancelled_independent_update_discards_prepared_files(self):
+        updater = self._updater()
+        updater.state = 1
+        updater.independent_offer = object()
+        updater._start_update = Mock(return_value=True)
+        ready = object()
+        with (
+            patch('module.runtime.updater.independent.enabled', return_value=True),
+            patch('module.runtime.updater.independent.prepare', return_value=ready),
+            patch('module.runtime.updater.independent.discard_ready') as discard,
+        ):
+            self.assertTrue(updater.run_update())
+        discard.assert_called_once_with(ready)
+        self.assertIsNone(updater.independent_ready)
+
     def test_update_marks_pending_sync_before_notifying_parent(self):
         order = []
         app_module = types.ModuleType("module.api.lifecycle")

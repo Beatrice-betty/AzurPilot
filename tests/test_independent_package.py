@@ -8,7 +8,6 @@ import sqlite3
 import subprocess
 import tempfile
 import unittest
-import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -88,48 +87,84 @@ class TestIndependentPackage(unittest.TestCase):
         self.assertEqual(first.args[-2:], (offer.repository, f'+{revision}:{independent.SOURCE_REF}'))
         self.assertEqual(retry.args[2:], ('-c', 'http.version=HTTP/1.1', *first.args[2:]))
 
-    def test_source_archive_reuses_objects_from_previous_update(self):
+    def test_git_update_reuses_objects_and_rebuilds_webui_only_when_changed(self):
         executable = shutil.which('git')
         if not executable:
             self.skipTest('Git unavailable')
         env = {key: value for key, value in os.environ.items() if not key.startswith('GIT_')}
         env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull)
 
-        def run_git(root, cwd, *args):
+        def run_git(root, cwd, *args, stdout=subprocess.PIPE, timeout=20):
             return subprocess.run(
                 [executable, '-c', 'fetch.unpackLimit=1', *args], cwd=cwd, env=env,
-                capture_output=True, check=True, timeout=20,
+                stdout=stdout, stderr=subprocess.PIPE, check=True, timeout=timeout,
             )
 
         upstream = self.root / 'upstream'
         upstream.mkdir()
         run_git(self.root, upstream, 'init', '-q')
-        (upstream / 'asset.bin').write_bytes(os.urandom(256 * 1024))
-        archive = self.root / 'source.zip'
+        for folder in ('assets', 'deploy', 'frontend/src'):
+            (upstream / folder).mkdir(parents=True)
+        (upstream / 'assets/asset.bin').write_bytes(os.urandom(256 * 1024))
+        (upstream / 'deploy/independent.py').touch()
+        (upstream / 'frontend/src/index.ts').write_bytes(b'first webui')
+        for name in ('uv.lock', 'pyproject.toml'):
+            (upstream / name).touch()
+            (self.root / name).touch()
+        self.current['dependencies'] = independent.dependency_id(self.root)
+        independent.write_json(self.root / independent.RECEIPT, self.current)
+        independent.write_json(self.root / independent.FILES, {
+            name: independent.digest(self.root / name) for name in ('uv.lock', 'pyproject.toml')
+        })
 
-        def archive_update(contents):
-            (upstream / 'changed.txt').write_bytes(contents)
+        def build_frontend(root, temp, staged):
+            name = 'frontend/dist/index.html'
+            output = staged / name
+            output.parent.mkdir(parents=True)
+            output.write_bytes((temp / 'build/frontend/src/index.ts').read_bytes())
+            return {name: independent.digest(output)}
+
+        def update(contents):
+            (upstream / 'gui.py').write_bytes(contents)
             run_git(self.root, upstream, 'add', '.')
             run_git(self.root, upstream, '-c', 'user.name=Test', '-c', 'user.email=test@example.test',
                     'commit', '-qm', 'test update')
             revision = run_git(self.root, upstream, 'rev-parse', 'HEAD').stdout.decode().strip()
             offer = independent.GitOffer({'revision': revision}, upstream.as_uri(), 'dev')
-            with patch.object(independent, 'git', side_effect=run_git):
-                self.assertEqual(independent._archive_source(self.root, self.root, offer, archive), offer.repository)
-            with zipfile.ZipFile(archive) as source:
-                self.assertEqual(source.read('changed.txt'), contents)
+            ready = independent.prepare(offer, self.root)
+            self.assertEqual((ready / 'app/gui.py').read_bytes(), contents)
+            self.assertEqual((ready / 'app/assets/asset.bin').read_bytes(),
+                             (upstream / 'assets/asset.bin').read_bytes())
+            independent.apply(ready, self.root)
+            independent.confirm(self.root)
+            self.assertFalse(ready.exists())
+            self.assertFalse(list((self.root / independent.WORK).glob('download-*')))
 
-        archive_update(b'first version')
-        cache, = self.root.glob('source-*.git')
-        packs = cache / 'objects/pack'
-        previous = set(packs.glob('*.pack'))
-        downloaded = sum(path.stat().st_size for path in previous)
-        self.assertGreater(downloaded, 256 * 1024)
+        with (
+            patch.object(independent, 'git', side_effect=run_git),
+            patch.object(independent, 'update_source', return_value=(upstream.as_uri(), 'dev')),
+            patch.object(independent, 'probe') as probe,
+            patch.object(independent, '_build_frontend', side_effect=build_frontend) as build,
+        ):
+            update(b'first version')
+            cache, = (self.root / independent.WORK).glob('source-*.git')
+            packs = cache / 'objects/pack'
+            previous = set(packs.glob('*.pack'))
+            downloaded = sum(path.stat().st_size for path in previous)
+            self.assertGreater(downloaded, 256 * 1024)
 
-        archive_update(b'second version')
-        added = sum(path.stat().st_size for path in set(packs.glob('*.pack')) - previous)
-        self.assertGreater(added, 0)
-        self.assertLess(added, downloaded // 10)
+            update(b'second version')
+            added = sum(path.stat().st_size for path in set(packs.glob('*.pack')) - previous)
+            self.assertGreater(added, 0)
+            self.assertLess(added, downloaded // 10)
+            self.assertEqual(build.call_count, 1)
+            self.assertEqual((self.root / 'frontend/dist/index.html').read_bytes(), b'first webui')
+
+            (upstream / 'frontend/src/index.ts').write_bytes(b'second webui')
+            update(b'third version')
+            self.assertEqual(build.call_count, 2)
+            self.assertEqual((self.root / 'frontend/dist/index.html').read_bytes(), b'second webui')
+            self.assertEqual(probe.call_count, 3)
 
     @unittest.skipUnless(independent.os.name == 'nt', 'Windows MinGit timeout')
     def test_git_timeout_terminates_windows_process_tree_before_waiting(self):
@@ -203,10 +238,12 @@ class TestIndependentPackage(unittest.TestCase):
         self.assertEqual('old', (self.root / 'gui.py').read_text())
         self.assertEqual('old data', (self.root / 'config/player.json').read_text())
         self.assertEqual('new data', (ready / 'config-after-failed-update/player.json').read_text())
+        self.assertFalse((ready / 'previous').exists())
+        self.assertFalse((ready / 'app').exists())
         self.assertFalse((self.root / 'assets/new.txt').exists())
         self.assertEqual(self.current, independent.read_json(self.root / independent.RECEIPT))
 
-    def test_commit_clears_staged_app_and_retains_consistent_database_backup(self):
+    def test_trial_keeps_consistent_database_backup_until_confirmed(self):
         ready = self.ready()
         database = self.root / 'config/azurpilot.db'
         writer = sqlite3.connect(database)
@@ -216,14 +253,15 @@ class TestIndependentPackage(unittest.TestCase):
         writer.execute('INSERT INTO history VALUES (?)', ('saved',))
         writer.commit()
         independent.apply(ready, self.root)
-        independent.confirm(self.root)
-        self.assertFalse(independent.trial_pending(self.root))
-        self.assertFalse((ready / 'app').exists())
+        independent.discard_ready(ready, self.root)
         backup = sqlite3.connect(ready / 'previous/config/azurpilot.db')
         try:
             self.assertEqual([('saved',)], backup.execute('SELECT value FROM history').fetchall())
         finally:
             backup.close()
+        independent.confirm(self.root)
+        self.assertFalse(independent.trial_pending(self.root))
+        self.assertFalse(ready.exists())
 
     def test_local_edit_refuses_replacement(self):
         ready = self.ready()
@@ -232,3 +270,4 @@ class TestIndependentPackage(unittest.TestCase):
             independent.apply(ready, self.root)
         self.assertEqual('local edit', (self.root / 'gui.py').read_text())
         self.assertFalse(independent.trial_pending(self.root))
+        self.assertFalse(ready.exists())

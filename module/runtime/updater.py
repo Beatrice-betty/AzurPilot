@@ -367,6 +367,12 @@ class Updater(DeployConfig, RuntimeGitManager):
                         logger.warning(self.independent_error)
                         self.state = "failed"
                         return False
+                    try:
+                        return self._start_update()
+                    finally:
+                        if self.independent_ready is not None:
+                            independent.discard_ready(self.independent_ready)
+                            self.independent_ready = None
                 return self._start_update()
 
     def _start_update(self) -> bool:
