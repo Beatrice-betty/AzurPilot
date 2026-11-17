@@ -685,6 +685,10 @@ Campaign:
   UseClearMode: true
   UseFleetLock: true
   UseAutoSearch: true
+  MultipleSortiesCount:
+    value: 0
+    validate: [0, 999]
+    display: hide
   ContinueAfterRestart: false
   Use2xBook: false
   AmbushEvade: true
@@ -696,6 +700,17 @@ OperationHandover:
   Count:
     value: 1
     validate: [0, 999]
+  DailyRunCount:
+    value: 0
+    validate: [0, 999]
+  DailyRunCountUsed:
+    type: stored
+    value: 0
+    display: hide
+  DailyRunCountRecord:
+    type: stored
+    value: 2020-01-01 00:00:00
+    display: hide
   AutoSupplementTime: false
   UseHandoverBook: false
   ConsumeAllBook:

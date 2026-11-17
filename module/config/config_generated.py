@@ -317,6 +317,7 @@ class GeneratedConfig:
     Campaign_UseClearMode = True
     Campaign_UseFleetLock = True
     Campaign_UseAutoSearch = True
+    Campaign_MultipleSortiesCount = 0
     Campaign_ContinueAfterRestart = False
     Campaign_Use2xBook = False
     Campaign_AmbushEvade = True
@@ -325,6 +326,9 @@ class GeneratedConfig:
 
     # 配置组 `OperationHandover`
     OperationHandover_Count = 1
+    OperationHandover_DailyRunCount = 0
+    OperationHandover_DailyRunCountUsed = 0
+    OperationHandover_DailyRunCountRecord = datetime.datetime(2020, 1, 1, 0, 0)
     OperationHandover_AutoSupplementTime = False
     OperationHandover_UseHandoverBook = False
     OperationHandover_ConsumeAllBook = False  # True, False
