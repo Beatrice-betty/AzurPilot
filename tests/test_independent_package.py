@@ -29,19 +29,48 @@ class TestIndependentPackage(unittest.TestCase):
         }
         independent.write_json(self.root / independent.RECEIPT, self.current)
 
-    def test_default_mirror_delay_uses_github_head_and_tries_domestic_download_first(self):
-        with patch.object(independent, '_remote_revision', side_effect=['1' * 40, '2' * 40]) as remote:
+    def test_healthy_gitcode_waits_without_checking_github(self):
+        for revision in (self.current['revision'], '2' * 40):
+            with (
+                self.subTest(revision=revision),
+                patch.object(independent, '_remote_revision', return_value=revision) as remote,
+                patch.object(independent, '_includes_installed', return_value=False),
+            ):
+                self.assertIsNone(independent.check(self.root))
+            remote.assert_called_once_with(self.root, independent.GITCODE_REPOSITORY, 'dev')
+
+    def test_gitcode_download_failure_falls_back_to_the_same_commit(self):
+        revision = '2' * 40
+        with (
+            patch.object(independent, '_remote_revision', return_value=revision) as remote,
+            patch.object(independent, '_includes_installed', return_value=True),
+        ):
             offer = independent.check(self.root)
-        self.assertEqual('2' * 40, offer.release['revision'])
-        self.assertEqual(independent.GITCODE_REPOSITORY, offer.repository)
-        self.assertEqual([call.args[1] for call in remote.call_args_list], list(independent.SOURCES))
+        remote.assert_called_once_with(self.root, independent.GITCODE_REPOSITORY, 'dev')
+        self.assertEqual(revision, offer.release['revision'])
         with patch.object(independent, 'git', side_effect=[None, subprocess.TimeoutExpired('fetch', 1), None, None]) as git:
             repository, checkout = independent._fetch_source(self.root, self.root, offer)
         first, fallback = git.call_args_list[1::2]
         self.assertEqual(repository, independent.GITHUB_REPOSITORY)
         self.assertEqual([first.args[-2], fallback.args[-2]], list(independent.SOURCES))
+        self.assertEqual(first.args[-1], revision)
+        self.assertEqual(fallback.args[-1], revision)
         self.assertEqual(checkout, fallback.args[1])
         self.assertNotEqual(first.args[1], checkout)
+
+    def test_gitcode_check_failure_downloads_directly_from_github(self):
+        with (
+            patch.object(independent, '_remote_revision', side_effect=[TimeoutError, '2' * 40]) as remote,
+            patch.object(independent, '_includes_installed', return_value=True),
+        ):
+            offer = independent.check(self.root)
+        self.assertEqual([call.args[1] for call in remote.call_args_list], list(independent.SOURCES))
+        self.assertEqual(offer.repository, independent.GITCODE_REPOSITORY)
+        with patch.object(independent, 'git') as git:
+            repository, _ = independent._fetch_source(self.root, self.root, offer)
+        self.assertEqual(repository, independent.GITHUB_REPOSITORY)
+        self.assertEqual(git.call_count, 2)
+        self.assertEqual(git.call_args.args[-2], independent.GITHUB_REPOSITORY)
 
     def test_deploy_repository_and_branch_select_unsigned_git_update(self):
         config = self.root / 'config'
@@ -117,14 +146,22 @@ class TestIndependentPackage(unittest.TestCase):
             name: independent.digest(self.root / name) for name in ('uv.lock', 'pyproject.toml')
         })
 
-        def build_frontend(root, temp, staged):
-            name = 'frontend/dist/index.html'
-            output = staged / name
-            output.parent.mkdir(parents=True)
-            output.write_bytes((temp / 'build/frontend/src/index.ts').read_bytes())
-            return {name: independent.digest(output)}
+        index = 'frontend/dist/index.html'
+        asset = 'frontend/dist/assets/index.js'
+        webui_root = b'<div id="root"></div>'
 
-        def update(contents):
+        def build_frontend(root, temp, staged, *, previous):
+            content = (temp / 'build/frontend/src/index.ts').read_bytes()
+            files = {index: webui_root + content, asset: b'unchanged frontend asset'}
+            hashes = {name: hashlib.sha256(body).hexdigest() for name, body in files.items()}
+            for name, body in files.items():
+                if hashes[name] != previous.get(name):
+                    output = staged / name
+                    output.parent.mkdir(parents=True, exist_ok=True)
+                    output.write_bytes(body)
+            return hashes
+
+        def update(contents, expected):
             (upstream / 'gui.py').write_bytes(contents)
             run_git(self.root, upstream, 'add', '.')
             run_git(self.root, upstream, '-c', 'user.name=Test', '-c', 'user.email=test@example.test',
@@ -132,39 +169,60 @@ class TestIndependentPackage(unittest.TestCase):
             revision = run_git(self.root, upstream, 'rev-parse', 'HEAD').stdout.decode().strip()
             offer = independent.GitOffer({'revision': revision}, upstream.as_uri(), 'dev')
             ready = independent.prepare(offer, self.root)
+            self.addCleanup(independent.discard_ready, ready, self.root)
+            self.assertEqual({path.relative_to(ready / 'app').as_posix()
+                              for path in (ready / 'app').rglob('*') if path.is_file()}, expected)
             self.assertEqual((ready / 'app/gui.py').read_bytes(), contents)
-            self.assertEqual((ready / 'app/assets/asset.bin').read_bytes(),
-                             (upstream / 'assets/asset.bin').read_bytes())
             independent.apply(ready, self.root)
             independent.confirm(self.root)
             self.assertFalse(ready.exists())
             self.assertFalse(list((self.root / independent.WORK).glob('download-*')))
+            if (upstream / 'assets/asset.bin').is_file():
+                self.assertEqual((self.root / 'assets/asset.bin').read_bytes(),
+                                 (upstream / 'assets/asset.bin').read_bytes())
+            return revision
 
         with (
             patch.object(independent, 'git', side_effect=run_git),
             patch.object(independent, 'update_source', return_value=(upstream.as_uri(), 'dev')),
-            patch.object(independent, 'probe') as probe,
             patch.object(independent, '_build_frontend', side_effect=build_frontend) as build,
         ):
-            update(b'first version')
+            first = update(b'version = 1\n', {'gui.py', 'assets/asset.bin', 'deploy/independent.py', index, asset})
             cache, = (self.root / independent.WORK).glob('source-*.git')
             packs = cache / 'objects/pack'
             previous = set(packs.glob('*.pack'))
             downloaded = sum(path.stat().st_size for path in previous)
             self.assertGreater(downloaded, 256 * 1024)
 
-            update(b'second version')
+            second = update(b'version = 2\n', {'gui.py'})
             added = sum(path.stat().st_size for path in set(packs.glob('*.pack')) - previous)
             self.assertGreater(added, 0)
             self.assertLess(added, downloaded // 10)
             self.assertEqual(build.call_count, 1)
-            self.assertEqual((self.root / 'frontend/dist/index.html').read_bytes(), b'first webui')
+            self.assertEqual((self.root / index).read_bytes(), webui_root + b'first webui')
+            run_git(self.root, upstream, 'config', 'uploadpack.allowFilter', 'true')
+            self.assertFalse(independent._includes_installed(self.root, upstream.as_uri(), second, first))
+            self.assertTrue(independent._includes_installed(self.root, upstream.as_uri(), first, second))
 
             (upstream / 'frontend/src/index.ts').write_bytes(b'second webui')
-            update(b'third version')
+            (upstream / 'assets/obsolete.txt').write_bytes(b'remove me later')
+            update(b'version = 3\n', {'gui.py', 'assets/obsolete.txt', index})
             self.assertEqual(build.call_count, 2)
-            self.assertEqual((self.root / 'frontend/dist/index.html').read_bytes(), b'second webui')
-            self.assertEqual(probe.call_count, 3)
+            self.assertEqual((self.root / index).read_bytes(), webui_root + b'second webui')
+
+            # 缓存被清掉时也只写摘要变化的文件，并处理删除。
+            cache.rename(cache.with_suffix('.saved'))
+            (upstream / 'assets/obsolete.txt').unlink()
+            update(b'version = 4\n', {'gui.py'})
+            self.assertFalse((self.root / 'assets/obsolete.txt').exists())
+            self.assertEqual(build.call_count, 2)
+
+            # 自定义源的 Git 归档属性也能改变相同 blob 导出的内容。
+            (upstream / '.gitattributes').write_text('assets/revision.txt export-subst\n', encoding='utf-8')
+            (upstream / 'assets/revision.txt').write_bytes(b'$Format:%H$')
+            update(b'version = 5\n', {'gui.py', 'assets/revision.txt'})
+            latest = update(b'version = 6\n', {'gui.py', 'assets/revision.txt'})
+            self.assertEqual((self.root / 'assets/revision.txt').read_text(), latest)
 
     @unittest.skipUnless(independent.os.name == 'nt', 'Windows MinGit timeout')
     def test_git_timeout_terminates_windows_process_tree_before_waiting(self):
@@ -205,9 +263,10 @@ class TestIndependentPackage(unittest.TestCase):
         raw.assert_not_called()
 
     def test_unavailable_release_keeps_installed_receipt(self):
-        with patch.object(independent, '_remote_revision', side_effect=TimeoutError):
+        with patch.object(independent, '_remote_revision', side_effect=TimeoutError) as remote:
             with self.assertRaisesRegex(RuntimeError, '当前版本'):
                 independent.check(self.root)
+        self.assertEqual([call.args[1] for call in remote.call_args_list], list(independent.SOURCES))
         self.assertEqual(self.current, independent.read_json(self.root / independent.RECEIPT))
 
     def ready(self):
@@ -242,6 +301,68 @@ class TestIndependentPackage(unittest.TestCase):
         self.assertFalse((ready / 'app').exists())
         self.assertFalse((self.root / 'assets/new.txt').exists())
         self.assertEqual(self.current, independent.read_json(self.root / independent.RECEIPT))
+
+    def test_interrupted_write_restores_files_already_replaced(self):
+        ready = self.ready()
+        restore = independent.restore_file
+
+        def interrupt(source, destination):
+            if destination == self.root / 'gui.py':
+                self.assertTrue((self.root / 'assets/new.txt').is_file())
+                raise OSError('interrupted during replacement')
+            restore(source, destination)
+
+        with patch.object(independent, 'restore_file', side_effect=interrupt):
+            with self.assertRaisesRegex(OSError, 'interrupted during replacement'):
+                independent.apply(ready, self.root)
+        self.assertEqual('old', (self.root / 'gui.py').read_text())
+        self.assertFalse((self.root / 'assets/new.txt').exists())
+        self.assertFalse(independent.trial_pending(self.root))
+        self.assertFalse(ready.exists())
+
+    def test_failed_start_without_config_changes_discards_duplicate_config(self):
+        ready = self.ready()
+        independent.apply(ready, self.root)
+        self.assertTrue(independent.recover(self.root))
+        self.assertEqual('old data', (self.root / 'config/player.json').read_text())
+        self.assertFalse(ready.exists())
+
+    def test_startup_cleans_duplicate_after_legacy_recovery_removed_previous(self):
+        ready = self.ready()
+        independent.write_json(ready / 'base.json', self.current['revision'])
+        independent.apply(ready, self.root)
+        with patch.object(independent, '_unchanged_failed_config', return_value=False):
+            independent.recover(self.root)
+        self.assertFalse((ready / 'previous').exists())
+        self.assertTrue((ready / 'config-after-failed-update').exists())
+        independent.clean_abandoned(self.root)
+        self.assertFalse(ready.exists())
+
+    def test_startup_recovers_pending_and_cleans_only_managed_abandoned_files(self):
+        pending = self.ready()
+        work = pending.parent
+        abandoned = work / 'ready-abandoned'
+        independent.write_json(abandoned / 'base.json', self.current['revision'])
+        (abandoned / 'source.zip').touch()
+        legacy = work / 'ready-legacy'
+        legacy.mkdir()
+        active = work / 'ready-active'
+        independent.write_json(active / 'base.json', self.current['revision'])
+
+        with patch.dict(independent._prepared_updates, {active: None}):
+            independent.apply(pending, self.root)
+            independent.clean_abandoned(self.root)
+            self.assertTrue(abandoned.exists())
+            self.assertTrue(pending.exists())
+
+            (self.root / 'config/player.json').write_text('keep failed run data', encoding='utf-8')
+            independent.recover(self.root)
+            independent.clean_abandoned(self.root)
+            self.assertFalse(abandoned.exists())
+            self.assertTrue(active.exists())
+        self.assertTrue(legacy.exists())
+        self.assertFalse((pending / 'previous').exists())
+        self.assertTrue((pending / 'config-after-failed-update/player.json').exists())
 
     def test_trial_keeps_consistent_database_backup_until_confirmed(self):
         ready = self.ready()

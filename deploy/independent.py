@@ -21,7 +21,7 @@ import time
 import urllib.request
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import closing, contextmanager
+from contextlib import ExitStack, closing, contextmanager
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import NamedTuple
 from urllib.parse import urlsplit
@@ -44,12 +44,14 @@ WORK = Path('.azurpilot/independent-update')
 SOURCE_REF = 'refs/azurpilot/source'
 CREATE_FLAGS = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 _history_lock = threading.Lock()
+_prepared_updates = {}
 
 
 class GitOffer(NamedTuple):
     release: dict
     repository: str
     branch: str
+    source: str | None = None
 
 
 def enabled():
@@ -65,9 +67,17 @@ def digest(path):
         return hashlib.file_digest(file, 'sha256').hexdigest()
 
 
-def dependency_id(root):
+def dependency_id(root, *, staged=None):
     root = Path(root)
-    return hashlib.sha256((root / 'uv.lock').read_bytes() + b'\0' + (root / 'pyproject.toml').read_bytes()).hexdigest()
+    return hashlib.sha256(b'\0'.join(
+        _projected_file(root, staged, name).read_bytes() for name in ('uv.lock', 'pyproject.toml')
+    )).hexdigest()
+
+
+def _projected_file(root, staged, name):
+    if staged is not None and (staged / name).is_file():
+        return staged / name
+    return root / name
 
 
 def read_json(path):
@@ -118,7 +128,7 @@ def check_target(root, name):
     return path
 
 
-def unpack(archive, target, *, frontend=False, build_frontend=False):
+def unpack(archive, target, *, frontend=False, build_frontend=False, previous=None):
     hashes = {}
     seen = set()
     with zipfile.ZipFile(archive) as bundle:
@@ -131,11 +141,17 @@ def unpack(archive, target, *, frontend=False, build_frontend=False):
             if name.casefold() in seen or stat.S_ISLNK(member.external_attr >> 16):
                 raise ValueError(f'更新包包含重复路径或链接 {name}')
             seen.add(name.casefold())
+            if previous is not None and name in previous:
+                with bundle.open(member) as source:
+                    hashes[name] = hashlib.file_digest(source, 'sha256').hexdigest()
+                if hashes[name] == previous[name]:
+                    continue
             path = target / name
             path.parent.mkdir(parents=True, exist_ok=True)
             with bundle.open(member) as source, path.open('xb') as output:
                 shutil.copyfileobj(source, output)
-            hashes[name] = digest(path)
+            if name not in hashes:
+                hashes[name] = digest(path)
     return hashes
 
 
@@ -205,20 +221,23 @@ def _remote_revision(root, repository, branch):
 
 def check(root=None):
     root = Path(root or Path.cwd()).resolve()
+    clean_abandoned(root)
     current = read_json(root / RECEIPT)
     repository, branch = update_source(root)
     mirrors = SOURCES if repository == GITCODE_REPOSITORY else (repository,)
-    revision = None
     for mirror in mirrors:
         try:
-            # 这对镜像由 GitHub 单向同步。不同步时以 GitHub 的提交为准，防止退回旧镜像。
             revision = _remote_revision(root, mirror, branch)
+            if revision == current['revision']:
+                return None
+            if repository == GITCODE_REPOSITORY and branch == DEFAULT_BRANCH and current['revision']:
+                if not _includes_installed(root, mirror, current['revision'], revision):
+                    logging.getLogger(__name__).info('更新源尚未包含当前提交，继续使用本地版本')
+                    return None
         except (OSError, ValueError, subprocess.SubprocessError):
             continue
-    if revision is None:
-        raise RuntimeError('无法读取所选仓库的分支，当前版本可以继续运行')
-    if revision != current['revision']:
-        return GitOffer({'revision': revision}, repository, branch)
+        return GitOffer({'revision': revision}, repository, branch, mirror)
+    raise RuntimeError('无法读取所选仓库的分支，当前版本可以继续运行')
 
 
 def git(root, cwd, *args, stdout=subprocess.DEVNULL, timeout=210):
@@ -255,26 +274,62 @@ def git(root, cwd, *args, stdout=subprocess.DEVNULL, timeout=210):
             return result
 
 
-def history_refs(root, revisions):
-    """按需缓存可达的提交对象，供没有工作区 Git 的独立版分页使用。"""
-    root = root.resolve()
+@contextmanager
+def _history_checkout(root):
+    from deploy.config_transaction import config_transaction
+
     cache = _transaction(root).parent / 'history.git'
-    with _history_lock:
-        deadline = time.monotonic() + 25
-        if cache.resolve() != cache:
-            raise ValueError('提交历史缓存不能是链接')
+    if cache.resolve() != cache:
+        raise ValueError('提交历史缓存不能是链接')
+    with _history_lock, config_transaction(cache):
         cache.mkdir(parents=True, exist_ok=True)
         if not (cache / 'HEAD').is_file():
             git(root, cache, 'init', '--bare', '-q')
+        yield cache
 
+
+def _has_commit(root, checkout, revision, timeout=5):
+    try:
+        git(root, checkout, '--no-lazy-fetch', 'cat-file', '-e', f'{revision}^{{commit}}', timeout=timeout)
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
+def _fetch_history(root, checkout, repository, revision, timeout):
+    git(root, checkout, '-c', 'protocol.version=2', 'fetch', '--no-tags', '--filter=tree:0',
+        '--no-write-fetch-head', repository, f'{revision}:refs/azurpilot/history/{revision}', timeout=timeout)
+
+
+def _includes_installed(root, repository, installed, revision):
+    if not re.fullmatch('[0-9a-f]{40}', installed):
+        raise ValueError('当前版本的提交记录无效')
+    with _history_checkout(root) as cache:
+        # 先用提交历史判定镜像是否已经同步，避免下载旧镜像的游戏资源。
+        if not _has_commit(root, cache, revision):
+            _fetch_history(root, cache, repository, revision, timeout=15)
+        if not _has_commit(root, cache, installed):
+            return False
+        try:
+            git(root, cache, '--no-lazy-fetch', 'merge-base', '--is-ancestor', installed, revision, timeout=5)
+        except subprocess.CalledProcessError as exc:
+            if exc.returncode == 1:
+                return False
+            raise
+        return True
+
+
+def history_refs(root, revisions):
+    """按需缓存可达的提交对象，供没有工作区 Git 的独立版分页使用。"""
+    root = root.resolve()
+    with _history_checkout(root) as cache:
+        deadline = time.monotonic() + 25
         refs = []
         source = None
         for revision in dict.fromkeys(revisions):
             if not re.fullmatch(r'[0-9a-f]{40}', revision):
                 continue
-            try:
-                git(root, cache, '--no-lazy-fetch', 'cat-file', '-e', f'{revision}^{{commit}}', timeout=5)
-            except subprocess.CalledProcessError:
+            if not _has_commit(root, cache, revision):
                 if source is None:
                     source, _ = update_source(root)
                 mirrors = SOURCES if source == GITCODE_REPOSITORY else (source,)
@@ -283,15 +338,11 @@ def history_refs(root, revisions):
                     if remaining <= 0:
                         break
                     try:
-                        git(root, cache, '-c', 'protocol.version=2', 'fetch', '--no-tags', '--filter=tree:0',
-                            '--no-write-fetch-head', mirror, f'{revision}:refs/azurpilot/history/{revision}',
-                            timeout=min(10, remaining))
+                        _fetch_history(root, cache, mirror, revision, timeout=min(10, remaining))
                     except (OSError, subprocess.SubprocessError):
                         continue
                     break
-                try:
-                    git(root, cache, '--no-lazy-fetch', 'cat-file', '-e', f'{revision}^{{commit}}', timeout=3)
-                except subprocess.CalledProcessError:
+                if not _has_commit(root, cache, revision, timeout=3):
                     continue
             refs.append(revision)
         if not refs:
@@ -390,7 +441,10 @@ def _matching_frontend(root, repository, revision, frontend):
 
 
 def _fetch_source(root, directory, offer, *, cache=None):
-    mirrors = SOURCES if offer.repository == GITCODE_REPOSITORY else (offer.repository,)
+    if offer.repository == GITCODE_REPOSITORY and offer.source != GITHUB_REPOSITORY:
+        mirrors = SOURCES
+    else:
+        mirrors = (offer.source or offer.repository,)
     revision = offer.release['revision']
     flags = ()
     if cache is not None:
@@ -451,14 +505,15 @@ def _same_frontend(root, checkout, previous, revision):
         return False
 
 
-def _stage_source(root, checkout, revision, directory, *, build_frontend=False):
-    """将 Git 中的候选文件直接写入试运行目录，避免压缩和保存整个仓库。"""
+def _read_archive(root, checkout, revision, directory, *, paths=(), build_frontend=False):
+    """从 Git 读取归档内容。没有目标目录时只计算摘要。"""
     read_fd, write_fd = os.pipe()
 
     def stream_archive():
         with os.fdopen(write_fd, 'wb') as output:
-            paths = ('--', 'frontend') if build_frontend else ()
-            git(root, checkout, 'archive', '--format=tar', revision, *paths, stdout=output)
+            selected = ('--', *paths) if paths else ()
+            git(root, checkout, '--literal-pathspecs', 'archive', '--format=tar', revision,
+                *selected, stdout=output)
 
     files = {}
     seen = set()
@@ -480,12 +535,16 @@ def _stage_source(root, checkout, revision, directory, *, build_frontend=False):
                         if name.casefold() in seen or not member.isfile():
                             raise ValueError(f'更新包包含重复路径或链接 {name}')
                         seen.add(name.casefold())
-                        target = directory / name
-                        target.parent.mkdir(parents=True, exist_ok=True)
-                        with bundle.extractfile(member) as contents, target.open('xb') as output:
-                            shutil.copyfileobj(contents, output)
-                        if not build_frontend:
-                            files[name] = digest(target)
+                        with bundle.extractfile(member) as contents:
+                            if directory is None:
+                                files[name] = hashlib.file_digest(contents, 'sha256').hexdigest()
+                            else:
+                                target = directory / name
+                                target.parent.mkdir(parents=True, exist_ok=True)
+                                with target.open('xb') as output:
+                                    shutil.copyfileobj(contents, output)
+                                if not build_frontend:
+                                    files[name] = digest(target)
                 # tarfile 遇到结束标记就停止。读完 Git 输出的填充，等待命令正常退出。
                 while source.read(256 * 1024):
                     pass
@@ -496,9 +555,79 @@ def _stage_source(root, checkout, revision, directory, *, build_frontend=False):
     return files
 
 
-def _installed_frontend(root):
+def _source_tree(root, checkout, revision):
+    entries = git(root, checkout, 'ls-tree', '-r', '-z', revision, stdout=subprocess.PIPE).stdout
+    files = {}
+    seen = set()
+    for entry in entries.split(b'\0'):
+        if not entry:
+            continue
+        fields, name = entry.split(b'\t', 1)
+        mode, kind, blob = fields.split()
+        name = name.decode('utf-8')
+        if kind != b'blob' or not (app_path(name) or app_path(name, frontend=True)):
+            continue
+        if mode == b'120000' or name.casefold() in seen:
+            raise ValueError(f'更新包包含重复路径或链接 {name}')
+        seen.add(name.casefold())
+        files[name] = blob
+    return files
+
+
+def _uses_export_attributes(root, checkout, revision):
+    try:
+        git(root, checkout, 'grep', '-q', '-E', 'export-(ignore|subst)', revision,
+            '--', ':(glob)**/.gitattributes')
+    except subprocess.CalledProcessError as exc:
+        if exc.returncode == 1:
+            return False
+        raise
+    return True
+
+
+def _path_batches(paths):
+    # 给 MinGit 的 Windows 命令行留足余量，按 UTF-16 长度分批传入路径。
+    batch = []
+    size = 0
+    for name in sorted(paths):
+        length = len(name.encode('utf-16-le')) // 2 + 3
+        if batch and size + length > 8000:
+            yield batch
+            batch = []
+            size = 0
+        batch.append(name)
+        size += length
+    if batch:
+        yield batch
+
+
+def _stage_changes(root, checkout, revision, installed, previous, staged, *, export_attributes):
+    comparable = (
+        not export_attributes
+        and _has_commit(root, checkout, installed)
+        and not _uses_export_attributes(root, checkout, installed)
+    )
+    if comparable:
+        old_tree = _source_tree(root, checkout, installed)
+        new_tree = _source_tree(root, checkout, revision)
+        files = {name: previous[name] for name, blob in new_tree.items()
+                 if name in previous and blob == old_tree.get(name)}
+        changed = new_tree.keys() - files.keys()
+    else:
+        # 缓存缺少旧提交，或自定义仓库修改了归档内容时，逐个文件比对已安装清单。
+        files = _read_archive(root, checkout, revision, None)
+        changed = {name for name, checksum in files.items() if previous.get(name) != checksum}
+    for batch in _path_batches(changed):
+        contents = _read_archive(root, checkout, revision, staged, paths=batch)
+        if contents.keys() != set(batch):
+            raise ValueError('Git 更新缺少待替换文件')
+        files.update(contents)
+    return files, comparable
+
+
+def _installed_frontend(root, previous):
     files = {
-        name: expected for name, expected in read_json(root / FILES).items()
+        name: expected for name, expected in previous.items()
         if app_path(name, frontend=True)
     }
     if 'frontend/dist/index.html' not in files:
@@ -524,7 +653,7 @@ def _node_command(root):
     return npm_command()
 
 
-def _build_frontend(root, temp, staged):
+def _build_frontend(root, temp, staged, *, previous=None):
     build = temp / 'build'
     project = build / 'frontend'
     for name in ('package.json', 'package-lock.json'):
@@ -560,14 +689,13 @@ def _build_frontend(root, temp, staged):
         if path.is_file():
             if not app_path(name, frontend=True):
                 raise ValueError('网页构建生成了无效路径')
-            target = staged / name
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(path, target)
-            files[name] = digest(target)
+            files[name] = digest(path)
+            if previous is None or files[name] != previous.get(name):
+                backup_file(path, staged / name)
     return files
 
 
-def _released_frontend(root, repo, revision, temp, staged):
+def _released_frontend(root, repo, revision, temp, staged, *, previous=None):
     if repo in SOURCES:
         frontend = temp / 'frontend.zip'
         for mirror in (repo, *(url for url in SOURCES if url != repo)):
@@ -576,7 +704,7 @@ def _released_frontend(root, repo, revision, temp, staged):
             except (OSError, ValueError, KeyError, subprocess.SubprocessError):
                 continue
             if matched:
-                return unpack(frontend, staged, frontend=True)
+                return unpack(frontend, staged, frontend=True, previous=previous)
 
 
 def _frontend_for_commit(root, repo, revision, archive, temp, staged):
@@ -591,17 +719,15 @@ def _frontend_for_commit(root, repo, revision, archive, temp, staged):
     return _build_frontend(root, temp, staged)
 
 
-def _stage_frontend(root, repo, checkout, previous, revision, temp, staged):
-    if _same_frontend(root, checkout, previous, revision):
-        installed = _installed_frontend(root)
-        if installed:
-            for name in installed:
-                backup_file(root / name, staged / name)
-            return installed
-    files = _released_frontend(root, repo, revision, temp, staged)
+def _stage_frontend(root, repo, checkout, revision, temp, staged, previous, *, unchanged):
+    if unchanged:
+        files = _installed_frontend(root, previous)
+        if files:
+            return files
+    files = _released_frontend(root, repo, revision, temp, staged, previous=previous)
     if files is not None:
         return files
-    _stage_source(root, checkout, revision, temp / 'build', build_frontend=True)
+    _read_archive(root, checkout, revision, temp / 'build', paths=('frontend',), build_frontend=True)
     return None
 
 
@@ -609,49 +735,83 @@ def prepare(offer, root=None):
     root = Path(root or Path.cwd()).resolve()
     if update_source(root) != (offer.repository, offer.branch):
         raise RuntimeError('更新源已更改，请重新检查更新')
-    current = read_json(root / RECEIPT)
-    if dependency_id(root) != current['dependencies']:
-        raise RuntimeError('本机依赖清单已经改变，请用完整安装包修复')
-    directory = _transaction(root).parent
-    directory.mkdir(parents=True, exist_ok=True)
-    # Windows 可能暂时占用已中断的 Git 目录，保留原始更新错误供调用方显示。
-    with tempfile.TemporaryDirectory(prefix='download-', dir=directory, ignore_cleanup_errors=True) as temp:
-        temp = Path(temp)
-        revision = offer.release['revision']
-        staged = temp / 'app'
-        staged.mkdir()
+    with ExitStack() as lease:
+        lease.enter_context(_update_lock(root))
+        journal = _transaction(root)
+        if journal.exists():
+            raise RuntimeError('正在恢复上一轮更新')
+        _clean_abandoned(root)
+        ready = Path(tempfile.mkdtemp(prefix='ready-', dir=journal.parent))
         try:
-            with _source_checkout(root, directory, offer) as (repo, checkout):
-                files = _stage_source(root, checkout, revision, staged)
-                if not all(name in files for name in ('gui.py', 'uv.lock', 'pyproject.toml', 'deploy/independent.py')):
-                    raise RuntimeError('仓库不兼容此独立版，当前版本可以继续运行')
-                if dependency_id(staged) != current['dependencies']:
-                    raise RuntimeError('所选版本需要不同的 Python 依赖，请使用对应完整安装包')
-                if update_source(root) != (offer.repository, offer.branch):
-                    raise RuntimeError('更新源已更改，请重新检查更新')
-                frontend = {}
-                if not (staged / 'frontend/dist').is_dir():
-                    frontend = _stage_frontend(root, repo, checkout, current['revision'], revision, temp, staged)
-            if frontend is None:
-                frontend = _build_frontend(root, temp, staged)
-            files.update(frontend)
-        except (tarfile.TarError, subprocess.SubprocessError) as exc:
-            raise RuntimeError('无法读取所选提交的应用文件，当前版本可以继续运行') from exc
-        except zipfile.BadZipFile as exc:
-            raise RuntimeError('网页包无效，当前版本可以继续运行') from exc
-        if not all(name in files for name in ('gui.py', 'frontend/dist/index.html', 'uv.lock')):
-            raise ValueError('应用包缺少必要文件')
-        probe(root, staged)
-        ready = Path(tempfile.mkdtemp(prefix='ready-', dir=directory))
-        try:
-            os.replace(staged, ready / 'app')
-            write_json(ready / 'files.json', files)
-            write_json(ready / 'version.json', {**current, 'revision': revision})
-            write_json(ready / 'source.json', [offer.repository, offer.branch])
+            _prepare_update(offer, root, ready)
         except BaseException:
             discard_ready(ready, root)
             raise
+        # 活跃请求在等待正在运行的任务退出时也持有锁，避免被另一进程误清理。
+        _prepared_updates[ready] = lease.pop_all()
         return ready
+
+
+def _prepare_update(offer, root, ready):
+    current = read_json(root / RECEIPT)
+    if dependency_id(root) != current['dependencies']:
+        raise RuntimeError('本机依赖清单已经改变，请用完整安装包修复')
+    installed = current['revision']
+    revision = offer.release['revision']
+    previous = read_json(root / FILES)
+    # 先记录候选所属的版本，启动器退出后可以识别尚未应用的临时目录。
+    write_json(ready / 'base.json', installed)
+    staged = ready / 'app'
+    try:
+        with _source_checkout(root, ready.parent, offer) as (repo, checkout):
+            export_attributes = _uses_export_attributes(root, checkout, revision)
+            files, comparable = _stage_changes(root, checkout, revision, installed, previous, staged,
+                                               export_attributes=export_attributes)
+            if not all(name in files for name in ('gui.py', 'uv.lock', 'pyproject.toml', 'deploy/independent.py')):
+                raise RuntimeError('仓库不兼容此独立版，当前版本可以继续运行')
+            if dependency_id(root, staged=staged) != current['dependencies']:
+                raise RuntimeError('所选版本需要不同的 Python 依赖，请使用对应完整安装包')
+            if update_source(root) != (offer.repository, offer.branch):
+                raise RuntimeError('更新源已更改，请重新检查更新')
+            frontend_sources = None
+            if not export_attributes:
+                entries = git(root, checkout, 'ls-tree', '-z', revision, '--', 'frontend', '.gitattributes',
+                              stdout=subprocess.PIPE).stdout
+                frontend_sources = hashlib.sha256(entries).hexdigest()
+            if not any(name.startswith('frontend/dist/') for name in files):
+                unchanged = (frontend_sources is not None
+                             and current.get('frontendSources') == [installed, frontend_sources])
+                if not unchanged and comparable:
+                    unchanged = _same_frontend(root, checkout, installed, revision)
+                with tempfile.TemporaryDirectory(prefix='frontend-', dir=ready, ignore_cleanup_errors=True) as temp:
+                    temp = Path(temp)
+                    frontend = _stage_frontend(root, repo, checkout, revision, temp, staged, previous,
+                                               unchanged=unchanged)
+                    if frontend is None:
+                        frontend = _build_frontend(root, temp, staged, previous=previous)
+                    files.update(frontend)
+    except (tarfile.TarError, subprocess.SubprocessError) as exc:
+        raise RuntimeError('无法读取所选提交的应用文件，当前版本可以继续运行') from exc
+    except zipfile.BadZipFile as exc:
+        raise RuntimeError('网页包无效，当前版本可以继续运行') from exc
+    index_name = 'frontend/dist/index.html'
+    if index_name not in files or not any(name.startswith('frontend/dist/assets/') for name in files):
+        raise ValueError('应用包缺少必要的网页文件')
+    with _projected_file(root, staged, index_name).open('rb') as index:
+        if b'<div id="root">' not in index.read(16 * 1024):
+            raise ValueError('候选版网页入口无效，继续使用当前版本')
+    gui = staged / 'gui.py'
+    if gui.is_file():
+        try:
+            compile(gui.read_bytes(), 'gui.py', 'exec')
+        except SyntaxError as exc:
+            raise ValueError('候选版启动入口无效，继续使用当前版本') from exc
+    write_json(ready / 'files.json', files)
+    write_json(ready / 'version.json', {
+        **current, 'revision': revision,
+        'frontendSources': [revision, frontend_sources] if frontend_sources is not None else None,
+    })
+    write_json(ready / 'source.json', [offer.repository, offer.branch])
 
 
 def backup_file(source, destination):
@@ -670,6 +830,12 @@ def restore_file(source, destination):
         temp.unlink(missing_ok=True)
 
 
+def _restore_snapshot(source, destination):
+    # 尚未写到的文件可能正是应用更新时无法替换的文件，原内容完好时无需重新写入。
+    if not destination.is_file() or digest(source) != digest(destination):
+        restore_file(source, destination)
+
+
 def _transaction(root):
     directory = root / WORK
     if directory.exists() and directory.resolve() != directory:
@@ -677,9 +843,46 @@ def _transaction(root):
     return directory / 'transaction.json'
 
 
+def _update_lock(root):
+    from deploy.config_transaction import config_transaction
+
+    return config_transaction(_transaction(root))
+
+
+def clean_abandoned(root=None):
+    root = Path(root or Path.cwd()).resolve()
+    journal = _transaction(root)
+    if journal.parent.is_dir() and not journal.exists():
+        with _update_lock(root):
+            _clean_abandoned(root)
+
+
+def _clean_abandoned(root):
+    journal = _transaction(root)
+    if journal.exists():
+        return
+    for ready in journal.parent.glob('ready-*'):
+        if (ready not in _prepared_updates and ready.resolve() == ready
+                and re.fullmatch(r'ready-[a-z0-9_]+', ready.name) and (ready / 'base.json').is_file()):
+            _discard_ready(ready, root)
+
+
+def _release_prepared(ready):
+    lease = _prepared_updates.pop(ready, None)
+    if lease is not None:
+        lease.close()
+
+
 def discard_ready(ready, root=None):
     """释放已结束的候选目录，并保留失败的新版本写出的配置。"""
     root = Path(root or Path.cwd()).resolve()
+    try:
+        _discard_ready(ready, root)
+    finally:
+        _release_prepared(ready)
+
+
+def _discard_ready(ready, root):
     journal = _transaction(root)
     if (ready.parent != journal.parent or not re.fullmatch(r'ready-[a-z0-9_]+', ready.name)
             or ready.resolve() != ready):
@@ -699,7 +902,9 @@ def discard_ready(ready, root=None):
         path.chmod(stat.S_IWRITE)
         remove(name)
 
-    paths = (ready / 'app', ready / 'previous') if (ready / 'config-after-failed-update').exists() else (ready,)
+    failed_config = ready / 'config-after-failed-update'
+    preserve_failed_config = failed_config.exists() and not _unchanged_failed_config(ready)
+    paths = (ready / 'app', ready / 'previous') if preserve_failed_config else (ready,)
     for path in paths:
         try:
             shutil.rmtree(path, onexc=remove_readonly)
@@ -724,13 +929,45 @@ def backup_config(config, destination):
                 source.backup(backup)
 
 
+def _config_digest(config):
+    if config.resolve() != config or not config.is_dir():
+        return None
+    files = {}
+
+    def raise_walk_error(error):
+        raise error
+
+    for directory, names, filenames in os.walk(config, onerror=raise_walk_error, followlinks=False):
+        subdirs = set(names)
+        for name in (*names, *filenames):
+            path = Path(directory) / name
+            if path.is_symlink() or path.is_junction():
+                return None
+            files[path.relative_to(config).as_posix()] = None if name in subdirs else digest(path)
+    return hashlib.sha256(canonical(files)).hexdigest()
+
+
+def _unchanged_failed_config(ready):
+    try:
+        recorded = ready / 'config-digest.json'
+        if recorded.resolve() != recorded:
+            return False
+        before = read_json(recorded)
+        return before is not None and before == _config_digest(ready / 'config-after-failed-update')
+    except (OSError, ValueError):
+        return False
+
+
 def apply(ready, root=None):
     root = Path(root or Path.cwd()).resolve()
     try:
-        _apply(ready, root)
+        with _update_lock(root):
+            _apply(ready, root)
     except BaseException:
         discard_ready(ready, root)
         raise
+    finally:
+        _release_prepared(ready)
 
 
 def _apply(ready, root):
@@ -740,12 +977,17 @@ def _apply(ready, root):
     journal = _transaction(root)
     if journal.exists():
         raise RuntimeError('正在恢复上一轮更新')
+    base = ready / 'base.json'
+    if base.is_file() and read_json(base) != read_json(root / RECEIPT)['revision']:
+        raise RuntimeError('本地版本已改变，请重新检查更新')
     old, new = read_json(root / FILES), read_json(ready / 'files.json')
     changed = sorted(name for name in old.keys() | new.keys() if old.get(name) != new.get(name))
     for name in changed:
         target = check_target(root, name)
         if target.exists() and (name not in old or not target.is_file() or digest(target) != old[name]):
             raise RuntimeError(f'检测到本机修改，保留现有文件 {name}')
+        if name in new and digest(ready / 'app' / name) != new[name]:
+            raise RuntimeError(f'候选文件校验失败 {name}')
     backup = ready / 'previous'
     config = root / 'config'
     if config.is_dir():
@@ -756,6 +998,14 @@ def _apply(ready, root):
                    for name in (*names, *files)):
                 raise ValueError('配置包含链接，当前安装保留原状')
         backup_config(config, backup / 'config')
+        try:
+            before = _config_digest(config)
+            if before is not None:
+                # 旧版恢复脚本可能先清理 previous，启动器随后仍需辨认重复配置。
+                write_json(ready / 'config-digest.json', before)
+        except OSError:
+            # 无法确认失败副本是否相同也可以回退，届时保留原数据。
+            pass
     for name in changed:
         target = root / name
         if target.is_file():
@@ -810,11 +1060,11 @@ def recover(root=None):
         target = check_target(root, name)
         original = backup / 'app' / name
         if original.is_file():
-            restore_file(original, target)
+            _restore_snapshot(original, target)
         else:
             target.unlink(missing_ok=True)
     for name in (RECEIPT, FILES):
-        restore_file(backup / name, root / name)
+        _restore_snapshot(backup / name, root / name)
     journal.unlink()
     discard_ready(backup.parent, root)
     return True
