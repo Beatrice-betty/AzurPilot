@@ -916,17 +916,47 @@ def _discard_ready(ready, root):
 
 def backup_config(config, destination):
     database = config / 'azurpilot.db'
-    sidecars = {'azurpilot.db', 'azurpilot.db-wal', 'azurpilot.db-shm', 'azurpilot.db-journal'}
+    database_files = {'azurpilot.db', 'azurpilot.db-wal', 'azurpilot.db-shm', 'azurpilot.db-journal'}
+    had_database = database.is_file()
 
     def ignore_database(directory, names):
-        return sidecars.intersection(names) if Path(directory) == config and database.is_file() else ()
+        return database_files.intersection(names) if Path(directory) == config else ()
 
     shutil.copytree(config, destination, ignore=ignore_database)
-    if database.is_file():
-        # 存储服务可能还在提交 WAL，使用 SQLite 的一致快照作为回退副本。
-        with closing(sqlite3.connect(database.as_uri() + '?mode=ro', uri=True)) as source:
-            with closing(sqlite3.connect(destination / database.name)) as backup:
-                source.backup(backup)
+    if not had_database and not database.is_file():
+        if ((destination / 'azurpilot.migrated').exists()
+                or any((config / name).exists() for name in database_files)):
+            raise RuntimeError('缺少 azurpilot.db，无法备份现有业务数据，本次更新已取消')
+        return None
+
+    snapshot = destination / database.name
+    # 使用 SQLite 的一致快照，以便包含已经提交到 WAL 的数据。
+    with closing(sqlite3.connect(database.as_uri() + '?mode=ro', uri=True)) as source:
+        with closing(sqlite3.connect(snapshot)) as backup:
+            source.backup(backup)
+            if backup.execute('PRAGMA quick_check').fetchall() != [('ok',)]:
+                raise RuntimeError('业务数据库快照未通过完整性检查，本次更新已取消')
+    return snapshot
+
+
+def _preserve_database_snapshot(root, snapshot):
+    with closing(sqlite3.connect(snapshot.as_uri() + '?mode=ro', uri=True)) as backup:
+        tables = backup.execute("""
+            SELECT name FROM sqlite_schema
+            WHERE type = 'table' AND name NOT GLOB 'sqlite_*' AND name <> 'storage_migrations'
+        """).fetchall()
+        for (table,) in tables:
+            quoted = table.replace('"', '""')
+            if backup.execute(f'SELECT 1 FROM "{quoted}" LIMIT 1').fetchone():
+                break
+        else:
+            # 初始化生成的空库不能覆盖已有的历史数据副本。
+            return
+
+    destination = root.with_name(root.name + '_Data_Backup') / 'before-update' / snapshot.name
+    if destination.resolve() != destination or destination.is_symlink():
+        raise ValueError('业务数据库备份路径不能通过链接写入')
+    restore_file(snapshot, destination)
 
 
 def _config_digest(config):
@@ -1014,7 +1044,9 @@ def _apply(ready, root):
             if any((Path(dirpath) / name).is_symlink() or (Path(dirpath) / name).is_junction()
                    for name in (*names, *files)):
                 raise ValueError('配置包含链接，当前安装保留原状')
-        backup_config(config, backup / 'config')
+        snapshot = backup_config(config, backup / 'config')
+        if snapshot is not None:
+            _preserve_database_snapshot(root, snapshot)
         try:
             before = _config_digest(config)
             if before is not None:

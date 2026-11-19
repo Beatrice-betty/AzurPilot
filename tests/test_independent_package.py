@@ -8,6 +8,7 @@ import sqlite3
 import subprocess
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
@@ -367,25 +368,73 @@ class TestIndependentPackage(unittest.TestCase):
         self.assertFalse((pending / 'previous').exists())
         self.assertTrue((pending / 'config-after-failed-update/player.json').exists())
 
-    def test_trial_keeps_consistent_database_backup_until_confirmed(self):
+    def test_update_keeps_consistent_database_backup_after_confirming(self):
+        self.root = self.root / 'install'
+        independent.write_json(self.root / independent.RECEIPT, self.current)
         ready = self.ready()
         database = self.root / 'config/azurpilot.db'
+        retained = self.root.parent / 'install_Data_Backup/before-update/azurpilot.db'
         writer = sqlite3.connect(database)
         self.addCleanup(writer.close)
         writer.execute('PRAGMA journal_mode=WAL')
         writer.execute('CREATE TABLE history (value TEXT)')
+        writer.execute('CREATE TABLE storage_migrations (version INTEGER)')
+        writer.execute('INSERT INTO storage_migrations VALUES (2)')
         writer.execute('INSERT INTO history VALUES (?)', ('saved',))
         writer.commit()
         independent.apply(ready, self.root)
         independent.discard_ready(ready, self.root)
-        backup = sqlite3.connect(ready / 'previous/config/azurpilot.db')
-        try:
+        with closing(sqlite3.connect(ready / 'previous/config/azurpilot.db')) as backup:
             self.assertEqual([('saved',)], backup.execute('SELECT value FROM history').fetchall())
-        finally:
-            backup.close()
         independent.confirm(self.root)
         self.assertFalse(independent.trial_pending(self.root))
         self.assertFalse(ready.exists())
+        writer.execute('DELETE FROM history')
+        writer.commit()
+        empty = independent.backup_config(database.parent, self.root / 'empty-backup')
+        independent._preserve_database_snapshot(self.root, empty)
+        with closing(sqlite3.connect(f'{retained.as_uri()}?mode=ro', uri=True)) as backup:
+            self.assertEqual([('saved',)], backup.execute('SELECT value FROM history').fetchall())
+
+    def test_update_refuses_missing_database_from_migrated_installation(self):
+        ready = self.ready()
+        (self.root / 'config/azurpilot.migrated').touch()
+        with self.assertRaisesRegex(RuntimeError, '缺少 azurpilot.db'):
+            independent.apply(ready, self.root)
+        self.assertEqual('old', (self.root / 'gui.py').read_text(encoding='utf-8'))
+        self.assertEqual(self.current, independent.read_json(self.root / independent.RECEIPT))
+        self.assertFalse(independent.trial_pending(self.root))
+
+    def test_update_refuses_database_that_disappears_while_copying_config(self):
+        ready = self.ready()
+        database = self.root / 'config/azurpilot.db'
+        database.touch()
+        copytree = shutil.copytree
+
+        def move_database_after_copy(source, destination, **kwargs):
+            result = copytree(source, destination, **kwargs)
+            if source == database.parent:
+                database.rename(self.root / 'moved.db')
+            return result
+
+        with patch.object(independent.shutil, 'copytree', side_effect=move_database_after_copy):
+            with self.assertRaises(sqlite3.OperationalError):
+                independent.apply(ready, self.root)
+        self.assertEqual('old', (self.root / 'gui.py').read_text(encoding='utf-8'))
+        self.assertEqual(self.current, independent.read_json(self.root / independent.RECEIPT))
+        self.assertFalse(independent.trial_pending(self.root))
+
+    def test_update_manifest_cannot_remove_business_database(self):
+        ready = self.ready()
+        name = 'config/azurpilot.db'
+        database = self.root / name
+        database.write_bytes(b'local data')
+        manifest = self.root / independent.FILES
+        independent.write_json(manifest, {**independent.read_json(manifest), name: independent.digest(database)})
+        with self.assertRaisesRegex(ValueError, '更新包路径无效'):
+            independent.apply(ready, self.root)
+        self.assertEqual(b'local data', database.read_bytes())
+        self.assertFalse(independent.trial_pending(self.root))
 
     def test_already_installed_files_only_update_the_version_record(self):
         ready = self.ready()
