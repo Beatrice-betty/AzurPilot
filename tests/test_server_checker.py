@@ -55,6 +55,9 @@ class ServerCheckerTestCase(unittest.TestCase):
         )
         self.session_patch.start()
         self.addCleanup(self.session_patch.stop)
+        gateway = patch('module.server_checker.query_server', side_effect=ServerStatusQueryError('timeout'))
+        self.gateway = gateway.start()
+        self.addCleanup(gateway.stop)
 
     def build_checker(self, server, response=None):
         """以指定首个响应构造检查器。"""
@@ -162,6 +165,20 @@ class TestServerApiFailure(ServerCheckerTestCase):
 
         self.assertTrue(checker.is_available())
         self.assert_requested_server("tw_1")
+        self.gateway.assert_called_once_with('tw', 1)
+
+    def test_unusable_api_responses_try_game_gateway(self):
+        gateway = GatewayServer(1, '莱茵演习', 1, 0, 1)
+        for response in (make_response(status_code=403), make_response(status_code=404), make_response(payload={})):
+            with self.subTest(status=response.status_code):
+                self.session.get.reset_mock()
+                self.gateway.reset_mock()
+                self.gateway.side_effect = None
+                self.gateway.return_value = gateway
+                checker = self.build_checker('cn_android-0', response)
+                self.assertFalse(checker.is_available())
+                self.assert_requested_server('cn_1')
+                self.gateway.assert_called_once_with('cn', 1)
 
     def test_transient_http_errors_use_fast_retry(self):
         for status_code in (429, 502):
@@ -337,7 +354,7 @@ class TestServerApiTimeout(unittest.TestCase):
 
 
 class TestDirectGameGateway(ServerCheckerTestCase):
-    def test_default_uses_game_gateway_without_external_status_api(self):
+    def test_unconfigured_origin_uses_game_gateway(self):
         with patch('module.server_checker.SERVER_API_BASE', ''), patch(
             'module.server_checker.query_server',
             return_value=GatewayServer(1, '莱茵演习', 0, 0, 1),

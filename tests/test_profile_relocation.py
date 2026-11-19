@@ -8,7 +8,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 from module.api.protocol import ApiError
-from module.api.stock_exchange_identity import load_identity
 from module.persistence.scheduler import read_observations, write_observation
 from module.runtime.game_data import GameDataProtector
 from module.scheduler.store import ProgramStore
@@ -26,8 +25,8 @@ class ProfileRelocationTests(unittest.TestCase):
         self.config_dir.mkdir(parents=True)
         self.config = self.config_dir / 'test.json'
         self.config.write_text(json.dumps({'Alas': {}}), encoding='utf-8')
-        self.identity, _ = load_identity(self.root, 'test')
         self.protector = GameDataProtector(self.root)
+        self.identity = self.protector.resolve('test')
         self.store = ProgramStore(self.config_dir)
         with self.store.database.transaction() as db:
             write_observation(db, 'test', 'Oil', 500, '2026-10-10T00:00:00', 'test')

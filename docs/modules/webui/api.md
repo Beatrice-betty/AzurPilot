@@ -286,7 +286,7 @@ API 模块自身的行为参数来自部署配置 `config/deploy.yaml`（经 `St
 
 一个 uvicorn 事件循环承载全部会话；阻塞操作一律离开事件循环：
 
-- **Session 的六个 asyncio 任务**（`run()` 启动）：`reader`（收请求）、`writer`（发消息）、`producer`（overview/instances 分频采样）、`log_producer`（日志到达即推送）、`preview_producer`（截图推送）、`stock_producer`（交易所事件即时推送）。任一任务结束即触发全会话收尾；收尾用 `anyio.CancelScope(shield=True)` 屏蔽外层取消，保证归还连接计数前收发任务真正结束——ASGI 服务器可能在客户端退出时取消整个会话作用域。
+- **Session 的六个 asyncio 任务**（`run()` 启动）：`reader`（收请求）、`writer`（发消息）、`producer`（overview/instances 分频采样）、`log_producer`（日志到达即推送）、`preview_producer`（截图推送）、`notification_producer`（通知推送）。任一任务结束即触发全会话收尾；收尾用 `anyio.CancelScope(shield=True)` 屏蔽外层取消，保证归还连接计数前收发任务真正结束——ASGI 服务器可能在客户端退出时取消整个会话作用域。
 - **业务线程**：`asyncio.to_thread` 派发，`Gateway.workers = Semaphore(8)` 同时约束 dispatch 与订阅采样的并发总量，防止一次大批量统计查询耗尽默认线程池。
 - **跨进程写保护**：`ConfigService.patch/delete` 持有 `self.lock`（RLock）+ `config_transaction` 文件锁（`.json.lock`，msvcrt/fcntl，等待上限 15 秒），与核心运行器的配置写回互斥。
 - **实例生命周期锁**：`start/stop/delete` 全部走 `ProcessManager._get_lifecycle_lock(instance)`，与 worker 线程内的状态变更互斥。
@@ -428,15 +428,6 @@ ws.send_json({'v':1,'type':'request','id':'2','method':'events.subscribe',
 - [MCP SSE 服务器](../entry/mcp-server.md) — 挂载于 `/mcp` 的独立协议子应用
 - [配置系统](../config.md) — 被校验与读写的数据来源（argument YAML、i18n、事务）
 - [外部桥接与开发工具](../infra/submodule-tools.md) — `dev_tools/export_api_schema` 所在的开发工具层
-
-### 茗交所股票实例接入
-
-`stock.status` / `stock.register` 仅处理独立股票登记及私密绑定状态。旧交易代理 `stock.request` 已移除，交易所自行管理交易账号和会话；Google reCAPTCHA 已移除。默认地址为 `https://stock.azurpilot.com`，v2 请求由 Python 签名。
-
-后台每 2 秒检查新记录，普通上传只发送未确认的 `{t:毫秒,p:整数行动力}` 增量；历史缺失时按月补足，30 分钟校对月份摘要。实例私钥、原始游戏资源和交易会话不提供给浏览器。`stock` WebSocket 主题保留用于本地状态通知，已移除远端行情 SSE；页面可见时每 15 秒检查绑定状态。
-
-股票身份及历史错误不阻断配置管理、普通采集或调度。`stock.rebuild` 保留范围预览和显式确认 API，先备份再重建股票身份，不改变远端交易账号。完整协议与持久化说明见 [前端 API](../../../frontend/API.md#股票实例接入-v2)。
-
 
 ## 船坞共享扫描与数据分析
 

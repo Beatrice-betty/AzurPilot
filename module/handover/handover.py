@@ -56,6 +56,7 @@ from module.base.runtime_params import (
 )
 from module.base.timer import Timer
 from module.config.schedule_time import schedule_utc
+from module.config.server import get_server_info
 from module.config.utils import get_server_last_update, read_run_param
 from module.campaign.run import CampaignRun
 from module.campaign.stage_name import normalize_event_stage, normalize_post_loop_stage
@@ -82,6 +83,7 @@ from module.map.assets import (
     MULTIPLE_SORTIES_RESULT_CHECK, MULTIPLE_SORTIES_RESULT_EXIT,
 )
 from module.ocr.ocr import Digit, Duration
+from module.server_status import ServerStatusQueryError, query_region, query_server
 
 OCR_HANDOVER_COUNT = Digit(HANDOVER_COUNT_OCR, letter=(255, 255, 255), threshold=128, alphabet='0123456789')
 OCR_HANDOVER_BOOK_COUNT = Digit(HANDOVER_BOOK_COUNT_OCR, letter=(255, 255, 255), threshold=128,
@@ -138,8 +140,7 @@ HANDOVER_WEEKDAY_NAMES = ['周一', '周二', '周三', '周四', '周五', '周
 # 消耗重试、维护前提前量与维护核对间隔走 WebUI「运行参数」页
 # （RunParams.Handover），默认值集中在 module/base/runtime_params.py。
 
-# 停服维护时间接口，顶层是国服公告的聚合结果，servers 里按 cn/jp/en/tw 分别给出
-# maintenance_date(YYYY-MM-DD) 与 start_time(HH:MM)
+# 停服维护时间接口，按 cn/jp/en/tw 查询对应区服的公告。
 HANDOVER_MAINTAIN_API = MAINTENANCE_API_URL
 # 接口里服务器时区的形状，如 `UTC+8`、`UTC-7`、`UTC+08:00`
 HANDOVER_MAINTAIN_TIMEZONE = re.compile(r'^UTC([+-])(\d{1,2})(?::?(\d{2}))?$')
@@ -1019,26 +1020,28 @@ class OperationHandover(CampaignRun):
         """查询停服维护接口，取出当前游戏服务器的那一份公告。
 
         使用 v2 按当前区服查询，RFC 3339 时间转换为当前区服时区。
-        其他区服没有计划时返回空结果，不退回国服公告。
+        该区服没有计划时返回空结果。接口不可用时查询游戏网关的当前状态，
+        保持公告未获取的重试语义。
 
         Returns:
             tuple[dict | None, datetime.timedelta, str]:
                 (维护公告, 公告时间所用的兜底时区, 失败原因)。取不到公告时公告为 None。
         """
         server = self.config.SERVER
-        if not HANDOVER_MAINTAIN_API:
-            return {}, SERVER_TO_TIMEZONE.get(server, SERVER_TO_TIMEZONE['cn']), ''
+        default = SERVER_TO_TIMEZONE.get(server, SERVER_TO_TIMEZONE['cn'])
         try:
             result = http.get(HANDOVER_MAINTAIN_API, params={'server': server},
                               headers=ANONYMOUS_STATUS_HEADERS, timeout=10)
             result.raise_for_status()
             response = result.json()
-            if response.get('schema_version') != 2 or response.get('server') != server or 'maintenance' not in response:
+            if (not isinstance(response, dict) or response.get('schema_version') != 2
+                    or response.get('server') != server or 'maintenance' not in response):
                 raise ValueError('维护接口返回了无效或其他区服的数据')
             plan = response['maintenance']
-            default = SERVER_TO_TIMEZONE.get(server, SERVER_TO_TIMEZONE['cn'])
             if plan is None:
                 return {}, default, ''
+            if not isinstance(plan, dict) or not isinstance(plan.get('starts_at'), str):
+                raise ValueError('维护接口未返回有效的开始时间')
             at = datetime.fromisoformat(plan['starts_at'].replace('Z', '+00:00'))
             if at.tzinfo is None:
                 raise ValueError('维护时间缺少时区')
@@ -1049,9 +1052,31 @@ class OperationHandover(CampaignRun):
             tz = f'UTC{sign}{absolute // 60}' + (f':{absolute % 60:02d}' if absolute % 60 else '')
             return {'maintenance_date': at.strftime('%Y-%m-%d'), 'start_time': at.strftime('%H:%M'),
                     'timezone': tz, 'name': plan.get('name', server)}, default, ''
-        except Exception as e:
-            logger.warning(f'[作战委托] 查询维护时间失败，按不维护处理: {e}')
-            return None, timedelta(), '查询维护时间失败'
+        except (OSError, OverflowError, ValueError) as e:
+            logger.warning(f'[作战委托] 查询维护公告失败，尝试直连游戏网关: {e}')
+            return None, default, self.handover_maintain_gateway(server)
+
+    def handover_maintain_gateway(self, region):
+        """读取当前状态供日志说明，维护前排期仍需要公告中的开始时间。"""
+        server = getattr(self.config, 'Emulator_ServerName', None) or 'disabled'
+        try:
+            info = get_server_info(server)
+        except ValueError:
+            info = None
+
+        try:
+            if info is not None and info.region.split('_', 1)[0] == region:
+                states = {query_server(info.region, info.server_id).status}
+            else:
+                states = {entry.status for entry in query_region(region)}
+        except ServerStatusQueryError as e:
+            return f'维护公告不可用，游戏网关查询失败（{e.code}）'
+
+        if states == {'maintenance'}:
+            return '游戏网关显示当前维护中，未获取维护公告'
+        if states and states <= {'normal', 'full', 'reg_full'}:
+            return '游戏网关显示当前可用，未获取维护公告'
+        return '游戏网关无法确认当前维护状态，未获取维护公告'
 
     def handover_maintain_timezone(self, payload, default):
         """解析维护公告所用的服务器时区。

@@ -3,7 +3,6 @@ import { createHash } from 'node:crypto'
 import Ajv from 'ajv'
 import {spawnSync} from 'node:child_process'
 import {fileURLToPath} from 'node:url'
-import {createStockProxy} from './stock.mjs'
 import {resourceFlows} from './resource-flows.mjs'
 
 // 只读取公开的模板、元数据和翻译，绝不读取用户实例或部署文件。
@@ -69,7 +68,6 @@ export function createMockState({ empty = false } = {}) {
     if (result.error) fail(result.code ?? 'INVALID_PARAMS', result.error)
     return result
   }
-  const stock = createStockProxy(name=>{const r=get(name).values.Dashboard.ActionPoint;return r?.Total!=null&&r.Record?{instance:name,actionPoints:r.Total,observedAt:Math.floor(new Date(r.Record.replace(' ','T')+'Z').getTime()/1000)}:null})
   const programs = new Map()
   const simulations = new Map()
   function simulation(name) {
@@ -586,9 +584,6 @@ export function createMockState({ empty = false } = {}) {
       case 'mind.plan': return fleetStatePython('mind.plan', params)
       case 'mind.import': return mindPython('import', params)
       case 'mind.recognize': return mindPython('recognize', params)
-      case 'stock.status': return stock.status(name)
-      case 'stock.rebuild': return stock.rebuild(name,params)
-      case 'stock.register': return stock.register(name,params)
       case 'scheduler.start': case 'tasks.run':
         if (get(name).status === 'running') fail('INSTANCE_RUNNING', '实例已在运行')
         if (method === 'tasks.run' && !['FleetScan', 'StorageStatistics', 'DockScan'].includes(params.task) && !Object.values(menu).some(group => group.page === 'tool' && group.tasks.includes(params.task))) fail('INVALID_PARAMS', '该任务不支持单独运行')
@@ -1075,5 +1070,5 @@ export function createMockState({ empty = false } = {}) {
       log(name, '模拟任务正在运行，等待下一轮调度。')
     }
   }
-  return { dispatch, tick, setUpdateScenario, subscribeStock:stock.subscribe, close:stock.close }
+  return { dispatch, tick, setUpdateScenario }
 }

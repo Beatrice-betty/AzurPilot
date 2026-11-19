@@ -88,7 +88,6 @@ frontend/
 ├── src/api/                  # client.ts 连接层；generated.ts 与 contract.json 为生成产物
 ├── src/app/                  # 布局、主题系统（theme.ts 按需加载）、连接上下文、任务优先级解析（taskPriority.ts）、各类偏好
 ├── src/pages/                # 页面：Home / Overview / TaskConfig / Statistics / Settings / Updater 等
-├── src/components/StockExchangeBoundary.tsx # 股票接入页面的加载和错误兜底
 ├── src/components/           # 可复用组件：FormControls、LogPanel、StatisticsChart、TaskPriorityField（任务优先级拖动排序）、实例切换等
 ├── src/config/               # EditQueue 跨页面字段保存队列、草稿恢复、输入校验
 ├── src/styles/               # 设计变量与界面样式（apple / forms / compact / minimal 等 css）
@@ -106,7 +105,6 @@ frontend/
 
 追代码从 `src/main.tsx` 开始：hash 路由表、顶层 ErrorBoundary 与主题加载流程都在这里。
 
-茗交所入口为 `src/pages/StockExchange.tsx`，侧栏导航位于「资源统计」下方，沿用 AzurPilot 主题与布局。此页面只负责实例股票告知确认/用户名注册、群内绑定命令、删除状态及本地恢复计划，注册并绑定后新标签页打开 `https://stock.azurpilot.com`。交易、教程、行情与登录均在独立站点，旧 `src/stock/` 目录及交易代理已删除。`src/components/StockExchangeBoundary.tsx` 提供加载与渲染错误兜底。Mock 完全本地，不再依赖交易所或验证码网络。详情见 [前端 README](../../../frontend/README.md#茗喵证券交易所)。
 
 | 入口 | 用途 |
 | --- | --- |

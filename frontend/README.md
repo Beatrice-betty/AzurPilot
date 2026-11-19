@@ -154,18 +154,6 @@ npm run test:e2e:mock
 - 图表按需加载 [Apache ECharts](https://echarts.apache.org/handbook/en/concepts/axis/)，支持滑块、Ctrl + 滚轮、框选缩放和图像导出。放大查看后可按 Escape 收起。
 - 大世界和委托支持历史月份；今日、本周委托以当前日期为准。短猫掉落保留旧版全设备累计统计，刷新统计会重算已有本地掉落记录。界面说明标注估算、聚合与缺失值口径。
 
-## 茗喵证券交易所
-
-实例侧栏「茗喵证券交易所」进入股票注册/绑定页，沿用当前 WebUI 主题和导航。输入股票用户名并确认公开持续同步告知后注册当前实例；交易账户与股票解耦，先加 QQ 群 [1126124220](https://qm.qq.com/q/93NWF3S362)，在群里 @官方机器人并发送“注册 <用户名>”直接开户并取得随机初始密码，再到 [stock.azurpilot.com](https://stock.azurpilot.com) 登录并强制改密。单独 @机器人打开主菜单，点击各指令按钮可查看用法与示例。将本页显示或复制的 `绑定股票 <绑定码>`（不含 `/`）在群里 @官方机器人后发送，页面会在绑定成功后于新标签页打开独立交易所；浏览器拦截时可点击「进入交易所」。
-
-交易 UI、行情图表、教程、登录、Google reCAPTCHA 与旧交易代理已从 AzurPilot 删除。前端仅调用 `stock.status` 和 `stock.register`。实例签名、已有行动力增量上报、断网持久队列及 30 分钟月份摘要校对由 Python 后端独立执行，不改变游戏任务。接入地址由 `STOCK_EXCHANGE_URL` 指定，默认 `https://stock.azurpilot.com`，开发仅允许回环 HTTP。
-
-`npm run dev:mock --prefix frontend` 提供隔离的股票注册与绑定展示夹具，不依赖外部交易所。`npm run test:e2e:stock --prefix frontend` 验证告知确认、注册、群链接、绑定命令、移动布局、私钥隔离、删股停报提示及自动新标签页跳转；真实签名、增量、重启补传及摘要修复由 Python 单测覆盖。
-
-群内 @提示及绑定命令显示、复制去掉 `/` 的调整，只需发布完整前端构建产物；新版机器人菜单需配套加载官方 QQ 插件 v2.0.1。相对于本次改动前的 v2 仓库版本，股票 API、实例身份、签名与历史协议均未变，无须更新或重启 AzurPilot 同步后端、交易所后端。
-
-此次 v2 接入须配套更新 AzurPilot 前后端，并在 v2 交易所就绪后重启 AzurPilot。旧 `bindings.json` 保留但不作为新股票登记；股票登记位于 `config/stock-exchange/stocks-v2.json`，身份、密钥和历史仍按完整 config 备份。协议及恢复行为见 [前端 API](API.md#股票实例接入-v2)。
-
 ## 资源管理
 
 实例侧栏「资源管理」对应 `/i/:instance/resources`，独立展示任务来源 → 资源 → 用途任务的桑基图、最近库存、收支依据与分页明细。支持自定义区间、资源和任务筛选、完整 CSV 导出及石油控制设置。刷新只读取本地账本，空实例不生成虚假收支。详细采集、归因与库存复核规则见 [资源管理文档](../docs/modules/webui/resource-management.md)。
@@ -180,5 +168,3 @@ npm run test:e2e:mock
 「扫描更新」页的「导出舰船 JSON」按钮会重新读取 `dock.report`，下载 `<实例名>-ships-<导出时间>.json`。文件包含 `version: 1`、`exported_at` 及完整报告：`ships` 只包含已保存的舰船，保留独立卡片 ID、未知经验、满星/改造状态和识别待核对标记；`pending_changes`、`pending_revision`、`pending_read` 单独保留候选差异和读取摘要。导出用于备份和离线核对，不修改数据库、不确认候选差异，也不启动游戏任务。此完整报告与「导入舰船清单」的精简字段格式不同，不能直接用于该导入入口。
 
 心智的编辑、导入、截图识别和导出继续使用 `mind.*`；舰船科技的人工历史修订继续使用 `fleetTech.patch`。两者的草稿和人工设置独立，分析页面本身不触发游戏任务。
-
-本次注册流程与删股联动更新需要配套更新 AzurPilot 股票前端和 Python 后端并重启。`stock.register` 新增 noticeVersion 告知字段，新旧 AzurPilot 前后端不能混用新注册流程。既有 v2 上报签名保留；连接旧 v2 交易所时不会发送未声明的 reconcile。管理员删除原股票后，受保护登记保存删除状态并停止上报；备份包含完整 config/stock-exchange。网页重新绑定前账户不可用，远端旧股票/交易历史不会被本地重建删除。

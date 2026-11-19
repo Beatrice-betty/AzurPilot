@@ -195,31 +195,6 @@ INTERNAL_ERROR 不向浏览器返回堆栈；参数校验详情不回显输入�
 
 上传仅接受 `x-azurpilot-background-token` 请求头；图片/视频标签不能设置请求头，代抓也接受 `token` 查询参数。该令牌仅授权背景接口，不能登录或调用其他 WebUI 方法；不得把访问密码放入图片 URL。令牌只在内存中使用，每次应用创建重新生成，不写入浏览器持久化设置；部署的访问日志也应避免记录含令牌的完整 URL。
 
-## 股票实例接入 v2
-
-`stock.status({instance})` 返回 `{url,instance,instanceId,registered,deleted,bound,stock,bindingCode,message,lastObservedAt}`。`stock` 是独立股票摘要或 `null`，`lastObservedAt` 为秒。绑定码只在已认证 AzurPilot 会话中展示，供实例所有者在 QQ 群向官方机器人发送绑定命令，不进入公开行情。浏览器不接触实例私钥或交易账户会话。
-
-`stock.register({instance,username,noticeVersion})` 仅注册当前实例股票。确认公开持续同步告知（`noticeVersion=stock-public-v2-20261101`）并提供 2 至 32 字的股票用户名，不创建 QQ 交易账户，不接受密码、行动力或浏览器提供的签名。QQ 交易身份由官方机器人唯一标识确定；群内发送“注册 <用户名>”直接开户并获得随机初始密码，首次网页登录强制改密并要求绑定股票。旧 `stock.request` 交易代理已删除。
-
-入口仍为 `/#/i/:instance/stock-exchange`，由 `src/pages/StockExchange.tsx` 提供并沿用 WebUI 主题。未绑定时显示 QQ 群 [1126124220](https://qm.qq.com/q/93NWF3S362) 和私密绑定命令；已注册且绑定时尝试在新标签页打开 [stock.azurpilot.com](https://stock.azurpilot.com)，弹窗被浏览器拦截时提供直接按钮。交易、行情图表、教程、密码及登录只在独立交易所提供。Google reCAPTCHA 已移除。
-
-Python 后端使用 `STOCK_EXCHANGE_URL`（默认 `https://stock.azurpilot.com`，开发仅允许回环 HTTP）调用 `/api/v2/instance/register|status|report|manifest`；服务端声明 reconcile 能力时，追加签名月摘要确认并记录成功校对时间。。请求使用稳定实例 UUID 和 Ed25519 签名；签名规范与字段见相邻交易所仓库 `docs/API-v2.md`。请求正文使用紧凑 JSON。行情点是 `{t:毫秒,p:整数总行动力}`，不重复上传交易所不需要的游戏资源快照。
-
-实例 HTTP 请求统一携带 `User-Agent: AzurPilot-StockExchange/2.0`，向公网 WAF 如实标识应用客户端，避免默认 `Python-urllib` 标识被拒绝。该请求头不改变签名、数据或前端接口；更新 Python 后端并重启 AzurPilot 后生效。
-
-`ActionHistory` 延续现有本地持久队列与实例隔离。每 2 秒检查文件是否改变，常规仅发送未被成功确认的增量；同毫秒修正重新入队，断网指数退避，重启继续上传。约每五分钟比较月份 count / SHA-256；摘要不一致时只重发缺失或不一致月份，cursor 不作为完整性证明。中央已保存历史完整导入，不按记录条数或月份截断；旧 CL1 数据只按既有迁移规则导入当月总行动力，原文件保留。
-
-股票登记保存为 `config/stock-exchange/stocks-v2.json`，身份与队列继续使用 `config/stock-exchange/` 既有文件密钥方案。旧账户登记 `bindings.json` 不再用于 v2，也不删除旧数据。新协议不兼容旧交易所 API；先提供 v2 交易所，再配套更新 AzurPilot 后端与前端并重启 AzurPilot。备份仍需包含完整 config 与 SQLite WAL。
-
-交易所管理员删除股票后返回 410 `STOCK_DELETED`。后端约每 15 秒检查远端状态，收到删除即持久写入受保护股票登记和 `stocks-retired-v2.json` 墓碑、停止监视与上报；重启或强制同步也不重试。即使本地绑定缺失，原 UUID 的删除仍会被记住。页面返回 `deleted:true`、不再提供该身份注册按钮；原交易账户须绑定其他股票后才可使用。删除期间不改脚本、调度、资源观察或远端历史。网络断开时由交易所拒绝所有旧身份上传，恢复连接后客户端获知删除。
-
-`stock` WebSocket 主题只通知本地实例状态，已移除远端行情 SSE。页面在可见时每 15 秒检查绑定状态；不显示时停止轮询。股票异常只影响该页面与上传，不阻断普通配置、资源采集、调度或游戏任务。
-
-`stock.rebuild({instance,confirm?,scope?})` 保留为故障恢复 API：先预览实际范围，确认后备份并重建股票身份。范围变化返回 `STOCK_REBUILD_SCOPE_CHANGED`，不会自动扩大。此操作不重置远端交易账户。页面先展示计划、实际范围与受影响实例，勾选确认后才执行，允许取消；不会自动扩大范围。
-
-真实跨进程集成：先使用当前 Go 源码启动回环服务及独立名称含 `_test` 的 Postgres 数据库；设置 `EXCHANGE_INTEGRATION_URL`、`EXCHANGE_INTEGRATION_DATABASE_URL`、`EXCHANGE_INTEGRATION_BOT_TOKEN`，并指定本机 `EXCHANGE_INTEGRATION_PSQL` 或隔离 Pg 容器名 `EXCHANGE_INTEGRATION_PG_CONTAINER`；管理员删股联动用例还需隔离 `EXCHANGE_INTEGRATION_ADMIN_PASSWORD`，运行 `uv run python -m unittest tests.test_stock_exchange_integration`。用例只使用临时 AzurPilot 配置，会注册隔离股票/交易账号并删除该股票的一条历史以验证摘要修复；禁止连接真实用户数据库。未显式配置时跳过，不计为集成通过。
-
-
 ## 本地启动器 WS v2
 
 Python 后端提供独立的 `/api/v2/launcher/ws`，启动器主动连接；控制命令、通知与登录票据共用一条连接。页面仍通过业务 WS 调用 `launcher.status`、`launcher.autostart.set` 和 `launcher.command.get`，订阅全局 `launcher` 主题。`auth.launcher` 消费 60 秒一次性票据，不传输或存储访问密码。以上操作与主题限定本机直连，写操作遵循 DEMO 只读保护。

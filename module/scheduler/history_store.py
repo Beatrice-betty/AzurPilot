@@ -33,13 +33,13 @@ class AuthenticatedHistoryStore:
 
     @contextmanager
     def connection(self, instance, write=False, baseline=None, strict_history=False):
-        """打开实例专用认证历史库，普通资源事务不因交易所认证失败而中断。
+        """打开实例专用认证历史库，兼顾普通资源事务的独立提交。
 
         Args:
             instance: 实例名。
             write: 是否以可写方式打开。
             baseline: 迁移行动力历史时使用的初始值。
-            strict_history: 交易所读取时启用历史强校验，损坏时抛出异常。
+            strict_history: 启用历史强校验，损坏时抛出异常。
         """
         path = self.path(instance)
         protection = GameDataProtector(self.directory.parent.parent)
@@ -97,7 +97,7 @@ class AuthenticatedHistoryStore:
                     except HISTORY_ERRORS:
                         if strict_history:
                             raise
-                        # 茗交所认证失败只停止交易同步，不回滚普通调度或资源记录。
+                        # 非严格模式保留普通调度或资源记录的提交。
                 connection.commit()
                 if connection.history_guard:
                     try:
@@ -144,7 +144,7 @@ class AuthenticatedHistoryStore:
                 except sqlite3.Error:
                     if connection.history_strict:
                         raise
-                    # 可选历史表损坏也不能阻断普通资源记录；茗交所读取时仍会报错。
+                    # 可选历史表损坏时，普通资源记录仍可提交。
 
     def observe(self, instance, name, value, timestamp, source):
         """保存本次观察并更新历史校验状态。"""

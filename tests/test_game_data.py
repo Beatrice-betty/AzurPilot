@@ -1,4 +1,4 @@
-"""茗交所跨部署密钥与旧版迁移回归；只使用临时文件和隔离身份。"""
+"""本地历史跨部署密钥与旧版迁移回归，使用临时文件和隔离身份。"""
 import base64
 import errno
 import hashlib
@@ -14,9 +14,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from module.api.protocol import ApiError
-from module.api.stock_exchange_identity import binding_key, load_identity
 from module.runtime.account_local import LocalProtector
-from module.runtime.game_data import GameDataProtector, canonical
+from module.runtime.game_data import INSTANCE_FIELD, GameDataProtector, canonical
 
 
 def make_directory_link(link, target):
@@ -42,7 +41,8 @@ class GameDataTests(unittest.TestCase):
         self.addCleanup(context.stop)
 
     def make_legacy(self, native=False):
-        identity, signing = load_identity(self.root, 'test')
+        identity = self.protection.resolve('test')
+        self.protection.write_file('identities/' + identity + '.json', {'fixture': '原实例'})
         self.protection.write_file('bindings.json', {'fixture': '原玩家绑定'})
         self.protection.anchor('fixture/history', [3, 4, 'a' * 64], prepare=True)
         self.protection.anchor('fixture/history', [3, 4, 'a' * 64])
@@ -73,7 +73,7 @@ class GameDataTests(unittest.TestCase):
         self.protection.key_path.unlink()
         self.protection.marker.unlink()
         self.protection.legacy_marker.write_text('AzurPilot game protection v1\n', encoding='utf-8')
-        return identity, binding_key(identity, signing), state
+        return identity, state
 
     def test_fresh_identity_without_host_user_or_os_protection(self):
         for platform in ('linux', 'darwin', 'win32'):
@@ -86,10 +86,9 @@ class GameDataTests(unittest.TestCase):
                 root = (Path(self.temp.name) / platform).resolve()
                 (root / 'config').mkdir(parents=True)
                 (root / 'config' / 'test.json').write_text(json.dumps({'Alas': {}}), encoding='utf-8')
-                identity, key = load_identity(root, 'test')
-                again, same = load_identity(root, 'test')
-                self.assertEqual(binding_key(identity, key), binding_key(again, same))
                 protection = GameDataProtector(root)
+                identity = protection.resolve('test')
+                self.assertEqual(identity, GameDataProtector(root).resolve('test'))
                 self.assertTrue(protection.key_path.is_relative_to(root / 'config'))
                 self.assertFalse(self.keys.exists())
 
@@ -97,34 +96,34 @@ class GameDataTests(unittest.TestCase):
         original = (self.root / 'config' / 'test.json').read_bytes()
         with patch.object(GameDataProtector, '_save_state', side_effect=OSError('隔离写入失败')):
             with self.assertRaises(ApiError):
-                load_identity(self.root, 'test')
+                self.protection.resolve('test')
         self.assertFalse(self.protection.key_path.exists())
         self.assertFalse(self.protection.state_path.exists())
         self.assertEqual(original, (self.root / 'config' / 'test.json').read_bytes())
-        identity, _ = load_identity(self.root, 'test')
-        self.assertEqual(identity, json.loads((self.root / 'config' / 'test.json').read_bytes())['_stockInstance'])
+        identity = self.protection.resolve('test')
+        self.assertEqual(identity, json.loads((self.root / 'config' / 'test.json').read_bytes())[INSTANCE_FIELD])
 
     def test_initialization_with_only_committed_key_can_resume(self):
         # 模拟进程在原子保存密钥后、首次空登记落盘前退出。
         self.protection.key_path.parent.mkdir(mode=0o700)
         original = os.urandom(32)
         self.protection.key_path.write_bytes(original)
-        load_identity(self.root, 'test')
+        self.protection.resolve('test')
         self.assertEqual(original, self.protection.key_path.read_bytes())
         self.assertTrue(self.protection.state_path.exists())
 
     def test_unregistered_existing_identity_cannot_resume_empty_registry(self):
-        load_identity(self.root, 'test')
+        self.protection.resolve('test')
         self.protection.state_path.unlink()
         self.protection.marker.unlink()
         original = self.protection.key_path.read_bytes()
         with self.assertRaises(ApiError):
-            load_identity(self.root, 'test')
+            self.protection.resolve('test')
         self.assertEqual(original, self.protection.key_path.read_bytes())
         self.assertFalse(self.protection.state_path.exists())
 
     def test_config_mount_survives_new_process_and_project_path(self):
-        identity, key = load_identity(self.root, 'test')
+        identity = self.protection.resolve('test')
         self.protection.write_file('bindings.json', {'fixture': '原玩家绑定'})
         self.protection.anchor('fixture/history', [3, 4, 'a' * 64], prepare=True)
         self.protection.anchor('fixture/history', [3, 4, 'a' * 64])
@@ -134,17 +133,15 @@ class GameDataTests(unittest.TestCase):
         script = '''
 import sys
 from unittest.mock import patch
-from module.api.stock_exchange_identity import load_identity, binding_key
 from module.runtime.account_local import LocalProtector
 from module.runtime.game_data import GameDataProtector
 with patch.object(LocalProtector, 'host_identity', side_effect=AssertionError('不能读取机器标识')):
-    identity, key = load_identity(sys.argv[1], 'test')
-    assert binding_key(identity, key) == sys.argv[2]
     protection = GameDataProtector(sys.argv[1])
+    assert protection.resolve('test') == sys.argv[2]
     assert protection.read_file('bindings.json') == {'fixture': '原玩家绑定'}
     assert protection.anchor('fixture/history', [3, 4, 'a' * 64])
 '''
-        result = subprocess.run([sys.executable, '-c', script, str(moved), binding_key(identity, key)],
+        result = subprocess.run([sys.executable, '-c', script, str(moved), identity],
                                 capture_output=True, text=True, encoding='utf-8', timeout=30)
         self.assertEqual(0, result.returncode, result.stderr)
 
@@ -177,16 +174,18 @@ with patch.object(LocalProtector, 'host_identity', side_effect=AssertionError('�
         self.assertEqual(b'unique-identity', self.protection.file_path('identities/other.json').read_bytes())
 
     def test_cache_protected_files_use_normal_config_loading(self):
-        identity, key = load_identity(self.root, 'test')
+        identity = self.protection.resolve('test')
+        identity_file = 'identities/' + identity + '.json'
+        self.protection.write_file(identity_file, {'fixture': '原实例'})
         self.protection.write_file('bindings.json', {'fixture': '保留原绑定'})
         cache = self.root / 'cache' / 'stock-exchange'
         cache.mkdir(parents=True)
         for name in ('identities', 'bindings.json', 'protected-v2'):
             (self.protection.directory / name).replace(cache / name)
-        again, same = load_identity(self.root, 'test')
+        again = self.protection.resolve('test')
         self.assertFalse(cache.exists())
         self.assertEqual(identity, again)
-        self.assertEqual(binding_key(identity, key), binding_key(again, same))
+        self.assertEqual({'fixture': '原实例'}, self.protection.read_file(identity_file))
         self.assertEqual({'fixture': '保留原绑定'}, self.protection.read_file('bindings.json'))
 
     def test_cache_migration_supports_separate_mounts(self):
@@ -202,12 +201,15 @@ with patch.object(LocalProtector, 'host_identity', side_effect=AssertionError('�
 
     def test_parallel_initialization_keeps_one_identity_and_key(self):
         script = '''
+import hashlib
 import json
 import sys
 from pathlib import Path
-from module.api.stock_exchange_identity import load_identity, binding_key
-identity, key = load_identity(sys.argv[1], 'test')
-Path(sys.argv[2]).write_text(json.dumps([identity, binding_key(identity, key)]), encoding='utf-8')
+from module.runtime.game_data import GameDataProtector
+protection = GameDataProtector(sys.argv[1])
+identity = protection.resolve('test')
+key_digest = hashlib.sha256(protection.key_path.read_bytes()).hexdigest()
+Path(sys.argv[2]).write_text(json.dumps([identity, key_digest]), encoding='utf-8')
 '''
         outputs = [Path(self.temp.name) / f'process-{index}.json' for index in range(3)]
         processes = [subprocess.Popen([sys.executable, '-c', script, str(self.root), str(path)],
@@ -224,17 +226,18 @@ Path(sys.argv[2]).write_text(json.dumps([identity, binding_key(identity, key)]),
                     process.communicate(timeout=10)
         records = [json.loads(path.read_bytes()) for path in outputs]
         self.assertEqual([records[0]] * len(records), records)
-        identity, key = load_identity(self.root, 'test')
-        self.assertEqual(records[0], [identity, binding_key(identity, key)])
+        identity = self.protection.resolve('test')
+        key_digest = hashlib.sha256(self.protection.key_path.read_bytes()).hexdigest()
+        self.assertEqual(records[0], [identity, key_digest])
 
     def test_legacy_migration_keeps_identity_files_bindings_and_checkpoints(self):
-        identity, binding, old_state = self.make_legacy()
+        identity, old_state = self.make_legacy()
         original = {path: path.read_bytes() for path in self.protection.directory.rglob('*.json')}
         with patch.object(LocalProtector, 'host_identity', side_effect=AssertionError('容器身份不应阻止迁移')), \
                 patch('module.runtime.game_data.dpapi', side_effect=lambda value, decrypt=False: bytes(value)):
-            again, key = load_identity(self.root, 'test')
+            again = self.protection.resolve('test')
         self.assertEqual(identity, again)
-        self.assertEqual(binding, binding_key(again, key))
+        self.assertEqual({'fixture': '原实例'}, self.protection.read_file('identities/' + identity + '.json'))
         for path, raw in original.items():
             self.assertEqual(raw, path.read_bytes())
         self.assertTrue(old_state.exists())
@@ -246,25 +249,23 @@ Path(sys.argv[2]).write_text(json.dumps([identity, binding_key(identity, key)]),
 
     @unittest.skipUnless(os.name == 'nt', '验证真实 Windows DPAPI 旧数据迁移')
     def test_native_windows_legacy_key_migrates(self):
-        identity, binding, _ = self.make_legacy(native=True)
-        again, key = load_identity(self.root, 'test')
-        self.assertEqual(identity, again)
-        self.assertEqual(binding, binding_key(again, key))
+        identity, _ = self.make_legacy(native=True)
+        self.assertEqual(identity, self.protection.resolve('test'))
+        self.assertEqual({'fixture': '原实例'}, self.protection.read_file('identities/' + identity + '.json'))
 
     def test_interrupted_legacy_migration_reuses_authenticated_key(self):
-        identity, binding, _ = self.make_legacy()
+        identity, _ = self.make_legacy()
         script = '''
 import os
 import sys
 from pathlib import Path
 from unittest.mock import patch
-from module.api.stock_exchange_identity import load_identity
 from module.runtime.account_local import LocalProtector
 from module.runtime.game_data import GameDataProtector
 with patch.object(LocalProtector, 'key_directory', return_value=Path(sys.argv[2])), \\
      patch('module.runtime.game_data.dpapi', side_effect=lambda value, decrypt=False: bytes(value)), \\
      patch.object(GameDataProtector, '_save_state', side_effect=lambda *args: os._exit(82)):
-    load_identity(sys.argv[1], 'test')
+    GameDataProtector(sys.argv[1]).resolve('test')
 '''
         result = subprocess.run([sys.executable, '-c', script, str(self.root), str(self.keys)],
                                 capture_output=True, text=True, encoding='utf-8', timeout=30)
@@ -272,18 +273,18 @@ with patch.object(LocalProtector, 'key_directory', return_value=Path(sys.argv[2]
         original = self.protection.key_path.read_bytes()
         self.assertFalse(self.protection.state_path.exists())
         with patch('module.runtime.game_data.dpapi', side_effect=lambda value, decrypt=False: bytes(value)):
-            again, key = load_identity(self.root, 'test')
+            again = self.protection.resolve('test')
         self.assertEqual(identity, again)
-        self.assertEqual(binding, binding_key(again, key))
+        self.assertEqual({'fixture': '原实例'}, self.protection.read_file('identities/' + identity + '.json'))
         self.assertEqual(original, self.protection.key_path.read_bytes())
 
     def test_unrecoverable_legacy_key_does_not_modify_data(self):
-        _, _, old_state = self.make_legacy()
+        _, old_state = self.make_legacy()
         next(self.keys.glob('*.key')).unlink()
         original = old_state.read_bytes()
         files = {path: path.read_bytes() for path in self.protection.directory.rglob('*') if path.is_file()}
         with self.assertRaises(ApiError) as failure:
-            load_identity(self.root, 'test')
+            self.protection.resolve('test')
         self.assertEqual('STOCK_STORAGE_DAMAGED', failure.exception.code)
         self.assertIn('旧版', failure.exception.message)
         self.assertFalse(self.protection.state_path.exists())
@@ -295,21 +296,23 @@ with patch.object(LocalProtector, 'key_directory', return_value=Path(sys.argv[2]
     def test_missing_portable_registry_never_falls_back_to_old_checkpoint(self):
         self.make_legacy()
         with patch('module.runtime.game_data.dpapi', side_effect=lambda value, decrypt=False: bytes(value)):
-            load_identity(self.root, 'test')
+            self.protection.resolve('test')
         self.protection.write_file('bindings.json', {'fixture': '迁移后的新玩家绑定'})
         original = self.protection.file_path('bindings.json').read_bytes()
         self.protection.state_path.unlink()
         self.protection.key_path.unlink()
         with self.assertRaises(ApiError):
-            load_identity(self.root, 'test')
+            self.protection.resolve('test')
         self.assertFalse(self.protection.state_path.exists())
         self.assertEqual(original, self.protection.file_path('bindings.json').read_bytes())
 
     def test_modified_key_context_or_registry_blocks_without_rebuilding(self):
-        identity, _ = load_identity(self.root, 'test')
+        identity = self.protection.resolve('test')
+        identity_file = 'identities/' + identity + '.json'
+        self.protection.write_file(identity_file, {'fixture': '原实例'})
         key = self.protection.key_path.read_bytes()
         registry = self.protection.state_path.read_bytes()
-        identity_path = self.protection.file_path('identities/' + identity + '.json')
+        identity_path = self.protection.file_path(identity_file)
         original = identity_path.read_bytes()
         for corruption in ('key', 'context', 'registry'):
             with self.subTest(corruption=corruption):
@@ -324,12 +327,12 @@ with patch.object(LocalProtector, 'key_directory', return_value=Path(sys.argv[2]
                 else:
                     self.protection.state_path.write_bytes(b'{broken')
                 with self.assertRaises(ApiError):
-                    load_identity(self.root, 'test')
+                    self.protection.resolve('test')
                 self.assertEqual(original, identity_path.read_bytes())
 
     @unittest.skipIf(os.name == 'nt', 'POSIX 私有文件权限')
     def test_private_directory_and_key_permissions(self):
-        load_identity(self.root, 'test')
+        self.protection.resolve('test')
         self.assertEqual(0o700, stat.S_IMODE(self.protection.state_path.parent.stat().st_mode))
         self.assertEqual(0o600, stat.S_IMODE(self.protection.key_path.stat().st_mode))
         self.assertEqual(0o600, stat.S_IMODE(self.protection.state_path.stat().st_mode))
@@ -363,24 +366,22 @@ class MacOSGameDataTests(unittest.TestCase):
         with self.assertRaises(ApiError) as failure:
             LocalProtector.key_directory()
         self.assertEqual('LOCAL_KEY_UNAVAILABLE', failure.exception.code)
+        protection = GameDataProtector(self.root)
         with patch.object(LocalProtector, 'host_identity', side_effect=AssertionError('不能读取机器身份')), \
                 patch('module.runtime.game_data.dpapi', side_effect=AssertionError('不能调用 DPAPI')):
-            identity, key = load_identity(self.root, 'test')
-            again, same = load_identity(self.root, 'test')
-        self.assertEqual(binding_key(identity, key), binding_key(again, same))
-        protection = GameDataProtector(self.root)
+            identity = protection.resolve('test')
+            self.assertEqual(identity, GameDataProtector(self.root).resolve('test'))
         self.assertEqual(0o600, stat.S_IMODE(protection.key_path.stat().st_mode))
 
     def test_macos_temp_directory_alias_preserves_identity_and_checkpoints(self):
-        identity, key = load_identity(self.root, 'test')
         protection = GameDataProtector(self.root)
+        identity = protection.resolve('test')
         protection.write_file('bindings.json', {'fixture': '原玩家绑定'})
         protection.anchor('fixture/history', [3, 4, 'a' * 64], prepare=True)
         protection.anchor('fixture/history', [3, 4, 'a' * 64])
         physical = self.root.resolve()
-        again, same = load_identity(physical, 'test')
         reopened = GameDataProtector(physical)
-        self.assertEqual(binding_key(identity, key), binding_key(again, same))
+        self.assertEqual(identity, reopened.resolve('test'))
         self.assertEqual({'fixture': '原玩家绑定'}, reopened.read_file('bindings.json'))
         self.assertTrue(reopened.anchor('fixture/history', [3, 4, 'a' * 64]))
         self.assertEqual(physical, protection.root)

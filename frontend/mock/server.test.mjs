@@ -42,24 +42,3 @@ it('WebSocket 认证、实例订阅替换与空订阅按协议工作', async () 
     expect(events.map(event => event.seq)).toEqual(events.map((_, index) => index + 1))
   } finally {socket.terminate(); await mock.close()}
 })
-
-it('股票实例注册不创建交易账户，旧交易代理方法已移除', async () => {
-  const mock = createMockServer()
-  mock.server.listen(0, '127.0.0.1')
-  await once(mock.server, 'listening')
-  const port = mock.server.address().port
-  const socket = new WebSocket(`ws://127.0.0.1:${port}/api/v1/ws`, {origin: `http://127.0.0.1:${port}`})
-  const pending = new Map()
-  let counter = 0
-  socket.on('message', raw => {const value=JSON.parse(raw.toString());if(value.type==='response'){pending.get(value.id)?.(value);pending.delete(value.id)}})
-  const request = (method, params = {}) => new Promise(resolve => {const id=String(++counter);pending.set(id,resolve);socket.send(JSON.stringify({v:1,type:'request',id,method,params:{instance:'demo-main',...params}}))})
-  try {
-    await once(socket,'open')
-    expect((await request('stock.status')).result).toMatchObject({registered:false,bound:false})
-    const registered=await request('stock.register',{username:'测试股票',noticeVersion:'stock-public-v2-20261101'})
-    expect(registered.result).toMatchObject({registered:true,bound:false,stock:{name:'测试股票'}})
-    expect(registered.result.bindingCode).toBeTruthy()
-    expect(JSON.stringify(registered)).not.toContain('privateKey')
-    expect((await request('stock.request',{path:'/login'})).ok).toBe(false)
-  } finally {socket.terminate();await mock.close()}
-})

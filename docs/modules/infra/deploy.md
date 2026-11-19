@@ -59,26 +59,20 @@ deploy/
 | `python -m deploy.app` | 只重建前端产物 |
 | `deploy/docker/Dockerfile` | 容器构建（多阶段，预装前端产物） |
 
-### 茗交所持久化
+### 本地历史持久化
 
-股票接入 v2 须在交易所已提供 `/api/v2/instance/*` 后，配套更新 AzurPilot Python 后端与完整前端构建产物并重启 AzurPilot。默认交易所地址已改为 `https://stock.azurpilot.com`；若曾显式设置 `STOCK_EXCHANGE_URL`，更新对应环境变量后重启。交易账户在官方 QQ 群机器人命名注册，登录/强制改密在独立交易所，旧 `stock.request` 不再支持，新前端与旧 AzurPilot 后端不兼容。股票登记使用 `stocks-v2.json`；旧 `bindings.json` 保留但不用于新协议。没有改动脚本调度或普通业务数据库模型。
-
-股票实例本地数据统一持久化在 `config/stock-exchange/`：`game.key` 是随机游戏密钥，`registry.json` 保存加密实例登记、文件摘要和历史检查点，同目录保存密文身份、绑定与补传日志。它们不绑定主机、运行用户或项目绝对路径，不需要额外挂载用户 HOME 或提供 Linux `machine-id`。仓库的 Compose 与 Docker 运行示例挂载完整项目目录；迁移完成后只挂载配置目录也能保留实例股票身份与历史。例如使用 `/app/AzurPilot` 镜像时：
+`config/stock-exchange/` 中的游戏密钥、实例登记和检查点继续供本地行动力历史使用。仓库的 Compose 和 Docker 示例挂载完整项目。迁移完成后也可单独挂载配置目录。使用 `/app/AzurPilot` 镜像时，挂载方式如下。
 
 ```yaml
 volumes:
   - ./config:/app/AzurPilot/config:rw
 ```
 
-国内 Dockerfile 的工作目录是 `/app/AzurLaneAutoScript`，挂载目标需使用对应路径。新容器运行用户须有数据目录的读写权限；备份、迁移或恢复应停掉服务和 worker，再整体复制配置、中央 SQLite、旧 CL1 统计库与上述游戏数据，避免不同时刻的检查点和历史混用。包含 `game.key` 的备份可解密交易凭据，按私有数据管理。每日自动备份不会覆盖全部交易数据，不能替代这份完整备份。
+国内 Dockerfile 的工作目录是 `/app/AzurLaneAutoScript`。容器运行用户需要数据目录的读写权限。备份、迁移或恢复时，先停止服务和 worker，再一起保存配置、SQLite 和本地历史密钥，保持历史与检查点来自同一时刻。
 
-首次升级须让旧 `cache/stock-exchange/` 可见且可写。检测到旧目录后仅移动文件到 config，支持不同磁盘或容器挂载间的移动；同名冲突静默以默认加载的 config 数据为准，旧 cache 副本被覆盖。搬运后统一执行常规读取、格式升级与校验，文件有问题只在茗交所提示，不阻断正常配置操作。
+首次迁移须让旧 `cache/stock-exchange/` 可见且可写。旧文件支持跨盘搬迁，冲突时以 `config/` 为准。升级旧保护格式前需保留 `.game` 登记和配套 `.key`。Windows 的旧密钥须由原用户通过 DPAPI 解封。当前格式依赖文件访问权限保护，支持跨部署路径和主机使用。Linux、Windows 和 macOS 的 `game-data` CI 任务运行本地身份与历史迁移测试。
 
-已有本机保护数据在常规读取时认证并升级，保留原 UUID、私钥、绑定和检查点。旧版应先在原项目路径下升级，再移动部署；升级前需保留原用户密钥目录中的游戏 `.game` 登记和配套 `.key`。Windows 旧密钥须由原用户 DPAPI 解封，Linux 需旧密钥目录可见且文件可读取，容器的 machine-id 变化不阻止升级。若旧容器已被删除且这些文件没有备份，程序无法恢复其加密密钥；可恢复原密钥/登记，也可使用 `stock.rebuild` API 查看实际范围并显式确认重建股票身份。重建保留 `config/backup/stock-rebuild-*/` 原件备份；共享数据损坏时须确认所有本地股票身份范围，不改变独立交易所的交易账号。
-
-macOS 本机部署（Apple Silicon 与 Intel）使用相同的游戏密钥存储，不要求 Keychain、TPM、DPAPI 或机器标识；POSIX 文件权限与跨进程文件锁用于保护持久化读写。`GameDataProtector` 统一解析项目物理路径，兼容 macOS `/var` 等系统路径别名，不放开受保护目录内自定义符号链接的检查。Windows/Linux 数据须先按上述流程升级，再整体迁移 config 到 Mac，继续沿用身份和账户绑定。macOS 上的 Docker 部署同样持久化配置目录。CI 的 `game-data` 任务分别在原生 Apple Silicon、Intel macOS、Windows 与 Linux 执行 `tests.test_game_data`、`tests.test_stock_exchange`、`tests.test_stock_exchange_history` 和 `tests.test_stock_exchange_recovery`；平台专属用例只在对应系统运行。
-
-完整运行环境仍按 `pyproject.toml` 与 `uv.lock` 安装：当前 Apple Silicon 的 ONNX Runtime wheel 最低为 macOS 14，较旧系统不能直接安装这份锁定环境。跨平台依赖预检使用 `MACOSX_DEPLOYMENT_TARGET=14.0 uv sync --frozen --dry-run --python-platform aarch64-apple-darwin`；这只验证安装计划，不替代原生 Mac 上的安装、测试或模拟器验收。茗交所密钥方案本身没有这项 ONNX 系统版本要求。
+完整运行环境仍按 `pyproject.toml` 与 `uv.lock` 安装：当前 Apple Silicon 的 ONNX Runtime wheel 最低为 macOS 14，较旧系统不能直接安装这份锁定环境。跨平台依赖预检使用 `MACOSX_DEPLOYMENT_TARGET=14.0 uv sync --frozen --dry-run --python-platform aarch64-apple-darwin`；这只验证安装计划，不替代原生 Mac 上的安装、测试或模拟器验收。
 
 ## 6. 工作流程
 
@@ -100,12 +94,12 @@ Alas.bat → python -m deploy.installer
 
 ### 统一云 API 入口
 
-核心云接口地址集中在 `deploy/api_endpoints.py`，统一使用 `https://api.azurpilot.com`：
+只读接口地址集中在 `deploy/api_endpoints.py`。区服状态和维护公告默认使用 `https://api.azurpilot.com`。公告接口仅在设置 `AZURPILOT_API_BASE` 后启用。
 
 | 用途 | 路径与协议 |
 | --- | --- |
 | 公告 | `GET /api/v2/get/notice/data.json`，读取 `announcement`，撤回时清除本地公告缓存 |
-| 停服维护 | `GET /api/v2/get/maintenance?server=cn`，按当前区服查询；其他服不回退国服 |
+| 停服维护 | `GET /api/v2/get/maintenance?server=cn`。按当前区服查询，失败后查该区服的游戏网关。网关只给出当前状态，缺少开始时间时按原间隔重试公告 |
 | 单服状态 | `GET /api/v2/get/server?region=cn&server_id=1`，保留网关直连后备逻辑 |
 
 区服和停服维护接口要求 `X-AzurPilot-ID` 请求头。所有安装都发送相同的全零值。
@@ -158,5 +152,3 @@ Alas.bat → python -m deploy.installer
 - [WebUI 总览](../webui/index.md) —— 更新事务与进程监督全貌
 - [运行时服务](../webui/runtime.md) —— updater 与 installer 共享的依赖同步
 - [外部桥接与开发工具](submodule-tools.md) —— dev_tools 中的生成器（CI 侧的对应物）
-
-股票注册/删股联动版本需要同时更新 Python 与前端：新注册要求 noticeVersion 告知确认，股票被交易所删除后保存删除墓碑并停止上报。旧四类实例签名不变，reconcile 仅在能力已声明时启用。发布前备份完整 config/stock-exchange（包含 stocks-v2.json 与 stocks-retired-v2.json）；不要用回退旧同步代码恢复已删股票上传。仅更新上述股票接入组件，不更新调度或游戏脚本核心。

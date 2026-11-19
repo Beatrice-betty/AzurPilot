@@ -8,7 +8,6 @@ from unittest.mock import Mock, PropertyMock, patch
 
 import numpy as np
 
-from module.api.stock_exchange_history import ActionHistory, history_point
 from module.ocr.ocr import Ocr
 from module.os_handler.action_point import ActionPointHandler
 from module.scheduler.store import ProgramStore
@@ -59,7 +58,7 @@ class EmptyInventoryTests(unittest.TestCase):
             with self.subTest(fast=fast):
                 handler, row = self.update(fast=fast)
                 self.assertEqual({'Value': 186, 'Total': 436}, row)
-                # 只修正报价采集资格，不放宽游戏内库存缓存的校验。
+                # 资源统计可记录当前总量，游戏内库存缓存仍要求完整识别。
                 self.assertFalse(handler._ap_inventory_valid)
 
     def test_all_boxes_can_be_empty_on_a_loaded_panel(self):
@@ -82,7 +81,7 @@ class EmptyInventoryTests(unittest.TestCase):
                     _, row = self.update(fast=fast, **options)
                     self.assertTrue(row is None or 'Total' not in row)
 
-    def test_november_observation_enters_authenticated_history_and_upload_queue(self):
+    def test_observation_enters_authenticated_local_history(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'config').mkdir()
@@ -93,15 +92,9 @@ class EmptyInventoryTests(unittest.TestCase):
             def observe(name, value):
                 store.observe('test', name, value, stamp.isoformat(), 'fixture')
             self.update(observe=observe)
-            journal = ActionHistory(root)
-            try:
-                latest = journal.capture('test', {}, store.history.path('test'))
-                self.assertEqual(history_point(436, stamp.isoformat()), latest)
-                connection, _ = journal._connection('test')
-                self.assertEqual(('2026-11', 436, 0), connection.execute(
-                    'SELECT month,total,uploaded FROM samples').fetchone())
-            finally:
-                journal.close()
+            with store.history.connection('test', strict_history=True) as history:
+                row = history.execute('SELECT observed_at, total FROM action_point_history').fetchone()
+                self.assertEqual((stamp.isoformat(), 436), tuple(row))
 
 
 if __name__ == '__main__':

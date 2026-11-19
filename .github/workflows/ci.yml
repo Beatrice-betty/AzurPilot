@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   game-data:
-    name: 茗交所持久化 (${{ matrix.os }})
+    name: 游戏数据持久化 (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -41,8 +41,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libgl1 libglib2.0-0 libgomp1
       - name: 安装锁定依赖
         run: uv sync --frozen
-      - name: 验证身份持久化、历史认证、账户恢复与部署迁移
-        run: uv run python -m unittest tests.test_game_data tests.test_stock_exchange tests.test_stock_exchange_history tests.test_stock_exchange_recovery tests.test_profile_relocation
+      - name: 验证本地身份持久化与历史迁移
+        run: uv run python -m unittest tests.test_game_data tests.test_profile_relocation
 
   frontend:
     name: React 与 WebSocket 检查

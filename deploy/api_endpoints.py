@@ -1,4 +1,4 @@
-"""Shared cloud API origin; usable before application dependencies are loaded."""
+"""Read-only service origins; usable before application dependencies are loaded."""
 
 import os
 from urllib.parse import urlsplit
@@ -13,6 +13,7 @@ try:
     ) else ''
 except ValueError:
     API_BASE_URL = ''
-MAINTENANCE_API_URL = f'{API_BASE_URL}/api/v2/get/maintenance' if API_BASE_URL else ''
+STATUS_API_BASE_URL = API_BASE_URL or 'https://api.azurpilot.com'
+MAINTENANCE_API_URL = f'{STATUS_API_BASE_URL}/api/v2/get/maintenance'
 # 两个状态接口要求此请求头。所有安装发送同一个值，避免携带本机标识。
 ANONYMOUS_STATUS_HEADERS = {'X-AzurPilot-ID': '0' * 32}

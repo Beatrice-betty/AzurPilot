@@ -1,15 +1,14 @@
 """游戏服务器状态检查器。
 
-通过游戏网关查询碧蓝航线服务器状态。在任务调度前
+优先通过公共 API 查询碧蓝航线服务器状态，失败时直连游戏网关。在任务调度前
 检查所选服务器是否可用，避免在维护或尚未开放期间执行无效操作。
 """
 
 from collections import deque
-from json import JSONDecodeError
 
 from module.base import http
 
-from deploy.api_endpoints import ANONYMOUS_STATUS_HEADERS, API_BASE_URL
+from deploy.api_endpoints import ANONYMOUS_STATUS_HEADERS, STATUS_API_BASE_URL
 from module.base.timer import Timer
 from module.config.server import VALID_SERVER_LIST as server_list
 from module.config.server import ServerInfo, get_server_info
@@ -17,7 +16,7 @@ from module.exception import ScriptError
 from module.logger import logger
 from module.server_status import ServerStatusQueryError, query_server
 
-SERVER_API_BASE = API_BASE_URL
+SERVER_API_BASE = STATUS_API_BASE_URL
 AVAILABLE_SERVER_STATES = {'normal', 'full', 'reg_full'}
 UNAVAILABLE_SERVER_STATES = {'maintenance', 'unopened', 'unknown'}
 
@@ -59,8 +58,8 @@ class ServerChecker:
 
         公共 API 的连接和读取超时各为 3 秒，失败后改为直连游戏网关，避免
         慢接口长时间阻塞任务启动。两种来源均无法取得状态
-        才会走既有的快速重试；响应结构错误和非预期客户端错误仍会抛出
-        ``ScriptError``，由顶层临时禁用检测器。
+        才会走既有的快速重试；API 响应无效且网关也查不到时，由顶层
+        按既有兼容逻辑处理。
 
         Raises:
             ScriptError: 服务器不存在、返回结构无效或 API 协议不匹配时抛出。
@@ -87,29 +86,36 @@ class ServerChecker:
                 )
             finally:
                 session.close()
-            if response.status_code == 200:
+            status_code = response.status_code
+            if status_code == 200:
                 self._load_response(response.json())
-            elif response.status_code == 404:
-                # 本地元数据可能已更新而 API 尚未收录，保留旧接口的兼容降级。
-                if self._server_in_local_list():
-                    self._state.append(True)
-                    logger.info(
-                        f'[服务器检查] 服务器 "{self._server}" 可用（本地已验证，API未知）。'
-                    )
-                else:
-                    self._state.append(False)
+            elif status_code == 404:
+                if not self._server_in_local_list():
                     raise ScriptError(f'Server "{self._server}" does not exist!')
-            elif response.status_code == 429 or response.status_code >= 500:
+                if self._load_gateway_server():
+                    return
+                # 本地元数据可能已更新而 API 尚未收录，保留旧接口的兼容降级。
+                self._state.append(True)
+                logger.info(f'[服务器检查] 服务器 "{self._server}" 可用（本地已验证，API未知）。')
+            elif status_code == 429 or status_code >= 500:
                 raise ServerApiUnavailableError(
-                    f'Get status_code {response.status_code}. '
+                    f'Get status_code {status_code}. '
                     f'Response is {getattr(response, "text", "")}'
                 )
             else:
                 raise ScriptError(
-                    f'Get status_code {response.status_code}. '
+                    f'Get status_code {status_code}. '
                     f'Response is {getattr(response, "text", "")}'
                 )
-        except (http.exceptions.ConnectionError, http.exceptions.Timeout) as e:
+        except (ValueError, ScriptError) as e:
+            # 查不到目标服的有效状态时，网关仍可能有可用结果。
+            if self._load_gateway_server():
+                return
+            self._state.append(False)
+            if isinstance(e, ScriptError):
+                raise
+            raise ScriptError('服务器检查 API 与游戏网关均返回无效数据。') from e
+        except http.exceptions.RequestException as e:
             logger.warning(f'[服务器检查] 公共状态 API 查询失败，尝试直连游戏网关：{e}')
             if self._load_gateway_server():
                 return
@@ -119,11 +125,6 @@ class ServerChecker:
                 self._state.append(False)
             else:
                 self._state.append(self.fast_retry())
-        except (JSONDecodeError, ValueError) as e:
-            if self._load_gateway_server():
-                return
-            self._state.append(False)
-            raise ScriptError('服务器检查 API 与游戏网关均返回无效数据。') from e
         except Exception as e:
             logger.error(e)
             self._state.append(False)

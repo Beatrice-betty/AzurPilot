@@ -8,6 +8,7 @@ from module.base.api_client import ApiClient
 from module.handover.handover import HANDOVER_MAINTAIN_API, OperationHandover
 from module.api.announcement_service import AnnouncementService
 from module.server_checker import SERVER_API_BASE
+from module.server_status import GatewayServer, ServerStatusQueryError
 
 
 class ApiEndpointsTest(unittest.TestCase):
@@ -35,39 +36,64 @@ class ApiEndpointsTest(unittest.TestCase):
             response.text = json.dumps({'schema_version': 2, 'announcement': None})
             self.assertIsNone(service.get(force=True))
 
-    def test_default_has_no_external_notice_or_maintenance_origin(self):
-        self.assertEqual(SERVER_API_BASE, '')
-        self.assertEqual(HANDOVER_MAINTAIN_API, '')
+    def test_default_status_and_maintenance_origin_does_not_enable_announcements(self):
+        self.assertEqual(SERVER_API_BASE, 'https://api.azurpilot.com')
+        self.assertEqual(HANDOVER_MAINTAIN_API, 'https://api.azurpilot.com/api/v2/get/maintenance')
         self.assertIsNone(AnnouncementService().get(force=True))
 
+    @staticmethod
+    def handover(server, server_name='disabled'):
+        target = OperationHandover.__new__(OperationHandover)
+        target.config = SimpleNamespace(SERVER=server, Emulator_ServerName=server_name)
+        return target
+
     def test_maintenance_never_falls_back_from_jp_to_cn(self):
-        target = SimpleNamespace(config=SimpleNamespace(SERVER='jp'))
+        target = self.handover('jp', 'cn_android-0')
         response = Mock()
         response.json.return_value = {'schema_version': 2, 'server': 'jp', 'maintenance': None}
         with patch('module.handover.handover.HANDOVER_MAINTAIN_API', 'https://notice.example.invalid/maintenance'), patch(
             'module.handover.handover.http.get', return_value=response,
-        ) as request:
-            result, _, error = OperationHandover.handover_maintain_query(target)
+        ) as request, patch('module.handover.handover.query_region', return_value=[]) as gateway:
+            result, _, error = target.handover_maintain_query()
             self.assertEqual(result, {})
             self.assertEqual(error, '')
             self.assertEqual(request.call_args.kwargs['params'], {'server': 'jp'})
             self.assertEqual(request.call_args.kwargs['headers'], {'X-AzurPilot-ID': '0' * 32})
+            gateway.assert_not_called()
             response.json.return_value = {'schema_version': 2, 'server': 'cn', 'maintenance': {'starts_at': '2026-10-22T02:00:00Z'}}
-            result, _, error = OperationHandover.handover_maintain_query(target)
+            result, _, error = target.handover_maintain_query()
             self.assertIsNone(result)
             self.assertTrue(error)
+            gateway.assert_called_once_with('jp')
 
     def test_unavailable_maintenance_is_an_explicit_query_error(self):
         import requests
-        target = SimpleNamespace(config=SimpleNamespace(SERVER='cn'))
+        target = self.handover('cn', 'cn_android-0')
         response = Mock()
         response.raise_for_status.side_effect = requests.HTTPError('503 Service Unavailable')
         with patch('module.handover.handover.HANDOVER_MAINTAIN_API', 'https://notice.example.invalid/maintenance'), patch(
             'module.handover.handover.http.get', return_value=response,
-        ):
-            result, _, error = OperationHandover.handover_maintain_query(target)
+        ), patch('module.handover.handover.query_server', side_effect=ServerStatusQueryError('timeout')) as gateway:
+            result, _, error = target.handover_maintain_query()
         self.assertIsNone(result)
-        self.assertTrue(error)
+        self.assertIn('timeout', error)
+        gateway.assert_called_once_with('cn', 1)
+
+    def test_gateway_maintenance_has_current_status_but_cannot_schedule_handover(self):
+        target = self.handover('cn', 'cn_android-0')
+        target.config.OperationHandover_MaintainOverride = True
+        response = Mock()
+        response.json.return_value = {'schema_version': 2, 'server': 'cn', 'maintenance': {'starts_at': None}}
+        gateway_server = GatewayServer(1, '莱茵演习', 1, 0, 1)
+        with patch('module.handover.handover.http.get', return_value=response) as request, patch(
+            'module.handover.handover.query_server', return_value=gateway_server,
+        ) as gateway:
+            start, reason, queried = target.handover_maintain_state()
+        request.assert_called_once()
+        gateway.assert_called_once_with('cn', 1)
+        self.assertIsNone(start)
+        self.assertIn('当前维护中', reason)
+        self.assertFalse(queried)
 
 
 if __name__ == '__main__':
