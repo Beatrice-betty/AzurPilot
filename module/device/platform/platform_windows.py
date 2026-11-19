@@ -12,8 +12,6 @@ import time
 from functools import wraps
 from ctypes import wintypes
 
-import psutil
-
 from deploy.Windows.utils import DataProcessInfo
 from module.base.decorator import run_once
 from module.base.runtime_params import (
@@ -361,6 +359,8 @@ class PlatformWindows(PlatformBase, EmulatorManager):
         Returns:
             int: 已终止的进程数量
         """
+        import psutil
+
         count = 0
 
         for proc in psutil.process_iter():
@@ -595,6 +595,8 @@ class PlatformWindows(PlatformBase, EmulatorManager):
             )
             return
 
+        import psutil
+
         has_mumu_process = False
         for proc in psutil.process_iter(['name', 'cmdline']):
             try:
@@ -613,6 +615,8 @@ class PlatformWindows(PlatformBase, EmulatorManager):
     @staticmethod
     def _mumu_deep_processes_alive():
         """检查深度重启名单里是否还有 MuMu 进程存活。"""
+        import psutil
+
         for proc in psutil.process_iter(['name']):
             try:
                 if (proc.info['name'] or '').lower() in MUMU12_DEEP_PROCESS_NAMES:
@@ -639,6 +643,8 @@ class PlatformWindows(PlatformBase, EmulatorManager):
         Returns:
             bool: True 表示名单里的 MuMu 进程都已退出。
         """
+        import psutil
+
         # 先礼貌关闭全部实例，让 MuMu 自己释放一遍再动手。
         # 这一步失败（MuMuManager 不可用等）不影响后续按进程名清理，
         # 深度重启本身是最后手段，不能因为它的一部分失败就把恢复流程打断。
@@ -777,6 +783,8 @@ class PlatformWindows(PlatformBase, EmulatorManager):
             marker = [instance.name]
         else:
             return 0
+
+        import psutil
 
         path = os.path.normcase(os.path.abspath(exe))
         pids = []
