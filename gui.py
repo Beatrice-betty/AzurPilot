@@ -4,6 +4,20 @@
 跨平台进程清理以及在独立子进程中执行 Python 依赖同步（uv sync）。
 """
 
+import os
+import sys
+from pathlib import Path
+
+# 现有独立启动器仍从包内 Python 进入，业务模块由选定环境的子进程加载。
+if __name__ == '__main__' and os.environ.get('AZURPILOT_INDEPENDENT') == '1':
+    from deploy import independent_runtime
+
+    if not independent_runtime.is_launch_child():
+        root = Path(__file__).resolve().parent
+        # 等待子进程的入口不访问业务数据，迁移检查通过工作目录识别真正的业务进程。
+        os.chdir(root / 'runtime')
+        sys.exit(independent_runtime.launch_console(sys.argv[1:], root=root))
+
 # 启动器行为参数集中在 module/base/runtime_params.py(WebUI 启动器域);
 # 该模块零 import,对启动器最早期阶段无额外依赖。
 from module.base.runtime_params import (
@@ -14,14 +28,11 @@ from module.base.runtime_params import (
     WEBUI_START_RETRY_LIMIT,
 )
 import errno
-import os
 import queue
 import socket
-import sys
 import threading
 import time
 from multiprocessing import Event, Process, Queue, set_start_method
-from pathlib import Path
 from typing import Optional
 
 if sys.platform != "win32":
@@ -995,6 +1006,13 @@ def run_webui_supervisor(watch_sources: bool = False) -> int:
     try:
         while not should_exit:
             from deploy import independent
+
+            if independent.enabled():
+                from deploy.independent_runtime import RELAUNCH, needs_relaunch
+
+                if needs_relaunch(Path.cwd()):
+                    logger.info('[GUI] WebUI 正在切换到已选定的 Python 环境')
+                    return RELAUNCH
             trial = independent.enabled() and independent.trial_pending()
             logger.info('[GUI] 检查依赖同步状态，准备 WebUI 启动环境')
             stage_started = time.perf_counter()
@@ -1249,6 +1267,10 @@ def run_webui_supervisor(watch_sources: bool = False) -> int:
 
 def main() -> int:
     """初始化普通业务数据并启动 WebUI，失败原因写入 GUI 日志。"""
+    if os.environ.get('AZURPILOT_INDEPENDENT') == '1':
+        from deploy.independent_runtime import mark_hot_reload
+
+        mark_hot_reload()
     # Windows 父进程保留启动日志；文件不可写时继续输出到控制台。
     try:
         logger.set_file_logger('gui-launcher')

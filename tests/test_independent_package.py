@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from deploy import independent
+from deploy import independent, independent_runtime
 
 
 class TestIndependentPackage(unittest.TestCase):
@@ -236,7 +236,7 @@ class TestIndependentPackage(unittest.TestCase):
             latest = update(b'version = 6\n', {'gui.py', 'assets/revision.txt'})
             self.assertEqual((self.root / 'assets/revision.txt').read_text(), latest)
 
-    def test_prepare_refuses_incompatible_or_invalid_dependency_manifests(self):
+    def test_prepare_refuses_invalid_dependencies_or_legacy_code_with_new_dependencies(self):
         project = b'[project]\nname = "azurpilot"\nrequires-python = ">=3.14"\ndependencies = ["demo==1"]\n'
         lock = b'version = 1\n[[package]]\nname = "demo"\nversion = "1"\n'
         installed = {'pyproject.toml': project, 'uv.lock': lock}
@@ -267,7 +267,7 @@ class TestIndependentPackage(unittest.TestCase):
             ):
                 with (
                     self.subTest(name=name, contents=contents),
-                    self.assertRaisesRegex(RuntimeError, '不同的 Python 依赖'),
+                    self.assertRaisesRegex(RuntimeError, '无法使用已安装的 Python 环境'),
                 ):
                     independent.prepare(offer, self.root)
             name, contents = 'pyproject.toml', b'[project\n'
@@ -281,6 +281,77 @@ class TestIndependentPackage(unittest.TestCase):
 
         self.assertEqual(independent.read_json(self.root / independent.RECEIPT), self.current)
         self.assertFalse(list((self.root / independent.WORK).glob('ready-*')))
+
+    def test_dependency_update_only_activates_at_apply_and_restores_previous_environment_on_failure(self):
+        old_lock = b'version = 1\n[[package]]\nname = "demo"\nversion = "1"\n'
+        new_lock = old_lock.replace(b'version = "1"', b'version = "2"')
+        installed = {
+            'pyproject.toml': b'[project]\nrequires-python = ">=3.14"\n',
+            'uv.lock': old_lock,
+            'gui.py': b'',
+            'deploy/independent.py': b'',
+            'deploy/independent_runtime.py': b'',
+            'frontend/dist/index.html': b'<div id="root"></div>',
+            'frontend/dist/assets/index.js': b'asset',
+        }
+        for name, contents in installed.items():
+            target = self.root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(contents)
+        self.current['dependencies'] = independent.dependency_id(self.root)
+        independent.write_json(self.root / independent.RECEIPT, self.current)
+        independent.write_json(self.root / independent.FILES,
+                               {name: independent.digest(self.root / name) for name in installed})
+        repository, branch = independent.update_source(self.root)
+        offer = independent.GitOffer({'revision': '2' * 40}, repository, branch)
+
+        def stage_changes(root, checkout, revision, installed_revision, previous, staged, **kwargs):
+            staged.mkdir()
+            (staged / 'uv.lock').write_bytes(new_lock)
+            return {**previous, 'uv.lock': independent.digest(staged / 'uv.lock')}, True
+
+        def sync(root, name, project, current):
+            self.assertEqual((project / 'uv.lock').read_bytes(), new_lock)
+            self.assertEqual((root / 'uv.lock').read_bytes(), old_lock)
+            self.assertEqual(independent.read_json(root / independent.RECEIPT), self.current)
+            python = independent.installed_python(root, {'pythonEnvironment': name})
+            python.parent.mkdir(parents=True)
+            python.touch()
+            return python
+
+        def probe(root, trial, *, python):
+            self.assertEqual((trial / 'uv.lock').read_bytes(), new_lock)
+            self.assertTrue((trial / 'frontend/dist/index.html').is_file())
+            self.assertTrue(python.is_file())
+
+        with (
+            patch.object(independent, '_source_checkout', return_value=nullcontext((repository, self.root))),
+            patch.object(independent, '_uses_export_attributes', return_value=True),
+            patch.object(independent, '_stage_changes', side_effect=stage_changes),
+            patch.object(independent_runtime, 'sync_environment', side_effect=sync) as sync_environment,
+            patch.object(independent_runtime, 'supports_hot_reload', return_value=False) as hot_reload,
+            patch.object(independent, 'probe', side_effect=probe) as start,
+        ):
+            with self.assertRaisesRegex(RuntimeError, '先退出并重新启动'):
+                independent.prepare(offer, self.root, hot_reload=True)
+            sync_environment.assert_not_called()
+            hot_reload.return_value = True
+            start.side_effect = RuntimeError('candidate probe failed')
+            with self.assertRaisesRegex(RuntimeError, 'candidate probe failed'):
+                independent.prepare(offer, self.root, hot_reload=True)
+            self.assertFalse(list((self.root / independent.PYTHON_ENVIRONMENTS).iterdir()))
+            start.side_effect = probe
+            ready = independent.prepare(offer, self.root, hot_reload=True)
+
+        self.assertEqual((self.root / 'uv.lock').read_bytes(), old_lock)
+        independent.apply(ready, self.root)
+        python = independent.installed_python(self.root)
+        self.assertTrue(python.is_file())
+        self.assertEqual((self.root / 'uv.lock').read_bytes(), new_lock)
+        self.assertTrue(independent.recover(self.root))
+        self.assertFalse(python.exists())
+        self.assertEqual(independent.read_json(self.root / independent.RECEIPT), self.current)
+        self.assertEqual((self.root / 'uv.lock').read_bytes(), old_lock)
 
     @unittest.skipUnless(independent.os.name == 'nt', 'Windows MinGit timeout')
     def test_git_timeout_terminates_windows_process_tree_before_waiting(self):

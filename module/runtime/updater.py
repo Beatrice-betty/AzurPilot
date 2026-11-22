@@ -361,7 +361,7 @@ class Updater(DeployConfig, RuntimeGitManager):
                     self.state = "run update"
                     self.independent_error = ''
                     try:
-                        self.independent_ready = independent.prepare(self.independent_offer)
+                        self.independent_ready = independent.prepare(self.independent_offer, hot_reload=True)
                     except (OSError, RuntimeError, ValueError) as error:
                         self.independent_error = str(error)
                         logger.warning(self.independent_error)
