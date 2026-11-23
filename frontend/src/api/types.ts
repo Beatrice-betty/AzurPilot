@@ -57,6 +57,7 @@ export interface Resource { name: string; label: string; value: number | null; l
 export interface Overview {
   instance: string; revision: string; status: Status; tasks: ScheduledTask[]
   resources: Resource[]; emulator: Record<string, Value>
+  storageNotice?: string
 }
 export interface LogEntry { id: number; level: string; text: string }
 export interface Logs { instance: string; cursor: number; reset: boolean; entries: LogEntry[] }

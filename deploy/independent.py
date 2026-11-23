@@ -18,6 +18,7 @@ import tarfile
 import tempfile
 import threading
 import time
+import tomllib
 import urllib.request
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
@@ -38,6 +39,7 @@ MAX_MANIFEST_SIZE = 64 * 1024
 MAX_FRONTEND_SIZE = 40 * 1024 * 1024
 APP_DIRS = ('assets', 'bin', 'campaign', 'deploy', 'module', 'submodule', 'licenses')
 APP_FILES = ('alas.py', 'gui.py', 'mcp_server_sse.py', 'tui.py', 'pyproject.toml', 'uv.lock', 'LICENSE')
+DEPENDENCY_FILES = ('uv.lock', 'pyproject.toml')
 RECEIPT = Path('.azurpilot/independent.json')
 FILES = Path('.azurpilot/independent-files.json')
 WORK = Path('.azurpilot/independent-update')
@@ -70,7 +72,7 @@ def digest(path):
 def dependency_id(root, *, staged=None):
     root = Path(root)
     return hashlib.sha256(b'\0'.join(
-        _projected_file(root, staged, name).read_bytes() for name in ('uv.lock', 'pyproject.toml')
+        _projected_file(root, staged, name).read_bytes() for name in DEPENDENCY_FILES
     )).hexdigest()
 
 
@@ -78,6 +80,30 @@ def _projected_file(root, staged, name):
     if staged is not None and (staged / name).is_file():
         return staged / name
     return root / name
+
+
+def _dependency_spec(root, staged=None):
+    """读取会影响 Python 环境的配置，忽略排版和测试工具设置。"""
+    manifests = {}
+    for name in DEPENDENCY_FILES:
+        with _projected_file(root, staged, name).open('rb') as file:
+            try:
+                manifests[name] = tomllib.load(file)
+            except (tomllib.TOMLDecodeError, UnicodeDecodeError) as exc:
+                raise ValueError(f'{name} 格式无效，无法校验 Python 依赖') from exc
+    pyproject = manifests['pyproject.toml']
+    project = pyproject.get('project', {})
+    tool = pyproject.get('tool', {})
+    if not isinstance(project, dict) or not isinstance(tool, dict):
+        raise ValueError('pyproject.toml 项目配置格式无效，无法校验 Python 依赖')
+    project_fields = ('name', 'requires-python', 'dependencies', 'optional-dependencies', 'dynamic')
+    return (
+        manifests['uv.lock'],
+        {name: project.get(name) for name in project_fields},
+        pyproject.get('build-system', {}),
+        pyproject.get('dependency-groups', {}),
+        tool.get('uv', {}),
+    )
 
 
 def read_json(path):
@@ -754,11 +780,14 @@ def prepare(offer, root=None):
 
 def _prepare_update(offer, root, ready):
     current = read_json(root / RECEIPT)
-    if dependency_id(root) != current['dependencies']:
-        raise RuntimeError('本机依赖清单已经改变，请用完整安装包修复')
+    previous = read_json(root / FILES)
+    # 程序文件清单随每次更新写入，安装包的原始依赖指纹继续供安装和修复使用。
+    for name in DEPENDENCY_FILES:
+        path = check_target(root, name)
+        if not path.is_file() or digest(path) != previous.get(name):
+            raise RuntimeError('本机依赖清单已经改变，请用完整安装包修复')
     installed = current['revision']
     revision = offer.release['revision']
-    previous = read_json(root / FILES)
     # 先记录候选所属的版本，启动器退出后可以识别尚未应用的临时目录。
     write_json(ready / 'base.json', installed)
     staged = ready / 'app'
@@ -767,9 +796,10 @@ def _prepare_update(offer, root, ready):
             export_attributes = _uses_export_attributes(root, checkout, revision)
             files, comparable = _stage_changes(root, checkout, revision, installed, previous, staged,
                                                export_attributes=export_attributes)
-            if not all(name in files for name in ('gui.py', 'uv.lock', 'pyproject.toml', 'deploy/independent.py')):
+            if not all(name in files for name in ('gui.py', 'deploy/independent.py', *DEPENDENCY_FILES)):
                 raise RuntimeError('仓库不兼容此独立版，当前版本可以继续运行')
-            if dependency_id(root, staged=staged) != current['dependencies']:
+            if (any((staged / name).is_file() for name in DEPENDENCY_FILES)
+                    and _dependency_spec(root, staged) != _dependency_spec(root)):
                 raise RuntimeError('所选版本需要不同的 Python 依赖，请使用对应完整安装包')
             if update_source(root) != (offer.repository, offer.branch):
                 raise RuntimeError('更新源已更改，请重新检查更新')

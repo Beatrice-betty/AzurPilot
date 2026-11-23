@@ -77,11 +77,14 @@ def source_files(database):
     return {path.absolute(): kind for path, kind in result.items() if path.is_file()}
 
 
-def _startup_process_ids():
+def _startup_process_ids(pid=None):
     """识别当前入口的启动转发进程，不豁免可能写数据的 Python 祖先进程。"""
     import psutil
 
-    current = psutil.Process()
+    try:
+        current = psutil.Process(pid) if pid is not None else psutil.Process()
+    except psutil.NoSuchProcess:
+        return set()
     result = {current.pid}
     try:
         command = current.cmdline()
@@ -131,7 +134,7 @@ def _startup_process_ids():
     return result
 
 
-def assert_no_workers(root):
+def assert_no_workers(root, *, supervisor_pid=None):
     """迁移不终止进程；可写源数据的旧运行进程存在时拒绝切换。"""
     import psutil
     from module.runtime.process_control import process_matches
@@ -143,8 +146,13 @@ def assert_no_workers(root):
             if isinstance(record, dict) and record.get('pid') != os.getpid() and process_matches(record):
                 raise MigrationError(f'旧业务 worker 仍在运行（PID {record["pid"]}），请停止后重新启动')
     startup_ids = _startup_process_ids()
+    if supervisor_pid is not None:
+        # 包内虚拟环境还可能有一个只转发同一命令的 Windows 进程。
+        startup_ids.update(_startup_process_ids(supervisor_pid))
     root_key = os.path.normcase(str(root.resolve()))
     for process in psutil.process_iter(['pid', 'cmdline']):
+        # 正在服务的 WebUI 可以从自己的监督器下完成迁移。监督器不写业务数据，
+        # 且上方的登记检查仍拦住任何活着的 worker。
         if process.pid in startup_ids:
             continue
         command = process.info.get('cmdline') or []
@@ -601,7 +609,7 @@ def import_farming(connection, original, copy, decoder):
 
 def migrate_month_rows(database):
     """在单一事务内迁移现有总库的全部月度数据，并保留可恢复的原版备份。"""
-    assert_no_workers(database.directory.parent)
+    assert_no_workers(database.directory.parent, supervisor_pid=database.webui_supervisor_pid)
     backup = database.directory / 'storage-backups' / (
         'pre-v2-' + datetime.now().strftime('%Y%m%d-%H%M%S') + '-' + uuid4().hex[:8]
     ) / database.path.name

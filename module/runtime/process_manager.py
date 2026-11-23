@@ -793,18 +793,22 @@ class ProcessManager:
             account_key: 解密注入的账号密钥。
             business_directory: 父进程实际使用的普通总库目录。
         """
-        from module.runtime.worker_events import initialize
-
-        initialize(q.put, run_id)
-        from module.scheduler.state_channel import initialize as initialize_program_channel
-        initialize_program_channel(program_queue, run_id)
-        if account_key is not None:
-            from module.runtime.account_vault import vault
-            vault.keys[config_name] = account_key
         result = WorkerResult.ERROR
         try:
-            if business_directory is not None:
-                prepare_statistics(business_directory)
+            # 在校验数据库、导入任务或注入账号之前就能报告初始化失败。
+            set_func_logger(func=q.put)
+            try:
+                set_file_logger(name=config_name)
+            except OSError:
+                logger.warning('[%s] 无法写入实例文件日志，继续通过 WebUI 输出', config_name)
+            from module.runtime.worker_events import initialize
+            from module.scheduler.state_channel import initialize as initialize_program_channel
+            initialize(q.put, run_id)
+            initialize_program_channel(program_queue, run_id)
+            if account_key is not None:
+                from module.runtime.account_vault import vault
+                vault.keys[config_name] = account_key
+            prepare_statistics(business_directory)
             result = ProcessManager._run_process(config_name, func, q, e, preview_queue, run_id)
         except SystemExit as exc:
             if exc.code in (None, 0):
@@ -853,13 +857,9 @@ class ProcessManager:
         args, _ = parser.parse_known_args()
         State.electron = args.electron
 
-        # 初始化日志器
-        set_file_logger(name=config_name)
-        prepare_statistics()
         if State.electron or os.environ.get("AZURPILOT_TUI") == "1":
             # 运行于 Electron 或 TUI 终端界面时，关闭控制台日志避免污染终端渲染
             set_console_logger(False)
-        set_func_logger(func=q.put)
         if preview_queue is not None:
             from module.runtime.preview import initialize
             initialize(config_name, preview_queue, q.put, run_id)

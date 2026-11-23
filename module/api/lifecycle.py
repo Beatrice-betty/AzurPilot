@@ -14,7 +14,7 @@ from module.runtime.task_handler import TaskHandler
 task_handler = TaskHandler()
 
 
-def startup(runs=None):
+def startup(runs=None, *, start_workers=True):
     """初始化共享进程登记与可选后台服务。
 
     启动自动检查更新任务、定时更新计划、OCR 独立服务（若配置启用）、
@@ -22,6 +22,7 @@ def startup(runs=None):
 
     Args:
         runs (list[str], optional): 随 WebUI 启动自动运行的实例名称列表。默认为 None。
+        start_workers (bool): 业务存储就绪且允许恢复运行时才启动实例。
     """
     from module.runtime.updater import updater
     State.init()
@@ -35,7 +36,8 @@ def startup(runs=None):
         start_ocr_server_process(State.deploy_config.OcrServerPort)
     if State.deploy_config.EnableRemoteAccess:
         task_handler.add(RemoteAccess.keep_ssh_alive(), 60)
-    ProcessManager.restart_processes(instances=runs, ev=updater.event)
+    if start_workers:
+        ProcessManager.restart_processes(instances=runs, ev=updater.event)
 
 
 def clearup():

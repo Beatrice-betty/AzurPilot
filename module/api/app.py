@@ -7,6 +7,7 @@ import argparse
 import asyncio
 import secrets
 from contextlib import asynccontextmanager
+from multiprocessing import parent_process
 from pathlib import Path
 
 from starlette.applications import Starlette
@@ -14,6 +15,7 @@ from starlette.responses import FileResponse, JSONResponse, PlainTextResponse, R
 from starlette.routing import Mount, Route, WebSocketRoute
 from starlette.staticfiles import StaticFiles
 
+from deploy import independent
 from module.api import launcher_api, notify_api
 from module.api.background_service import LIBRARY_DIR, gallery_add_bytes, proxy_fetch
 from module.api.config_service import ConfigService, ROOT
@@ -41,6 +43,11 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
         Starlette: 已配置好的 ASGI 应用对象。
     """
     configs = ConfigService(root)
+    recover_missing = independent.enabled() and not independent.trial_pending(root)
+    if recover_missing and manage_runtime and State.restart_event is not None:
+        supervisor = parent_process()
+        if supervisor is not None and supervisor.is_alive():
+            configs.database.webui_supervisor_pid = supervisor.pid
     runtime = RuntimeService(configs)
     mcp_app = None
     parser = argparse.ArgumentParser(add_help=False)
@@ -61,18 +68,32 @@ def create_app(*, root: Path = ROOT, password=None, manage_runtime=True, mount_m
         try:
             if manage_runtime:
                 from module.persistence.database import initialize
-                await asyncio.to_thread(initialize, configs.directory)
+                start_workers = True
+                try:
+                    await asyncio.to_thread(initialize, configs.directory, recover_missing=recover_missing)
+                except Exception:
+                    if not recover_missing:
+                        raise
+                    logger.exception('普通业务存储暂未就绪，继续启动独立版 WebUI')
+                    start_workers = False
+                else:
+                    if recover_missing:
+                        from module.persistence.recovery import current_recovery
+                        recovery = await asyncio.to_thread(current_recovery, configs.database)
+                        start_workers = not recovery.get('awaiting_manual_start')
                 await asyncio.to_thread(configs.migrate_schedules)
-            if manage_runtime:
                 from module.api.lifecycle import startup
                 from module.runtime.deploy_settings import parse_run_config
                 from module.runtime.startup_memory import consume_update_restart, startup_runs
-                runs = args.run or parse_run_config(State.deploy_config.Run)
-                if not args.run:
-                    # 只在决定启动清单这一支消费更新标记。
-                    update_restart = consume_update_restart()
-                    runs = startup_runs(runs, update_restart=update_restart)
-                await asyncio.to_thread(startup, runs)
+                if start_workers:
+                    runs = args.run or parse_run_config(State.deploy_config.Run)
+                    if not args.run:
+                        # 只在决定启动清单这一支消费更新标记。
+                        update_restart = consume_update_restart()
+                        runs = startup_runs(runs, update_restart=update_restart)
+                    await asyncio.to_thread(startup, runs)
+                else:
+                    await asyncio.to_thread(startup, start_workers=False)
                 if State.deploy_config.DiscordRichPresence:
                     try:
                         from module.runtime.discord_presence import init_discord_rpc

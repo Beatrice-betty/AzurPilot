@@ -1,18 +1,23 @@
 """运行状态、日志和截图适配层，浏览器断开不会停止任务。"""
 import io
 import re
+import sqlite3
 import threading
 from datetime import datetime, timedelta
 
 from rich.console import Console
 
+from deploy import independent
 from module.api.protocol import ApiError
 from module.config.server import to_server
-from module.persistence.database import configured_database, get_database
 from module.logger import logger
+from module.persistence.database import MissingBusinessDatabase, configured_database, get_database
+from module.persistence.migration import MigrationError
 from module.runtime.process_manager import ProcessManager
 
 STATES = {1: 'running', 2: 'stopped', 3: 'error', 4: 'updating'}
+STORAGE_ERRORS = (OSError, sqlite3.Error, ValueError, MigrationError)
+STORAGE_UNAVAILABLE = '普通业务数据库暂不可用。请停止其他正在运行的实例后重试。如数据库文件损坏或版本不兼容，请退出后放回有效备份。'
 
 
 def timeline_latest(timeline: list[dict], field: str) -> dict:
@@ -193,12 +198,32 @@ class RuntimeService:
                       'value': values.get('Value'), 'limit': values.get('Limit'), 'total': values.get('Total'),
                       'record': values.get('Record')}
                      for name, values in data.get('Dashboard', {}).items() if 'Value' in values]
-        resources.extend(monthly_statistics_resources(instance))
-        return {'instance': instance, 'revision': revision,
+        storage_notice = None
+        try:
+            resources.extend(monthly_statistics_resources(instance))
+        except STORAGE_ERRORS as exc:
+            if not independent.enabled():
+                raise
+            if isinstance(exc, MissingBusinessDatabase):
+                storage_notice = '普通业务数据库缺失。启动调度器或重启独立版时会尝试恢复。'
+            else:
+                storage_notice = STORAGE_UNAVAILABLE
+        else:
+            if independent.enabled():
+                from module.persistence.recovery import current_recovery
+                recovery = current_recovery(self.database)
+                storage_notice = recovery.get('message')
+                if recovery.get('awaiting_manual_start'):
+                    storage_notice += '请检查调度设置后手动启动实例。'
+        data = {'instance': instance, 'revision': revision,
                 'status': STATES.get(manager.state, 'stopped') if manager else 'stopped',
                 'tasks': tasks, 'resources': resources,
                 'emulator': data.get('Alas', {}).get('Emulator', {})}
+        if storage_notice:
+            data['storageNotice'] = storage_notice
+        return data
 
+    @configured_database
     def start(self, instance: str, task: str = None) -> dict:
         """启动实例的调度器或指定独立任务。
 
@@ -222,9 +247,21 @@ class RuntimeService:
                 if task not in get_available_func():
                     raise ApiError('INVALID_PARAMS', '该任务不支持单独运行')
             from module.runtime.updater import updater
+            if independent.enabled():
+                try:
+                    self.database.ensure_ready(recover_missing=True)
+                except STORAGE_ERRORS as exc:
+                    logger.warning('[%s] 启动调度器前无法准备普通业务存储：%s', instance, exc)
+                    raise ApiError('STORAGE_UNAVAILABLE', STORAGE_UNAVAILABLE) from exc
             manager.start(task or 'alas', ev=updater.event)
             if not manager.alive:
                 raise ApiError('START_FAILED', '任务未启动，请检查服务是否正在重启')
+            if independent.enabled() and task is None:
+                from module.persistence.recovery import record_manual_start
+                try:
+                    record_manual_start(self.database)
+                except OSError:
+                    logger.warning('[%s] 调度器已启动，无法保存手动启动记录', instance, exc_info=True)
         self._record_running_now()
         return self.overview(instance)
 

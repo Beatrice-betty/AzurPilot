@@ -1,6 +1,7 @@
 """统一连接、事务与安装级迁移入口。"""
 import os
 import sqlite3
+import stat
 import threading
 import time
 from contextlib import contextmanager, closing
@@ -23,6 +24,13 @@ def current_directory():
     return _directory.get() or _configured_directory
 _databases = {}
 _guard = threading.RLock()
+
+
+class MissingBusinessDatabase(FileNotFoundError):
+    """已迁移的总库不在原位置，不能再导入旧分库。"""
+
+    def __init__(self):
+        super().__init__('已迁移的普通总库丢失，请从备份恢复，不能重新导入旧数据')
 
 
 class ClosingConnection(sqlite3.Connection):
@@ -65,6 +73,21 @@ def create_month_rows(connection):
     connection.execute(Path(__file__).with_name('schema_v2.sql').read_text(encoding='utf-8'))
 
 
+def read_storage_version(connection):
+    """从当前 SQLite 快照确认支持的版本及相应的迁移记录。"""
+    version = connection.execute('PRAGMA user_version').fetchone()[0]
+    if version not in (SCHEMA_V1, VERSION):
+        raise ValueError(f'不支持的总库版本：{version}')
+    row = connection.execute('SELECT source_digest FROM storage_migrations WHERE version=?', (version,)).fetchone()
+    if row is None or connection.execute('SELECT MAX(version) FROM storage_migrations').fetchone()[0] != version:
+        raise ValueError('总库缺少迁移完成记录')
+    if version == VERSION:
+        connection.execute('SELECT instance, month, data_json FROM cl1_data LIMIT 0')
+    else:
+        connection.execute('SELECT instance, month, field_mask FROM cl1_months LIMIT 0')
+    return version, row[0]
+
+
 class BusinessDatabase:
     """一个配置目录对应一个普通总库，所有连接都经过迁移入口。"""
 
@@ -74,7 +97,8 @@ class BusinessDatabase:
         self.path = self.directory / 'azurpilot.db'
         self.marker = self.directory / 'azurpilot.migrated'
         self.legacy_sources = {}
-        self._ready = False
+        self.webui_supervisor_pid = None
+        self._ready_stamp = None
         self._lock = threading.RLock()
 
     def add_legacy_source(self, kind, path):
@@ -84,44 +108,68 @@ class BusinessDatabase:
             sources = self.legacy_sources.setdefault(kind, set())
             sources.add(path)
 
-    def ensure_ready(self):
+    def _file_stamp(self):
+        """识别文件替换和直接覆盖，包括文件名和 inode 都未变化的情况。"""
+        try:
+            info = self.path.lstat()
+        except FileNotFoundError:
+            return None
+        if stat.S_ISLNK(info.st_mode):
+            raise ValueError('总库路径不能是符号链接')
+        if not stat.S_ISREG(info.st_mode):
+            raise ValueError('总库路径不是普通文件')
+        return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
+
+    def ensure_ready(self, *, recover_missing=False):
         """检查总库与迁移状态，必要时完成首次初始化。"""
-        if self._ready and self.path.is_file():
+        stamp = self._file_stamp()
+        if stamp is not None and stamp == self._ready_stamp:
             return
+        if stamp is None and self.marker.exists() and not recover_missing:
+            raise MissingBusinessDatabase()
         from module.logger import logger
         started = time.perf_counter()
-        logger.info('[存储] 等待总库初始化锁：%s', self.path)
+        log_initialization = self._ready_stamp is None
+        if log_initialization:
+            logger.info('[存储] 等待总库初始化锁：%s', self.path)
         with self._lock, config_transaction(self.directory / '.azurpilot-install'):
-            logger.info('[存储] 已取得安装锁，等待 %.2f 秒', time.perf_counter() - started)
-            if self.path.is_symlink():
-                raise ValueError('总库路径不能是符号链接')
-            if self.path.is_file():
-                logger.info('[存储] 检查已有总库的版本与迁移记录：%s', self.path)
+            stamp = self._file_stamp()
+            if stamp is not None and stamp == self._ready_stamp:
+                return
+            if log_initialization:
+                logger.info('[存储] 已取得安装锁，等待 %.2f 秒', time.perf_counter() - started)
+            if stamp is None and not self.marker.exists():
+                from module.persistence.migration import migrate
+                migrate(self)
+                stamp = self._file_stamp()
+            else:
+                recovery = None
+                if stamp is None:
+                    if not recover_missing:
+                        raise MissingBusinessDatabase()
+                    from module.persistence.recovery import recover_missing_database
+                    recovery = recover_missing_database(self)
+                    stamp = self._file_stamp()
+                if log_initialization:
+                    logger.info('[存储] 检查已有总库的版本与迁移记录：%s', self.path)
                 with closing(sqlite3.connect(self.path.as_uri() + '?mode=ro', uri=True)) as connection:
-                    version = connection.execute('PRAGMA user_version').fetchone()[0]
-                    if version not in (SCHEMA_V1, VERSION):
-                        raise ValueError(f'不支持的总库版本：{version}')
-                    row = connection.execute('SELECT source_digest FROM storage_migrations WHERE version=?', (version,)).fetchone()
-                    if row is None or connection.execute('SELECT MAX(version) FROM storage_migrations').fetchone()[0] != version:
-                        raise ValueError('总库缺少迁移完成记录')
-                    if version == VERSION:
-                        connection.execute('SELECT instance, month, data_json FROM cl1_data LIMIT 0')
-                digest = row[0]
+                    version, digest = read_storage_version(connection)
                 if version == SCHEMA_V1:
                     from module.persistence.migration import migrate_month_rows
                     digest = migrate_month_rows(self)
+                    stamp = self._file_stamp()
+                if recovery is not None:
+                    from module.persistence.recovery import record_recovery
+                    record_recovery(self, digest, recovery)
                 marker = f'{VERSION}\n{digest}\n'
-                if not self.marker.is_file() or self.marker.read_text(encoding='utf-8') != marker:
+                if not self.marker.is_file() or self.marker.read_text(encoding='utf-8', errors='replace') != marker:
                     logger.info('[存储] 补齐迁移完成标记')
                     self._write_marker(digest)
-                logger.info('[存储] 总库 v%s 已完成迁移，无需再次解密旧数据', VERSION)
-            else:
-                if self.marker.exists():
-                    raise FileNotFoundError('已迁移的普通总库丢失，请从备份恢复，不能重新导入旧数据')
-                from module.persistence.migration import migrate
-                migrate(self)
-            self._ready = True
-            logger.info('[存储] 总库已就绪，耗时 %.2f 秒：%s', time.perf_counter() - started, self.path)
+                if log_initialization:
+                    logger.info('[存储] 总库 v%s 已完成迁移，无需再次解密旧数据', VERSION)
+            self._ready_stamp = stamp
+            if log_initialization:
+                logger.info('[存储] 总库已就绪，耗时 %.2f 秒：%s', time.perf_counter() - started, self.path)
 
     def _write_marker(self, digest):
         """原子写入与总库对应的迁移完成标记。"""
@@ -135,8 +183,9 @@ class BusinessDatabase:
     def connect(self, *, timeout=10.0, readonly=False, factory=ClosingConnection):
         """返回带事务生命周期管理的 SQLite 连接。"""
         self.ensure_ready()
-        path = self.path.as_uri() + '?mode=ro' if readonly else self.path
-        connection = sqlite3.connect(path, uri=readonly, timeout=timeout, factory=factory)
+        # 即使检查之后文件被移走，也由安装入口负责恢复，连接本身不创建空库。
+        path = self.path.as_uri() + ('?mode=ro' if readonly else '?mode=rw')
+        connection = sqlite3.connect(path, uri=True, timeout=timeout, factory=factory)
         try:
             connection.row_factory = sqlite3.Row
             connection.execute('PRAGMA foreign_keys=ON')
@@ -196,14 +245,14 @@ def for_legacy_path(path, kind):
     return database
 
 
-def initialize(config_directory=None):
-    """运行入口在创建业务 worker 前调用，失败必须中止启动。"""
+def initialize(config_directory=None, *, recover_missing=False):
+    """运行入口在创建业务 worker 前调用；独立版可显式恢复丢失的总库。"""
     global _configured_directory
     if config_directory is not None:
         _configured_directory = Path(config_directory).absolute()
         _directory.set(_configured_directory)
     database = get_database()
-    database.ensure_ready()
+    database.ensure_ready(recover_missing=recover_missing)
     return database
 
 

@@ -8,7 +8,7 @@ import sqlite3
 import subprocess
 import tempfile
 import unittest
-from contextlib import closing
+from contextlib import closing, nullcontext
 from pathlib import Path
 from unittest.mock import patch
 
@@ -138,9 +138,11 @@ class TestIndependentPackage(unittest.TestCase):
         (upstream / 'assets/asset.bin').write_bytes(os.urandom(256 * 1024))
         (upstream / 'deploy/independent.py').touch()
         (upstream / 'frontend/src/index.ts').write_bytes(b'first webui')
-        for name in ('uv.lock', 'pyproject.toml'):
-            (upstream / name).touch()
-            (self.root / name).touch()
+        project = b'[project]\nname = "azurpilot"\nrequires-python = ">=3.14"\ndependencies = ["demo==1"]\n'
+        lock = b'version = 1\n[[package]]\nname = "demo"\nversion = "1"\n'
+        for name, contents in (('pyproject.toml', project), ('uv.lock', lock)):
+            (upstream / name).write_bytes(contents)
+            (self.root / name).write_bytes(contents)
         self.current['dependencies'] = independent.dependency_id(self.root)
         independent.write_json(self.root / independent.RECEIPT, self.current)
         independent.write_json(self.root / independent.FILES, {
@@ -179,6 +181,7 @@ class TestIndependentPackage(unittest.TestCase):
             independent.confirm(self.root)
             installed = independent.read_json(self.root / independent.RECEIPT)
             self.assertEqual((installed['branch'], installed['revision']), (branch, revision))
+            self.assertEqual(installed['dependencies'], self.current['dependencies'])
             self.assertFalse(ready.exists())
             self.assertFalse(list((self.root / independent.WORK).glob('download-*')))
             if (upstream / 'assets/asset.bin').is_file():
@@ -198,7 +201,12 @@ class TestIndependentPackage(unittest.TestCase):
             downloaded = sum(path.stat().st_size for path in previous)
             self.assertGreater(downloaded, 256 * 1024)
 
-            second = update(b'version = 2\n', {'gui.py'})
+            project += b'\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
+            (upstream / 'pyproject.toml').write_bytes(project)
+            (upstream / 'uv.lock').write_bytes(b'# formatting only\n' + lock)
+            second = update(b'version = 2\n', {'gui.py', 'pyproject.toml', 'uv.lock'})
+            self.assertEqual((self.root / 'pyproject.toml').read_bytes(), project)
+            self.assertNotEqual(independent.dependency_id(self.root), self.current['dependencies'])
             added = sum(path.stat().st_size for path in set(packs.glob('*.pack')) - previous)
             self.assertGreater(added, 0)
             self.assertLess(added, downloaded // 10)
@@ -227,6 +235,52 @@ class TestIndependentPackage(unittest.TestCase):
             update(b'version = 5\n', {'gui.py', 'assets/revision.txt'})
             latest = update(b'version = 6\n', {'gui.py', 'assets/revision.txt'})
             self.assertEqual((self.root / 'assets/revision.txt').read_text(), latest)
+
+    def test_prepare_refuses_incompatible_or_invalid_dependency_manifests(self):
+        project = b'[project]\nname = "azurpilot"\nrequires-python = ">=3.14"\ndependencies = ["demo==1"]\n'
+        lock = b'version = 1\n[[package]]\nname = "demo"\nversion = "1"\n'
+        installed = {'pyproject.toml': project, 'uv.lock': lock}
+        for name, contents in installed.items():
+            (self.root / name).write_bytes(contents)
+        self.current['dependencies'] = independent.dependency_id(self.root)
+        independent.write_json(self.root / independent.RECEIPT, self.current)
+        previous = {name: independent.digest(self.root / name) for name in installed}
+        independent.write_json(self.root / independent.FILES, previous)
+        repository, branch = independent.update_source(self.root)
+        offer = independent.GitOffer({'revision': '2' * 40}, repository, branch)
+
+        def stage_changes(root, checkout, revision, installed_revision, previous, staged, **kwargs):
+            staged.mkdir()
+            path = staged / name
+            path.write_bytes(contents)
+            return {**previous, name: independent.digest(path), 'gui.py': '', 'deploy/independent.py': ''}, True
+
+        with (
+            patch.object(independent, '_source_checkout', return_value=nullcontext((repository, self.root))),
+            patch.object(independent, '_uses_export_attributes', return_value=False),
+            patch.object(independent, '_stage_changes', side_effect=stage_changes) as stage,
+        ):
+            for name, contents in (
+                ('pyproject.toml', project.replace(b'>=3.14', b'>=3.15')),
+                ('pyproject.toml', project.replace(b'demo==1', b'demo==2')),
+                ('uv.lock', lock.replace(b'version = "1"', b'version = "2"')),
+            ):
+                with (
+                    self.subTest(name=name, contents=contents),
+                    self.assertRaisesRegex(RuntimeError, '不同的 Python 依赖'),
+                ):
+                    independent.prepare(offer, self.root)
+            name, contents = 'pyproject.toml', b'[project\n'
+            with self.assertRaisesRegex(ValueError, 'pyproject.toml 格式无效'):
+                independent.prepare(offer, self.root)
+            stage.reset_mock()
+            (self.root / name).write_bytes(project + b'# local changes\n')
+            with self.assertRaisesRegex(RuntimeError, '本机依赖清单已经改变'):
+                independent.prepare(offer, self.root)
+            stage.assert_not_called()
+
+        self.assertEqual(independent.read_json(self.root / independent.RECEIPT), self.current)
+        self.assertFalse(list((self.root / independent.WORK).glob('ready-*')))
 
     @unittest.skipUnless(independent.os.name == 'nt', 'Windows MinGit timeout')
     def test_git_timeout_terminates_windows_process_tree_before_waiting(self):
