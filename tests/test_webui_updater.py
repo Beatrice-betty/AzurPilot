@@ -5,6 +5,7 @@ import types
 import unittest
 from unittest.mock import Mock, patch
 
+from deploy import independent
 from deploy.git import GitManager
 from module.runtime.setting import State
 from module.runtime.updater import Updater
@@ -404,6 +405,27 @@ class TestUpdaterCheck(unittest.TestCase):
         updater = object.__new__(Updater)
         updater.state = 0
         return updater
+
+    def test_check_failure_retains_only_a_verified_offer_for_the_same_source(self):
+        repository, branch = independent.GITHUB_REPOSITORY, 'preview/test'
+        offer = independent.GitOffer({'revision': '2' * 40}, repository, branch)
+        for error, expected in (
+            (independent.UpdateSourceUnavailable(repository, branch), offer),
+            (independent.UpdateSourceUnavailable(repository, 'dev'), None),
+            (independent.UpdateBranchNotFound('没有找到配置的更新分支'), None),
+            (ValueError('更新源无效'), None),
+        ):
+            with (
+                self.subTest(error=type(error).__name__, source=getattr(error, 'source', None)),
+                patch.object(independent, 'enabled', return_value=True),
+                patch.object(independent, 'check', side_effect=error) as check,
+            ):
+                updater = self._updater()
+                updater.independent_offer = offer
+                self.assertFalse(updater._check_update())
+                self.assertIs(updater.independent_offer, expected)
+                self.assertTrue(updater.independent_error)
+            check.assert_called_once_with(hot_reload=True)
 
     def test_cdn_version_check_does_not_call_policy_service(self):
         updater = self._updater()
