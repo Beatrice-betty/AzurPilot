@@ -51,7 +51,10 @@ export function Overview() {
   }, [instance, connection])
 
   useEffect(() => api.onEvent(event => {
-    if (event.topic === 'overview' && (event.data as OverviewData).instance === instance) setData(event.data as OverviewData)
+    if (event.topic === 'overview' && (event.data as OverviewData).instance === instance) {
+      setData(event.data as OverviewData)
+      setError('')
+    }
   }), [instance])
 
   if (error) return <ErrorBox message={error}/>
@@ -60,6 +63,7 @@ export function Overview() {
   // 紧凑主题省略与面包屑重复的标题行，设置按钮改挂日志面板工具栏。
   const condensed = theme === 'extreme'
   const actions = <InstanceActions resources={data.resources} selectedResources={selectedResources} onResourcesChange={updateResourceSelection} showLabel={condensed}/>
+  const storageNotice = data.storageNotice && <ErrorBox message={data.storageNotice}/>
 
   // 旧版版式：左列调度器与任务计划，右列资源卡与日志；右栏在旧版主题下不渲染。
   if (usesLegacyLayout(theme)) return <div className="instance-page-grid">
@@ -76,6 +80,7 @@ export function Overview() {
       </section>
     </LegacyRail>
     <div className="instance-page-main">
+      {storageNotice}
       <ResourceCards resources={data.resources} selected={selectedResources}/>
       {/* 换面板时重挂一次，让内容列的淡入重放；方向类决定从哪一侧滑入。 */}
       <div className={`instance-page-panel ${panel === 'stats' ? 'panel-drop' : 'panel-rise'}`} key={panel}>
@@ -88,6 +93,7 @@ export function Overview() {
 
   return <div className="overview-page">
     {!condensed && <PageTitle className="instance-page-title" title={instance} actions={actions}/>}
+    {storageNotice}
     <ResourceCards resources={data.resources} selected={selectedResources}/>
     <div className="overview-main">
       <MonitorPanel instance={instance} actions={condensed ? actions : undefined}/>

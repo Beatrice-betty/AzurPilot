@@ -1267,10 +1267,14 @@ def run_webui_supervisor(watch_sources: bool = False) -> int:
 
 def main() -> int:
     """初始化普通业务数据并启动 WebUI，失败原因写入 GUI 日志。"""
-    if os.environ.get('AZURPILOT_INDEPENDENT') == '1':
+    from deploy import independent
+
+    if independent.enabled():
         from deploy.independent_runtime import mark_hot_reload
 
         mark_hot_reload()
+    # 候选版本仍须以业务存储成功初始化为试运行通过条件。
+    recover_missing = independent.enabled() and not independent.trial_pending()
     # Windows 父进程保留启动日志；文件不可写时继续输出到控制台。
     try:
         logger.set_file_logger('gui-launcher')
@@ -1279,18 +1283,21 @@ def main() -> int:
     logger.info('[GUI] 开始检查普通业务存储；启动日志：%s', logger.log_file or '控制台')
     try:
         from module.persistence.database import initialize
-        initialize()
+        initialize(recover_missing=recover_missing)
     except Exception as exc:
         logger.error_context(
             title='普通业务数据初始化失败',
             reason=str(exc),
             exc=exc,
-            impact='WebUI 尚未启动，旧数据与迁移备份保留。',
+            impact=('WebUI 继续启动，普通业务数据及其依赖功能可能暂不可用。' if recover_missing
+                    else 'WebUI 尚未启动，旧数据与迁移备份保留。'),
             action='查看 GUI 日志中的异常原因，修复后重试；不要删除旧数据库或迁移标记。',
-            level=50,
+            level=40 if recover_missing else 50,
         )
-        return EXIT_STARTUP_FAILURE
-    logger.info('[GUI] 存储已就绪，继续初始化 WebUI')
+        if not recover_missing:
+            return EXIT_STARTUP_FAILURE
+    else:
+        logger.info('[GUI] 存储已就绪，继续初始化 WebUI')
 
     # 设置multiprocessing启动方式为spawn（macOS兼容性要求）
     try:

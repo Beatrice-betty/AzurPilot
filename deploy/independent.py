@@ -44,6 +44,8 @@ WORK = Path('.azurpilot/independent-update')
 BUNDLED_PYTHON = Path('runtime/python/python.exe')
 PYTHON_ENVIRONMENTS = Path('.azurpilot/independent-python/environments')
 PYTHON_ENVIRONMENT_KEY = 'pythonEnvironment'
+DEPENDENCY_BASE_KEY = 'dependencyBaseRevision'
+DEPENDENCY_RELEASE_TAG = 'refs/tags/azurpilot-independent-deps/'
 SOURCE_REF = 'refs/azurpilot/source'
 CREATE_FLAGS = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 _history_lock = threading.Lock()
@@ -237,26 +239,41 @@ def update_source(root):
     return repository, branch
 
 
-def _remote_revision(root, repository, branch):
+def _remote_revisions(root, repository, branch, *, dependency_releases):
     ref = f'refs/heads/{branch}'
-    listing = git(root, gitcode_checkout(root), 'ls-remote', '--exit-code', '--refs', repository, ref,
+    patterns = [ref]
+    if dependency_releases:
+        patterns.append(f'{DEPENDENCY_RELEASE_TAG}*')
+    listing = git(root, gitcode_checkout(root), 'ls-remote', '--exit-code', '--refs', repository, *patterns,
                   stdout=subprocess.PIPE, timeout=15).stdout.decode('ascii')
+    refs = {}
     for line in listing.splitlines():
         revision, _, name = line.partition('\t')
-        if name == ref and re.fullmatch('[0-9a-f]{40}', revision):
-            return revision
-    raise ValueError('没有找到配置的更新分支')
+        if re.fullmatch('[0-9a-f]{40}', revision):
+            refs[name] = revision
+    base = refs.get(ref)
+    if base is None:
+        raise ValueError('没有找到配置的更新分支')
+    candidate = refs.get(f'{DEPENDENCY_RELEASE_TAG}{base}') if dependency_releases else None
+    return base, candidate if candidate != base else None
 
 
 def check(root=None):
+    from deploy.independent_runtime import supports_hot_reload
+
     root = Path(root or Path.cwd()).resolve()
     clean_abandoned(root)
     current = read_json(root / RECEIPT)
     repository, branch = update_source(root)
     mirrors = SOURCES if repository == GITCODE_REPOSITORY else (repository,)
+    # 更新器随网页热重载后，旧桌面父进程可能仍不支持切换解释器。
+    dependency_releases = supports_hot_reload()
     for mirror in mirrors:
         try:
-            revision = _remote_revision(root, mirror, branch)
+            base, candidate = _remote_revisions(root, mirror, branch, dependency_releases=dependency_releases)
+            if candidate is None and base == current.get(DEPENDENCY_BASE_KEY) and branch == current.get('branch'):
+                return None
+            revision = candidate or base
             if revision == current['revision']:
                 return None
             if repository == GITCODE_REPOSITORY and branch == DEFAULT_BRANCH and current['revision']:
@@ -265,7 +282,10 @@ def check(root=None):
                     return None
         except (OSError, ValueError, subprocess.SubprocessError):
             continue
-        return GitOffer({'revision': revision}, repository, branch, mirror)
+        release = {'revision': revision}
+        if candidate is not None:
+            release[DEPENDENCY_BASE_KEY] = base
+        return GitOffer(release, repository, branch, mirror)
     raise RuntimeError('无法读取所选仓库的分支，当前版本可以继续运行')
 
 
@@ -781,6 +801,15 @@ def prepare(offer, root=None, *, hot_reload=False):
         return ready
 
 
+def _validate_dependency_release(root, checkout, revision, base):
+    # 浅克隆仍保留原始提交头，可直接验证依赖版本衔接自哪个兼容提交。
+    commit = git(root, checkout, 'cat-file', 'commit', revision, stdout=subprocess.PIPE).stdout
+    headers = commit.partition(b'\n\n')[0].splitlines()
+    parents = [line for line in headers if line.startswith(b'parent ')]
+    if parents != [f'parent {base}'.encode('ascii')]:
+        raise ValueError('依赖更新与当前分支的兼容版本不匹配，请重新获取更新')
+
+
 def _prepare_update(offer, root, ready, *, hot_reload):
     current = read_json(root / RECEIPT)
     previous = read_json(root / FILES)
@@ -791,6 +820,7 @@ def _prepare_update(offer, root, ready, *, hot_reload):
             raise RuntimeError('本机依赖清单已经改变，请用完整安装包修复')
     installed = current['revision']
     revision = offer.release['revision']
+    dependency_base = offer.release.get(DEPENDENCY_BASE_KEY)
     # 先记录候选所属的版本，启动器退出后可以识别尚未应用的临时目录。
     write_json(ready / 'base.json', installed)
     staged = ready / 'app'
@@ -798,6 +828,8 @@ def _prepare_update(offer, root, ready, *, hot_reload):
     sync_dependencies = False
     try:
         with _source_checkout(root, ready.parent, offer) as (repo, checkout):
+            if dependency_base is not None:
+                _validate_dependency_release(root, checkout, revision, dependency_base)
             export_attributes = _uses_export_attributes(root, checkout, revision)
             files, comparable = _stage_changes(root, checkout, revision, installed, previous, staged,
                                                export_attributes=export_attributes)
@@ -877,6 +909,10 @@ def _prepare_update(offer, root, ready, *, hot_reload):
         version.pop(PYTHON_ENVIRONMENT_KEY, None)
     else:
         version[PYTHON_ENVIRONMENT_KEY] = environment
+    if dependency_base is None:
+        version.pop(DEPENDENCY_BASE_KEY, None)
+    else:
+        version[DEPENDENCY_BASE_KEY] = dependency_base
     write_json(ready / 'version.json', version)
     write_json(ready / 'source.json', [offer.repository, offer.branch])
 

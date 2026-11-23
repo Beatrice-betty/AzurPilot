@@ -34,20 +34,22 @@ class TestIndependentPackage(unittest.TestCase):
         for revision in (self.current['revision'], '2' * 40):
             with (
                 self.subTest(revision=revision),
-                patch.object(independent, '_remote_revision', return_value=revision) as remote,
+                patch.object(independent, '_remote_revisions', return_value=(revision, None)) as remote,
                 patch.object(independent, '_includes_installed', return_value=False),
             ):
                 self.assertIsNone(independent.check(self.root))
-            remote.assert_called_once_with(self.root, independent.GITCODE_REPOSITORY, 'dev')
+            remote.assert_called_once_with(self.root, independent.GITCODE_REPOSITORY, 'dev',
+                                           dependency_releases=False)
 
     def test_gitcode_download_failure_falls_back_to_the_same_commit(self):
         revision = '2' * 40
         with (
-            patch.object(independent, '_remote_revision', return_value=revision) as remote,
+            patch.object(independent, '_remote_revisions', return_value=(revision, None)) as remote,
             patch.object(independent, '_includes_installed', return_value=True),
         ):
             offer = independent.check(self.root)
-        remote.assert_called_once_with(self.root, independent.GITCODE_REPOSITORY, 'dev')
+        remote.assert_called_once_with(self.root, independent.GITCODE_REPOSITORY, 'dev',
+                                           dependency_releases=False)
         self.assertEqual(revision, offer.release['revision'])
         with patch.object(independent, 'git', side_effect=[None, subprocess.TimeoutExpired('fetch', 1), None, None]) as git:
             repository, checkout = independent._fetch_source(self.root, self.root, offer)
@@ -61,7 +63,7 @@ class TestIndependentPackage(unittest.TestCase):
 
     def test_gitcode_check_failure_downloads_directly_from_github(self):
         with (
-            patch.object(independent, '_remote_revision', side_effect=[TimeoutError, '2' * 40]) as remote,
+            patch.object(independent, '_remote_revisions', side_effect=[TimeoutError, ('2' * 40, None)]) as remote,
             patch.object(independent, '_includes_installed', return_value=True),
         ):
             offer = independent.check(self.root)
@@ -80,9 +82,9 @@ class TestIndependentPackage(unittest.TestCase):
         deploy = config / 'deploy.yaml'
         deploy.write_text(f'Deploy:\n  Git:\n    Repository: "{repository}"\n    Branch: preview/test\n',
                           encoding='utf-8')
-        with patch.object(independent, '_remote_revision', return_value='2' * 40) as remote:
+        with patch.object(independent, '_remote_revisions', return_value=('2' * 40, None)) as remote:
             offer = independent.check(self.root)
-        remote.assert_called_once_with(self.root, repository, 'preview/test')
+        remote.assert_called_once_with(self.root, repository, 'preview/test', dependency_releases=False)
         self.assertEqual(offer.release, {'revision': '2' * 40})
         with patch.object(independent, 'git', side_effect=[None, subprocess.TimeoutExpired('fetch', 1)]) as git:
             with self.assertRaisesRegex(RuntimeError, '所选仓库'):
@@ -92,6 +94,52 @@ class TestIndependentPackage(unittest.TestCase):
         deploy.write_text(f'Repository: {repository}\nBranch: other\n', encoding='utf-8')
         with self.assertRaisesRegex(RuntimeError, '更新源已更改'):
             independent.prepare(offer, self.root)
+
+    def test_dependency_release_uses_the_tag_for_the_exact_branch_head(self):
+        base, candidate = '2' * 40, '3' * 40
+        stale_base, stale_candidate = '4' * 40, '5' * 40
+        repository, branch = independent.GITHUB_REPOSITORY, 'preview/test'
+        config = self.root / 'config'
+        config.mkdir()
+        (config / 'deploy.yaml').write_text(f'Repository: {repository}\nBranch: {branch}\n', encoding='utf-8')
+        prefix = independent.DEPENDENCY_RELEASE_TAG
+        ref = f'refs/heads/{branch}'
+        listing = f'{stale_candidate}\t{prefix}{stale_base}\n{base}\t{ref}\n{candidate}\t{prefix}{base}\n'
+        result = subprocess.CompletedProcess([], 0, stdout=listing.encode('ascii'))
+        with (
+            patch.object(independent, 'gitcode_checkout', return_value=self.root),
+            patch.object(independent, 'git', return_value=result) as git,
+            patch.object(independent_runtime, 'supports_hot_reload', side_effect=[False, True]),
+        ):
+            self.assertEqual(independent.check(self.root).release, {'revision': base})
+            self.assertEqual(independent.check(self.root).release, {
+                'revision': candidate, independent.DEPENDENCY_BASE_KEY: base,
+            })
+        self.assertEqual(git.call_args_list[0].args[-1:], (ref,))
+        self.assertEqual(git.call_args_list[1].args[-2:], (ref, f'{prefix}*'))
+
+    def test_missing_dependency_tag_keeps_the_installed_upgrade(self):
+        base = '2' * 40
+        self.current.update(branch='dev', **{independent.DEPENDENCY_BASE_KEY: base})
+        independent.write_json(self.root / independent.RECEIPT, self.current)
+        with patch.object(independent, '_remote_revisions', return_value=(base, None)):
+            self.assertIsNone(independent.check(self.root))
+
+    def test_dependency_release_parent_must_be_the_compatibility_commit(self):
+        base, candidate = '2' * 40, '3' * 40
+        other = '4' * 40
+        # 只检查提交头，正文中的 parent 文本不能代替实际父提交。
+        for header in (f'parent {other}', f'parent {base}\nparent {other}'):
+            result = subprocess.CompletedProcess([], 0, stdout=f'{header}\n\nparent {base}\n'.encode('ascii'))
+            with (
+                self.subTest(header=header),
+                patch.object(independent, 'git', return_value=result),
+                self.assertRaisesRegex(ValueError, '兼容版本不匹配'),
+            ):
+                independent._validate_dependency_release(self.root, self.root, candidate, base)
+        result = subprocess.CompletedProcess([], 0, stdout=f'parent {base}\n\nmessage\n'.encode('ascii'))
+        with patch.object(independent, 'git', return_value=result):
+            independent._validate_dependency_release(self.root, self.root, candidate, base)
 
     def test_cached_github_download_clears_stale_locks_and_retries_over_http1(self):
         revision = '2' * 40
@@ -303,7 +351,10 @@ class TestIndependentPackage(unittest.TestCase):
         independent.write_json(self.root / independent.FILES,
                                {name: independent.digest(self.root / name) for name in installed})
         repository, branch = independent.update_source(self.root)
-        offer = independent.GitOffer({'revision': '2' * 40}, repository, branch)
+        base = self.current['revision']
+        release = {'revision': '2' * 40, independent.DEPENDENCY_BASE_KEY: base}
+        offer = independent.GitOffer(release, repository, branch)
+        commit = subprocess.CompletedProcess([], 0, stdout=f'parent {base}\n\nrelease\n'.encode('ascii'))
 
         def stage_changes(root, checkout, revision, installed_revision, previous, staged, **kwargs):
             staged.mkdir()
@@ -327,6 +378,7 @@ class TestIndependentPackage(unittest.TestCase):
         with (
             patch.object(independent, '_source_checkout', return_value=nullcontext((repository, self.root))),
             patch.object(independent, '_uses_export_attributes', return_value=True),
+            patch.object(independent, 'git', return_value=commit),
             patch.object(independent, '_stage_changes', side_effect=stage_changes),
             patch.object(independent_runtime, 'sync_environment', side_effect=sync) as sync_environment,
             patch.object(independent_runtime, 'supports_hot_reload', return_value=False) as hot_reload,
@@ -345,6 +397,8 @@ class TestIndependentPackage(unittest.TestCase):
 
         self.assertEqual((self.root / 'uv.lock').read_bytes(), old_lock)
         independent.apply(ready, self.root)
+        receipt = independent.read_json(self.root / independent.RECEIPT)
+        self.assertEqual(receipt[independent.DEPENDENCY_BASE_KEY], base)
         python = independent.installed_python(self.root)
         self.assertTrue(python.is_file())
         self.assertEqual((self.root / 'uv.lock').read_bytes(), new_lock)
@@ -392,7 +446,7 @@ class TestIndependentPackage(unittest.TestCase):
         raw.assert_not_called()
 
     def test_unavailable_release_keeps_installed_receipt(self):
-        with patch.object(independent, '_remote_revision', side_effect=TimeoutError) as remote:
+        with patch.object(independent, '_remote_revisions', side_effect=TimeoutError) as remote:
             with self.assertRaisesRegex(RuntimeError, '当前版本'):
                 independent.check(self.root)
         self.assertEqual([call.args[1] for call in remote.call_args_list], list(independent.SOURCES))

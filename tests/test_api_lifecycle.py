@@ -1,4 +1,5 @@
 """真实共享进程与 ASGI 生命周期的集成回归，隔离所有游戏及网络任务。"""
+import os
 import tempfile
 import threading
 import unittest
@@ -19,10 +20,24 @@ class ApiLifecycleTests(unittest.TestCase):
     def test_destroyed_vault_does_not_abort_webui_lifespan(self):
         self.run_lifecycle(fail_account=True)
 
-    def run_lifecycle(self, fail_start=False, fail_discord=False, fail_discord_start=False, fail_account=False):
+    def test_independent_webui_starts_and_keeps_config_accessible_with_invalid_database(self):
+        self.run_lifecycle(invalid_database=True)
+
+    def test_independent_webui_with_new_empty_recovery_waits_for_manual_start(self):
+        self.run_lifecycle(missing_database=True)
+
+    def run_lifecycle(self, fail_start=False, fail_discord=False, fail_discord_start=False, fail_account=False,
+                      invalid_database=False, missing_database=False):
         with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
             root = fixture(directory)
             executed = threading.Event()
+            database = root / 'config/azurpilot.db'
+            if invalid_database or missing_database:
+                stack.enter_context(patch.dict(os.environ, {'AZURPILOT_INDEPENDENT': '1'}))
+            if invalid_database:
+                database.write_bytes(b'invalid SQLite database')
+            if missing_database:
+                (database.parent / 'azurpilot.migrated').write_text('2\noriginal\n', encoding='utf-8')
 
             def schedule():
                 yield
@@ -54,7 +69,7 @@ class ApiLifecycleTests(unittest.TestCase):
                                          mock_open(read_data='broken\nhealthy\n'), create=True))
                 stack.enter_context(patch('module.runtime.process_manager.os.remove'))
             else:
-                stack.enter_context(patch.object(lifecycle.ProcessManager, 'restart_processes'))
+                restart = stack.enter_context(patch.object(lifecycle.ProcessManager, 'restart_processes'))
             stack.enter_context(patch.object(lifecycle.ProcessManager, 'running_instances', return_value=[]))
             if fail_discord:
                 stack.enter_context(patch('module.runtime.discord_presence.async_close_discord_rpc',
@@ -78,6 +93,24 @@ class ApiLifecycleTests(unittest.TestCase):
                         socket.send_json({'v': 1, 'type': 'request', 'id': 'smoke',
                                           'method': 'system.ping', 'params': {}})
                         self.assertEqual({'pong': True}, socket.receive_json()['result'])
+                        if invalid_database:
+                            for method in ('config.get', 'overview.get', 'scheduler.start'):
+                                socket.send_json({'v': 1, 'type': 'request', 'id': method, 'method': method,
+                                                  'params': {'instance': 'testpilot'}})
+                                response = socket.receive_json()
+                                if method == 'scheduler.start':
+                                    self.assertEqual(response['error']['code'], 'STORAGE_UNAVAILABLE')
+                                else:
+                                    self.assertTrue(response['ok'])
+                                    if method == 'overview.get':
+                                        self.assertIn('storageNotice', response['result'])
+                            self.assertEqual(database.read_bytes(), b'invalid SQLite database')
+                        if missing_database:
+                            socket.send_json({'v': 1, 'type': 'request', 'id': 'overview', 'method': 'overview.get',
+                                              'params': {'instance': 'testpilot'}})
+                            self.assertIn('手动启动', socket.receive_json()['result']['storageNotice'])
+                if invalid_database or missing_database:
+                    restart.assert_not_called()
             self.assertIsNone(State.manager)
             self.assertTrue(State._clearup)
             self.assertFalse(tasks._thread and tasks._thread.is_alive())
