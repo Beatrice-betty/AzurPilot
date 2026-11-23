@@ -27,8 +27,6 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import NamedTuple
 from urllib.parse import urlsplit
 
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-
 GITCODE_REPOSITORY = 'https://gitcode.com/Beatrice-betty/AzurPilot.git'
 GITHUB_REPOSITORY = 'https://github.com/Beatrice-betty/AzurPilot.git'
 GITHUB_RELEASE = 'https://raw.githubusercontent.com/Beatrice-betty/AzurPilot/independent-windows/'
@@ -43,6 +41,11 @@ DEPENDENCY_FILES = ('uv.lock', 'pyproject.toml')
 RECEIPT = Path('.azurpilot/independent.json')
 FILES = Path('.azurpilot/independent-files.json')
 WORK = Path('.azurpilot/independent-update')
+BUNDLED_PYTHON = Path('runtime/python/python.exe')
+PYTHON_ENVIRONMENTS = Path('.azurpilot/independent-python/environments')
+PYTHON_ENVIRONMENT_KEY = 'pythonEnvironment'
+DEPENDENCY_BASE_KEY = 'dependencyBaseRevision'
+DEPENDENCY_RELEASE_TAG = 'refs/tags/azurpilot-independent-deps/'
 SOURCE_REF = 'refs/azurpilot/source'
 CREATE_FLAGS = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 _history_lock = threading.Lock()
@@ -54,6 +57,18 @@ class GitOffer(NamedTuple):
     repository: str
     branch: str
     source: str | None = None
+
+
+class UpdateBranchNotFound(ValueError):
+    """Git 已返回结果，但没有所选分支。"""
+
+
+class UpdateSourceUnavailable(RuntimeError):
+    """暂时读不到上游，保留查询所用的仓库和分支。"""
+
+    def __init__(self, repository, branch):
+        super().__init__('暂时无法获取上游版本，当前版本可以继续运行')
+        self.source = repository, branch
 
 
 def enabled():
@@ -182,6 +197,8 @@ def unpack(archive, target, *, frontend=False, build_frontend=False, previous=No
 
 
 def verify_manifest(document, key):
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
     payload = document['release']
     Ed25519PublicKey.from_public_bytes(base64.b64decode(key, validate=True)).verify(
         base64.b64decode(document['signature'], validate=True), canonical(payload)
@@ -234,36 +251,77 @@ def update_source(root):
     return repository, branch
 
 
-def _remote_revision(root, repository, branch):
+def _remote_revisions(root, repository, branch, *, dependency_releases):
     ref = f'refs/heads/{branch}'
-    listing = git(root, gitcode_checkout(root), 'ls-remote', '--exit-code', '--refs', repository, ref,
-                  stdout=subprocess.PIPE, timeout=15).stdout.decode('ascii')
-    for line in listing.splitlines():
+    patterns = [ref]
+    if dependency_releases:
+        patterns.append(f'{DEPENDENCY_RELEASE_TAG}*')
+    checkout = gitcode_checkout(root)
+    args = ('ls-remote', '--exit-code', '--refs', repository, *patterns)
+    for options in ((), ('-c', 'http.version=HTTP/1.1')):
+        try:
+            listing = git(root, checkout, *options, *args, stdout=subprocess.PIPE, timeout=15).stdout
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+            if getattr(error, 'returncode', None) == 2:
+                raise UpdateBranchNotFound('没有找到配置的更新分支') from error
+            if options:
+                raise
+        else:
+            break
+    refs = {}
+    for line in listing.decode('utf-8', errors='replace').splitlines():
         revision, _, name = line.partition('\t')
-        if name == ref and re.fullmatch('[0-9a-f]{40}', revision):
-            return revision
-    raise ValueError('没有找到配置的更新分支')
+        if re.fullmatch('[0-9a-f]{40}', revision):
+            refs[name] = revision
+    base = refs.get(ref)
+    if base is None:
+        raise UpdateBranchNotFound('没有找到配置的更新分支')
+    candidate = refs.get(f'{DEPENDENCY_RELEASE_TAG}{base}') if dependency_releases else None
+    return base, candidate if candidate != base else None
 
 
-def check(root=None):
+def check(root=None, *, hot_reload=False):
+    from deploy.independent_runtime import supports_hot_reload
+
     root = Path(root or Path.cwd()).resolve()
     clean_abandoned(root)
     current = read_json(root / RECEIPT)
     repository, branch = update_source(root)
     mirrors = SOURCES if repository == GITCODE_REPOSITORY else (repository,)
+    # 冷启动可选择新解释器。旧桌面父进程内的 WebUI 必须等完整重启。
+    dependency_releases = not hot_reload or supports_hot_reload()
+    missing_branch = None
+    transport_error = None
     for mirror in mirrors:
         try:
-            revision = _remote_revision(root, mirror, branch)
+            base, candidate = _remote_revisions(root, mirror, branch, dependency_releases=dependency_releases)
+            if candidate is None and base == current.get(DEPENDENCY_BASE_KEY) and branch == current.get('branch'):
+                return None
+            revision = candidate or base
             if revision == current['revision']:
                 return None
             if repository == GITCODE_REPOSITORY and branch == DEFAULT_BRANCH and current['revision']:
                 if not _includes_installed(root, mirror, current['revision'], revision):
                     logging.getLogger(__name__).info('更新源尚未包含当前提交，继续使用本地版本')
                     return None
-        except (OSError, ValueError, subprocess.SubprocessError):
+        except UpdateBranchNotFound as error:
+            missing_branch = error
             continue
-        return GitOffer({'revision': revision}, repository, branch, mirror)
-    raise RuntimeError('无法读取所选仓库的分支，当前版本可以继续运行')
+        except (OSError, subprocess.SubprocessError) as error:
+            from deploy.uv import redact_sensitive_text
+
+            transport_error = error
+            stderr = (getattr(error, 'stderr', None) or b'').decode('utf-8', errors='replace').strip()
+            detail = redact_sensitive_text(stderr or str(error))[-600:]
+            logging.getLogger(__name__).warning('独立版读取上游版本失败 [%s] %s', urlsplit(mirror).hostname, detail)
+            continue
+        release = {'revision': revision}
+        if candidate is not None:
+            release[DEPENDENCY_BASE_KEY] = base
+        return GitOffer(release, repository, branch, mirror)
+    if missing_branch is not None:
+        raise missing_branch
+    raise UpdateSourceUnavailable(repository, branch) from transport_error
 
 
 def git(root, cwd, *args, stdout=subprocess.DEVNULL, timeout=210):
@@ -376,7 +434,7 @@ def history_refs(root, revisions):
         return cache, refs
 
 
-def probe(root, staged):
+def probe(root, staged, *, python=None):
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
         port = sock.getsockname()[1]
@@ -389,7 +447,7 @@ def probe(root, staged):
         env.pop(name, None)
     env.update(AZURPILOT_INDEPENDENT='1', PYTHONNOUSERSITE='1')
     child = subprocess.Popen(
-        [str(root / 'runtime/python/python.exe'), '-B', '-c', command],
+        [str(python or root / BUNDLED_PYTHON), '-B', '-c', command],
         cwd=staged, env=env, creationflags=CREATE_FLAGS,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
@@ -757,7 +815,7 @@ def _stage_frontend(root, repo, checkout, revision, temp, staged, previous, *, u
     return None
 
 
-def prepare(offer, root=None):
+def prepare(offer, root=None, *, hot_reload=False):
     root = Path(root or Path.cwd()).resolve()
     if update_source(root) != (offer.repository, offer.branch):
         raise RuntimeError('更新源已更改，请重新检查更新')
@@ -769,7 +827,7 @@ def prepare(offer, root=None):
         _clean_abandoned(root)
         ready = Path(tempfile.mkdtemp(prefix='ready-', dir=journal.parent))
         try:
-            _prepare_update(offer, root, ready)
+            _prepare_update(offer, root, ready, hot_reload=hot_reload)
         except BaseException:
             discard_ready(ready, root)
             raise
@@ -778,7 +836,16 @@ def prepare(offer, root=None):
         return ready
 
 
-def _prepare_update(offer, root, ready):
+def _validate_dependency_release(root, checkout, revision, base):
+    # 浅克隆仍保留原始提交头，可直接验证依赖版本衔接自哪个兼容提交。
+    commit = git(root, checkout, 'cat-file', 'commit', revision, stdout=subprocess.PIPE).stdout
+    headers = commit.partition(b'\n\n')[0].splitlines()
+    parents = [line for line in headers if line.startswith(b'parent ')]
+    if parents != [f'parent {base}'.encode('ascii')]:
+        raise ValueError('依赖更新与当前分支的兼容版本不匹配，请重新获取更新')
+
+
+def _prepare_update(offer, root, ready, *, hot_reload):
     current = read_json(root / RECEIPT)
     previous = read_json(root / FILES)
     # 程序文件清单随每次更新写入，安装包的原始依赖指纹继续供安装和修复使用。
@@ -788,19 +855,34 @@ def _prepare_update(offer, root, ready):
             raise RuntimeError('本机依赖清单已经改变，请用完整安装包修复')
     installed = current['revision']
     revision = offer.release['revision']
+    dependency_base = offer.release.get(DEPENDENCY_BASE_KEY)
     # 先记录候选所属的版本，启动器退出后可以识别尚未应用的临时目录。
     write_json(ready / 'base.json', installed)
     staged = ready / 'app'
+    environment = current.get(PYTHON_ENVIRONMENT_KEY)
+    sync_dependencies = False
     try:
         with _source_checkout(root, ready.parent, offer) as (repo, checkout):
+            if dependency_base is not None:
+                _validate_dependency_release(root, checkout, revision, dependency_base)
             export_attributes = _uses_export_attributes(root, checkout, revision)
             files, comparable = _stage_changes(root, checkout, revision, installed, previous, staged,
                                                export_attributes=export_attributes)
             if not all(name in files for name in ('gui.py', 'deploy/independent.py', *DEPENDENCY_FILES)):
                 raise RuntimeError('仓库不兼容此独立版，当前版本可以继续运行')
-            if (any((staged / name).is_file() for name in DEPENDENCY_FILES)
-                    and _dependency_spec(root, staged) != _dependency_spec(root)):
-                raise RuntimeError('所选版本需要不同的 Python 依赖，请使用对应完整安装包')
+            sync_dependencies = (any((staged / name).is_file() for name in DEPENDENCY_FILES)
+                                 and _dependency_spec(root, staged) != _dependency_spec(root))
+            if 'deploy/independent_runtime.py' not in files and (environment is not None or sync_dependencies):
+                if dependency_id(root, staged=staged) != current['dependencies']:
+                    raise RuntimeError('所选版本无法使用已安装的 Python 环境，继续使用当前版')
+                # 回到仍与安装包原始环境匹配的旧分支时，旧入口可以直接启动。
+                environment = None
+                sync_dependencies = False
+            if sync_dependencies and hot_reload:
+                from deploy.independent_runtime import supports_hot_reload
+
+                if not supports_hot_reload():
+                    raise RuntimeError('请先退出并重新启动 AzurPilot，再更新 Python 依赖')
             if update_source(root) != (offer.repository, offer.branch):
                 raise RuntimeError('更新源已更改，请重新检查更新')
             frontend_sources = None
@@ -836,11 +918,37 @@ def _prepare_update(offer, root, ready):
             compile(gui.read_bytes(), 'gui.py', 'exec')
         except SyntaxError as exc:
             raise ValueError('候选版启动入口无效，继续使用当前版本') from exc
+    if sync_dependencies:
+        from deploy.independent_runtime import sync_environment
+
+        project = ready / 'python-project'
+        project.mkdir()
+        for name in DEPENDENCY_FILES:
+            backup_file(_projected_file(root, staged, name), project / name)
+        environment = ready.name
+        python = sync_environment(root, environment, project, current)
+        # 增量包只暂存变更文件，试运行需要完整的候选程序，配置和数据库留在原目录。
+        with tempfile.TemporaryDirectory(prefix='probe-', dir=ready, ignore_cleanup_errors=True) as trial:
+            trial = Path(trial)
+            for name in files:
+                path = _projected_file(root, staged, name)
+                if path.is_file() and path.resolve() == path:
+                    backup_file(path, trial / name)
+            probe(root, trial, python=python)
     write_json(ready / 'files.json', files)
-    write_json(ready / 'version.json', {
+    version = {
         **current, 'revision': revision, 'branch': offer.branch,
         'frontendSources': [revision, frontend_sources] if frontend_sources is not None else None,
-    })
+    }
+    if environment is None:
+        version.pop(PYTHON_ENVIRONMENT_KEY, None)
+    else:
+        version[PYTHON_ENVIRONMENT_KEY] = environment
+    if dependency_base is None:
+        version.pop(DEPENDENCY_BASE_KEY, None)
+    else:
+        version[DEPENDENCY_BASE_KEY] = dependency_base
+    write_json(ready / 'version.json', version)
     write_json(ready / 'source.json', [offer.repository, offer.branch])
 
 
@@ -895,6 +1003,14 @@ def _clean_abandoned(root):
         if (ready not in _prepared_updates and ready.resolve() == ready
                 and re.fullmatch(r'ready-[a-z0-9_]+', ready.name) and (ready / 'base.json').is_file()):
             _discard_ready(ready, root)
+    environments = root / PYTHON_ENVIRONMENTS
+    if environments.is_dir() and environments.resolve() == environments:
+        active = read_json(root / RECEIPT).get(PYTHON_ENVIRONMENT_KEY)
+        for path in environments.glob('ready-*'):
+            if (path.name != active and journal.parent / path.name not in _prepared_updates
+                    and path.is_dir() and path.resolve() == path
+                    and re.fullmatch(r'ready-[a-z0-9_]+', path.name)):
+                _remove_update_tree(path)
 
 
 def _release_prepared(ready):
@@ -912,6 +1028,44 @@ def discard_ready(ready, root=None):
         _release_prepared(ready)
 
 
+def _environment_directory(root, name):
+    if not isinstance(name, str) or not re.fullmatch(r'ready-[a-z0-9_]+', name):
+        raise ValueError('Python 环境记录无效')
+    directory = root / PYTHON_ENVIRONMENTS / name
+    if directory.resolve() != directory:
+        raise ValueError('Python 环境目录不能是链接')
+    return directory
+
+
+def installed_python(root, receipt=None):
+    if receipt is None:
+        receipt = read_json(root / RECEIPT)
+    environment = receipt.get(PYTHON_ENVIRONMENT_KEY)
+    if environment is None:
+        return root / BUNDLED_PYTHON
+    return _environment_directory(root, environment) / 'Scripts/python.exe'
+
+
+def _remove_update_tree(path):
+    # 候选环境内的监督进程也会执行回滚，等进程退出后再清理它的环境。
+    if path == Path(sys.prefix).resolve():
+        return
+
+    def remove_readonly(remove, name, error):
+        path = Path(name)
+        if os.name != 'nt' or not isinstance(error, PermissionError) or path.resolve() != path:
+            raise error
+        path.chmod(stat.S_IWRITE)
+        remove(name)
+
+    try:
+        shutil.rmtree(path, onexc=remove_readonly)
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        logging.getLogger(__name__).warning('更新临时目录清理失败：%s', exc)
+
+
 def _discard_ready(ready, root):
     journal = _transaction(root)
     if (ready.parent != journal.parent or not re.fullmatch(r'ready-[a-z0-9_]+', ready.name)
@@ -925,23 +1079,15 @@ def _discard_ready(ready, root):
     except (OSError, ValueError, KeyError):
         return
 
-    def remove_readonly(remove, name, error):
-        path = Path(name)
-        if os.name != 'nt' or not isinstance(error, PermissionError) or path.resolve() != path:
-            raise error
-        path.chmod(stat.S_IWRITE)
-        remove(name)
-
     failed_config = ready / 'config-after-failed-update'
     preserve_failed_config = failed_config.exists() and not _unchanged_failed_config(ready)
     paths = (ready / 'app', ready / 'previous') if preserve_failed_config else (ready,)
     for path in paths:
-        try:
-            shutil.rmtree(path, onexc=remove_readonly)
-        except FileNotFoundError:
-            pass
-        except OSError as exc:
-            logging.getLogger(__name__).warning('更新临时目录清理失败：%s', exc)
+        _remove_update_tree(path)
+    candidate = root / PYTHON_ENVIRONMENTS / ready.name
+    if candidate.is_dir() and candidate.resolve() == candidate:
+        if read_json(root / RECEIPT).get(PYTHON_ENVIRONMENT_KEY) != ready.name:
+            _remove_update_tree(candidate)
 
 
 def backup_config(config, destination):
@@ -1063,6 +1209,9 @@ def _apply(ready, root):
     base = ready / 'base.json'
     if base.is_file() and read_json(base) != read_json(root / RECEIPT)['revision']:
         raise RuntimeError('本地版本已改变，请重新检查更新')
+    version = read_json(ready / 'version.json')
+    if version.get(PYTHON_ENVIRONMENT_KEY) and not installed_python(root, version).is_file():
+        raise RuntimeError('候选 Python 环境已不可用，继续使用当前版')
     old, new = read_json(root / FILES), read_json(ready / 'files.json')
     changed = _files_to_replace(root, ready, old, new)
     backup = ready / 'previous'
@@ -1100,7 +1249,7 @@ def _apply(ready, root):
             else:
                 target.unlink(missing_ok=True)
         write_json(root / FILES, new)
-        write_json(root / RECEIPT, read_json(ready / 'version.json'))
+        write_json(root / RECEIPT, version)
         if changed:
             write_json(journal, {'ready': ready.name, 'changed': changed, 'phase': 'trial'})
         else:
