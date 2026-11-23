@@ -6,7 +6,7 @@ from rich.text import Text
 
 from module.runtime.process_manager import ProcessManager
 from module.runtime.setting import State
-from module.runtime.worker_events import WorkerResult
+from module.runtime.worker_events import ExitEvent, WorkerResult
 
 
 class TestProcessManagerRegistry(unittest.TestCase):
@@ -32,6 +32,26 @@ class TestProcessManagerRegistry(unittest.TestCase):
         State._restart_requested = self.original_restart_requested
         ProcessManager._processes = self.original_processes
         ProcessManager._lifecycle_locks = self.original_lifecycle_locks
+
+    def test_storage_initialization_failure_is_logged_before_any_task_runs(self):
+        queue = Mock()
+        calls = Mock()
+        module = 'module.runtime.process_manager'
+        with patch(f'{module}.set_file_logger', calls.file), \
+                patch(f'{module}.set_func_logger', calls.queue), \
+                patch(f'{module}.prepare_statistics', calls.storage), \
+                patch(f'{module}.logger.exception', calls.error), \
+                patch('module.runtime.worker_events.initialize'), \
+                patch('module.scheduler.state_channel.initialize'), \
+                patch.object(ProcessManager, '_run_process') as run:
+            error = FileNotFoundError('缺少总库')
+            calls.storage.side_effect = error
+            ProcessManager.run_process('example', 'alas', queue, run_id='run', business_directory='config')
+
+        self.assertEqual([call[0] for call in calls.mock_calls], ['queue', 'file', 'storage', 'error'])
+        calls.error.assert_called_once_with(error)
+        queue.put.assert_called_once_with(ExitEvent('run', WorkerResult.ERROR))
+        run.assert_not_called()
 
     def test_restart_skips_blocked_instance_and_continues_without_logging_secrets(self):
         from module.api.protocol import ApiError

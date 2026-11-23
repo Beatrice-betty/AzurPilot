@@ -99,6 +99,21 @@ class MigrationProcessTests(unittest.TestCase):
             with self.assertRaisesRegex(MigrationError, '旧业务 worker.*PID 1000001'):
                 self.scan(current, [redirector])
 
+    def test_serving_webui_allows_its_supervisor_and_forwarder_only(self):
+        current = self.process(os.getpid(), self.base_interpreter, ['-c', 'spawn'])
+        supervisor = self.process(1000001, self.base_interpreter, ['gui.py'])
+        redirector = self.process(1000002, self.interpreter, ['gui.py'])
+        another = self.process(1000003, self.base_interpreter, ['gui.py'])
+        supervisor.parents.return_value = [redirector]
+        with patch('psutil.Process', side_effect=lambda pid=None: current if pid is None else supervisor), \
+                patch('psutil.process_iter', return_value=[current, redirector, supervisor]) as processes, \
+                patch('module.persistence.migration.sys.platform', 'win32'), \
+                patch('module.persistence.migration.sys.executable', str(self.interpreter)):
+            assert_no_workers(self.root, supervisor_pid=supervisor.pid)
+            processes.return_value = [current, redirector, supervisor, another]
+            with self.assertRaisesRegex(MigrationError, 'PID 1000003'):
+                assert_no_workers(self.root, supervisor_pid=supervisor.pid)
+
     def test_unverified_parent_is_not_exempt(self):
         import psutil
         current = self.process(os.getpid(), self.base_interpreter, ['gui.py'])
@@ -231,6 +246,24 @@ class MigrationTests(unittest.TestCase):
             for key, data in records.items():
                 self.assertEqual(read_month(connection, *key), data)
         self.assertEqual(self.database.marker.read_text(encoding='utf-8'), '1\nnative\n')
+
+    def test_pasting_v1_over_prepared_database_rechecks_version_and_migrates(self):
+        self.database.ensure_ready()
+        initial_marker = self.database.marker.read_bytes()
+        incoming = self.root / 'incoming.db'
+        with closing(sqlite3.connect(incoming)) as connection:
+            records = self.seed_native_months(connection)
+        self.database.marker.write_bytes(initial_marker)
+        shutil.copyfile(incoming, self.database.path)
+
+        # Reuse the same prepared handle after an in-place file copy.
+        with self.database.transaction(write=False) as connection:
+            self.assertEqual(connection.execute('PRAGMA user_version').fetchone()[0], VERSION)
+            for key, data in records.items():
+                self.assertEqual(read_month(connection, *key), data)
+        self.assertEqual(len(list((self.config / 'storage-backups').glob('pre-v2-*/azurpilot.db'))), 1)
+        with closing(sqlite3.connect(incoming)) as connection:
+            self.assertEqual(connection.execute('PRAGMA user_version').fetchone()[0], SCHEMA_V1)
 
     def old_cl1(self, data):
         path = self.config / 'cl1_data.db'
@@ -584,6 +617,69 @@ class MigrationTests(unittest.TestCase):
         recovered.path.unlink()
         with self.assertRaises(FileNotFoundError):
             recovered.ensure_ready()
+
+    def test_missing_database_restores_matching_backup_and_preserves_old_sidecars(self):
+        from module.persistence.recovery import current_recovery
+
+        self.database.ensure_ready()
+        original_marker = self.database.marker.read_bytes()
+        with self.database.transaction() as connection:
+            save_month(connection, 'inst', '2026-09', {'battle_count': 9})
+        daily = self.root / 'AzurPilot_Data_Backup/2026-10-01/azurpilot.db'
+        self.database.backup(daily)
+        wrong = self.root / 'AzurPilot_Data_Backup/2026-10-02/azurpilot.db'
+        self.database.backup(wrong)
+        with closing(sqlite3.connect(wrong)) as connection, connection:
+            connection.execute("UPDATE storage_migrations SET source_digest='other database'")
+        os.utime(wrong, ns=(wrong.stat().st_atime_ns, daily.stat().st_mtime_ns + 1_000_000_000))
+        self.database.path.unlink()
+        (self.config / 'azurpilot.db-wal').write_bytes(b'orphaned SQLite write log')
+        daily_original = daily.read_bytes()
+
+        self.database.ensure_ready(recover_missing=True)
+
+        with self.database.transaction(write=False) as connection:
+            self.assertEqual(read_month(connection, 'inst', '2026-09'), {'battle_count': 9})
+        archive, = (self.config / 'storage-backups').glob('missing-*')
+        self.assertEqual((archive / 'azurpilot.migrated').read_bytes(), original_marker)
+        self.assertEqual((archive / 'azurpilot.db-wal').read_bytes(), b'orphaned SQLite write log')
+        self.assertEqual(daily.read_bytes(), daily_original)
+        record = current_recovery(self.database)
+        self.assertIn('2026-10-01', record['message'])
+        self.assertFalse(record['awaiting_manual_start'])
+
+    def test_missing_database_can_start_clean_without_importing_old_sources(self):
+        from module.persistence.recovery import current_recovery, record_manual_start
+
+        self.database.ensure_ready()
+        previous = self.root / 'manual.db'
+        self.database.backup(previous)
+        path = self.old_cl1({'battle_count': 7})
+        legacy = path.read_bytes()
+        self.database.path.unlink()
+
+        self.database.ensure_ready(recover_missing=True)
+
+        with self.database.transaction(write=False) as connection:
+            self.assertEqual(connection.execute('PRAGMA user_version').fetchone()[0], VERSION)
+            self.assertIsNone(read_month(connection, 'inst', '2026-09'))
+        self.assertEqual(path.read_bytes(), legacy)
+        reopened = BusinessDatabase(self.config)
+        record = current_recovery(reopened)
+        self.assertIn('已新建空库', record['message'])
+        self.assertTrue(record['awaiting_manual_start'])
+        record_manual_start(reopened)
+        self.assertFalse(current_recovery(reopened)['awaiting_manual_start'])
+        shutil.copyfile(previous, self.database.path)
+        self.database.ensure_ready()
+        self.assertEqual(current_recovery(self.database), {})
+
+    def test_removed_database_is_never_implicitly_recreated_by_write_connection(self):
+        self.database.ensure_ready()
+        with patch.object(self.database, 'ensure_ready', side_effect=self.database.path.unlink):
+            with self.assertRaises(sqlite3.OperationalError):
+                self.database.connect()
+        self.assertFalse(self.database.path.exists())
 
     def test_v1_encrypted_payload_does_not_retire_keys_or_rewrite_original(self):
         key = b'x' * 32
