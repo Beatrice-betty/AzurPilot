@@ -134,13 +134,19 @@ class Updater(DeployConfig, RuntimeGitManager):
         """
         self.state = "checking"
         if independent.enabled():
-            self.independent_offer = None
             self.independent_error = ''
             try:
-                self.independent_offer = independent.check()
+                self.independent_offer = independent.check(hot_reload=True)
             except (OSError, RuntimeError, ValueError, KeyError) as error:
                 self.independent_error = str(error)
+                offer = self.independent_offer
+                if (isinstance(error, independent.UpdateSourceUnavailable) and offer is not None
+                        and (offer.repository, offer.branch) == error.source):
+                    self.independent_error = '暂时无法刷新上游版本，可以继续尝试安装之前找到的更新'
+                else:
+                    self.independent_offer = None
                 logger.warning(self.independent_error)
+                # 定时更新仍要求本轮查询成功。已核实的版本可以由用户手动更新。
                 return False
             return self.independent_offer is not None
 

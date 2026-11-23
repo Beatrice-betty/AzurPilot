@@ -59,6 +59,18 @@ class GitOffer(NamedTuple):
     source: str | None = None
 
 
+class UpdateBranchNotFound(ValueError):
+    """Git 已返回结果，但没有所选分支。"""
+
+
+class UpdateSourceUnavailable(RuntimeError):
+    """暂时读不到上游，保留查询所用的仓库和分支。"""
+
+    def __init__(self, repository, branch):
+        super().__init__('暂时无法获取上游版本，当前版本可以继续运行')
+        self.source = repository, branch
+
+
 def enabled():
     return os.environ.get('AZURPILOT_INDEPENDENT') == '1'
 
@@ -244,21 +256,31 @@ def _remote_revisions(root, repository, branch, *, dependency_releases):
     patterns = [ref]
     if dependency_releases:
         patterns.append(f'{DEPENDENCY_RELEASE_TAG}*')
-    listing = git(root, gitcode_checkout(root), 'ls-remote', '--exit-code', '--refs', repository, *patterns,
-                  stdout=subprocess.PIPE, timeout=15).stdout.decode('ascii')
+    checkout = gitcode_checkout(root)
+    args = ('ls-remote', '--exit-code', '--refs', repository, *patterns)
+    for options in ((), ('-c', 'http.version=HTTP/1.1')):
+        try:
+            listing = git(root, checkout, *options, *args, stdout=subprocess.PIPE, timeout=15).stdout
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+            if getattr(error, 'returncode', None) == 2:
+                raise UpdateBranchNotFound('没有找到配置的更新分支') from error
+            if options:
+                raise
+        else:
+            break
     refs = {}
-    for line in listing.splitlines():
+    for line in listing.decode('utf-8', errors='replace').splitlines():
         revision, _, name = line.partition('\t')
         if re.fullmatch('[0-9a-f]{40}', revision):
             refs[name] = revision
     base = refs.get(ref)
     if base is None:
-        raise ValueError('没有找到配置的更新分支')
+        raise UpdateBranchNotFound('没有找到配置的更新分支')
     candidate = refs.get(f'{DEPENDENCY_RELEASE_TAG}{base}') if dependency_releases else None
     return base, candidate if candidate != base else None
 
 
-def check(root=None):
+def check(root=None, *, hot_reload=False):
     from deploy.independent_runtime import supports_hot_reload
 
     root = Path(root or Path.cwd()).resolve()
@@ -266,8 +288,10 @@ def check(root=None):
     current = read_json(root / RECEIPT)
     repository, branch = update_source(root)
     mirrors = SOURCES if repository == GITCODE_REPOSITORY else (repository,)
-    # 更新器随网页热重载后，旧桌面父进程可能仍不支持切换解释器。
-    dependency_releases = supports_hot_reload()
+    # 冷启动可选择新解释器。旧桌面父进程内的 WebUI 必须等完整重启。
+    dependency_releases = not hot_reload or supports_hot_reload()
+    missing_branch = None
+    transport_error = None
     for mirror in mirrors:
         try:
             base, candidate = _remote_revisions(root, mirror, branch, dependency_releases=dependency_releases)
@@ -280,13 +304,24 @@ def check(root=None):
                 if not _includes_installed(root, mirror, current['revision'], revision):
                     logging.getLogger(__name__).info('更新源尚未包含当前提交，继续使用本地版本')
                     return None
-        except (OSError, ValueError, subprocess.SubprocessError):
+        except UpdateBranchNotFound as error:
+            missing_branch = error
+            continue
+        except (OSError, subprocess.SubprocessError) as error:
+            from deploy.uv import redact_sensitive_text
+
+            transport_error = error
+            stderr = (getattr(error, 'stderr', None) or b'').decode('utf-8', errors='replace').strip()
+            detail = redact_sensitive_text(stderr or str(error))[-600:]
+            logging.getLogger(__name__).warning('独立版读取上游版本失败 [%s] %s', urlsplit(mirror).hostname, detail)
             continue
         release = {'revision': revision}
         if candidate is not None:
             release[DEPENDENCY_BASE_KEY] = base
         return GitOffer(release, repository, branch, mirror)
-    raise RuntimeError('无法读取所选仓库的分支，当前版本可以继续运行')
+    if missing_branch is not None:
+        raise missing_branch
+    raise UpdateSourceUnavailable(repository, branch) from transport_error
 
 
 def git(root, cwd, *args, stdout=subprocess.DEVNULL, timeout=210):

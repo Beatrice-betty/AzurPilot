@@ -39,7 +39,7 @@ class TestIndependentPackage(unittest.TestCase):
             ):
                 self.assertIsNone(independent.check(self.root))
             remote.assert_called_once_with(self.root, independent.GITCODE_REPOSITORY, 'dev',
-                                           dependency_releases=False)
+                                           dependency_releases=True)
 
     def test_gitcode_download_failure_falls_back_to_the_same_commit(self):
         revision = '2' * 40
@@ -49,7 +49,7 @@ class TestIndependentPackage(unittest.TestCase):
         ):
             offer = independent.check(self.root)
         remote.assert_called_once_with(self.root, independent.GITCODE_REPOSITORY, 'dev',
-                                           dependency_releases=False)
+                                           dependency_releases=True)
         self.assertEqual(revision, offer.release['revision'])
         with patch.object(independent, 'git', side_effect=[None, subprocess.TimeoutExpired('fetch', 1), None, None]) as git:
             repository, checkout = independent._fetch_source(self.root, self.root, offer)
@@ -84,7 +84,7 @@ class TestIndependentPackage(unittest.TestCase):
                           encoding='utf-8')
         with patch.object(independent, '_remote_revisions', return_value=('2' * 40, None)) as remote:
             offer = independent.check(self.root)
-        remote.assert_called_once_with(self.root, repository, 'preview/test', dependency_releases=False)
+        remote.assert_called_once_with(self.root, repository, 'preview/test', dependency_releases=True)
         self.assertEqual(offer.release, {'revision': '2' * 40})
         with patch.object(independent, 'git', side_effect=[None, subprocess.TimeoutExpired('fetch', 1)]) as git:
             with self.assertRaisesRegex(RuntimeError, '所选仓库'):
@@ -111,12 +111,41 @@ class TestIndependentPackage(unittest.TestCase):
             patch.object(independent, 'git', return_value=result) as git,
             patch.object(independent_runtime, 'supports_hot_reload', side_effect=[False, True]),
         ):
-            self.assertEqual(independent.check(self.root).release, {'revision': base})
-            self.assertEqual(independent.check(self.root).release, {
-                'revision': candidate, independent.DEPENDENCY_BASE_KEY: base,
-            })
+            self.assertEqual(independent.check(self.root, hot_reload=True).release, {'revision': base})
+            expected = {'revision': candidate, independent.DEPENDENCY_BASE_KEY: base}
+            self.assertEqual(independent.check(self.root).release, expected)
+            self.assertEqual(independent.check(self.root, hot_reload=True).release, expected)
         self.assertEqual(git.call_args_list[0].args[-1:], (ref,))
         self.assertEqual(git.call_args_list[1].args[-2:], (ref, f'{prefix}*'))
+
+    def test_branch_query_retries_transport_error_over_http_1(self):
+        revision = '2' * 40
+        result = subprocess.CompletedProcess([], 0, stdout=f'{revision}\trefs/heads/dev\n'.encode('ascii'))
+        for error in (subprocess.CalledProcessError(128, 'ls-remote'),
+                      subprocess.TimeoutExpired('ls-remote', 15)):
+            with (
+                self.subTest(error=type(error).__name__),
+                patch.object(independent, 'gitcode_checkout', return_value=self.root),
+                patch.object(independent, 'git', side_effect=[error, result]) as git,
+            ):
+                self.assertEqual(independent._remote_revisions(
+                    self.root, independent.GITHUB_REPOSITORY, 'dev', dependency_releases=True,
+                ), (revision, None))
+            first, second = git.call_args_list
+            self.assertEqual(second.args[2:], ('-c', 'http.version=HTTP/1.1', *first.args[2:]))
+            self.assertEqual(second.kwargs, first.kwargs)
+
+    def test_missing_branch_is_distinct_from_transport_failure(self):
+        missing = subprocess.CalledProcessError(2, 'ls-remote')
+        with (
+            patch.object(independent, 'gitcode_checkout', return_value=self.root),
+            patch.object(independent, 'git', side_effect=missing) as git,
+            self.assertRaisesRegex(independent.UpdateBranchNotFound, '没有找到配置的更新分支'),
+        ):
+            independent._remote_revisions(
+                self.root, independent.GITHUB_REPOSITORY, 'dev', dependency_releases=False,
+            )
+        git.assert_called_once()
 
     def test_missing_dependency_tag_keeps_the_installed_upgrade(self):
         base = '2' * 40
@@ -447,7 +476,7 @@ class TestIndependentPackage(unittest.TestCase):
 
     def test_unavailable_release_keeps_installed_receipt(self):
         with patch.object(independent, '_remote_revisions', side_effect=TimeoutError) as remote:
-            with self.assertRaisesRegex(RuntimeError, '当前版本'):
+            with self.assertRaisesRegex(independent.UpdateSourceUnavailable, '当前版本'):
                 independent.check(self.root)
         self.assertEqual([call.args[1] for call in remote.call_args_list], list(independent.SOURCES))
         self.assertEqual(self.current, independent.read_json(self.root / independent.RECEIPT))
