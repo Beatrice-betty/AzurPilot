@@ -2,16 +2,22 @@
 
 import ctypes
 import importlib
+import os
 import unittest
 from json import JSONDecodeError
+from socketserver import StreamRequestHandler, TCPServer
+from threading import Thread
 from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
 # Device 导入先安装项目的 pkg_resources 兼容补丁；不构造设备或读取配置。
 from module.device.device import Device  # noqa: F401
+from adbutils import AdbClient
 from adbutils.errors import AdbError, AdbTimeout
 from requests.exceptions import ConnectionError as HttpConnectionError, ReadTimeout
 
+from module.device.connection import Connection
+from module.device.connection_attr import ConnectionAttr
 from module.device.method import (
     adb, ascreencap, droidcast, hermit, ldopengl, maatouch, minitouch, nemu_ipc,
     uiautomator_2, utils, wsa,
@@ -356,6 +362,76 @@ class TestImageTruncatedRecovery(unittest.TestCase):
         self.assertEqual(adb.retry(perform)(self.device), '成功')
 
         self.device.adb_reconnect.assert_called_once()
+
+
+class TestAdbServerProtocol(unittest.TestCase):
+    def test_device_listing_and_forward_commands_use_the_installed_adb_client(self):
+        devices = b'emulator-5554\tdevice\n127.0.0.1:5555\toffline\n'
+        commands = []
+        replies = {
+            'host:devices': b'OKAY' + f'{len(devices):04x}'.encode('ascii') + devices,
+            'host:transport:emulator-5554': b'OKAY',
+            'reverse:forward:localabstract:test;tcp:16400': b'OKAY',
+            'host-serial:emulator-5554:killforward:tcp:16400': b'OKAY',
+            'reverse:killforward:localabstract:test': b'OKAY',
+        }
+
+        class ServerHandler(StreamRequestHandler):
+            def handle(self):
+                self.connection.settimeout(3)
+                while size := self.rfile.read(4):
+                    command = self.rfile.read(int(size, 16)).decode('ascii')
+                    commands.append(command)
+                    self.wfile.write(replies[command])
+
+        server = self.enterContext(TCPServer(('127.0.0.1', 0), ServerHandler))
+        thread = Thread(target=server.serve_forever, kwargs={'poll_interval': 0.05}, daemon=True)
+        thread.start()
+        self.addCleanup(thread.join, 4)
+        self.addCleanup(server.shutdown)
+        connection = object.__new__(Connection)
+        connection.adb_client = AdbClient(*server.server_address)
+        connection.serial = 'emulator-5554'
+        with patch('module.device.connection.time.sleep'):
+            found = connection.list_device()
+        self.assertEqual([(device.serial, device.status) for device in found], [
+            ('emulator-5554', 'device'),
+            ('127.0.0.1:5555', 'offline'),
+        ])
+        connection._adb_reverse_transport('localabstract:test', 'tcp:16400')
+        connection.adb_forward_remove('tcp:16400')
+        connection.adb_reverse_remove('localabstract:test')
+        self.assertEqual(commands, [
+            'host:devices',
+            'host:transport:emulator-5554',
+            'reverse:forward:localabstract:test;tcp:16400',
+            'host-serial:emulator-5554:killforward:tcp:16400',
+            'host:transport:emulator-5554',
+            'reverse:killforward:localabstract:test',
+        ])
+
+    def test_adb_autostart_uses_the_configured_binary(self):
+        if hasattr(AdbClient, 'make_connection'):
+            failure = AdbTimeout('ADB is not running')
+        else:
+            failure = ConnectionRefusedError('ADB is not running')
+        with (
+            patch.object(utils.AdbConnection, '_create_socket', side_effect=failure),
+            patch.dict(os.environ, {'ADBUTILS_ADB_PATH': 'default-adb.exe'}),
+            patch('adbutils.adb_path'),
+            patch('subprocess.run', side_effect=RuntimeError('ADB autostart intercepted')) as start,
+        ):
+            connection = object.__new__(Connection)
+            connection.adb_binary = 'configured-adb.exe'
+            connection.adb_client = AdbClient()
+            config = SimpleNamespace(Emulator_Serial='emulator-5554', args={})
+            ConnectionAttr.__init__(connection, config)
+
+            with self.assertRaisesRegex(RuntimeError, 'ADB autostart intercepted'):
+                connection._adb_server_connection()
+
+        start.assert_called_once()
+        self.assertEqual(start.call_args.args[0], ['configured-adb.exe', 'start-server'])
 
 
 if __name__ == '__main__':

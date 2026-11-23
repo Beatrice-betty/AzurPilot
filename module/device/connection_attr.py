@@ -145,8 +145,11 @@ class ConnectionAttr:
 
         # 初始化 adb 客户端
         logger.attr('ADB路径', self.adb_binary)
-        # Monkey patch 自定义 adb
-        adbutils.adb_path = lambda: self.adb_binary
+        # 新版 adbutils 从环境变量读取自动启动 ADB 服务所用的路径。
+        if hasattr(AdbClient, 'make_connection'):
+            os.environ['ADBUTILS_ADB_PATH'] = self.adb_binary
+        else:
+            adbutils.adb_path = lambda: self.adb_binary
         # 移除全局代理设置，避免 uiautomator2 请求走代理
         d = dict(**os.environ)
         d.update(self.config.args)

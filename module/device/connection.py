@@ -625,6 +625,14 @@ class Connection(ConnectionAttr):
         cmd.insert(0, 'exec-out')
         return self.adb_command(cmd, serial)
 
+    def _adb_server_connection(self):
+        client = self.adb_client
+        connect = getattr(client, 'make_connection', None)
+        if connect is None:
+            # adbutils 0.11 uses _connect for the ADB server connection.
+            connect = client._connect
+        return connect()
+
     def adb_forward(self, remote):
         """执行 `adb forward <local> <remote>`。
 
@@ -673,7 +681,7 @@ class Connection(ConnectionAttr):
             args.append("norebind")
         args.append(remote + ";" + local)
         cmd = ":".join(args)
-        with self.adb_client._connect() as c:
+        with self._adb_server_connection() as c:
             c.send_command(f'host:transport:{self.serial}')
             c.check_okay()
             c.send_command(cmd)
@@ -712,7 +720,7 @@ class Connection(ConnectionAttr):
             local (str): 本地地址，如 'tcp:2437'。
         """
         try:
-            with self.adb_client._connect() as c:
+            with self._adb_server_connection() as c:
                 list_cmd = f"host-serial:{self.serial}:killforward:{local}"
                 c.send_command(list_cmd)
                 c.check_okay()
@@ -734,7 +742,7 @@ class Connection(ConnectionAttr):
             local (str): 本地地址，如 'tcp:2437'。
         """
         try:
-            with self.adb_client._connect() as c:
+            with self._adb_server_connection() as c:
                 c.send_command(f"host:transport:{self.serial}")
                 c.check_okay()
                 list_cmd = f"reverse:killforward:{local}"
@@ -1077,7 +1085,7 @@ class Connection(ConnectionAttr):
         """
         devices = []
         try:
-            with self.adb_client._connect() as c:
+            with self._adb_server_connection() as c:
                 c.send_command("host:devices")
                 c.check_okay()
                 output = c.read_string_block()
