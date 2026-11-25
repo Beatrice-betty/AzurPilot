@@ -22,7 +22,6 @@ import re
 from datetime import datetime
 
 from module.campaign.campaign_status import CampaignStatus
-from module.coalition.assets import VERITAS_MAIN_ENTRANCE
 from module.config.config_updater import COALITIONS, EVENTS, GEMS_FARMINGS, HOSPITAL, MARITIME_ESCORTS, RAIDS
 from module.config.time_source import now as current_time
 from module.config.utils import DEFAULT_TIME
@@ -303,10 +302,6 @@ class CampaignEvent(CampaignStatus):
         page = get_coalition_page(self.config.Campaign_Event)
         if self.ui_get_current_page() == page:
             logger.info('[活动战役] 已在联动页面')
-            return True
-        elif (self.config.Campaign_Event == 'coalition_20261124' and self.is_in_main()
-              and self.appear_then_click(VERITAS_MAIN_ENTRANCE, offset=(20, 20), interval=2)):
-            self.ui_goto(page, skip_first_screenshot=False)
             return True
         else:
             self.ui_goto(page_campaign_menu)

@@ -204,8 +204,8 @@ page_coalition.link(button=BACK_ARROW, destination=page_campaign_menu)
 page_campaign_menu.link(button=CAMPAIGN_MENU_GOTO_EVENT, destination=page_coalition)
 
 page_coalition_veritas = Page(VERITAS_COALITION_CHECK)
-page_coalition_veritas.link(button=VERITAS_HOME, destination=page_main)
-page_coalition_veritas.link(button=VERITAS_BACK, destination=page_campaign_menu)
+page_coalition_veritas.link(button=VERITAS_GOTO_HOME, destination=page_main)
+page_coalition_veritas.link(button=BACK_ARROW, destination=page_campaign_menu)
 page_campaign_menu.link(button=CAMPAIGN_MENU_GOTO_EVENT, destination=page_coalition_veritas)
 
 

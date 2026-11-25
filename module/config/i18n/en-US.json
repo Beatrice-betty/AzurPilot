@@ -86,6 +86,10 @@
       "name": "Event General",
       "help": ""
     },
+    "Coalition": {
+      "name": "The Transfer Student of Veritas Academy",
+      "help": ""
+    },
     "Event": {
       "name": "Event Map-1",
       "help": "This function is designed for regular events; co-op raid events usually have a dedicated settings page."
@@ -110,10 +114,6 @@
       "name": "Letter from the Deep Valley",
       "help": ""
     },
-    "Coalition": {
-      "name": "Light & Shadow Fashion - Shooting in Progress",
-      "help": ""
-    },
     "CoalitionScuttle": {
       "name": "Coalition Scuttle",
       "help": "Farm affinity by having ships sunk in Coalition events. Recommend sortie with multiple fleets; the first fleet sinks. Refer to tutorials for details."
@@ -129,6 +129,10 @@
     "WarArchives": {
       "name": "War Archives",
       "help": "Due to lack of maintenance for War Archives, the clearing function may not work properly. If you find AzurPilot running abnormally, please complete the clearing manually and then use the auto-search function."
+    },
+    "CoalitionSp": {
+      "name": "The Transfer Student of Veritas Academy SP",
+      "help": ""
     },
     "EventA": {
       "name": "Daily Map A",
@@ -152,10 +156,6 @@
     },
     "RaidDaily": {
       "name": "Raid Event Daily",
-      "help": ""
-    },
-    "CoalitionSp": {
-      "name": "Tales of the Strange: Escape from White Night Villa SP",
       "help": ""
     },
     "Commission": {
@@ -1633,7 +1633,7 @@
       "coalition_20251120": "DATE A LANE",
       "coalition_20260122": "Light & Shadow Fashion Shoot!",
       "coalition_20260723": "Authentic Horror Story",
-      "coalition_20261124": "The Transfer Student at Veritas Academy",
+      "coalition_20261124": "The Transfer Student of Veritas Academy",
       "event_20200227_cn": "Northern Overture",
       "event_20200312_cn": "The Solomon Ranger Rerun",
       "event_20200326_cn": "Microlayer Medley",

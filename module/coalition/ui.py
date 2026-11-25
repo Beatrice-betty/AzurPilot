@@ -21,11 +21,11 @@ from module.ui.page import get_coalition_page
 from module.ui.switch import Switch
 
 
-# 三服共用图像素材，EX 按各服的关卡名和结算文案读取。
-VERITAS_EX_TEXT = {
-    'cn': ('cnocr', '图书馆', '总得分', '确定'),
-    'en': ('ppocr_v6', 'LIBRARY', 'TOTALSCORE', 'CONFIRM'),
-    'jp': ('jp', '図書館', '合計スコア', '確定'),
+# EX 总得分弹窗按各服的结算文案确认。
+VERITAS_EX_RESULT_TEXT = {
+    'cn': ('cnocr', '总得分', '确定'),
+    'en': ('ppocr_v6', 'TOTALSCORE', 'CONFIRM'),
+    'jp': ('jp', '合計スコア', '確定'),
 }
 
 
@@ -72,6 +72,14 @@ class HorrorSwitch(Switch):
         return super().handle_additional(main)
 
 
+class VeritasSwitch(HorrorSwitch):
+    def get(self, main):
+        for data in self.state_list:
+            if main.match_template_color(data['check_button'], offset=data['offset']):
+                return data['state']
+        return 'unknown'
+
+
 class CoalitionUI(Combat):
     """联合出击活动界面交互基类。"""
 
@@ -87,8 +95,8 @@ class CoalitionUI(Combat):
     def ui_additional(self, get_ship=True):
         """导航遇到真理学院编队窗口时，先关闭编队再识别活动页。"""
         if (self.config.Campaign_Event == 'coalition_20261124'
-                and self.appear(VERITAS_FLEET_PREPARATION, offset=(20, 50))
-                and self.appear_then_click(VERITAS_FLEET_CLOSE, offset=(20, 20), interval=3)):
+                and self.appear(VERITAS_FLEET_PREPARATION, offset=(20, 50), interval=3)):
+            self.device.click(NEONCITY_PREPARATION_EXIT)
             return True
         return super().ui_additional(get_ship=get_ship)
 
@@ -143,7 +151,7 @@ class CoalitionUI(Combat):
             mode_switch.add_state('story', HORROR_MODE_STORY)
             mode_switch.add_state('battle', HORROR_MODE_BATTLE)
         elif event == 'coalition_20261124':
-            mode_switch = HorrorSwitch('CoalitionMode', is_selector=True, offset=0)
+            mode_switch = VeritasSwitch('CoalitionMode', is_selector=True, offset=(20, 20))
             mode_switch.add_state('story', VERITAS_MODE_STORY)
             mode_switch.add_state('battle', VERITAS_MODE_BATTLE)
         else:
@@ -274,6 +282,7 @@ class CoalitionUI(Combat):
             ('coalition_20261124', 'normal'): VERITAS_NORMAL,
             ('coalition_20261124', 'hard'): VERITAS_HARD,
             ('coalition_20261124', 'sp'): VERITAS_SP,
+            ('coalition_20261124', 'ex'): VERITAS_EX,
         }
         stage = stage.lower()
         try:
@@ -284,7 +293,7 @@ class CoalitionUI(Combat):
 
     def veritas_text_buttons(self, area, labels):
         """将真理学院页面上的指定文字位置转换为点击区域。"""
-        model_name, _, _, _ = VERITAS_EX_TEXT[self.config.SERVER]
+        model_name, _, _ = VERITAS_EX_RESULT_TEXT[self.config.SERVER]
         ocr = getattr(OCR_MODEL, model_name)
         left, top, _, _ = area
         for text, box, _ in ocr.det(crop(self.device.image, area)):
@@ -299,18 +308,9 @@ class CoalitionUI(Combat):
             click_area = (center_x - 4, center_y - 4, center_x + 4, center_y + 4)
             yield Button(area=rect, color=(), button=click_area, name=label)
 
-    def veritas_ex_entrance(self):
-        """定位通关 SP 后显示的图书馆入口。"""
-        _, name, _, _ = VERITAS_EX_TEXT[self.config.SERVER]
-        labels = (name, f'EX{name}', f'{name}EX')
-        buttons = list(self.veritas_text_buttons((0, 106, 1280, 613), (*labels, 'EX')))
-        # 优先点击关卡名。只识别出 EX 标志时，该标志也位于关卡入口内。
-        matches = [button for button in buttons if button.name in labels] or buttons
-        return matches[0] if len(matches) == 1 else None
-
     def handle_veritas_ex_result(self):
         """识别 EX 总得分页面的确定按钮，返回是否点击。"""
-        _, _, score, confirm = VERITAS_EX_TEXT[self.config.SERVER]
+        _, score, confirm = VERITAS_EX_RESULT_TEXT[self.config.SERVER]
         buttons = list(self.veritas_text_buttons((0, 0, 1280, 720), (score, confirm)))
         confirms = [button for button in buttons if button.name == confirm]
         if len(confirms) == 1 and any(button.name == score for button in buttons):
@@ -520,12 +520,7 @@ class CoalitionUI(Combat):
         """
         logger.info('联动地图退出')
         fleet_preparation = self.coalition_get_fleet_preparation(event)
-        if event == 'coalition_20261124':
-            fleet_exit = VERITAS_FLEET_CLOSE
-            fleet_offset = (20, 50)
-        else:
-            fleet_exit = NEONCITY_PREPARATION_EXIT
-            fleet_offset = (20, 20)
+        fleet_offset = (20, 50) if event == 'coalition_20261124' else (20, 20)
         for _ in self.loop():
             if self.in_coalition():
                 break
@@ -537,8 +532,8 @@ class CoalitionUI(Combat):
                 self.device.click(BACK_ARROW)
                 continue
             if self.appear(fleet_preparation, offset=fleet_offset, interval=3):
-                logger.info(f'{fleet_preparation} -> {fleet_exit}')
-                self.device.click(fleet_exit)
+                logger.info(f'{fleet_preparation} -> {NEONCITY_PREPARATION_EXIT}')
+                self.device.click(NEONCITY_PREPARATION_EXIT)
                 continue
             if event == 'coalition_20251120':
                 if self.appear_then_click(DAL_DIFFICULTY_EXIT, offset=(20, 20), interval=3):
@@ -560,8 +555,7 @@ class CoalitionUI(Combat):
         Raises:
             RequestHumanTakeover: 进入关卡或准备舰队连续失败超过阈值。
         """
-        veritas_ex = event == 'coalition_20261124' and stage.lower() == 'ex'
-        button = None if veritas_ex else self.coalition_get_entrance(event, stage)
+        button = self.coalition_get_entrance(event, stage)
         if event in ['coalition_20251120']:
             button_difficulty = self.coalition_20251120_get_entrance_difficulty(event, stage)
         else:
@@ -577,7 +571,7 @@ class CoalitionUI(Combat):
         for _ in self.loop():
             # 异常检查
             if campaign_click > 5:
-                logger.critical(f"[联动] 无法进入 {button or stage}，尝试次数过多")
+                logger.critical(f"[联动] 无法进入 {button}，点击次数过多")
                 logger.critical("[联动] 可能的原因1: 你还没有通关前置关卡，无法解锁该关卡。")
                 raise RequestHumanTakeover
             if campaign_difficulty_click > 5:
@@ -604,10 +598,7 @@ class CoalitionUI(Combat):
 
             # 进入关卡
             if campaign_timer.reached() and self.in_coalition():
-                if veritas_ex:
-                    button = self.veritas_ex_entrance()
-                if button is not None:
-                    self.device.click(button)
+                self.device.click(button)
                 campaign_click += 1
                 campaign_timer.reset()
                 continue

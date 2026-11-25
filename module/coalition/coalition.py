@@ -127,7 +127,8 @@ class Coalition(CoalitionCombat, CampaignEvent):
             threshold = 256 if self.config.SERVER == 'en' else 221
             ocr = Digit(HORROR_PT_OCR, name='OCR_PT', lang='cnocr', letter=(228, 230, 237), threshold=threshold)
         elif event == 'coalition_20261124':
-            ocr = Digit(VERITAS_PT_OCR, name='OCR_PT', letter=(192, 208, 227), threshold=192)
+            # 活动积分使用细字体，azur_lane 模型容易误读为 0。
+            ocr = Digit(VERITAS_PT_OCR, name='OCR_PT', lang='cnocr', letter=(255, 255, 255), threshold=128)
         else:
             logger.error(f'[联动] 活动 {event} 未定义OCR对象')
             raise ScriptError
