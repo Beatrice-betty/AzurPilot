@@ -1,4 +1,4 @@
-name: Sync CNB and Gitee
+name: Sync CNB
 
 on:
   push:
@@ -17,18 +17,8 @@ jobs:
     if: github.repository == 'Beatrice-betty/AzurPilot'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - host: cnb.cool
-            username: cnb
-            secret: CNB_TOKEN
-          - host: gitee.com
-            username: Beatrice-betty
-            secret: GITEE_TOKEN
     concurrency:
-      group: azurpilot-mirror-${{ matrix.host }}
+      group: azurpilot-mirror-cnb.cool
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
@@ -37,20 +27,6 @@ jobs:
 
       - name: Sync and verify all GitHub branches and tags
         env:
-          MIRROR_HOST: ${{ matrix.host }}
-          MIRROR_USER: ${{ matrix.username }}
-          MIRROR_TOKEN: ${{ secrets[matrix.secret] }}
-          MIRROR_SECRET: ${{ matrix.secret }}
+          MIRROR_TOKEN: ${{ secrets.CNB_TOKEN }}
           GIT_TERMINAL_PROMPT: '0'
-        run: |
-          if [ -z "$MIRROR_TOKEN" ]; then
-            echo "::error::请配置仓库镜像写入凭据 $MIRROR_SECRET"
-            exit 1
-          fi
-          auth="$(printf '%s:%s' "$MIRROR_USER" "$MIRROR_TOKEN" | base64 -w0)"
-          echo "::add-mask::$auth"
-          export GIT_CONFIG_COUNT=1
-          export GIT_CONFIG_KEY_0="http.https://$MIRROR_HOST/.extraHeader"
-          export GIT_CONFIG_VALUE_0="Authorization: Basic $auth"
-          unset auth MIRROR_TOKEN
-          bash .github/scripts/sync-repo-mirror.sh "https://$MIRROR_HOST/Beatrice-betty/AzurPilot.git"
+        run: bash .github/scripts/sync-repo-mirror.sh https://cnb.cool/Beatrice-betty/AzurPilot cnb
