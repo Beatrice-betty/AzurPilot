@@ -15,7 +15,7 @@ from unittest.mock import patch
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from deploy import independent, independent_runtime
-from deploy.utils import CNB_REPOSITORY, GITCODE_REPOSITORY, GITHUB_REPOSITORY, REPOSITORY_SOURCES
+from deploy.utils import CNB_REPOSITORY, GITCODE_REPOSITORY, GITHUB_REPOSITORY, GITLINK_REPOSITORY
 
 
 class TestIndependentPackage(unittest.TestCase):
@@ -55,27 +55,32 @@ class TestIndependentPackage(unittest.TestCase):
             repository, checkout = independent._fetch_source(self.root, self.root, offer)
         first, fallback = git.call_args_list[1::2]
         self.assertEqual(repository, GITCODE_REPOSITORY)
-        self.assertEqual([first.args[-2], fallback.args[-2]], list(REPOSITORY_SOURCES[:2]))
+        self.assertEqual([first.args[-2], fallback.args[-2]], [CNB_REPOSITORY, GITCODE_REPOSITORY])
         self.assertEqual(first.args[-1], revision)
         self.assertEqual(fallback.args[-1], revision)
         self.assertEqual(checkout, fallback.args[1])
         self.assertNotEqual(first.args[1], checkout)
 
-    def test_unavailable_or_stale_mirrors_use_github(self):
-        with (
-            patch.object(independent, '_remote_revisions',
-                         side_effect=[('2' * 40, None), ('3' * 40, None), TimeoutError]) as remote,
-            patch.object(independent, '_includes_installed', return_value=True),
-        ):
-            offer = independent.check(self.root)
-        self.assertEqual([call.args[1] for call in remote.call_args_list],
-                         [GITHUB_REPOSITORY, CNB_REPOSITORY, GITCODE_REPOSITORY])
-        self.assertEqual(offer.repository, CNB_REPOSITORY)
-        with patch.object(independent, 'git') as git:
-            repository, _ = independent._fetch_source(self.root, self.root, offer)
-        self.assertEqual(repository, independent.GITHUB_REPOSITORY)
-        self.assertEqual(git.call_count, 2)
-        self.assertEqual(git.call_args.args[-2], independent.GITHUB_REPOSITORY)
+    def test_unavailable_or_stale_mirrors_use_gitlink_then_github(self):
+        revision = '2' * 40
+        stale = '3' * 40
+        for gitlink_revision, expected_source in ((revision, GITLINK_REPOSITORY), (stale, GITHUB_REPOSITORY)):
+            with (
+                self.subTest(gitlink_revision=gitlink_revision),
+                patch.object(independent, '_remote_revisions', side_effect=[
+                    (revision, None), (stale, None), TimeoutError, (gitlink_revision, None),
+                ]) as remote,
+                patch.object(independent, '_includes_installed', return_value=True),
+            ):
+                offer = independent.check(self.root)
+                self.assertEqual([call.args[1] for call in remote.call_args_list],
+                                 [GITHUB_REPOSITORY, CNB_REPOSITORY, GITCODE_REPOSITORY, GITLINK_REPOSITORY])
+                self.assertEqual(offer.repository, CNB_REPOSITORY)
+                with patch.object(independent, 'git') as git:
+                    repository, _ = independent._fetch_source(self.root, self.root, offer)
+                self.assertEqual(repository, expected_source)
+                self.assertEqual(git.call_count, 2)
+                self.assertEqual(git.call_args.args[-2:], (expected_source, revision))
 
     def test_missing_dependency_release_skips_cnb_even_when_the_branch_matches(self):
         base, candidate = '2' * 40, '3' * 40

@@ -11,8 +11,9 @@ DEPLOY_CONFIG = './config/deploy.yaml'
 DEPLOY_TEMPLATE = './deploy/template'
 CNB_REPOSITORY = 'https://cnb.cool/Beatrice-betty/AzurPilot'
 GITCODE_REPOSITORY = 'https://gitcode.com/Beatrice-betty/AzurPilot'
+GITLINK_REPOSITORY = 'https://gitlink.org.cn/BeatriceBetty/AzurPilot'
 GITHUB_REPOSITORY = 'https://github.com/Beatrice-betty/AzurPilot'
-REPOSITORY_SOURCES = (CNB_REPOSITORY, GITCODE_REPOSITORY, GITHUB_REPOSITORY)
+REPOSITORY_SOURCES = (CNB_REPOSITORY, GITCODE_REPOSITORY, GITLINK_REPOSITORY, GITHUB_REPOSITORY)
 NPM_REGISTRIES = (
     'https://registry.npmmirror.com',
     'https://mirrors.huaweicloud.com/repository/npm/',

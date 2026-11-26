@@ -8,7 +8,14 @@ from deploy import config as deploy_config
 from deploy import geo
 from deploy import git as deploy_git
 from deploy.Windows import config as windows_config
-from deploy.utils import CNB_REPOSITORY, GITCODE_REPOSITORY, GITHUB_REPOSITORY, official_repository, repository_candidates
+from deploy.utils import (
+    CNB_REPOSITORY,
+    GITCODE_REPOSITORY,
+    GITHUB_REPOSITORY,
+    GITLINK_REPOSITORY,
+    official_repository,
+    repository_candidates,
+)
 
 
 class TestIp9Location(unittest.TestCase):
@@ -67,8 +74,11 @@ class TestDeployLocation(unittest.TestCase):
 
     def test_repository_order(self):
         self.assertEqual(repository_candidates(official_repository(GITCODE_REPOSITORY + '.git')),
-                         (CNB_REPOSITORY, GITCODE_REPOSITORY, GITHUB_REPOSITORY))
-        self.assertEqual(repository_candidates(GITCODE_REPOSITORY), (GITCODE_REPOSITORY, GITHUB_REPOSITORY))
+                         (CNB_REPOSITORY, GITCODE_REPOSITORY, GITLINK_REPOSITORY, GITHUB_REPOSITORY))
+        self.assertEqual(repository_candidates(GITCODE_REPOSITORY),
+                         (GITCODE_REPOSITORY, GITLINK_REPOSITORY, GITHUB_REPOSITORY))
+        self.assertEqual(repository_candidates(official_repository(GITLINK_REPOSITORY + '.git')),
+                         (GITLINK_REPOSITORY, GITHUB_REPOSITORY))
         self.assertEqual(official_repository('gitee'), CNB_REPOSITORY)
         self.assertEqual(repository_candidates('https://example.invalid/custom'), ('https://example.invalid/custom',))
 
@@ -77,7 +87,11 @@ class TestDeployLocation(unittest.TestCase):
         expected = subprocess.CompletedProcess([], 0, stdout=f'{revision}\trefs/heads/preview/test\n'.encode())
         old = subprocess.CompletedProcess([], 0, stdout=f'{"b" * 40}\trefs/heads/preview/test\n'.encode())
         with patch.object(deploy_git.subprocess, 'run', side_effect=[
-            expected, old, expected, subprocess.TimeoutExpired('fetch', 1), None, None,
+            expected,
+            old,
+            expected, subprocess.TimeoutExpired('fetch', 1),
+            expected, subprocess.TimeoutExpired('fetch', 1),
+            None, None,
         ]) as run:
             self.assertTrue(deploy_git.fetch_verified_branch(
                 'git', 'origin', 'preview/test', repository_candidates(CNB_REPOSITORY),
@@ -85,7 +99,7 @@ class TestDeployLocation(unittest.TestCase):
             ))
         commands = [call.args[0][3:] for call in run.call_args_list]
         self.assertEqual([parts[-2:] for parts in commands if parts[0] == 'fetch'],
-                         [[GITCODE_REPOSITORY, revision], [GITHUB_REPOSITORY, revision]])
+                         [[GITCODE_REPOSITORY, revision], [GITLINK_REPOSITORY, revision], [GITHUB_REPOSITORY, revision]])
         self.assertEqual(commands[-1], ['update-ref', 'refs/remotes/origin/preview/test', revision])
 
     def test_github_lookup_failure_leaves_tracking_ref_untouched(self):
