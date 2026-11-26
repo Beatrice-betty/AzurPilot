@@ -143,7 +143,7 @@ class GitManager(DeployConfig):
         Raises:
             ExecutionError: 所有尝试均失败时抛出。
         """
-        repositories = repository_candidates(self.get_remote_url(source))
+        repositories = repository_candidates(official_repository(self.get_remote_url(source)))
         if len(repositories) > 1:
             if fetch_verified_branch(self.git, source, branch, repositories, user_agent=self.git_user_agent,
                                      max_retry=max_retry, delay=delay, log=logger):

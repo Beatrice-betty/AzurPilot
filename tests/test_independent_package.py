@@ -15,7 +15,7 @@ from unittest.mock import patch
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from deploy import independent, independent_runtime
-from deploy.utils import CNB_REPOSITORY, GITEE_REPOSITORY, GITHUB_REPOSITORY, REPOSITORY_SOURCES
+from deploy.utils import CNB_REPOSITORY, GITCODE_REPOSITORY, GITHUB_REPOSITORY, REPOSITORY_SOURCES
 
 
 class TestIndependentPackage(unittest.TestCase):
@@ -54,7 +54,7 @@ class TestIndependentPackage(unittest.TestCase):
         with patch.object(independent, 'git', side_effect=[None, subprocess.TimeoutExpired('fetch', 1), None, None]) as git:
             repository, checkout = independent._fetch_source(self.root, self.root, offer)
         first, fallback = git.call_args_list[1::2]
-        self.assertEqual(repository, GITEE_REPOSITORY)
+        self.assertEqual(repository, GITCODE_REPOSITORY)
         self.assertEqual([first.args[-2], fallback.args[-2]], list(REPOSITORY_SOURCES[:2]))
         self.assertEqual(first.args[-1], revision)
         self.assertEqual(fallback.args[-1], revision)
@@ -69,7 +69,7 @@ class TestIndependentPackage(unittest.TestCase):
         ):
             offer = independent.check(self.root)
         self.assertEqual([call.args[1] for call in remote.call_args_list],
-                         [GITHUB_REPOSITORY, CNB_REPOSITORY, GITEE_REPOSITORY])
+                         [GITHUB_REPOSITORY, CNB_REPOSITORY, GITCODE_REPOSITORY])
         self.assertEqual(offer.repository, CNB_REPOSITORY)
         with patch.object(independent, 'git') as git:
             repository, _ = independent._fetch_source(self.root, self.root, offer)
@@ -85,7 +85,11 @@ class TestIndependentPackage(unittest.TestCase):
             patch.object(independent, '_includes_installed', return_value=True),
         ):
             offer = independent.check(self.root)
-        self.assertEqual(offer.source, GITEE_REPOSITORY)
+        self.assertEqual(offer.source, GITCODE_REPOSITORY)
+        with patch.object(independent, 'git') as git:
+            repository, _ = independent._fetch_source(self.root, self.root, offer)
+        self.assertEqual(repository, GITCODE_REPOSITORY)
+        self.assertEqual(git.call_args.args[-2:], (GITCODE_REPOSITORY, candidate))
         self.assertEqual(offer.release, {'revision': candidate, independent.DEPENDENCY_BASE_KEY: base})
 
     def test_deploy_repository_and_branch_select_unsigned_git_update(self):

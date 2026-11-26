@@ -10,10 +10,9 @@ T = TypeVar("T")
 DEPLOY_CONFIG = './config/deploy.yaml'
 DEPLOY_TEMPLATE = './deploy/template'
 CNB_REPOSITORY = 'https://cnb.cool/Beatrice-betty/AzurPilot'
-GITEE_REPOSITORY = 'https://gitee.com/Beatrice-betty/AzurPilot'
-GITHUB_REPOSITORY = 'https://github.com/Beatrice-betty/AzurPilot'
 GITCODE_REPOSITORY = 'https://gitcode.com/Beatrice-betty/AzurPilot'
-REPOSITORY_SOURCES = (CNB_REPOSITORY, GITEE_REPOSITORY, GITHUB_REPOSITORY)
+GITHUB_REPOSITORY = 'https://github.com/Beatrice-betty/AzurPilot'
+REPOSITORY_SOURCES = (CNB_REPOSITORY, GITCODE_REPOSITORY, GITHUB_REPOSITORY)
 NPM_REGISTRIES = (
     'https://registry.npmmirror.com',
     'https://mirrors.huaweicloud.com/repository/npm/',
@@ -24,17 +23,17 @@ NPM_REGISTRIES = (
 
 def official_repository(repository):
     address = repository.rstrip('/').removesuffix('.git')
-    if address in ('cn', 'cnb', 'gitcode', GITCODE_REPOSITORY):
+    # 旧默认配置和上一版误用的国内地址都进入 CNB 优先的更新链路。
+    if address in ('cn', 'cnb', 'gitcode', GITCODE_REPOSITORY,
+                   'gitee', 'https://gitee.com/Beatrice-betty/AzurPilot'):
         return CNB_REPOSITORY
-    if address == 'gitee':
-        return GITEE_REPOSITORY
     if address == 'global':
         return GITHUB_REPOSITORY
     return address if address in REPOSITORY_SOURCES else repository
 
 
 def repository_candidates(repository):
-    repository = official_repository(repository)
+    """从已经选定的仓库向后尝试备用源。"""
     if repository in REPOSITORY_SOURCES:
         return REPOSITORY_SOURCES[REPOSITORY_SOURCES.index(repository):]
     return (repository,)

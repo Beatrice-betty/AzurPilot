@@ -9,7 +9,7 @@ from deploy.Windows.utils import cached_property
 from deploy.git import fetch_verified_branch
 from deploy.git_over_cdn.client import GitOverCdnClient
 from deploy.git_over_cdn.endpoints import CLOUDFLARE_UPDATE_URLS, FALLBACK_UPDATE_URLS
-from deploy.utils import repository_candidates
+from deploy.utils import official_repository, repository_candidates
 
 
 class GitConfigParser(configparser.ConfigParser):
@@ -138,7 +138,7 @@ class GitManager(DeployConfig):
         Raises:
             ExecutionError: 所有尝试均失败时抛出。
         """
-        repositories = repository_candidates(self.get_remote_url(source))
+        repositories = repository_candidates(official_repository(self.get_remote_url(source)))
         if len(repositories) > 1:
             if fetch_verified_branch(self.git, source, branch, repositories, user_agent=self.git_user_agent,
                                      max_retry=max_retry, delay=delay, log=logger):
