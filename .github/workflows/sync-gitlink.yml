@@ -1,0 +1,32 @@
+name: Sync GitLink
+
+on:
+  push:
+    branches: ['**']
+    tags: ['**']
+  workflow_dispatch:
+  schedule:
+    # 补跑旧分支上尚未包含本工作流的推送。
+    - cron: '17,47 * * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  repo-sync:
+    if: github.repository == 'Beatrice-betty/AzurPilot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: azurpilot-mirror-gitlink.org.cn
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Sync and verify all GitHub branches and tags
+        env:
+          MIRROR_TOKEN: ${{ secrets.GITLINK_TOKEN }}
+          GIT_TERMINAL_PROMPT: '0'
+        run: bash .github/scripts/sync-repo-mirror.sh https://gitlink.org.cn/BeatriceBetty/AzurPilot.git BeatriceBetty
