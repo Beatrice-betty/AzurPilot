@@ -1,4 +1,4 @@
-"""验证单向镜像的分支来源、强推及提交核对。"""
+"""验证国内镜像的分支、标签及提交核对。"""
 
 import os
 import shutil
@@ -15,13 +15,20 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class TestRepositoryMirrors(unittest.TestCase):
     def test_all_branches_and_tags_are_fetched_from_github(self):
-        path = ROOT / '.github/workflows/sync-cnb.yml'
-        workflow = yaml.load(path.read_text(encoding='utf-8'), Loader=yaml.BaseLoader)
-        self.assertEqual(workflow['on']['push'], {'branches': ['**'], 'tags': ['**']})
-        self.assertIn('schedule', workflow['on'])
-        job = workflow['jobs']['repo-sync']
-        self.assertEqual([item['host'] for item in job['strategy']['matrix']['include']], ['cnb.cool', 'gitee.com'])
-        self.assertIn('matrix.host', job['concurrency']['group'])
+        for name, host, secret in (
+            ('sync-cnb.yml', 'cnb.cool', 'CNB_TOKEN'),
+            ('sync2.yml', 'gitcode.com', 'GITCODE_TOKEN'),
+        ):
+            with self.subTest(host=host):
+                path = ROOT / '.github/workflows' / name
+                workflow = yaml.load(path.read_text(encoding='utf-8'), Loader=yaml.BaseLoader)
+                self.assertEqual(workflow['on']['push'], {'branches': ['**'], 'tags': ['**']})
+                self.assertIn('schedule', workflow['on'])
+                job = workflow['jobs']['repo-sync']
+                self.assertIn('Beatrice-betty/AzurPilot', job['if'])
+                self.assertEqual(job['concurrency']['group'], f'azurpilot-mirror-{host}')
+                self.assertIn(secret, job['steps'][-1]['env']['MIRROR_TOKEN'])
+                self.assertIn(f'https://{host}/Beatrice-betty/AzurPilot', job['steps'][-1]['run'])
 
         git = shutil.which('git')
         bash = Path(git).resolve().parent.parent / 'bin/bash.exe' if os.name == 'nt' and git else shutil.which('bash')
@@ -58,12 +65,8 @@ class TestRepositoryMirrors(unittest.TestCase):
 
 
 class TestGitCodeSync(unittest.TestCase):
-    def test_checkout_and_push_retry(self):
-        workflow = yaml.safe_load((ROOT / '.github/workflows/sync2.yml').read_text(encoding='utf-8'))
-        job = workflow['jobs']['repo-sync']
-        self.assertIn('Beatrice-betty/AzurPilot', job['if'])
-        self.assertEqual(0, job['steps'][0]['with']['fetch-depth'])
-        push = next(step['run'] for step in job['steps'] if step.get('name') == 'sync')
+    def test_full_push_retry(self):
+        script = (ROOT / '.github/scripts/sync-repo-mirror.sh').read_text(encoding='utf-8')
         git_path = shutil.which('git')
         bash = (Path(git_path).resolve().parent.parent / 'bin/bash.exe') if os.name == 'nt' and git_path else shutil.which('bash')
         if not bash or not Path(bash).exists():
@@ -79,16 +82,20 @@ git() {
     if [[ "$1" == "fetch" ]]; then
         printf '%s\n' "$*" >> fetch.log
     elif [[ "$1" == "rev-parse" ]]; then
-        printf '%s\n' "$REVISION"
-    elif [[ "$*" == *" push "* ]]; then
+        printf 'false\n'
+    elif [[ "$1" == "push" ]]; then
         printf '%s\n' "$*" >> push.log
+        printf '%s\n' "$GIT_CONFIG_VALUE_1" >> agents.log
         local count
         count="$(wc -l < push.log)"
         if [ "$count" -le "$FAILURES" ]; then
             return 128
         fi
-    elif [[ "$*" == *" ls-remote "* ]]; then
-        printf '%s\trefs/heads/dev\n' "$REVISION"
+        touch synchronized
+    elif [[ "$1" == "ls-remote" ]]; then
+        if [[ "$3" == "origin" || -f synchronized ]]; then
+            printf '%s\trefs/heads/dev\n' "$REVISION"
+        fi
     fi
 }
 sleep() { :; }
@@ -96,16 +103,21 @@ sleep() { :; }
         for failures, expected_status, expected_attempts in ((2, 0, 3), (5, 1, 5)):
             with self.subTest(failures=failures), tempfile.TemporaryDirectory() as directory:
                 result = subprocess.run(
-                    [str(bash), '-c', stub + push], cwd=directory, capture_output=True,
+                    [str(bash), '-c', stub + script, '--',
+                     'https://gitcode.com/Beatrice-betty/AzurPilot.git', 'Beatrice-betty'],
+                    cwd=directory, capture_output=True,
                     env={**os.environ, 'FAILURES': str(failures), 'REVISION': revision,
-                         'GITCODE_TOKEN': 'test-token', 'MIRROR_BRANCH': 'dev'},
+                         'MIRROR_TOKEN': 'test-token'},
                 )
                 self.assertEqual(expected_status, result.returncode, result.stderr.decode(errors='replace'))
-                self.assertEqual('fetch --no-tags origin refs/heads/dev', (Path(directory) / 'fetch.log').read_text().strip())
+                self.assertIn('fetch --prune --no-tags origin', (Path(directory) / 'fetch.log').read_text())
                 attempts = (Path(directory) / 'push.log').read_text().splitlines()
+                agents = (Path(directory) / 'agents.log').read_text().splitlines()
                 self.assertEqual(expected_attempts, len(attempts))
-                for attempt in attempts:
-                    self.assertIn('http.userAgent=Mozilla/5.0', attempt)
+                self.assertEqual(expected_attempts, len(agents))
+                for attempt, agent in zip(attempts, agents):
+                    self.assertTrue(agent.startswith('Mozilla/5.0'))
                     self.assertIn('gitcode.com/Beatrice-betty/AzurPilot.git', attempt)
-                    self.assertIn(f'+{revision}:refs/heads/dev', attempt)
+                    self.assertIn('refs/azurpilot-mirror/heads/*:refs/heads/*', attempt)
+                    self.assertIn('refs/azurpilot-mirror/tags/*:refs/tags/*', attempt)
                     self.assertNotIn('test-token', attempt)
