@@ -13,6 +13,50 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 
 
+class TestRepositoryMirrors(unittest.TestCase):
+    def test_all_branches_and_tags_are_fetched_from_github(self):
+        path = ROOT / '.github/workflows/sync-cnb.yml'
+        workflow = yaml.load(path.read_text(encoding='utf-8'), Loader=yaml.BaseLoader)
+        self.assertEqual(workflow['on']['push'], {'branches': ['**'], 'tags': ['**']})
+        self.assertIn('schedule', workflow['on'])
+        job = workflow['jobs']['repo-sync']
+        self.assertEqual([item['host'] for item in job['strategy']['matrix']['include']], ['cnb.cool', 'gitee.com'])
+        self.assertIn('matrix.host', job['concurrency']['group'])
+
+        git = shutil.which('git')
+        bash = Path(git).resolve().parent.parent / 'bin/bash.exe' if os.name == 'nt' and git else shutil.which('bash')
+        if not git or not bash or not Path(bash).exists():
+            self.skipTest('环境未提供 Git 和 Bash')
+        script = (ROOT / '.github/scripts/sync-repo-mirror.sh').read_text(encoding='utf-8')
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            origin = root / 'github'
+            checkout = root / 'runner'
+            mirror = root / 'mirror'
+
+            def git_run(cwd, *args):
+                return subprocess.run([git, *args], cwd=cwd, check=True, capture_output=True,
+                                      text=True, encoding='utf-8').stdout.strip()
+
+            git_run(root, 'init', '-b', 'dev', origin)
+            git_run(origin, 'config', 'user.name', 'Mirror test')
+            git_run(origin, 'config', 'user.email', 'mirror@example.invalid')
+            git_run(origin, 'commit', '--allow-empty', '-m', 'Base')
+            git_run(origin, 'branch', 'preview/custom')
+            git_run(origin, 'commit', '--allow-empty', '-m', 'Latest dev')
+            git_run(origin, 'tag', '-a', 'azurpilot-independent-deps/test', '-m', 'Update')
+            git_run(root, 'init', '--bare', mirror)
+            git_run(root, 'clone', '--depth=1', origin.as_uri(), checkout)
+            result = subprocess.run([str(bash), '-c', script, '--', mirror.as_uri()], cwd=checkout,
+                                    capture_output=True, encoding='utf-8', errors='replace', timeout=45)
+            if os.name == 'nt' and 'NtCreateDirectoryObject' in result.stderr:
+                self.skipTest('Windows 环境未授予 Git Bash 所需权限')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(git_run(checkout, 'ls-remote', '--refs', 'origin'),
+                             git_run(checkout, 'ls-remote', '--refs', mirror.as_uri()))
+
+
 class TestGitCodeSync(unittest.TestCase):
     def test_checkout_and_push_retry(self):
         workflow = yaml.safe_load((ROOT / '.github/workflows/sync2.yml').read_text(encoding='utf-8'))

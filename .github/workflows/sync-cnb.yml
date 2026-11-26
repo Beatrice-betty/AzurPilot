@@ -1,59 +1,56 @@
-name: sync2cnb
+name: Sync CNB and Gitee
+
 on:
   push:
-    branches:
-      - master
-      - dev
+    branches: ['**']
+    tags: ['**']
   workflow_dispatch:
+  schedule:
+    # 补跑旧分支上尚未包含本工作流的推送。
+    - cron: '17,47 * * * *'
 
-# 镜像同步使用独立凭据；限制默认 GITHUB_TOKEN 权限。
 permissions:
   contents: read
 
 jobs:
   repo-sync:
+    if: github.repository == 'Beatrice-betty/AzurPilot'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - host: cnb.cool
+            username: cnb
+            secret: CNB_TOKEN
+          - host: gitee.com
+            username: Beatrice-betty
+            secret: GITEE_TOKEN
     concurrency:
-      group: cnb-sync-${{ github.ref }}
+      group: azurpilot-mirror-${{ matrix.host }}
       cancel-in-progress: false
-    env:
-      cnb_token: ${{ secrets.CNB_TOKEN }}
-      cnb_user: ${{ secrets.CNB_USER }}
-      cnb_repo: ${{ secrets.CNB_REPO }}
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          fetch-depth: 0
 
-      - name: Mask sensitive values
+      - name: Sync and verify all GitHub branches and tags
         env:
-          MASK_OWNER: ${{ github.repository_owner }}
-          MASK_REPO: ${{ github.event.repository.name }}
-          MASK_TARGET: ${{ secrets.CNB_REPO }}
+          MIRROR_HOST: ${{ matrix.host }}
+          MIRROR_USER: ${{ matrix.username }}
+          MIRROR_TOKEN: ${{ secrets[matrix.secret] }}
+          MIRROR_SECRET: ${{ matrix.secret }}
+          GIT_TERMINAL_PROMPT: '0'
         run: |
-          echo "::add-mask::${MASK_OWNER}"
-          echo "::add-mask::${MASK_REPO}"
-          echo "::add-mask::${MASK_TARGET}"
-
-      - name: sync
-        if: env.cnb_token && env.cnb_user && env.cnb_repo
-        env:
-          CNB_USER: ${{ secrets.CNB_USER }}
-          CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
-          CNB_REPO: ${{ secrets.CNB_REPO }}
-        run: |
-          git remote remove upstream-cnb 2>/dev/null || true
-          git remote add upstream-cnb "https://${CNB_USER}:${CNB_TOKEN}@cnb.cool/${CNB_REPO}.git"
-          for attempt in 1 2 3 4 5; do
-            if git push --force --progress upstream-cnb "HEAD:${GITHUB_REF}"; then
-              exit 0
-            else
-              status=$?
-            fi
-            if [ "$attempt" -eq 5 ]; then
-              exit "$status"
-            fi
-            echo "CNB 推送失败，准备第 $((attempt + 1))/5 次尝试"
-            sleep "$((attempt * 2))"
-          done
+          if [ -z "$MIRROR_TOKEN" ]; then
+            echo "::error::请配置仓库镜像写入凭据 $MIRROR_SECRET"
+            exit 1
+          fi
+          auth="$(printf '%s:%s' "$MIRROR_USER" "$MIRROR_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0="http.https://$MIRROR_HOST/.extraHeader"
+          export GIT_CONFIG_VALUE_0="Authorization: Basic $auth"
+          unset auth MIRROR_TOKEN
+          bash .github/scripts/sync-repo-mirror.sh "https://$MIRROR_HOST/Beatrice-betty/AzurPilot.git"
