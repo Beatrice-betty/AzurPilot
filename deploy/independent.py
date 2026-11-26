@@ -27,11 +27,15 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import NamedTuple
 from urllib.parse import urlsplit
 
-GITCODE_REPOSITORY = 'https://gitcode.com/Beatrice-betty/AzurPilot.git'
-GITHUB_REPOSITORY = 'https://github.com/Beatrice-betty/AzurPilot.git'
-GITHUB_RELEASE = 'https://raw.githubusercontent.com/Beatrice-betty/AzurPilot/independent-windows/'
-SOURCES = (GITCODE_REPOSITORY, GITHUB_REPOSITORY)
-RELEASE_BRANCH = 'refs/heads/independent-windows'
+if __name__ != '__main__':
+    # 恢复脚本独立运行，首次部署的轻量包则已自带 deploy.utils。
+    from deploy.utils import (
+        CNB_REPOSITORY, GITHUB_REPOSITORY, NPM_REGISTRIES, REPOSITORY_SOURCES,
+        official_repository, repository_candidates,
+    )
+
+GITHUB_RAW = 'https://raw.githubusercontent.com/Beatrice-betty/AzurPilot/'
+RELEASE_BRANCH = 'independent-windows'
 DEFAULT_BRANCH = 'dev'
 MAX_MANIFEST_SIZE = 64 * 1024
 MAX_FRONTEND_SIZE = 40 * 1024 * 1024
@@ -224,12 +228,9 @@ def update_source(root):
     from deploy.utils import poor_yaml_read
 
     values = poor_yaml_read(root / 'config/deploy.yaml')
-    repository = str(values.get('Repository') or GITCODE_REPOSITORY).strip().strip('"')
+    repository = str(values.get('Repository') or CNB_REPOSITORY).strip().strip('"')
     branch = str(values.get('Branch') or DEFAULT_BRANCH).strip().strip('"')
-    if repository in ('cn', 'cnb', 'gitcode'):
-        repository = GITCODE_REPOSITORY
-    elif repository == 'global':
-        repository = GITHUB_REPOSITORY
+    repository = official_repository(repository)
     url = urlsplit(repository)
     if (url.scheme != 'https' or not url.hostname or url.username is not None
             or any(char in repository for char in ('?', '#', '%')) or not url.path.strip('/')
@@ -243,12 +244,7 @@ def update_source(root):
             or '..' in branch or any(not part or part.startswith('.') or part.endswith(('.', '.lock'))
                                      for part in branch.split('/'))):
         raise ValueError('更新分支名称无效')
-    repository = repository.rstrip('/')
-    for official in SOURCES:
-        if repository.removesuffix('.git') == official.removesuffix('.git'):
-            repository = official
-            break
-    return repository, branch
+    return repository.rstrip('/'), branch
 
 
 def _remote_revisions(root, repository, branch, *, dependency_releases):
@@ -281,46 +277,54 @@ def _remote_revisions(root, repository, branch, *, dependency_releases):
 
 
 def check(root=None, *, hot_reload=False):
-    from deploy.independent_runtime import supports_hot_reload
-
     root = Path(root or Path.cwd()).resolve()
     clean_abandoned(root)
     current = read_json(root / RECEIPT)
     repository, branch = update_source(root)
-    mirrors = SOURCES if repository == GITCODE_REPOSITORY else (repository,)
+    mirrors = repository_candidates(repository)
     # 冷启动可选择新解释器。旧桌面父进程内的 WebUI 必须等完整重启。
-    dependency_releases = not hot_reload or supports_hot_reload()
-    missing_branch = None
+    dependency_releases = True
+    if hot_reload:
+        from deploy.independent_runtime import supports_hot_reload
+
+        dependency_releases = supports_hot_reload()
+    expected = None
+    if len(mirrors) > 1:
+        try:
+            expected = _remote_revisions(root, GITHUB_REPOSITORY, branch, dependency_releases=dependency_releases)
+        except (OSError, subprocess.SubprocessError) as error:
+            raise UpdateSourceUnavailable(repository, branch) from error
     transport_error = None
     for mirror in mirrors:
         try:
-            base, candidate = _remote_revisions(root, mirror, branch, dependency_releases=dependency_releases)
+            if mirror == GITHUB_REPOSITORY and expected is not None:
+                base, candidate = expected
+            else:
+                base, candidate = _remote_revisions(root, mirror, branch, dependency_releases=dependency_releases)
+                if expected is not None and (base, candidate) != expected:
+                    logging.getLogger(__name__).info('更新源与 GitHub 的分支或依赖发布不一致，跳过 %s', mirror)
+                    continue
             if candidate is None and base == current.get(DEPENDENCY_BASE_KEY) and branch == current.get('branch'):
                 return None
             revision = candidate or base
             if revision == current['revision']:
                 return None
-            if repository == GITCODE_REPOSITORY and branch == DEFAULT_BRANCH and current['revision']:
+            if expected is not None and branch == DEFAULT_BRANCH and current['revision']:
                 if not _includes_installed(root, mirror, current['revision'], revision):
                     logging.getLogger(__name__).info('更新源尚未包含当前提交，继续使用本地版本')
                     return None
-        except UpdateBranchNotFound as error:
-            missing_branch = error
-            continue
+        except UpdateBranchNotFound:
+            if expected is None:
+                raise
         except (OSError, subprocess.SubprocessError) as error:
-            from deploy.uv import redact_sensitive_text
-
             transport_error = error
-            stderr = (getattr(error, 'stderr', None) or b'').decode('utf-8', errors='replace').strip()
-            detail = redact_sensitive_text(stderr or str(error))[-600:]
-            logging.getLogger(__name__).warning('独立版读取上游版本失败 [%s] %s', urlsplit(mirror).hostname, detail)
-            continue
-        release = {'revision': revision}
-        if candidate is not None:
-            release[DEPENDENCY_BASE_KEY] = base
-        return GitOffer(release, repository, branch, mirror)
-    if missing_branch is not None:
-        raise missing_branch
+            logging.getLogger(__name__).warning('独立版读取上游版本失败 [%s] %s',
+                                                urlsplit(mirror).hostname, type(error).__name__)
+        else:
+            release = {'revision': revision}
+            if candidate is not None:
+                release[DEPENDENCY_BASE_KEY] = base
+            return GitOffer(release, repository, branch, mirror)
     raise UpdateSourceUnavailable(repository, branch) from transport_error
 
 
@@ -416,7 +420,7 @@ def history_refs(root, revisions):
             if not _has_commit(root, cache, revision):
                 if source is None:
                     source, _ = update_source(root)
-                mirrors = SOURCES if source == GITCODE_REPOSITORY else (source,)
+                mirrors = repository_candidates(source)
                 for mirror in mirrors:
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
@@ -481,22 +485,13 @@ def gitcode_checkout(root):
     checkout = _transaction(root).parent / 'gitcode-release'
     checkout.mkdir(parents=True, exist_ok=True)
     if checkout.resolve() != checkout:
-        raise ValueError('GitCode 发布缓存不能是链接')
+        raise ValueError('发布缓存不能是链接')
     if not (checkout / '.git').is_dir():
         git(root, checkout, 'init', '-q')
     return checkout
 
 
-def fetch_gitcode_release(root, checkout):
-    git(root, checkout, 'fetch', '--depth=1', '--no-tags', GITCODE_REPOSITORY, RELEASE_BRANCH, timeout=25)
-    revision = git(root, checkout, 'rev-parse', '--verify', 'FETCH_HEAD', stdout=subprocess.PIPE).stdout
-    revision = revision.decode('ascii').strip()
-    if not re.fullmatch('[0-9a-f]{40}', revision):
-        raise ValueError('GitCode 发布提交无效')
-    return revision
-
-
-def gitcode_release_file(root, checkout, revision, name, limit):
+def git_release_file(root, checkout, revision, name, limit):
     object_name = f'{revision}:{name}'
     size = int(git(root, checkout, 'cat-file', '-s', object_name, stdout=subprocess.PIPE).stdout)
     if not 0 < size <= limit:
@@ -504,20 +499,24 @@ def gitcode_release_file(root, checkout, revision, name, limit):
     return git(root, checkout, 'show', object_name, stdout=subprocess.PIPE).stdout
 
 
-def _matching_frontend(root, repository, revision, frontend):
+def _matching_frontend(root, repository, revision, frontend, *, release_commit=None):
     """可选发布分支只用来取与当前源码提交匹配的预构建网页。"""
-    if repository == GITCODE_REPOSITORY:
+    if repository != GITHUB_REPOSITORY:
+        if release_commit is None:
+            return False
         checkout = gitcode_checkout(root)
-        release = fetch_gitcode_release(root, checkout)
-        manifest = json.loads(gitcode_release_file(root, checkout, release, 'release.json', MAX_MANIFEST_SIZE))
+        git(root, checkout, 'fetch', '--depth=1', '--no-tags', '--no-write-fetch-head',
+            repository, release_commit, timeout=25)
+        manifest = json.loads(git_release_file(root, checkout, release_commit, 'release.json', MAX_MANIFEST_SIZE))
         if manifest['release']['revision'] != revision:
             return False
-        data = gitcode_release_file(root, checkout, release, 'frontend.zip', MAX_FRONTEND_SIZE)
+        data = git_release_file(root, checkout, release_commit, 'frontend.zip', MAX_FRONTEND_SIZE)
     else:
-        manifest = json.loads(fetch(GITHUB_RELEASE + 'release.json', MAX_MANIFEST_SIZE))
+        url = f'{GITHUB_RAW}{release_commit or RELEASE_BRANCH}/'
+        manifest = json.loads(fetch(url + 'release.json', MAX_MANIFEST_SIZE))
         if manifest['release']['revision'] != revision:
             return False
-        data = fetch(GITHUB_RELEASE + 'frontend.zip', MAX_FRONTEND_SIZE)
+        data = fetch(url + 'frontend.zip', MAX_FRONTEND_SIZE)
     if hashlib.sha256(data).hexdigest() != manifest['release']['frontendSha256']:
         raise ValueError('网页包校验不符')
     frontend.write_bytes(data)
@@ -525,10 +524,7 @@ def _matching_frontend(root, repository, revision, frontend):
 
 
 def _fetch_source(root, directory, offer, *, cache=None):
-    if offer.repository == GITCODE_REPOSITORY and offer.source != GITHUB_REPOSITORY:
-        mirrors = SOURCES
-    else:
-        mirrors = (offer.source or offer.repository,)
+    mirrors = repository_candidates(offer.source or offer.repository)
     revision = offer.release['revision']
     flags = ()
     if cache is not None:
@@ -749,14 +745,14 @@ def _build_frontend(root, temp, staged, *, previous=None):
     env['PATH'] = str(Path(command[0]).parent) + os.pathsep + env.get('PATH', '')
     env['npm_config_cache'] = str(temp / 'npm-cache')
     try:
-        for registry in ('https://registry.npmmirror.com', 'https://registry.npmjs.org'):
+        for registry in NPM_REGISTRIES:
             try:
                 subprocess.run([*command, 'ci', '--no-audit', '--no-fund', f'--registry={registry}'],
                                cwd=project, env=env, check=True, timeout=300, creationflags=CREATE_FLAGS,
                                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
                 break
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-                if registry == 'https://registry.npmjs.org':
+                if registry == NPM_REGISTRIES[-1]:
                     raise
         subprocess.run([*command, 'run', 'build'], cwd=project, env=env, check=True, timeout=180,
                        creationflags=CREATE_FLAGS, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
@@ -780,11 +776,18 @@ def _build_frontend(root, temp, staged, *, previous=None):
 
 
 def _released_frontend(root, repo, revision, temp, staged, *, previous=None):
-    if repo in SOURCES:
+    if repo in REPOSITORY_SOURCES:
         frontend = temp / 'frontend.zip'
-        for mirror in (repo, *(url for url in SOURCES if url != repo)):
+        mirrors = repository_candidates(repo)
+        release_commit = None
+        if len(mirrors) > 1:
             try:
-                matched = _matching_frontend(root, mirror, revision, frontend)
+                release_commit, _ = _remote_revisions(root, GITHUB_REPOSITORY, RELEASE_BRANCH, dependency_releases=False)
+            except (OSError, UpdateBranchNotFound, subprocess.SubprocessError):
+                pass
+        for mirror in mirrors:
+            try:
+                matched = _matching_frontend(root, mirror, revision, frontend, release_commit=release_commit)
             except (OSError, ValueError, KeyError, subprocess.SubprocessError):
                 continue
             if matched:

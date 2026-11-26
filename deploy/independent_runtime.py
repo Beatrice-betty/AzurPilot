@@ -5,6 +5,7 @@ import io
 import os
 import subprocess
 import sys
+import time
 import tomllib
 import zipfile
 from pathlib import Path
@@ -133,7 +134,7 @@ def _python_options(root, project, current):
 
 def sync_environment(root, name, project, current):
     """只在候选目录安装目标提交的生产依赖，保留当前环境供运行和回退。"""
-    from deploy.uv import redact_sensitive_text
+    from deploy.uv import can_retry_locked_mirrors, command_output, redact_sensitive_text, sync_locked_mirrors
 
     environment = _environment_directory(root, name)
     storage = PYTHON_ENVIRONMENTS.parent
@@ -146,20 +147,27 @@ def sync_environment(root, name, project, current):
     env.update(UV_CACHE_DIR=str(cache), UV_PYTHON_INSTALL_DIR=str(interpreters),
                UV_PROJECT_ENVIRONMENT=str(environment), UV_NO_PROGRESS='1', PYTHONNOUSERSITE='1')
     uv = _uv_executable(root, current, project)
+    python = environment / 'Scripts/python.exe'
+    deadline = time.monotonic() + _SYNC_TIMEOUT
     print('正在准备候选版本的 Python 环境', flush=True)
     try:
-        subprocess.run(
-            [uv, 'sync', '--locked', '--no-dev', '--no-install-project',
-             '--link-mode', 'copy', *_python_options(root, project, current)],
-            cwd=project, env=env, capture_output=True, encoding='utf-8', errors='replace',
-            creationflags=CREATE_FLAGS, check=True, timeout=_SYNC_TIMEOUT,
-        )
+        try:
+            subprocess.run(
+                [uv, 'sync', '--locked', '--no-dev', '--no-install-project',
+                 '--link-mode', 'copy', *_python_options(root, project, current)],
+                cwd=project, env=env, capture_output=True, encoding='utf-8', errors='replace',
+                creationflags=CREATE_FLAGS, check=True, timeout=_SYNC_TIMEOUT,
+            )
+        except subprocess.CalledProcessError:
+            if not python.is_file() or not can_retry_locked_mirrors(root, project, env):
+                raise
+            sync_locked_mirrors(uv, project, python, dict(env, UV_LINK_MODE='copy'), lock_option='--locked',
+                                deadline=deadline, outputs=[], creationflags=CREATE_FLAGS)
     except subprocess.CalledProcessError as exc:
-        details = redact_sensitive_text(exc.stderr).strip()[-1200:]
+        details = redact_sensitive_text(exc.stderr or command_output(exc)).strip()[-1200:]
         raise RuntimeError(f'候选版 Python 依赖同步失败，继续使用当前版\n{details}') from exc
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise RuntimeError('候选版 Python 依赖同步未完成，继续使用当前版') from exc
-    python = environment / 'Scripts/python.exe'
     if not python.is_file():
         raise RuntimeError('候选版未生成可用的 Python 环境，继续使用当前版')
     return python

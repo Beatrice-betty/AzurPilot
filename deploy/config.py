@@ -8,10 +8,6 @@ from deploy.utils import *
 
 
 GIT_OVER_CDN_REPOSITORY = 'git://git.pull/AzurPilot'
-GITHUB_REPOSITORY = 'https://github.com/Beatrice-betty/AzurPilot'
-GITCODE_REPOSITORY = 'https://gitcode.com/Beatrice-betty/AzurPilot'
-GIT_OVER_CDN_FALLBACK_REPOSITORIES = [GITHUB_REPOSITORY, GITCODE_REPOSITORY]
-GIT_OVER_CDN_FALLBACK_REPOSITORY = GITCODE_REPOSITORY
 
 
 class ErrorCodes:
@@ -39,7 +35,7 @@ class ExecutionError(Exception):
 class ConfigModel:
     """部署配置模型，定义所有配置项及其默认值。"""
     # Git 配置
-    Repository: str = GITCODE_REPOSITORY
+    Repository: str = CNB_REPOSITORY
     Branch: str = "dev"
     GitExecutable: str = "./.venv/Scripts/git/cmd/git.exe" if sys.platform == "win32" else "./.venv/bin/git"
     GitProxy: Optional[str] = None
@@ -140,7 +136,7 @@ class DeployConfig(DeployConfigTransaction, ConfigModel):
         """
         self.config.pop('AutoUpdate', None)
         repository = str(self.Repository).strip().rstrip('/').removesuffix('.git')
-        if os.environ.get('AZURPILOT_INDEPENDENT') != '1' and repository in ('cn', 'cnb', 'gitcode', GIT_OVER_CDN_REPOSITORY,
+        if os.environ.get('AZURPILOT_INDEPENDENT') != '1' and repository in (GIT_OVER_CDN_REPOSITORY,
                           'https://github.com/wess09/AzurPilot', 'https://cnb.cool/AzurPilot/AzurPilot',
                           'https://gitcode.com/ddl2/AzurPilot', 'https://git.nanoda.work/git/AzurPilot',
                           'https://git.nanoda.work/git/AzurLaneAutoScript', 'https://git.nanoda.work',
@@ -153,10 +149,15 @@ class DeployConfig(DeployConfigTransaction, ConfigModel):
                           'https://gitcode.com/ZhangMusan/AzurLaneAutoScript',
                           'https://gitcode.com/nerom/AzurLaneAutoScript',
                           'https://gitee.com/wqeaxc/AzurLaneAutoScript1'):
-            object.__setattr__(self, 'Repository', GITCODE_REPOSITORY)
-            self.config['Repository'] = GITCODE_REPOSITORY
+            object.__setattr__(self, 'Repository', CNB_REPOSITORY)
+            self.config['Repository'] = CNB_REPOSITORY
         elif repository == 'global':
             object.__setattr__(self, 'Repository', GITHUB_REPOSITORY)
+        elif isinstance(self.Repository, str):
+            source = official_repository(self.Repository.strip())
+            if source in REPOSITORY_SOURCES and source != self.Repository:
+                object.__setattr__(self, 'Repository', source)
+                self.config['Repository'] = source
         object.__setattr__(self, 'GitOverCdn', False)
         if (self.CloudflareRegistry or '').rstrip('/') in (
                 'https://remote.azurpilot.com', 'https://ap-remote.108-186-180-52.sslip.io:8443'):

@@ -59,6 +59,14 @@ deploy/
 | `python -m deploy.app` | 只重建前端产物 |
 | `deploy/docker/Dockerfile` | 容器构建（多阶段，预装前端产物） |
 
+### 源码与依赖镜像
+
+默认先从 GitHub 查询配置分支的提交号，再按 CNB、Gitee、GitHub 的顺序下载该提交。国内镜像的分支须匹配 GitHub，独立版的候选依赖发布也须匹配对应标签。GitHub 暂时无法查询时，已安装的程序继续运行。配置 `global` 可直接使用 GitHub，也可以保留自己的自定义仓库地址。
+
+仓库的镜像工作流从 GitHub 同步全部分支和标签并逐项比对。工作流使用仓库 Secrets 中的 `CNB_TOKEN`、`GITEE_TOKEN`。镜像侧出现独有或分叉引用时，工作流会报告不一致并保留这些引用。
+
+若锁文件中的 Python 下载源失败，部署程序可按锁定版本与哈希尝试清华、中科大、腾讯云和 PyPI 官方源。独立版在候选环境里完成同步后才切换。前端构建按 npmmirror、华为云、腾讯云和 npm 官方源的顺序安装锁定依赖。
+
 ### 茗交所持久化
 
 股票接入 v2 须在交易所已提供 `/api/v2/instance/*` 后，配套更新 AzurPilot Python 后端与完整前端构建产物并重启 AzurPilot。默认交易所地址已改为 `https://stock.azurpilot.com`；若曾显式设置 `STOCK_EXCHANGE_URL`，更新对应环境变量后重启。交易账户在官方 QQ 群机器人命名注册，登录/强制改密在独立交易所，旧 `stock.request` 不再支持，新前端与旧 AzurPilot 后端不兼容。股票登记使用 `stocks-v2.json`；旧 `bindings.json` 保留但不用于新协议。没有改动脚本调度或普通业务数据库模型。

@@ -8,6 +8,8 @@ import tarfile
 import urllib.request
 from pathlib import Path
 
+from deploy.utils import NPM_REGISTRIES
+
 # 安卓运行包永不本地编译前端：源码变更后由宿主从其 CI 发布渠道拉取按提交发布的
 # 预构建 dist（frontend-<commit>.tar.xz + .sha256）。基址由宿主注入（含镜像前缀）。
 ANDROID_DIST_BASE_ENV = 'AZURPILOT_ANDROID_DIST_BASE'
@@ -192,13 +194,12 @@ def _install_dependencies(command, directory, flags):
         flags (dict): 平台相关的子进程启动参数。
 
     Raises:
-        subprocess.CalledProcessError: 两个源均安装失败时抛出最后一次异常。
+        subprocess.CalledProcessError: 各源均安装失败时抛出最后一次异常。
         subprocess.TimeoutExpired: 官方源安装超时时抛出。
     """
     from module.logger import logger
 
-    registries = ('https://registry.npmmirror.com', 'https://registry.npmjs.org')
-    for index, registry in enumerate(registries):
+    for registry in NPM_REGISTRIES:
         logger.info(f'使用 npm 源安装前端依赖: {registry}')
         try:
             subprocess.run(
@@ -209,13 +210,13 @@ def _install_dependencies(command, directory, flags):
             return
         except subprocess.CalledProcessError as exc:
             _log_process_error(exc, stage='npm ci')
-            if index == len(registries) - 1:
+            if registry == NPM_REGISTRIES[-1]:
                 raise
-            logger.warning(f'镜像源安装失败，切换至 npm 官方源重试: {exc}')
+            logger.warning(f'npm 镜像安装失败，尝试下一源: {exc}')
         except subprocess.TimeoutExpired:
-            if index == len(registries) - 1:
+            if registry == NPM_REGISTRIES[-1]:
                 raise
-            logger.warning('镜像源安装超时，切换至 npm 官方源重试')
+            logger.warning('npm 镜像安装超时，尝试下一源')
 
 
 def ensure_frontend(root=None):

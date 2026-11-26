@@ -1,6 +1,7 @@
 import os
 import queue
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -38,6 +39,37 @@ class TestUvEnvironmentPath(unittest.TestCase):
 
 
 class TestUvCommandOutput(unittest.TestCase):
+    def test_frozen_install_retries_with_exported_versions_and_hashes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            lock = root / "uv.lock"
+            original = '[[package]]\nsource = { registry = "https://mirrors.aliyun.com/pypi/simple/" }\n'
+            lock.write_text(original, encoding="utf-8")
+            failure = subprocess.CalledProcessError(2, "uv", output="mirror unavailable")
+            with (
+                patch("deploy.uv._resolve_uv", return_value=Path("uv")),
+                patch("deploy.uv._ensure_self_contained_python"),
+                patch("deploy.uv._uv_python_env", return_value={}),
+                patch("deploy.uv._run_and_collect", side_effect=[failure, None, failure, None]) as run,
+            ):
+                result = uv.sync_project_venv(root=root, capture_output=True)
+            primary, export, first, fallback = [call.args[0] for call in run.call_args_list]
+            self.assertIn("--frozen", primary)
+            self.assertEqual(export[1:5], ["export", "--frozen", "--no-dev", "--no-emit-project"])
+            self.assertEqual(export[-1], first[-1])
+            self.assertEqual(first[-1], fallback[-1])
+            self.assertEqual([first[-2], fallback[-2]], list(uv.PYPI_FALLBACK_INDEXES[:2]))
+            self.assertIn("--require-hashes", fallback)
+            self.assertEqual(result.command, [str(part) for part in fallback])
+            self.assertEqual(lock.read_text(encoding="utf-8"), original)
+
+    def test_private_locked_registry_stays_on_the_custom_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "uv.lock").write_text(
+                '[[package]]\nsource = { registry = "https://private.test/simple/" }\n', encoding="utf-8")
+            self.assertFalse(uv.can_retry_locked_mirrors(root, root, {}))
+
     def test_run_captures_merged_output(self):
         completed = subprocess.CompletedProcess(["uv", "sync"], 0, "resolved\ninstalled\n")
         with patch("deploy.uv.subprocess.run", return_value=completed):

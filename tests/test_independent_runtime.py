@@ -93,6 +93,25 @@ class TestIndependentRuntime(unittest.TestCase):
             self.assertEqual(independent_runtime._python_options(self.root, project, {}),
                              ['--python', '>=3.15,<3.16', '--managed-python'])
 
+    def test_candidate_source_fallback_only_uses_the_candidate_environment(self):
+        project = self.root / 'project'
+        project.mkdir()
+        uv = self.root / 'uv.exe'
+        self.candidate_python.parent.mkdir(parents=True)
+        self.candidate_python.touch()
+        with (
+            patch.object(independent_runtime, '_uv_executable', return_value=uv),
+            patch.object(independent_runtime, '_python_options', return_value=[]),
+            patch.object(independent_runtime.subprocess, 'run', side_effect=subprocess.CalledProcessError(2, 'uv')),
+            patch('deploy.uv.can_retry_locked_mirrors', return_value=True),
+            patch('deploy.uv.sync_locked_mirrors') as fallback,
+        ):
+            self.assertEqual(independent_runtime.sync_environment(self.root, 'ready-candidate', project, {}),
+                             self.candidate_python)
+        self.assertEqual(fallback.call_args.args[:3], (uv, project, self.candidate_python))
+        self.assertEqual(fallback.call_args.kwargs['lock_option'], '--locked')
+        self.assertEqual(fallback.call_args.args[3]['UV_LINK_MODE'], 'copy')
+
     def test_missing_uv_executable_can_use_a_verified_wheel_from_the_installed_lock(self):
         data = io.BytesIO()
         with zipfile.ZipFile(data, 'w') as archive:

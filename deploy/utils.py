@@ -9,6 +9,35 @@ T = TypeVar("T")
 
 DEPLOY_CONFIG = './config/deploy.yaml'
 DEPLOY_TEMPLATE = './deploy/template'
+CNB_REPOSITORY = 'https://cnb.cool/Beatrice-betty/AzurPilot'
+GITEE_REPOSITORY = 'https://gitee.com/Beatrice-betty/AzurPilot'
+GITHUB_REPOSITORY = 'https://github.com/Beatrice-betty/AzurPilot'
+GITCODE_REPOSITORY = 'https://gitcode.com/Beatrice-betty/AzurPilot'
+REPOSITORY_SOURCES = (CNB_REPOSITORY, GITEE_REPOSITORY, GITHUB_REPOSITORY)
+NPM_REGISTRIES = (
+    'https://registry.npmmirror.com',
+    'https://mirrors.huaweicloud.com/repository/npm/',
+    'https://mirrors.cloud.tencent.com/npm/',
+    'https://registry.npmjs.org',
+)
+
+
+def official_repository(repository):
+    address = repository.rstrip('/').removesuffix('.git')
+    if address in ('cn', 'cnb', 'gitcode', GITCODE_REPOSITORY):
+        return CNB_REPOSITORY
+    if address == 'gitee':
+        return GITEE_REPOSITORY
+    if address == 'global':
+        return GITHUB_REPOSITORY
+    return address if address in REPOSITORY_SOURCES else repository
+
+
+def repository_candidates(repository):
+    repository = official_repository(repository)
+    if repository in REPOSITORY_SOURCES:
+        return REPOSITORY_SOURCES[REPOSITORY_SOURCES.index(repository):]
+    return (repository,)
 
 
 def get_deploy_template():

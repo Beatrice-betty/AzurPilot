@@ -63,7 +63,7 @@ class UpdateServiceTest(unittest.TestCase):
         install.mkdir()
         independent.write_json(install / independent.RECEIPT, {'revision': self.base})
         self.updater.independent_offer = independent.GitOffer(
-            {'revision': self.remote}, independent.GITCODE_REPOSITORY, 'dev',
+            {'revision': self.remote}, independent.CNB_REPOSITORY, 'dev',
         )
         self.updater.independent_error = ''
         service = UpdateService(install, self.updater)

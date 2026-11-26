@@ -6,7 +6,9 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Union
@@ -17,6 +19,12 @@ BOOTSTRAPPED_ENV = "AZURPILOT_UV_BOOTSTRAPPED"
 BOOTSTRAP_UV_ENV = "AZURPILOT_BOOTSTRAP_UV"
 NO_BOOTSTRAP_ENV = "AZURPILOT_NO_UV_BOOTSTRAP"
 DEPENDENCY_SYNC_TIMEOUT = 30 * 60
+PYPI_FALLBACK_INDEXES = (
+    "https://pypi.tuna.tsinghua.edu.cn/simple/",
+    "https://mirrors.ustc.edu.cn/pypi/simple/",
+    "https://mirrors.cloud.tencent.com/pypi/simple/",
+    "https://pypi.org/simple/",
+)
 
 
 _URL_USERINFO_RE = re.compile(r"(?P<scheme>\b[a-z][a-z0-9+.-]*://)[^/\s@]+@", re.IGNORECASE)
@@ -305,12 +313,13 @@ def _run(
     env=None,
     capture_output: bool = False,
     timeout: float | None = None,
+    creationflags: int = 0,
 ):
     command = [str(part) for part in command]
     print("+ " + _join_command(command))
     # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
     if not capture_output:
-        subprocess.run(command, cwd=str(root), check=True, env=env, timeout=timeout)
+        subprocess.run(command, cwd=str(root), check=True, env=env, timeout=timeout, creationflags=creationflags)
         return None
 
     result = subprocess.run(
@@ -323,6 +332,7 @@ def _run(
         encoding="utf-8",
         errors="replace",
         timeout=timeout,
+        creationflags=creationflags,
     )
     output = result.stdout or ""
     if result.returncode:
@@ -370,6 +380,7 @@ def _run_and_collect(
     env,
     outputs: Optional[list[str]],
     timeout: float | None = None,
+    creationflags: int = 0,
 ):
     output = _run(
         command,
@@ -377,6 +388,7 @@ def _run_and_collect(
         env=env,
         capture_output=outputs is not None,
         timeout=timeout,
+        creationflags=creationflags,
     )
     if outputs is not None and output:
         outputs.append(output)
@@ -391,6 +403,58 @@ def _remaining_timeout(deadline: float | None, command) -> float | None:
     if remaining <= 0:
         raise subprocess.TimeoutExpired(command, 0)
     return remaining
+
+
+def can_retry_locked_mirrors(root, project, env):
+    mirror = _read_deploy_value(root, "PypiMirror")
+    known = (*PYPI_FALLBACK_INDEXES, "https://mirrors.aliyun.com/pypi/simple/",
+             "https://repo.huaweicloud.com/repository/pypi/simple/")
+    if (mirror and mirror.rstrip("/") + "/" not in known) or any(
+            env.get(key) for key in ("UV_INDEX", "UV_DEFAULT_INDEX", "UV_INDEX_URL", "UV_EXTRA_INDEX_URL",
+                                    "UV_FIND_LINKS", "UV_NO_INDEX", "UV_OFFLINE", "UV_CONFIG_FILE")):
+        return False
+    try:
+        with (project / "uv.lock").open("rb") as file:
+            lock = tomllib.load(file)
+    except (OSError, ValueError):
+        return False
+    for package in lock.get("package", []):
+        source = package.get("source", {})
+        if not isinstance(source, dict):
+            return False
+        if source != {"virtual": "."} and source.get("registry", "").rstrip("/") + "/" not in known:
+            return False
+    return True
+
+
+def sync_locked_mirrors(uv, root, python, env, *, lock_option, deadline, outputs=None, creationflags=0):
+    """导出锁定版本和哈希，按源下载同一组依赖。"""
+    with tempfile.TemporaryDirectory(prefix="azurpilot-uv-") as directory:
+        requirements = Path(directory) / "requirements.txt"
+        export = [
+            uv, "export", lock_option, "--no-dev", "--no-emit-project",
+            "--quiet", "--output-file", requirements,
+        ]
+        _run_and_collect(export, root, env, outputs, _remaining_timeout(deadline, export), creationflags)
+        mirror_env = env.copy()
+        mirror_env.setdefault("UV_HTTP_RETRIES", "0")
+        mirror_env.setdefault("UV_HTTP_TIMEOUT", "15")
+        for index in PYPI_FALLBACK_INDEXES:
+            command = [
+                uv, "pip", "sync", "--no-config", "--no-python-downloads",
+                "--python", python, "--require-hashes", "--default-index", index, requirements,
+            ]
+            print(f"正在从 {index} 安装已锁定的 Python 依赖", flush=True)
+            try:
+                _run_and_collect(command, root, mirror_env, outputs, _remaining_timeout(deadline, command),
+                                 creationflags)
+            except subprocess.CalledProcessError as error:
+                if index == PYPI_FALLBACK_INDEXES[-1]:
+                    raise
+                if outputs is not None and (output := command_output(error)):
+                    outputs.append(output)
+            else:
+                return command
 
 
 def _ensure_self_contained_python(
@@ -547,16 +611,20 @@ def sync_project_venv(
             "--python",
             venv_python(root),
         ]
-        if (root / "uv.lock").exists():
+        locked = (root / "uv.lock").is_file()
+        if locked:
             command.append("--frozen")
         command += ["--no-dev", "--no-install-project"] + _uv_index_args(root)
-        _run_and_collect(
-            command,
-            root,
-            _uv_python_env(root),
-            outputs,
-            _remaining_timeout(deadline, command),
-        )
+        env = _uv_python_env(root)
+        try:
+            _run_and_collect(command, root, env, outputs, _remaining_timeout(deadline, command))
+        except subprocess.CalledProcessError as error:
+            if not locked or not can_retry_locked_mirrors(root, root, env):
+                raise
+            if outputs is not None and (output := command_output(error)):
+                outputs.append(output)
+            command = sync_locked_mirrors(uv, root, venv_python(root), env, lock_option="--frozen",
+                                          deadline=deadline, outputs=outputs)
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
         if outputs is not None:
             output = command_output(exc)

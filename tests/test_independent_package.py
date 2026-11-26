@@ -15,6 +15,7 @@ from unittest.mock import patch
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from deploy import independent, independent_runtime
+from deploy.utils import CNB_REPOSITORY, GITEE_REPOSITORY, GITHUB_REPOSITORY, REPOSITORY_SOURCES
 
 
 class TestIndependentPackage(unittest.TestCase):
@@ -30,7 +31,7 @@ class TestIndependentPackage(unittest.TestCase):
         }
         independent.write_json(self.root / independent.RECEIPT, self.current)
 
-    def test_healthy_gitcode_waits_without_checking_github(self):
+    def test_matching_official_source_does_not_reinstall_or_downgrade(self):
         for revision in (self.current['revision'], '2' * 40):
             with (
                 self.subTest(revision=revision),
@@ -38,42 +39,54 @@ class TestIndependentPackage(unittest.TestCase):
                 patch.object(independent, '_includes_installed', return_value=False),
             ):
                 self.assertIsNone(independent.check(self.root))
-            remote.assert_called_once_with(self.root, independent.GITCODE_REPOSITORY, 'dev',
-                                           dependency_releases=True)
+            self.assertEqual([call.args[1] for call in remote.call_args_list], [GITHUB_REPOSITORY, CNB_REPOSITORY])
 
-    def test_gitcode_download_failure_falls_back_to_the_same_commit(self):
+    def test_cnb_download_failure_falls_back_to_the_same_commit(self):
         revision = '2' * 40
         with (
             patch.object(independent, '_remote_revisions', return_value=(revision, None)) as remote,
             patch.object(independent, '_includes_installed', return_value=True),
         ):
             offer = independent.check(self.root)
-        remote.assert_called_once_with(self.root, independent.GITCODE_REPOSITORY, 'dev',
-                                           dependency_releases=True)
+        self.assertEqual([call.args[1] for call in remote.call_args_list], [GITHUB_REPOSITORY, CNB_REPOSITORY])
+        self.assertEqual(offer.source, CNB_REPOSITORY)
         self.assertEqual(revision, offer.release['revision'])
         with patch.object(independent, 'git', side_effect=[None, subprocess.TimeoutExpired('fetch', 1), None, None]) as git:
             repository, checkout = independent._fetch_source(self.root, self.root, offer)
         first, fallback = git.call_args_list[1::2]
-        self.assertEqual(repository, independent.GITHUB_REPOSITORY)
-        self.assertEqual([first.args[-2], fallback.args[-2]], list(independent.SOURCES))
+        self.assertEqual(repository, GITEE_REPOSITORY)
+        self.assertEqual([first.args[-2], fallback.args[-2]], list(REPOSITORY_SOURCES[:2]))
         self.assertEqual(first.args[-1], revision)
         self.assertEqual(fallback.args[-1], revision)
         self.assertEqual(checkout, fallback.args[1])
         self.assertNotEqual(first.args[1], checkout)
 
-    def test_gitcode_check_failure_downloads_directly_from_github(self):
+    def test_unavailable_or_stale_mirrors_use_github(self):
         with (
-            patch.object(independent, '_remote_revisions', side_effect=[TimeoutError, ('2' * 40, None)]) as remote,
+            patch.object(independent, '_remote_revisions',
+                         side_effect=[('2' * 40, None), ('3' * 40, None), TimeoutError]) as remote,
             patch.object(independent, '_includes_installed', return_value=True),
         ):
             offer = independent.check(self.root)
-        self.assertEqual([call.args[1] for call in remote.call_args_list], list(independent.SOURCES))
-        self.assertEqual(offer.repository, independent.GITCODE_REPOSITORY)
+        self.assertEqual([call.args[1] for call in remote.call_args_list],
+                         [GITHUB_REPOSITORY, CNB_REPOSITORY, GITEE_REPOSITORY])
+        self.assertEqual(offer.repository, CNB_REPOSITORY)
         with patch.object(independent, 'git') as git:
             repository, _ = independent._fetch_source(self.root, self.root, offer)
         self.assertEqual(repository, independent.GITHUB_REPOSITORY)
         self.assertEqual(git.call_count, 2)
         self.assertEqual(git.call_args.args[-2], independent.GITHUB_REPOSITORY)
+
+    def test_missing_dependency_release_skips_cnb_even_when_the_branch_matches(self):
+        base, candidate = '2' * 40, '3' * 40
+        with (
+            patch.object(independent, '_remote_revisions',
+                         side_effect=[(base, candidate), (base, None), (base, candidate)]),
+            patch.object(independent, '_includes_installed', return_value=True),
+        ):
+            offer = independent.check(self.root)
+        self.assertEqual(offer.source, GITEE_REPOSITORY)
+        self.assertEqual(offer.release, {'revision': candidate, independent.DEPENDENCY_BASE_KEY: base})
 
     def test_deploy_repository_and_branch_select_unsigned_git_update(self):
         config = self.root / 'config'
@@ -452,22 +465,22 @@ class TestIndependentPackage(unittest.TestCase):
         self.assertEqual(taskkill.call_args.args[0][1:], ['/PID', '100', '/T', '/F'])
         child.kill.assert_called_once()
 
-    def test_gitcode_frontend_uses_same_release_commit_as_manifest(self):
+    def test_cnb_frontend_uses_the_release_commit_from_github(self):
         revision = 'a' * 40
         manifest = independent.canonical({'release': {
             'revision': '2' * 40, 'frontendSha256': hashlib.sha256(b'frontend archive').hexdigest(),
         }})
         zip_path = self.root / 'frontend.zip'
         with patch.object(independent, 'gitcode_checkout', return_value=self.root), patch.object(
-            independent, 'fetch_gitcode_release', return_value=revision,
+            independent, 'git',
         ) as fetch_git, patch.object(
-            independent, 'gitcode_release_file', side_effect=[manifest, b'frontend archive'],
+            independent, 'git_release_file', side_effect=[manifest, b'frontend archive'],
         ) as read_git, patch.object(independent, 'fetch') as raw:
             self.assertTrue(independent._matching_frontend(
-                self.root, independent.GITCODE_REPOSITORY, '2' * 40, zip_path,
+                self.root, CNB_REPOSITORY, '2' * 40, zip_path, release_commit=revision,
             ))
         self.assertEqual(b'frontend archive', zip_path.read_bytes())
-        fetch_git.assert_called_once_with(self.root, self.root)
+        self.assertEqual(fetch_git.call_args.args[-2:], (CNB_REPOSITORY, revision))
         self.assertEqual(
             [call.args[2:4] for call in read_git.call_args_list],
             [(revision, 'release.json'), (revision, 'frontend.zip')],
@@ -478,7 +491,7 @@ class TestIndependentPackage(unittest.TestCase):
         with patch.object(independent, '_remote_revisions', side_effect=TimeoutError) as remote:
             with self.assertRaisesRegex(independent.UpdateSourceUnavailable, '当前版本'):
                 independent.check(self.root)
-        self.assertEqual([call.args[1] for call in remote.call_args_list], list(independent.SOURCES))
+        remote.assert_called_once_with(self.root, GITHUB_REPOSITORY, 'dev', dependency_releases=True)
         self.assertEqual(self.current, independent.read_json(self.root / independent.RECEIPT))
 
     def ready(self):

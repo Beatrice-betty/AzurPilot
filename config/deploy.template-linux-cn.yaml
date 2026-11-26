@@ -2,7 +2,7 @@ Deploy:
   Git:
     # AzurPilot 仓库地址
     # URL of AzurPilot repository
-    Repository: https://gitcode.com/Beatrice-betty/AzurPilot
+    Repository: https://cnb.cool/Beatrice-betty/AzurPilot
     # AzurPilot 分支
     # Branch of AzurPilot
     # [开发者] 使用 'dev'、'app' 等分支体验新功能

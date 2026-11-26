@@ -85,6 +85,8 @@ class FrontendInstallFallbackTests(unittest.TestCase):
         self.addCleanup(environment.stop)
         self.mirror = ['node', 'npm-cli.js', 'ci', '--no-audit', '--no-fund',
                        '--registry=https://registry.npmmirror.com']
+        self.huawei = [*self.mirror[:-1], '--registry=https://mirrors.huaweicloud.com/repository/npm/']
+        self.tencent = [*self.mirror[:-1], '--registry=https://mirrors.cloud.tencent.com/npm/']
         self.official = [*self.mirror[:-1], '--registry=https://registry.npmjs.org']
         self.build = ['node', 'npm-cli.js', 'run', 'build']
 
@@ -106,11 +108,11 @@ class FrontendInstallFallbackTests(unittest.TestCase):
         self.assert_commands(self.mirror, self.build)
         self.assert_current_marker()
 
-    def test_install_failure_retries_official_source(self):
+    def test_install_failure_retries_the_next_domestic_source(self):
         error = subprocess.CalledProcessError(1, self.mirror)
         self.subprocess_run.side_effect = [error, None, None]
         ensure_frontend(self.root)
-        self.assert_commands(self.mirror, self.official, self.build)
+        self.assert_commands(self.mirror, self.huawei, self.build)
         self.assert_current_marker()
 
     def test_install_failure_logs_stderr_and_eperm_hint(self):
@@ -123,30 +125,33 @@ class FrontendInstallFallbackTests(unittest.TestCase):
             ensure_frontend(self.root)
             warning.assert_any_call('npm ci 错误输出:\nnpm error code EPERM\nnpm error syscall unlink\nfile in use')
             error_log.assert_called_with('node_modules 中的文件被其他进程占用（如正在运行的 WebUI、Vite 或编辑器）。请先关闭占用进程后重新启动。')
-        self.assert_commands(self.mirror, self.official, self.build)
+        self.assert_commands(self.mirror, self.huawei, self.build)
 
-    def test_install_timeout_retries_official_source(self):
-        self.subprocess_run.side_effect = [subprocess.TimeoutExpired(self.mirror, 600), None, None]
+    def test_install_uses_official_source_after_all_domestic_sources_fail(self):
+        self.subprocess_run.side_effect = [subprocess.TimeoutExpired(command, 600)
+                                           for command in (self.mirror, self.huawei, self.tencent)] + [None, None]
         ensure_frontend(self.root)
-        self.assert_commands(self.mirror, self.official, self.build)
+        self.assert_commands(self.mirror, self.huawei, self.tencent, self.official, self.build)
         self.assert_current_marker()
 
-    def test_both_installs_fail_without_building(self):
+    def test_all_installs_fail_without_building(self):
         last_error = subprocess.CalledProcessError(2, self.official)
-        self.subprocess_run.side_effect = [subprocess.CalledProcessError(1, self.mirror), last_error]
+        self.subprocess_run.side_effect = [subprocess.CalledProcessError(1, command)
+                                           for command in (self.mirror, self.huawei, self.tencent)] + [last_error]
         with self.assertRaises(subprocess.CalledProcessError) as raised:
             ensure_frontend(self.root)
         self.assertIs(raised.exception, last_error)
-        self.assert_commands(self.mirror, self.official)
+        self.assert_commands(self.mirror, self.huawei, self.tencent, self.official)
         self.assertEqual(self.marker.read_text(encoding='utf-8'), 'old\n')
 
     def test_official_timeout_is_propagated_without_building(self):
         last_error = subprocess.TimeoutExpired(self.official, 600)
-        self.subprocess_run.side_effect = [subprocess.TimeoutExpired(self.mirror, 600), last_error]
+        self.subprocess_run.side_effect = [subprocess.TimeoutExpired(command, 600)
+                                           for command in (self.mirror, self.huawei, self.tencent)] + [last_error]
         with self.assertRaises(subprocess.TimeoutExpired) as raised:
             ensure_frontend(self.root)
         self.assertIs(raised.exception, last_error)
-        self.assert_commands(self.mirror, self.official)
+        self.assert_commands(self.mirror, self.huawei, self.tencent, self.official)
         self.assertEqual(self.marker.read_text(encoding='utf-8'), 'old\n')
 
     def test_build_failure_does_not_retry_install_or_update_marker(self):
