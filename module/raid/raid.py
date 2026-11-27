@@ -309,6 +309,8 @@ class Raid(MapOperation, RaidCombat, CampaignEvent):
     Attributes:
         _raid_has_oil_icon: 当前突袭活动是否显示油量图标（property，默认 False）。
     """
+    raid_force_ex_submarine = True
+
     @property
     def _raid_has_oil_icon(self):
         """
@@ -477,7 +479,8 @@ class Raid(MapOperation, RaidCombat, CampaignEvent):
             Fleet_FleetOrder='fleet1_all_fleet2_standby'
         )
 
-        if mode == 'ex':
+        force_ex_submarine = mode == 'ex' and self.raid_force_ex_submarine
+        if force_ex_submarine:
             backup = self.config.temporary(
                 Submarine_Fleet=1,
                 Submarine_Mode='every_combat'
@@ -488,7 +491,7 @@ class Raid(MapOperation, RaidCombat, CampaignEvent):
         self.raid_enter(mode=mode, raid=raid)
         self.combat(balance_hp=False, expected_end=self.raid_expected_end)
 
-        if mode == 'ex':
+        if force_ex_submarine:
             backup.recover()
 
         logger.hr('突袭结束')
@@ -513,7 +516,8 @@ class Raid(MapOperation, RaidCombat, CampaignEvent):
             Fleet_FleetOrder='fleet1_all_fleet2_standby'
         )
 
-        if mode == 'ex':
+        force_ex_submarine = mode == 'ex' and self.raid_force_ex_submarine
+        if force_ex_submarine:
             backup = self.config.temporary(
                 Submarine_Fleet=1,
                 Submarine_Mode='every_combat'
@@ -531,7 +535,7 @@ class Raid(MapOperation, RaidCombat, CampaignEvent):
         self.raid_enter(mode=mode, raid=raid)
         self.combat(balance_hp=False, expected_end=self.raid_expected_end)
 
-        if mode == 'ex':
+        if force_ex_submarine:
             backup.recover()
 
         logger.hr('突袭结束')

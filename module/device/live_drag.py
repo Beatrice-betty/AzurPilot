@@ -8,19 +8,21 @@ from module.exception import ScriptError
 from module.logger import logger
 
 
-LIVE_DRAG_METHODS = ('minitouch', 'MaaTouch', 'uiautomator2', 'scrcpy', 'nemu_ipc')
+LIVE_DRAG_METHODS = ('minitouch', 'MaaTouch', 'uiautomator2', 'scrcpy', 'nemu_ipc', 'azurpilot_android')
 
 
 class LiveDrag:
     """调用方逐帧移动触点；离开上下文时释放，绝不回退为点击。"""
 
-    def __init__(self, device, name):
+    def __init__(self, device, name, *, method=None, release_on_click=False):
         """初始化持续触控会话及其线程控制状态。"""
         self.device = device
         self.name = name
-        self.method = device.config.Emulator_ControlMethod
+        self.method = method if method is not None else device.config.Emulator_ControlMethod
         if self.method not in LIVE_DRAG_METHODS:
             raise ScriptError(f'{self.method} 不支持持续按住期间的截图反馈，请使用 MaaTouch 等控制方式')
+        self.release_on_click = release_on_click
+        self._previous_click_drag = None
         self.active = False
         self.point = None
         self._motion = None
@@ -33,6 +35,9 @@ class LiveDrag:
 
     def __enter__(self):
         """进入触控会话并准备释放资源的上下文。"""
+        if self.release_on_click:
+            self._previous_click_drag = self.device.__dict__.get('_click_release_drag')
+            self.device._click_release_drag = self
         return self
 
     def __exit__(self, exc_type, exc, traceback):
@@ -44,6 +49,9 @@ class LiveDrag:
                 raise
             # 保留导致中断的原异常；释放失败也必须留下可诊断信息。
             logger.error(f'[设备-控制] 连续拖拽释放失败: {release_error}')
+        finally:
+            if self.release_on_click:
+                self.device._click_release_drag = self._previous_click_drag
 
     def _send(self, operation, point):
         """通过所选触控后端提交当前触点操作。"""
@@ -65,6 +73,10 @@ class LiveDrag:
                 device.nemu_ipc.up()
             else:
                 device.nemu_ipc.down(*point)
+        elif self.method == 'azurpilot_android':
+            x, y = point
+            display = device.azurpilot_android_display_id
+            device.azurpilot_android_shell_output(f'input touchscreen -d {display} motionevent {operation.upper()} {x} {y}')
         else:
             from module.device.method.scrcpy import const
             device.scrcpy_ensure_running()

@@ -103,15 +103,15 @@ class CoalitionCombat(CoalitionUI, CampaignBase):
         if self.appear(BATTLE_STATUS, offset=(80, 20)):
             return True
 
-    def coalition_combat(self):
-        """执行联合出击的多轮自律战斗循环。
+    def coalition_combat(self, auto='combat_auto'):
+        """执行联合出击的多轮战斗循环。
 
         Pages:
             in: is_coalition
             out: is_coalition
         """
         self.battle_count = 0
-        self.combat_preparation(emotion_reduce=False)
+        self.combat_preparation(emotion_reduce=False, auto=auto)
 
         try:
             while 1:

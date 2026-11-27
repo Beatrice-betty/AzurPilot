@@ -104,7 +104,7 @@
     },
     "RaidScuttle": {
       "name": "共鬥沉船",
-      "help": ""
+      "help": "選擇「原地不動」或「向右拖動」時，腳本會自動關閉自律。選定潛艇編隊後，可用「每戰出擊」或「自動召喚潛艇」在手動操作時召喚。"
     },
     "Hospital": {
       "name": "深谷來信",
@@ -116,7 +116,7 @@
     },
     "CoalitionScuttle": {
       "name": "聯盟沉船",
-      "help": "聯盟活動中艦船被擊沉後刷取好感度，建議多隊出擊，第一隊就沉，建議看相關教學"
+      "help": "聯盟活動中艦船被擊沉後刷取好感度，建議多隊出擊，第一隊就沉，建議看相關教學。選擇「原地不動」或「向右拖動」時，腳本會自動關閉自律。選定潛艇編隊後，可用「每戰出擊」或「自動召喚潛艇」在手動操作時召喚。"
     },
     "MaritimeEscort": {
       "name": "商路護航",
@@ -2015,7 +2015,9 @@
       "combat_manual": "手操",
       "stand_still_in_the_middle": "中路站樁",
       "hide_in_bottom_left": "躲左下角",
-      "hide_in_upper_left": "躲左上角"
+      "hide_in_upper_left": "躲左上角",
+      "stand_still": "原地不動",
+      "drag_right": "向右拖動"
     },
     "Fleet1Step": {
       "name": "一隊步長",
@@ -2559,19 +2561,6 @@
       "help": "",
       "single": "單隊連戰",
       "multi": "多隊出擊"
-    }
-  },
-  "CoalitionScuttle": {
-    "_info": {
-      "name": "聯盟沉船",
-      "help": "聯盟活動沉船設定，選擇被擊沉艦船位置"
-    },
-    "Sacrifice": {
-      "name": "犧牲船位置",
-      "help": "選擇被擊沉的艦船位置，前排/旗艦/前排+旗艦",
-      "vanguard": "前排",
-      "flagship": "旗艦",
-      "vanguard_flagship": "前排+旗艦"
     }
   },
   "EventShop": {

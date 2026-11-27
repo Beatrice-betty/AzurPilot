@@ -27,7 +27,7 @@ from module.base.decorator import cached_property
 from module.base.utils import color_similar, get_color, lower_template_match_similarity
 from module.combat.assets import *
 from module.combat.combat_auto import CombatAuto
-from module.combat.combat_manual import CombatManual
+from module.combat.combat_manual import CombatManual, SCUTTLE_JOYSTICK_OFFSET, SCUTTLE_MANUAL_MODES
 from module.combat.hp_balancer import HPBalancer
 from module.combat.level import Level
 from module.combat.result import CombatResult
@@ -531,6 +531,22 @@ class Combat(Level, HPBalancer, Retirement, EquipmentConfigHandler, SubmarineCal
 
         return False
 
+    def handle_combat_controls(self, auto):
+        """处理战斗操控；沉船两种手操模式只确认自律关闭。"""
+        if auto in SCUTTLE_MANUAL_MODES:
+            if self.auto_mode_checked or not self.is_combat_executing():
+                return False
+            if self.combat_joystick_button(offset=SCUTTLE_JOYSTICK_OFFSET) is not None:
+                # 摇杆拖住时会偏离识别区，确认关闭后本场不再切换。
+                self.auto_mode_checked = True
+                return False
+            return self.handle_combat_auto(auto)
+        if self.handle_combat_auto(auto) or self.handle_combat_manual(auto):
+            return True
+        if auto != 'combat_auto' and self.auto_mode_checked and self.is_combat_executing():
+            return self.handle_combat_weapon_release()
+        return False
+
     def combat_execute(self, auto='combat_auto', submarine='do_not_use', drop=None):
         """战斗执行阶段：处理自动/手动战斗、潜艇呼叫、弹窗，等待战斗结算。
 
@@ -553,42 +569,42 @@ class Combat(Level, HPBalancer, Retirement, EquipmentConfigHandler, SubmarineCal
         confirm_timer = Timer(10)
         confirm_timer.start()
 
-        for _ in self.loop():
+        with self.combat_joystick_drag(auto) as drag:
+            for _ in self.loop():
 
-            if not confirm_timer.reached():
-                if self.handle_combat_automation_confirm():
+                if not confirm_timer.reached():
+                    if self.handle_combat_automation_confirm():
+                        continue
+
+                if self.handle_combat_defeat(drop=drop):
+                    break
+
+                if self.handle_story_skip():
+                    continue
+                if self.handle_combat_controls(auto):
+                    continue
+                if self.handle_submarine_call(submarine):
+                    continue
+                # 处理各种弹窗
+                if self.handle_popup_confirm('COMBAT_EXECUTE'):
+                    continue
+                if self.handle_urgent_commission():
+                    continue
+                if self.handle_guild_popup_cancel():
+                    continue
+                if self.handle_vote_popup():
+                    continue
+                if self.handle_mission_popup_ack():
                     continue
 
-            if self.handle_combat_defeat(drop=drop):
-                break
-
-            if self.handle_story_skip():
-                continue
-            if self.handle_combat_auto(auto):
-                continue
-            if self.handle_combat_manual(auto):
-                continue
-            if auto != 'combat_auto' and self.auto_mode_checked and self.is_combat_executing():
-                if self.handle_combat_weapon_release():
-                    continue
-            if self.handle_submarine_call(submarine):
-                continue
-            # 处理各种弹窗
-            if self.handle_popup_confirm('COMBAT_EXECUTE'):
-                continue
-            if self.handle_urgent_commission():
-                continue
-            if self.handle_guild_popup_cancel():
-                continue
-            if self.handle_vote_popup():
-                continue
-            if self.handle_mission_popup_ack():
-                continue
-
-            # 战斗结算，退出循环
-            if self.handle_battle_status(drop=drop) \
-                    or self.handle_get_items(drop=drop):
-                break
+                # 战斗结算，退出循环
+                if self.handle_battle_status(drop=drop) or self.handle_get_items(drop=drop):
+                    break
+                if drag is not None:
+                    if self.is_combat_executing():
+                        self.handle_combat_drag_right(drag)
+                    else:
+                        drag.up()
 
     def handle_battle_status(self, drop=None):
         """处理战斗结算画面（S/A/B/C/D 评价）。
@@ -840,9 +856,7 @@ class Combat(Level, HPBalancer, Retirement, EquipmentConfigHandler, SubmarineCal
         if auto_mode is None:
             auto_mode = self.config.Fleet_Fleet1Mode if fleet_index == 1 else self.config.Fleet_Fleet2Mode
         if submarine_mode is None:
-            submarine_mode = 'do_not_use'
-            if self.config.Submarine_Fleet:
-                submarine_mode = self.config.Submarine_Mode
+            submarine_mode = self.combat_submarine_mode()
         self.battle_status_click_interval = 7 if save_get_items else 2
 
         with self.stat.new(

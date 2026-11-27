@@ -15,8 +15,14 @@
 继承自 ModuleBase，被 Combat 组合使用。
 """
 
+from contextlib import contextmanager
+
 from module.base.base import ModuleBase
 from module.combat.assets import *
+
+SCUTTLE_MANUAL_MODES = ('stand_still', 'drag_right')
+# 手操摇杆拨向一侧时，圆心会超出常规的 20 像素搜索范围。
+SCUTTLE_JOYSTICK_OFFSET = (55, 40)
 
 
 class CombatManual(ModuleBase):
@@ -36,6 +42,30 @@ class CombatManual(ModuleBase):
     def combat_manual_reset(self):
         """重置手动战斗执行状态。"""
         self.manual_executed = False
+
+    @contextmanager
+    def combat_joystick_drag(self, auto):
+        """为向右拖动模式保持单个触点，结算或异常离开时自动松手。"""
+        if auto != 'drag_right':
+            yield None
+            return
+        # ADB 与 Hermit 只提供整段手势，持续按住时借用本机的 MaaTouch。
+        method = 'MaaTouch' if self.device.config.Emulator_ControlMethod in ('ADB', 'Hermit') else None
+        with self.device.live_drag('COMBAT_JOYSTICK_RIGHT', method=method, release_on_click=True) as drag:
+            yield drag
+
+    def handle_combat_drag_right(self, drag):
+        """识别手操摇杆后水平拖到右侧，等待结算或其他界面操作释放。"""
+        if drag.active:
+            return False
+        button = self.combat_joystick_button(offset=SCUTTLE_JOYSTICK_OFFSET)
+        if button is None:
+            return False
+        x1, y1, x2, y2 = button.button
+        x, y = (x1 + x2) // 2, (y1 + y2) // 2
+        drag.down((x, y))
+        drag.move((x + 100, y))
+        return True
 
     def handle_combat_stand_still_in_the_middle(self, auto):
         """处理战斗中停留在画面中央的模式。

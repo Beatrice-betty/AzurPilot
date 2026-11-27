@@ -13,6 +13,7 @@ class LiveDragTests(unittest.TestCase):
     def device(self, method):
         device = Mock()
         device.config = SimpleNamespace(Emulator_ControlMethod=method)
+        device.azurpilot_android_display_id = 9
         device._scrcpy_control_socket_lock = threading.Lock()
         builder = Mock()
         for operation in ('down', 'move', 'up', 'commit'):
@@ -38,6 +39,8 @@ class LiveDragTests(unittest.TestCase):
                         device.u2.touch.up.assert_not_called()
                     elif method == 'nemu_ipc':
                         device.nemu_ipc.up.assert_not_called()
+                    elif method == 'azurpilot_android':
+                        self.assertEqual(device.azurpilot_android_shell_output.call_count, 3)
                     else:
                         self.assertEqual([entry.args[2] for entry in device._scrcpy_control.touch.call_args_list],
                                          [0, 2, 2])
@@ -58,6 +61,13 @@ class LiveDragTests(unittest.TestCase):
                     device.u2.touch.up.assert_called_once_with(1243, 122)
                 elif method == 'nemu_ipc':
                     device.nemu_ipc.up.assert_called_once_with()
+                elif method == 'azurpilot_android':
+                    self.assertEqual(device.azurpilot_android_shell_output.call_args_list, [
+                        call('input touchscreen -d 9 motionevent DOWN 1243 120'),
+                        call('input touchscreen -d 9 motionevent MOVE 1243 121'),
+                        call('input touchscreen -d 9 motionevent MOVE 1243 122'),
+                        call('input touchscreen -d 9 motionevent UP 1243 122'),
+                    ])
                 else:
                     device._scrcpy_control.touch.assert_called_with(1243, 122, 1)
 

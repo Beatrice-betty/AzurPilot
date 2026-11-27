@@ -104,7 +104,7 @@
     },
     "RaidScuttle": {
       "name": "共斗沉船",
-      "help": ""
+      "help": "选择「原地不动」或「向右拖动」时，脚本会自动关闭自律。选定潜艇编队后，可用「每战出击」或「自动召唤潜艇」在手操时召唤。"
     },
     "Hospital": {
       "name": "深谷来信",
@@ -116,7 +116,7 @@
     },
     "CoalitionScuttle": {
       "name": "联盟沉船",
-      "help": "联盟活动中舰船被击沉后刷取好感度，建议多队出击，第一队就沉，建议看相关教程"
+      "help": "联盟活动中舰船被击沉后刷取好感度，建议多队出击，第一队就沉，建议看相关教程。选择「原地不动」或「向右拖动」时，脚本会自动关闭自律。选定潜艇编队后，可用「每战出击」或「自动召唤潜艇」在手操时召唤。"
     },
     "MaritimeEscort": {
       "name": "商路护航",
@@ -2015,7 +2015,9 @@
       "combat_manual": "手操",
       "stand_still_in_the_middle": "中路站桩",
       "hide_in_bottom_left": "躲左下角",
-      "hide_in_upper_left": "躲左上角"
+      "hide_in_upper_left": "躲左上角",
+      "stand_still": "原地不动",
+      "drag_right": "向右拖动"
     },
     "Fleet1Step": {
       "name": "一队步长",
@@ -2559,19 +2561,6 @@
       "help": "",
       "single": "单队连战",
       "multi": "多队出击"
-    }
-  },
-  "CoalitionScuttle": {
-    "_info": {
-      "name": "联盟沉船",
-      "help": "联盟活动沉船设置，选择被击沉舰船位置"
-    },
-    "Sacrifice": {
-      "name": "牺牲船位置",
-      "help": "选择被击沉的舰船位置，前排/旗舰/前排+旗舰",
-      "vanguard": "前排",
-      "flagship": "旗舰",
-      "vanguard_flagship": "前排+旗舰"
     }
   },
   "EventShop": {

@@ -274,6 +274,24 @@ RaidScuttle:
     Name: dynamic
     Event:
       type: state
+  Fleet:
+    Fleet1Mode: &scuttle_combat_mode
+      display: display
+      value: stand_still
+      option: [stand_still, drag_right, combat_auto, combat_manual, stand_still_in_the_middle, hide_in_bottom_left, hide_in_upper_left]
+  Submarine: &scuttle_submarine
+    Mode:
+      option: [do_not_use, every_combat]
+    DistanceToBoss: &scuttle_hidden {display: hide, type: stored}
+    AdvancedConfig: *scuttle_hidden
+  Emotion: &scuttle_emotion
+    # 两种沉船均使用第一队的心情账本，保留旧记录供通用配置流程使用。
+    Fleet2Value: *scuttle_hidden
+    Fleet2Record: *scuttle_hidden
+    Fleet2Control: *scuttle_hidden
+    Fleet2Recover: *scuttle_hidden
+    Fleet2Oath: *scuttle_hidden
+    Fleet2Onsen: *scuttle_hidden
 Hospital:
   StopCondition:
     RunCount: 0
@@ -407,6 +425,20 @@ CoalitionScuttle:
     StageIncrease: false
     GetNewShip: false
     ReachLevel: 0
+  Fleet:
+    Fleet1Mode: *scuttle_combat_mode
+    # 联盟的出战编队由游戏内配置，只显示战斗模式。
+    Fleet1: *scuttle_hidden
+    Fleet1Formation: *scuttle_hidden
+    Fleet1Step: *scuttle_hidden
+    Fleet2: *scuttle_hidden
+    Fleet2Formation: *scuttle_hidden
+    Fleet2Mode: *scuttle_hidden
+    Fleet2Step: *scuttle_hidden
+    FleetOrder: *scuttle_hidden
+    SkipPreparation: *scuttle_hidden
+  Submarine: *scuttle_submarine
+  Emotion: *scuttle_emotion
 
 CoalitionSp:
   Scheduler:

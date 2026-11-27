@@ -104,7 +104,7 @@
     },
     "RaidScuttle": {
       "name": "Raid Scuttle",
-      "help": ""
+      "help": "The script turns off Auto Battle when using Stay in place or Hold right. To summon submarines in manual combat, select a submarine fleet and enable Every battle or Auto summon."
     },
     "Hospital": {
       "name": "Letter from the Deep Valley",
@@ -116,7 +116,7 @@
     },
     "CoalitionScuttle": {
       "name": "Coalition Scuttle",
-      "help": "Farm affinity by having ships sunk in Coalition events. Recommend sortie with multiple fleets; the first fleet sinks. Refer to tutorials for details."
+      "help": "Farm affinity by having ships sunk in Coalition events. Recommend sortie with multiple fleets; the first fleet sinks. Refer to tutorials for details. The script turns off Auto Battle when using Stay in place or Hold right. To summon submarines in manual combat, select a submarine fleet and enable Every battle or Auto summon."
     },
     "MaritimeEscort": {
       "name": "Trade Convoy",
@@ -2015,7 +2015,9 @@
       "combat_manual": "Manual",
       "stand_still_in_the_middle": "Stand still in middle",
       "hide_in_bottom_left": "Hide in bottom left",
-      "hide_in_upper_left": "Hide in upper left"
+      "hide_in_upper_left": "Hide in upper left",
+      "stand_still": "Stay in place",
+      "drag_right": "Hold right"
     },
     "Fleet1Step": {
       "name": "Fleet 1 step size",
@@ -2559,19 +2561,6 @@
       "help": "",
       "single": "Single team battle",
       "multi": "Multiple teams attack"
-    }
-  },
-  "CoalitionScuttle": {
-    "_info": {
-      "name": "Coalition scuttle",
-      "help": "Coalition event scuttle settings. Select the position of ships to be sunk."
-    },
-    "Sacrifice": {
-      "name": "Sacrificial ship position",
-      "help": "Select the position of ships to be sunk: Vanguard, Flagship, or Vanguard + Flagship",
-      "vanguard": "Vanguard",
-      "flagship": "Flagship",
-      "vanguard_flagship": "Vanguard + Flagship"
     }
   },
   "EventShop": {

@@ -13,6 +13,7 @@ class CoalitionScuttleCombat(CoalitionCombat):
     """联盟沉船复用结算，只豁免额外心情并处理专用确认。"""
 
     combat_shipwreck_emotion = False
+    combat_submarine_auto_call = True
     coalition_result_confirm_buttons = (SCUTTLE_CONFIRM, COALITION_REWARD_CONFIRM)
 
     def coalition_emotion_reduce(self):
@@ -66,7 +67,7 @@ class CoalitionScuttleRun(Coalition, CoalitionScuttleCombat):
             raise ScriptEnd
 
         self.enter_map(event=event, stage=stage, mode=fleet)
-        self.coalition_combat()
+        self.coalition_combat(auto=self.config.Fleet_Fleet1Mode)
 
     def run(self, event='', mode='', fleet='', total=0):
         """

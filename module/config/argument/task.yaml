@@ -141,10 +141,11 @@ Event:
       - Emotion
     CoalitionScuttle:
       - Scheduler
-      - CoalitionScuttle
       - Campaign
       - Coalition
       - StopCondition
+      - Fleet
+      - Submarine
       - Emotion
     MaritimeEscort:
       - Scheduler

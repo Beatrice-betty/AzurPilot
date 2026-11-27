@@ -36,6 +36,15 @@ class SubmarineCall(ModuleBase):
     submarine_call_click_timer = Timer(1)
     submarine_call_grace_used = False
     submarine_advanced = None
+    combat_submarine_auto_call = False
+
+    def combat_submarine_mode(self):
+        """选择战中潜艇方案；沉船也接受显式设置的自动召唤。"""
+        if not self.config.Submarine_Fleet:
+            return 'do_not_use'
+        if self.combat_submarine_auto_call and self.config.Submarine_AutoSearchMode == 'sub_auto_call':
+            return 'every_combat'
+        return self.config.Submarine_Mode
 
     def submarine_call_reset(self):
         """重置潜艇呼叫相关的状态标志与计时器。

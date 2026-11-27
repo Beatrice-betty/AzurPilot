@@ -403,9 +403,7 @@ class AutoSearchCombat(MapOperation, Combat, CampaignStatus):
         logger.info('[自动搜索-战斗] 战斗执行')
         self._restart_resume_guard = False
         self.submarine_call_reset()
-        submarine_mode = 'do_not_use'
-        if self.config.Submarine_Fleet:
-            submarine_mode = self.config.Submarine_Mode
+        submarine_mode = self.combat_submarine_mode()
         force_call = battle[0] == battle[1] - 1 if battle is not None else False
         self.combat_auto_reset()
         self.combat_manual_reset()
@@ -417,60 +415,59 @@ class AutoSearchCombat(MapOperation, Combat, CampaignStatus):
 
         confirm_timer = Timer(10)
         confirm_timer.start()
-        while 1:
-            self.device.screenshot()
+        with self.combat_joystick_drag(auto) as drag:
+            while 1:
+                self.device.screenshot()
 
-            # C/D 共用的失败画面优先于通用弹窗；记录结果后交给结算恢复。
-            if self.handle_combat_defeat():
-                break
-            if self.appear(FLEET_UNAVAILABLE, offset=(160, 30)):
-                self.combat_result_record(fleet_unavailable=True)
-                break
+                # C/D 共用的失败画面优先于通用弹窗；记录结果后交给结算恢复。
+                if self.handle_combat_defeat():
+                    break
+                if self.appear(FLEET_UNAVAILABLE, offset=(160, 30)):
+                    self.combat_result_record(fleet_unavailable=True)
+                    break
 
-            if self.handle_submarine_call(submarine_mode, call=force_call):
-                continue
-            if self.handle_combat_auto(auto):
-                continue
-            if self.handle_combat_manual(auto):
-                continue
-            if auto != 'combat_auto' and self.auto_mode_checked and self.is_combat_executing():
-                if self.handle_combat_weapon_release():
+                if self.handle_submarine_call(submarine_mode, call=force_call):
                     continue
-            # 处理各种弹窗
-            if self.handle_popup_confirm('AUTO_SEARCH_COMBAT_EXECUTE'):
-                continue
-            if not self._withdraw and self.handle_urgent_commission():
-                continue
-            if self.handle_story_skip():
-                continue
-            if self.handle_guild_popup_cancel():
-                continue
-            if self.handle_vote_popup():
-                continue
-            if self.handle_mission_popup_ack():
-                continue
+                if self.handle_combat_controls(auto):
+                    continue
+                # 处理各种弹窗
+                if self.handle_popup_confirm('AUTO_SEARCH_COMBAT_EXECUTE'):
+                    continue
+                if not self._withdraw and self.handle_urgent_commission():
+                    continue
+                if self.handle_story_skip():
+                    continue
+                if self.handle_guild_popup_cancel():
+                    continue
+                if self.handle_vote_popup():
+                    continue
+                if self.handle_mission_popup_ack():
+                    continue
 
-            # 结束判断
-            if self.is_in_auto_search_menu() or self._handle_auto_search_menu_missing():
-                self.device.screenshot_interval_set()
-                raise CampaignEnd
-            if self.is_combat_executing():
-                confirm_timer.reset()
-                continue
-            if self.handle_get_ship():
-                continue
-            if self.combat_result_observe():
-                break
-            if confirm_timer.reached():
-                # 超时只转交结算处理；没有沉船弹窗不能确认战败。
-                logger.warning('[自动搜索-战斗] 结算确认超时，进入status处理')
-                confirm_timer.reset()
-                break
-            if self.is_auto_search_running():
-                self.device.screenshot_interval_set()
-                break
-            if callable(expected_end):
-                if expected_end():
+                # 结束判断
+                if self.is_in_auto_search_menu() or self._handle_auto_search_menu_missing():
+                    self.device.screenshot_interval_set()
+                    raise CampaignEnd
+                if self.is_combat_executing():
+                    if drag is not None:
+                        self.handle_combat_drag_right(drag)
+                    confirm_timer.reset()
+                    continue
+                if drag is not None:
+                    drag.up()
+                if self.handle_get_ship():
+                    continue
+                if self.combat_result_observe():
+                    break
+                if confirm_timer.reached():
+                    # 超时只转交结算处理；没有沉船弹窗不能确认战败。
+                    logger.warning('[自动搜索-战斗] 结算确认超时，进入status处理')
+                    confirm_timer.reset()
+                    break
+                if self.is_auto_search_running():
+                    self.device.screenshot_interval_set()
+                    break
+                if callable(expected_end) and expected_end():
                     self.device.screenshot_interval_set()
                     break
 

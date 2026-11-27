@@ -436,6 +436,13 @@ class ConfigGenerator:
                 deep_load(path)
             if 'option' in data:
                 deep_load(path, words=data['option'], default=False)
+        # 仅某些任务可选的额外选项也需要翻译，避免将其加入其他任务的选项。
+        for (_, group, arg), override in deep_iter(self.override, depth=3):
+            if isinstance(override, dict) and 'option' in override:
+                options = deep_get(self.argument, keys=[group, arg, 'option'])
+                if options is not None:
+                    extra = [option for option in override['option'] if option not in options]
+                    deep_load([group, arg], words=extra, default=False)
         # 活动名称翻译
         # 名称来源优先级：同语言服务器 > en > cn > jp > tw
         events = {}

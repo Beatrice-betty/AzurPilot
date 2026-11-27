@@ -44,13 +44,14 @@ class CombatAuto(ModuleBase):
         Returns:
             bool: 摇杆是否出现。
         """
-        if self.appear(COMBAT_AUTO, offset=(20, 20)):
-            return True
-        if self.appear(COMBAT_AUTO_133, offset=(20, 20)):
-            return True
-        if self.appear(COMBAT_AUTO_150, offset=(20, 20)):
-            return True
-        return False
+        return self.combat_joystick_button() is not None
+
+    def combat_joystick_button(self, offset=(20, 20)):
+        """从当前截图识别手操摇杆，保留匹配得到的实际位置。"""
+        for button in (COMBAT_AUTO, COMBAT_AUTO_133, COMBAT_AUTO_150):
+            if self.appear(button, offset=offset):
+                return button
+        return None
 
     def combat_auto_reset(self):
         """重置自动战斗相关的状态标志与计时器。"""
