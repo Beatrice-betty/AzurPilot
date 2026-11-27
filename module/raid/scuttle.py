@@ -15,6 +15,7 @@ class RaidScuttleCombat(RaidCombat):
 
     combat_shipwreck_emotion = False
     combat_submarine_auto_call = True
+    combat_switch_to_manual_allowed = False
     combat_weapon_release_disabled_modes = SCUTTLE_NO_WEAPON_MODES
 
 

@@ -1,6 +1,7 @@
 """沉船手操、结算与潜艇召唤的离线战斗回放。"""
 
 import unittest
+from itertools import product
 from unittest.mock import MagicMock, Mock, patch
 
 from module.base.timer import Timer
@@ -93,17 +94,19 @@ class ScuttleCombatControlTests(unittest.TestCase):
             for mode, move in modes.items():
                 with self.subTest(task=cls.__name__, mode=mode):
                     replay = ScuttleReplay(cls, mode, [
-                        screen(BATTLE_PREPARATION, AUTOMATION_ON), screen(BATTLE_PREPARATION, AUTOMATION_OFF),
-                        screen(*ready),
-                        screen(*ready, SUBMARINE_AVAILABLE_CHECK_1, SUBMARINE_AVAILABLE_CHECK_2, SUBMARINE_READY),
-                        *(screen(*ready) for _ in range(9)),
+                        screen(BATTLE_PREPARATION, AUTOMATION_OFF),
+                        screen('COMBAT'),
+                        screen('COMBAT', SUBMARINE_AVAILABLE_CHECK_1, SUBMARINE_AVAILABLE_CHECK_2, SUBMARINE_READY),
+                        *(screen('COMBAT') for _ in range(5)),
+                        *(screen(*ready) for _ in range(4)),
                     ], summon=True)
                     del replay.campaign.handle_combat_manual
                     del replay.campaign.handle_combat_weapon_release
                     replay.run()
                     replay.device.long_click.assert_called_once()
                     self.assertIs(replay.device.long_click.call_args.args[0], move)
-                    self.assertEqual(replay.clicks.count(AUTOMATION_SWITCH.name), 1)
+                    self.assertNotIn(AUTOMATION_SWITCH.name, replay.clicks)
+                    self.assertNotIn(COMBAT_AUTO_SWITCH.name, replay.clicks)
                     self.assertIn(SUBMARINE_READY.name, replay.clicks)
                     self.assertNotIn(READY_AIR_RAID.name, replay.clicks)
                     self.assertNotIn(READY_TORPEDO.name, replay.clicks)
@@ -123,22 +126,37 @@ class ScuttleCombatControlTests(unittest.TestCase):
                 self.assertTrue(task.handle_combat_controls(mode))
                 self.assertEqual(replay.clicks, [READY_AIR_RAID.name])
 
-    def test_stand_still_turns_auto_off_and_skips_movement_and_weapons(self):
+    def test_non_auto_modes_leave_both_switches_alone_without_a_visible_joystick(self):
+        modes = ('stand_still', 'drag_right', 'combat_manual', 'stand_still_in_the_middle',
+                 'hide_in_bottom_left', 'hide_in_upper_left')
+        for cls, mode, switch in product((RaidScuttleRun, CoalitionScuttleRun), modes, (AUTOMATION_OFF, AUTOMATION_ON)):
+            with self.subTest(task=cls.__name__, mode=mode, switch=switch.name):
+                replay = ScuttleReplay(cls, mode, [
+                    screen(BATTLE_PREPARATION, switch),
+                    *(screen('COMBAT') for _ in range(8)),
+                ])
+                del replay.campaign.handle_combat_manual
+                replay.run()
+                self.assertNotIn(AUTOMATION_SWITCH.name, replay.clicks)
+                self.assertNotIn(COMBAT_AUTO_SWITCH.name, replay.clicks)
+                self.assertIn(OPTS_INFO_D.name, replay.clicks)
+                replay.device.long_click.assert_not_called()
+                replay.campaign.handle_combat_weapon_release.assert_not_called()
+
+    def test_stand_still_with_visible_joystick_does_not_move_or_fire(self):
         for cls in (RaidScuttleRun, CoalitionScuttleRun):
             with self.subTest(task=cls.__name__):
                 replay = ScuttleReplay(cls, 'stand_still', [
-                    screen(BATTLE_PREPARATION, AUTOMATION_ON), screen(BATTLE_PREPARATION, AUTOMATION_OFF),
-                    screen('COMBAT', COMBAT_AUTO), screen('COMBAT', COMBAT_AUTO), screen('COMBAT'),
+                    screen(BATTLE_PREPARATION, AUTOMATION_OFF),
+                    *(screen('COMBAT', COMBAT_AUTO, READY_AIR_RAID, READY_TORPEDO) for _ in range(8)),
                 ])
                 replay.run()
-                self.assertEqual(replay.clicks.count(AUTOMATION_SWITCH.name), 1)
+                self.assertNotIn(AUTOMATION_SWITCH.name, replay.clicks)
                 self.assertNotIn(COMBAT_AUTO_SWITCH.name, replay.clicks)
-                self.assertNotIn(SUBMARINE_READY.name, replay.clicks)
-                self.assertIn(OPTS_INFO_D.name, replay.clicks)
+                replay.device.long_click.assert_not_called()
                 replay.device.live_drag.assert_not_called()
                 replay.campaign.handle_combat_manual.assert_not_called()
                 replay.campaign.handle_combat_weapon_release.assert_not_called()
-                replay.campaign.config.temporary.assert_not_called()
 
     def test_scuttle_drag_holds_right_and_resumes_after_summoning_in_manual_battle(self):
         for cls in (RaidScuttleRun, CoalitionScuttleRun):
@@ -161,15 +179,16 @@ class ScuttleCombatControlTests(unittest.TestCase):
                 self.assertNotIn(COMBAT_AUTO_SWITCH.name, replay.clicks)
                 replay.campaign.handle_combat_weapon_release.assert_not_called()
 
-    def test_scuttle_switches_auto_off_if_needed_in_battle(self):
+    def test_scuttle_auto_mode_still_switches_on_in_preparation_and_battle(self):
         for cls in (RaidScuttleRun, CoalitionScuttleRun):
             with self.subTest(task=cls.__name__):
-                replay = ScuttleReplay(cls, 'stand_still', [
+                replay = ScuttleReplay(cls, 'combat_auto', [
                     screen(BATTLE_PREPARATION, AUTOMATION_OFF),
-                    screen('COMBAT'), screen('COMBAT'), screen('COMBAT'), screen('COMBAT'),
-                    screen('COMBAT', COMBAT_AUTO), screen('COMBAT'),
+                    screen(BATTLE_PREPARATION, AUTOMATION_ON),
+                    *(screen('COMBAT', COMBAT_AUTO) for _ in range(3)),
+                    *(screen('COMBAT') for _ in range(4)),
                 ])
                 replay.run()
                 self.assertEqual(replay.clicks.count(COMBAT_AUTO_SWITCH.name), 1)
-                self.assertNotIn(AUTOMATION_SWITCH.name, replay.clicks)
+                self.assertEqual(replay.clicks.count(AUTOMATION_SWITCH.name), 1)
                 replay.campaign.handle_combat_weapon_release.assert_not_called()

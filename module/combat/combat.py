@@ -464,6 +464,8 @@ class Combat(Level, HPBalancer, Retirement, EquipmentConfigHandler, SubmarineCal
         Returns:
             bool: 是否进行了切换操作。
         """
+        if not auto and not self.combat_switch_to_manual_allowed:
+            return False
         if not self._automation_set_timer.reached():
             return False
 

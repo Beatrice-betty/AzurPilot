@@ -15,6 +15,7 @@
 from module.base.base import ModuleBase
 from module.base.timer import Timer
 from module.combat.assets import COMBAT_AUTO, COMBAT_AUTO_133, COMBAT_AUTO_150, COMBAT_AUTO_SWITCH
+from module.combat.combat_manual import SCUTTLE_JOYSTICK_OFFSET
 from module.logger import logger
 
 
@@ -35,6 +36,7 @@ class CombatAuto(ModuleBase):
     auto_mode_checked = False
     auto_mode_switched = False
     auto_mode_click_timer = Timer(5)
+    combat_switch_to_manual_allowed = True
 
     def combat_joystick_appear(self) -> bool:
         """检测摇杆是否出现。
@@ -72,6 +74,12 @@ class CombatAuto(ModuleBase):
             bool: 是否执行了点击切换操作。
         """
         if self.auto_mode_checked:
+            return False
+        if auto != 'combat_auto' and not self.combat_switch_to_manual_allowed:
+            # 保留原先的走位时机，等看到手操摇杆再执行，不靠摇杆缺失切换自律。
+            if (self.auto_mode_click_timer.reached() and self.is_combat_executing()
+                    and self.combat_joystick_button(offset=SCUTTLE_JOYSTICK_OFFSET) is not None):
+                self.auto_mode_checked = True
             return False
         if self.auto_mode_click_timer.reached():
             logger.info('[战斗-自动] 自动模式检查计时器到达')

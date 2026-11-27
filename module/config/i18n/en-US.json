@@ -104,7 +104,7 @@
     },
     "RaidScuttle": {
       "name": "Raid Scuttle",
-      "help": "The script turns off Auto Battle when using Stay in place or Hold right. To summon submarines in manual combat, select a submarine fleet and enable Every battle or Auto summon."
+      "help": "Only Auto Battle mode can change the in-game Auto Battle setting. Other modes keep the game's current setting. To summon submarines in manual combat, select a submarine fleet and enable Every battle or Auto summon."
     },
     "Hospital": {
       "name": "Letter from the Deep Valley",
@@ -116,7 +116,7 @@
     },
     "CoalitionScuttle": {
       "name": "Coalition Scuttle",
-      "help": "Farm affinity by having ships sunk in Coalition events. Recommend sortie with multiple fleets; the first fleet sinks. Refer to tutorials for details. The script turns off Auto Battle when using Stay in place or Hold right. To summon submarines in manual combat, select a submarine fleet and enable Every battle or Auto summon."
+      "help": "Farm affinity by having ships sunk in Coalition events. Recommend sortie with multiple fleets; the first fleet sinks. Refer to tutorials for details. Only Auto Battle mode can change the in-game Auto Battle setting. Other modes keep the game's current setting. To summon submarines in manual combat, select a submarine fleet and enable Every battle or Auto summon."
     },
     "MaritimeEscort": {
       "name": "Trade Convoy",
