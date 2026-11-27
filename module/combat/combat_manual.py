@@ -21,6 +21,9 @@ from module.base.base import ModuleBase
 from module.combat.assets import *
 
 SCUTTLE_MANUAL_MODES = ('stand_still', 'drag_right')
+SCUTTLE_NO_WEAPON_MODES = (
+    'stand_still_in_the_middle', 'hide_in_bottom_left', 'hide_in_upper_left',
+)
 # 手操摇杆拨向一侧时，圆心会超出常规的 20 像素搜索范围。
 SCUTTLE_JOYSTICK_OFFSET = (55, 40)
 

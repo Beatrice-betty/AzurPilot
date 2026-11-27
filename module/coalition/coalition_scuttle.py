@@ -5,6 +5,7 @@
 from module.coalition.assets import *
 from module.coalition.combat import CoalitionCombat
 from module.coalition.coalition import Coalition
+from module.combat.combat_manual import SCUTTLE_NO_WEAPON_MODES
 from module.exception import ScriptEnd, ScriptError
 from module.logger import logger
 
@@ -14,6 +15,7 @@ class CoalitionScuttleCombat(CoalitionCombat):
 
     combat_shipwreck_emotion = False
     combat_submarine_auto_call = True
+    combat_weapon_release_disabled_modes = SCUTTLE_NO_WEAPON_MODES
     coalition_result_confirm_buttons = (SCUTTLE_CONFIRM, COALITION_REWARD_CONFIRM)
 
     def coalition_emotion_reduce(self):

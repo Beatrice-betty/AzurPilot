@@ -60,6 +60,7 @@ class Combat(Level, HPBalancer, Retirement, EquipmentConfigHandler, SubmarineCal
     battle_status_click_interval = 2
     battle_result_retry_interval = 2
     combat_shipwreck_emotion = True
+    combat_weapon_release_disabled_modes: tuple[str, ...] = ()
 
     @cached_property
     def combat_result(self):
@@ -543,7 +544,8 @@ class Combat(Level, HPBalancer, Retirement, EquipmentConfigHandler, SubmarineCal
             return self.handle_combat_auto(auto)
         if self.handle_combat_auto(auto) or self.handle_combat_manual(auto):
             return True
-        if auto != 'combat_auto' and self.auto_mode_checked and self.is_combat_executing():
+        if (auto != 'combat_auto' and auto not in self.combat_weapon_release_disabled_modes
+                and self.auto_mode_checked and self.is_combat_executing()):
             return self.handle_combat_weapon_release()
         return False
 

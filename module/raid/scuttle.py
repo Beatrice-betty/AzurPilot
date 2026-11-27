@@ -5,7 +5,7 @@
 战斗循环由 RunCount 等停止条件控制。
 """
 
-from module.combat.combat_manual import SCUTTLE_MANUAL_MODES
+from module.combat.combat_manual import SCUTTLE_MANUAL_MODES, SCUTTLE_NO_WEAPON_MODES
 from module.raid.combat import RaidCombat
 from module.raid.run import RaidRun
 
@@ -15,6 +15,7 @@ class RaidScuttleCombat(RaidCombat):
 
     combat_shipwreck_emotion = False
     combat_submarine_auto_call = True
+    combat_weapon_release_disabled_modes = SCUTTLE_NO_WEAPON_MODES
 
 
 class RaidScuttleRun(RaidRun, RaidScuttleCombat):

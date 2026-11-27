@@ -6,12 +6,15 @@ from unittest.mock import MagicMock, Mock, patch
 from module.base.timer import Timer
 from module.coalition.assets import SCUTTLE_CONFIRM
 from module.coalition.coalition_scuttle import CoalitionScuttleRun
+from module.coalition.combat import CoalitionCombat
 from module.combat.assets import (
     AUTOMATION_OFF, AUTOMATION_ON, AUTOMATION_SWITCH, BATTLE_PREPARATION,
-    COMBAT_AUTO, COMBAT_AUTO_SWITCH, OPTS_INFO_D, SUBMARINE_AVAILABLE_CHECK_1,
+    COMBAT_AUTO, COMBAT_AUTO_SWITCH, MOVE_DOWN, MOVE_LEFT_DOWN, MOVE_LEFT_UP,
+    OPTS_INFO_D, READY_AIR_RAID, READY_TORPEDO, SUBMARINE_AVAILABLE_CHECK_1,
     SUBMARINE_AVAILABLE_CHECK_2, SUBMARINE_READY,
 )
 from module.device.control import Control
+from module.raid.combat import RaidCombat
 from module.raid.scuttle import RaidScuttleRun
 from tests.test_auto_search_defeat import ScreenReplay, screen
 
@@ -79,6 +82,47 @@ class ScuttleReplay(ScreenReplay):
 
 
 class ScuttleCombatControlTests(unittest.TestCase):
+    def test_scuttle_position_modes_move_and_summon_without_using_weapons(self):
+        modes = {
+            'stand_still_in_the_middle': MOVE_DOWN,
+            'hide_in_bottom_left': MOVE_LEFT_DOWN,
+            'hide_in_upper_left': MOVE_LEFT_UP,
+        }
+        ready = ('COMBAT', COMBAT_AUTO, READY_AIR_RAID, READY_TORPEDO)
+        for cls in (RaidScuttleRun, CoalitionScuttleRun):
+            for mode, move in modes.items():
+                with self.subTest(task=cls.__name__, mode=mode):
+                    replay = ScuttleReplay(cls, mode, [
+                        screen(BATTLE_PREPARATION, AUTOMATION_ON), screen(BATTLE_PREPARATION, AUTOMATION_OFF),
+                        screen(*ready),
+                        screen(*ready, SUBMARINE_AVAILABLE_CHECK_1, SUBMARINE_AVAILABLE_CHECK_2, SUBMARINE_READY),
+                        *(screen(*ready) for _ in range(9)),
+                    ], summon=True)
+                    del replay.campaign.handle_combat_manual
+                    del replay.campaign.handle_combat_weapon_release
+                    replay.run()
+                    replay.device.long_click.assert_called_once()
+                    self.assertIs(replay.device.long_click.call_args.args[0], move)
+                    self.assertEqual(replay.clicks.count(AUTOMATION_SWITCH.name), 1)
+                    self.assertIn(SUBMARINE_READY.name, replay.clicks)
+                    self.assertNotIn(READY_AIR_RAID.name, replay.clicks)
+                    self.assertNotIn(READY_TORPEDO.name, replay.clicks)
+
+    def test_weapon_release_stays_available_outside_scuttle_position_modes(self):
+        cases = (
+            (RaidCombat, 'hide_in_bottom_left'),
+            (CoalitionCombat, 'hide_in_bottom_left'),
+            (RaidScuttleRun, 'combat_manual'),
+            (CoalitionScuttleRun, 'combat_manual'),
+        )
+        for cls, mode in cases:
+            with self.subTest(task=cls.__name__, mode=mode):
+                replay = ScreenReplay([screen('COMBAT', READY_AIR_RAID)])
+                task = replay.make_campaign(cls)
+                task.auto_mode_checked = True
+                self.assertTrue(task.handle_combat_controls(mode))
+                self.assertEqual(replay.clicks, [READY_AIR_RAID.name])
+
     def test_stand_still_turns_auto_off_and_skips_movement_and_weapons(self):
         for cls in (RaidScuttleRun, CoalitionScuttleRun):
             with self.subTest(task=cls.__name__):
