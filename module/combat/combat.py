@@ -414,7 +414,7 @@ class Combat(Level, HPBalancer, Retirement, EquipmentConfigHandler, SubmarineCal
                 continue
             if balance_hp and self.handle_emergency_repair_use():
                 continue
-            if self.handle_battle_preparation():
+            if self.combat_preparation_auto_ready(auto) and self.handle_battle_preparation():
                 continue
             if self.handle_combat_automation_confirm():
                 continue
@@ -453,6 +453,12 @@ class Combat(Level, HPBalancer, Retirement, EquipmentConfigHandler, SubmarineCal
 
         return False
 
+    def combat_preparation_auto_ready(self, auto):
+        """沉船非自律模式在准备页明确识别到 OFF 后才出击。"""
+        if auto != 'combat_auto' and not self.combat_switch_to_manual_allowed:
+            return self.appear(AUTOMATION_OFF) and not self.appear(AUTOMATION_ON)
+        return True
+
     def handle_combat_automation_set(self, auto):
         """设置战斗自动化开关状态。
 
@@ -465,6 +471,10 @@ class Combat(Level, HPBalancer, Retirement, EquipmentConfigHandler, SubmarineCal
             bool: 是否进行了切换操作。
         """
         if not auto and not self.combat_switch_to_manual_allowed:
+            if not self.appear(AUTOMATION_OFF) and self.appear(AUTOMATION_ON, interval=2):
+                logger.info('[战斗-自动化] 战前检测到自律开启，关闭自律')
+                self.device.click(AUTOMATION_SWITCH)
+                return True
             return False
         if not self._automation_set_timer.reached():
             return False
@@ -542,6 +552,9 @@ class Combat(Level, HPBalancer, Retirement, EquipmentConfigHandler, SubmarineCal
             if self.combat_joystick_button(offset=SCUTTLE_JOYSTICK_OFFSET) is not None:
                 # 摇杆拖住时会偏离识别区，确认关闭后本场不再切换。
                 self.auto_mode_checked = True
+                logger.info('[战斗-自动] 已识别到手操摇杆')
+                return False
+            if not self.combat_switch_to_manual_allowed:
                 return False
             return self.handle_combat_auto(auto)
         if self.handle_combat_auto(auto) or self.handle_combat_manual(auto):

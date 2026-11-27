@@ -36,6 +36,7 @@ class CombatAuto(ModuleBase):
     auto_mode_checked = False
     auto_mode_switched = False
     auto_mode_click_timer = Timer(5)
+    # 战中无法安全切回手操的任务，需要在准备页确认自律已关闭。
     combat_switch_to_manual_allowed = True
 
     def combat_joystick_appear(self) -> bool:
@@ -76,10 +77,12 @@ class CombatAuto(ModuleBase):
         if self.auto_mode_checked:
             return False
         if auto != 'combat_auto' and not self.combat_switch_to_manual_allowed:
-            # 保留原先的走位时机，等看到手操摇杆再执行，不靠摇杆缺失切换自律。
-            if (self.auto_mode_click_timer.reached() and self.is_combat_executing()
-                    and self.combat_joystick_button(offset=SCUTTLE_JOYSTICK_OFFSET) is not None):
+            # 准备页负责关闭自律；战斗中只确认手操摇杆，不根据摇杆缺失点击。
+            if (self.is_combat_executing()
+                    and self.combat_joystick_button(offset=SCUTTLE_JOYSTICK_OFFSET) is not None
+                    and self.auto_mode_click_timer.reached()):
                 self.auto_mode_checked = True
+                logger.info('[战斗-自动] 已识别到手操摇杆')
             return False
         if self.auto_mode_click_timer.reached():
             logger.info('[战斗-自动] 自动模式检查计时器到达')

@@ -379,7 +379,8 @@ class Raid(MapOperation, RaidCombat, CampaignEvent):
                 continue
             if self.handle_combat_low_emotion():
                 continue
-            if self.appear_then_click(BATTLE_PREPARATION, offset=(30, 20), interval=2):
+            if (self.combat_preparation_auto_ready(auto) and
+                    self.appear_then_click(BATTLE_PREPARATION, offset=(30, 20), interval=2)):
                 continue
             if self.handle_combat_automation_confirm():
                 continue

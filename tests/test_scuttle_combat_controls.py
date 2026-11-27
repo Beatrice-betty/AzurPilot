@@ -51,7 +51,6 @@ class ScuttleReplay(ScreenReplay):
         task.auto_skip_timer = Timer(1)
         task.auto_click_interval_timer = Timer(1)
         task.handle_combat_weapon_release = Mock()
-        task.handle_battle_preparation = Mock(return_value=False)
         task.handle_raid_ticket_use = Mock(return_value=False)
         task.is_auto_search_running = Mock(return_value=False)
         task._handle_auto_search_menu_missing = Mock(return_value=False)
@@ -126,18 +125,27 @@ class ScuttleCombatControlTests(unittest.TestCase):
                 self.assertTrue(task.handle_combat_controls(mode))
                 self.assertEqual(replay.clicks, [READY_AIR_RAID.name])
 
-    def test_non_auto_modes_leave_both_switches_alone_without_a_visible_joystick(self):
+    def test_non_auto_modes_confirm_off_before_sortie_and_never_toggle_in_battle(self):
         modes = ('stand_still', 'drag_right', 'combat_manual', 'stand_still_in_the_middle',
                  'hide_in_bottom_left', 'hide_in_upper_left')
-        for cls, mode, switch in product((RaidScuttleRun, CoalitionScuttleRun), modes, (AUTOMATION_OFF, AUTOMATION_ON)):
-            with self.subTest(task=cls.__name__, mode=mode, switch=switch.name):
+        preparation_states = {
+            'off': ((AUTOMATION_OFF,),),
+            'on': ((AUTOMATION_ON,), (AUTOMATION_ON,), (), (AUTOMATION_OFF,)),
+            'unknown': ((), (AUTOMATION_ON, AUTOMATION_OFF), (AUTOMATION_OFF,)),
+        }
+        for cls, mode, initial in product((RaidScuttleRun, CoalitionScuttleRun), modes, preparation_states):
+            with self.subTest(task=cls.__name__, mode=mode, initial=initial):
+                preparation = preparation_states[initial]
                 replay = ScuttleReplay(cls, mode, [
-                    screen(BATTLE_PREPARATION, switch),
+                    *(screen(BATTLE_PREPARATION, *state) for state in preparation),
                     *(screen('COMBAT') for _ in range(8)),
                 ])
                 del replay.campaign.handle_combat_manual
                 replay.run()
-                self.assertNotIn(AUTOMATION_SWITCH.name, replay.clicks)
+                switch_frames = [index for index, name in replay.click_frames if name == AUTOMATION_SWITCH.name]
+                sortie_frames = [index for index, name in replay.click_frames if name == BATTLE_PREPARATION.name]
+                self.assertEqual(switch_frames, [0] if initial == 'on' else [])
+                self.assertEqual(sortie_frames, [len(preparation) - 1])
                 self.assertNotIn(COMBAT_AUTO_SWITCH.name, replay.clicks)
                 self.assertIn(OPTS_INFO_D.name, replay.clicks)
                 replay.device.long_click.assert_not_called()
